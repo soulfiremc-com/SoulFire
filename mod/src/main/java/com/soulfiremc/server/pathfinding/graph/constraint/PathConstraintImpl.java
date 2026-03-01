@@ -56,6 +56,10 @@ public final class PathConstraintImpl implements PathConstraint {
   private final int placeBlockPenalty;
   private final int expireTimeout;
   private final boolean disablePruning;
+  private final double yawJitterMin;
+  private final double yawJitterMax;
+  private final double pitchJitterMin;
+  private final double pitchJitterMax;
   private final CachedLazyObject<List<EntityRangeData>> unfriendlyEntities = new CachedLazyObject<>(this::getUnfriendlyEntitiesExpensive, 10, TimeUnit.SECONDS);
 
   public PathConstraintImpl(
@@ -68,7 +72,11 @@ public final class PathConstraintImpl implements PathConstraint {
     int breakBlockPenalty,
     int placeBlockPenalty,
     int expireTimeout,
-    boolean disablePruning) {
+    boolean disablePruning,
+    double yawJitterMin,
+    double yawJitterMax,
+    double pitchJitterMin,
+    double pitchJitterMax) {
     this.entity = entity;
     this.levelHeightAccessor = levelHeightAccessor;
     this.allowBreakingUndiggable = allowBreakingUndiggable;
@@ -79,6 +87,10 @@ public final class PathConstraintImpl implements PathConstraint {
     this.placeBlockPenalty = placeBlockPenalty;
     this.expireTimeout = expireTimeout;
     this.disablePruning = disablePruning;
+    this.yawJitterMin = yawJitterMin;
+    this.yawJitterMax = yawJitterMax;
+    this.pitchJitterMin = pitchJitterMin;
+    this.pitchJitterMax = pitchJitterMax;
   }
 
   public PathConstraintImpl(BotConnection botConnection) {
@@ -103,7 +115,11 @@ public final class PathConstraintImpl implements PathConstraint {
       settingsSource.get(PathfindingSettings.BREAK_BLOCK_PENALTY),
       settingsSource.get(PathfindingSettings.PLACE_BLOCK_PENALTY),
       settingsSource.get(PathfindingSettings.EXPIRE_TIMEOUT),
-      settingsSource.get(PathfindingSettings.DISABLE_PRUNING)
+      settingsSource.get(PathfindingSettings.DISABLE_PRUNING),
+      settingsSource.get(PathfindingSettings.YAW_JITTER_MIN),
+      settingsSource.get(PathfindingSettings.YAW_JITTER_MAX),
+      settingsSource.get(PathfindingSettings.PITCH_JITTER_MIN),
+      settingsSource.get(PathfindingSettings.PITCH_JITTER_MAX)
     );
   }
 
@@ -211,6 +227,26 @@ public final class PathConstraintImpl implements PathConstraint {
   @Override
   public boolean disablePruning() {
     return disablePruning;
+  }
+
+  @Override
+  public double yawJitterMin() {
+    return yawJitterMin;
+  }
+
+  @Override
+  public double yawJitterMax() {
+    return yawJitterMax;
+  }
+
+  @Override
+  public double pitchJitterMin() {
+    return pitchJitterMin;
+  }
+
+  @Override
+  public double pitchJitterMax() {
+    return pitchJitterMax;
   }
 
   private List<EntityRangeData> getUnfriendlyEntitiesExpensive() {

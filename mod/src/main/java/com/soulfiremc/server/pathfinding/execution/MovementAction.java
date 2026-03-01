@@ -20,6 +20,7 @@ package com.soulfiremc.server.pathfinding.execution;
 import com.google.common.math.DoubleMath;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.pathfinding.SFVec3i;
+import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
 import com.soulfiremc.server.util.MathHelper;
 import com.soulfiremc.server.util.VectorHelper;
 import lombok.RequiredArgsConstructor;
@@ -29,13 +30,18 @@ import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Random;
+
 @Slf4j
 @RequiredArgsConstructor
 public final class MovementAction implements WorldAction {
+  private static final Random rand = new Random();
+
   private static final double STEP_HEIGHT = 0.6;
   private final SFVec3i blockPosition;
   // Corner jumps normally require you to stand closer to the block to jump
   private final boolean walkFewTicksNoJump;
+  private final PathConstraint settings;
   private boolean didLook;
   private boolean lockYRot;
   private boolean wasStill;
@@ -88,7 +94,19 @@ public final class MovementAction implements WorldAction {
 
     var previousYRot = clientEntity.getYRot();
     clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, targetMiddleBlock);
-    clientEntity.setXRot(0);
+
+    var xRotation = 0f;
+    var yRotation = 0f;
+
+    if (settings.yawJitterMin() < settings.yawJitterMax()) {
+      yRotation = rand.nextFloat((float) settings.yawJitterMin(), (float) settings.yawJitterMax());
+    }
+    if (settings.pitchJitterMin() < settings.pitchJitterMax()) {
+      xRotation = rand.nextFloat((float) settings.pitchJitterMin(), (float) settings.pitchJitterMax());
+    }
+
+    clientEntity.setYRot(clientEntity.getYRot() + yRotation);
+    clientEntity.setXRot(xRotation);
     var newYRot = clientEntity.getYRot();
 
     var yRotDifference = Math.abs(MathHelper.wrapDegrees(newYRot - previousYRot));

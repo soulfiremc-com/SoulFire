@@ -324,7 +324,7 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
       actions.add(new BlockPlaceAction(floorBlock, blockPlaceAgainstData));
     }
 
-    actions.add(new MovementAction(absoluteTargetFeetBlock, diagonal));
+    actions.add(new MovementAction(absoluteTargetFeetBlock, diagonal, graph.pathConstraint()));
     if (interactablePassage != null) {
       actions.add(new InteractBlockAction(interactablePassage.block(), interactablePassage.interactFace(), false));
     }

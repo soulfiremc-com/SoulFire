@@ -99,5 +99,25 @@ public interface DelegatePathConstraint extends PathConstraint {
     return delegate().disablePruning();
   }
 
+  @Override
+  default double yawJitterMin() {
+    return delegate().yawJitterMin();
+  }
+
+  @Override
+  default double yawJitterMax() {
+    return delegate().yawJitterMax();
+  }
+
+  @Override
+  default double pitchJitterMin() {
+    return delegate().pitchJitterMin();
+  }
+
+  @Override
+  default double pitchJitterMax() {
+    return delegate().pitchJitterMax();
+  }
+
   PathConstraint delegate();
 }

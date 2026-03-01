@@ -35,7 +35,11 @@ public final class TestPathConstraint implements DelegatePathConstraint {
     2,      // breakBlockPenalty
     5,      // placeBlockPenalty
     180,    // expireTimeout
-    false   // disablePruning
+    false,   // disablePruning
+    -25,  // yawJitterMin
+    25,   // yawJitterMax
+    -4,   // pitchJitterMin
+    4   // pitchJitterMax
   );
 
   private TestPathConstraint() {}

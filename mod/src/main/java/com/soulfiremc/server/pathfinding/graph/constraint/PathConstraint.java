@@ -58,4 +58,12 @@ public interface PathConstraint {
 
   /// Returns whether pruning of the pathfinding search space is disabled.
   boolean disablePruning();
+
+  double yawJitterMin();
+
+  double yawJitterMax();
+
+  double pitchJitterMin();
+
+  double pitchJitterMax();
 }

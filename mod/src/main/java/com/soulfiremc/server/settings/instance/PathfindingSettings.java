@@ -19,10 +19,7 @@ package com.soulfiremc.server.settings.instance;
 
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
-import com.soulfiremc.server.settings.property.BooleanProperty;
-import com.soulfiremc.server.settings.property.ImmutableBooleanProperty;
-import com.soulfiremc.server.settings.property.ImmutableIntProperty;
-import com.soulfiremc.server.settings.property.IntProperty;
+import com.soulfiremc.server.settings.property.*;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -108,5 +105,49 @@ public final class PathfindingSettings implements SettingsObject {
       .uiName("Disable Pruning")
       .description("Disable periodic pruning of the pathfinding search space (may use more memory)")
       .defaultValue(false)
+      .build();
+  public static final DoubleProperty<SettingsSource.Bot> YAW_JITTER_MIN =
+    ImmutableDoubleProperty.<SettingsSource.Bot>builder()
+      .sourceType(SettingsSource.Bot.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("yaw-jitter-min")
+      .uiName("Yaw Jitter Minimum")
+      .description("Minimum random horizontal angle offset")
+      .defaultValue(-25)
+      .minValue(-180)
+      .maxValue(180)
+      .build();
+  public static final DoubleProperty<SettingsSource.Bot> YAW_JITTER_MAX =
+    ImmutableDoubleProperty.<SettingsSource.Bot>builder()
+      .sourceType(SettingsSource.Bot.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("yaw-jitter-max")
+      .uiName("Yaw Jitter Maximum")
+      .description("Maximum random horizontal angle offset")
+      .defaultValue(25)
+      .minValue(-180)
+      .maxValue(180)
+      .build();
+  public static final DoubleProperty<SettingsSource.Bot> PITCH_JITTER_MIN =
+    ImmutableDoubleProperty.<SettingsSource.Bot>builder()
+      .sourceType(SettingsSource.Bot.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("pitch-jitter-min")
+      .uiName("Pitch Jitter Minimum")
+      .description("Minimum random vertical angle offset")
+      .defaultValue(-4)
+      .minValue(-90)
+      .maxValue(90)
+      .build();
+  public static final DoubleProperty<SettingsSource.Bot> PITCH_JITTER_MAX =
+    ImmutableDoubleProperty.<SettingsSource.Bot>builder()
+      .sourceType(SettingsSource.Bot.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("pitch-jitter-max")
+      .uiName("Pitch Jitter Maximum")
+      .description("Maximum random vertical angle offset")
+      .defaultValue(4)
+      .minValue(-90)
+      .maxValue(90)
       .build();
 }

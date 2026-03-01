@@ -58,13 +58,13 @@ public final class PathExecutor implements ControllingTask {
     this.pathCompletionFuture = pathCompletionFuture;
   }
 
-  private static List<WorldAction> repositionIfNeeded(List<WorldAction> actions, SFVec3i from, boolean requiresRepositioning) {
+  private static List<WorldAction> repositionIfNeeded(List<WorldAction> actions, SFVec3i from, boolean requiresRepositioning, LiveRouteFinder findPath) {
     if (!requiresRepositioning) {
       return actions;
     }
 
     var repositionActions = new ArrayList<WorldAction>();
-    repositionActions.add(new MovementAction(from, false));
+    repositionActions.add(new MovementAction(from, false, findPath.pathConstraint));
     repositionActions.addAll(actions);
 
     return repositionActions;
@@ -118,7 +118,7 @@ public final class PathExecutor implements ControllingTask {
 
         SFHelpers.mustSupply(() -> switch (routeSearchResult.routeSearchResult()) {
           case RouteFinder.FoundRouteResult foundRouteResult -> () -> {
-            var newActions = repositionIfNeeded(foundRouteResult.actions(), routeSearchResult.start(), isInitial);
+            var newActions = repositionIfNeeded(foundRouteResult.actions(), routeSearchResult.start(), isInitial, this.findPath);
             if (newActions.isEmpty()) {
               log.info("We're already at the goal!");
               return;
@@ -133,7 +133,7 @@ public final class PathExecutor implements ControllingTask {
           };
           case RouteFinder.NoRouteFoundResult _ -> throw new IllegalStateException("No route found to the goal!");
           case RouteFinder.PartialRouteResult partialRouteResult -> () -> {
-            var newActions = addRecalculate(repositionIfNeeded(partialRouteResult.actions(), routeSearchResult.start(), isInitial));
+            var newActions = addRecalculate(repositionIfNeeded(partialRouteResult.actions(), routeSearchResult.start(), isInitial, this.findPath));
             if (newActions.isEmpty()) {
               log.info("We're already at the goal!");
               return;
