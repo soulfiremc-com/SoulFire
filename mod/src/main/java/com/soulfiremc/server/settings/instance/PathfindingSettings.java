@@ -106,6 +106,7 @@ public final class PathfindingSettings implements SettingsObject {
       .description("Disable periodic pruning of the pathfinding search space (may use more memory)")
       .defaultValue(false)
       .build();
+  // TODO: Add 2 MinMaxProperty instead of 4 IntProperty
   public static final DoubleProperty<SettingsSource.Bot> YAW_JITTER_MIN =
     ImmutableDoubleProperty.<SettingsSource.Bot>builder()
       .sourceType(SettingsSource.Bot.INSTANCE)
