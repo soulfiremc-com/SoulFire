@@ -18,7 +18,7 @@
 package com.soulfiremc.server.script.nodes.action;
 
 import com.soulfiremc.server.script.*;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -52,9 +52,9 @@ public final class ClickSlotNode extends AbstractScriptNode {
     var clickTypeStr = getStringInput(inputs, "clickType", "left");
 
     var clickType = switch (clickTypeStr.toLowerCase()) {
-      case "right" -> ClickType.PICKUP;
-      case "shift" -> ClickType.QUICK_MOVE;
-      default -> ClickType.PICKUP;
+      case "right" -> ContainerInput.PICKUP;
+      case "shift" -> ContainerInput.QUICK_MOVE;
+      default -> ContainerInput.PICKUP;
     };
     var button = "right".equalsIgnoreCase(clickTypeStr) ? 1 : 0;
 
@@ -62,7 +62,7 @@ public final class ClickSlotNode extends AbstractScriptNode {
       var player = bot.minecraft().player;
       var gameMode = bot.minecraft().gameMode;
       if (player != null && gameMode != null) {
-        gameMode.handleInventoryMouseClick(
+        gameMode.handleContainerInput(
           player.containerMenu.containerId, slot, button, clickType, player
         );
       }

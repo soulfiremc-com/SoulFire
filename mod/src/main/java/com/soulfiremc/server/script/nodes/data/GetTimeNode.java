@@ -61,7 +61,7 @@ public final class GetTimeNode extends AbstractScriptNode {
     }
 
     var gameTime = level.getGameTime();
-    var dayTime = level.getDayTime() % 24000;
+    var dayTime = level.getLevelData().getGameTime() % 24000;
     // Day is roughly 0-12000 (6am-6pm), night is 12000-24000 (6pm-6am)
     // More precisely: 0=6am, 6000=noon, 12000=6pm, 18000=midnight
     var isDay = dayTime >= 0 && dayTime < 12000;

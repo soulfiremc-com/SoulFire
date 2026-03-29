@@ -45,7 +45,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.dialog.*;
 import net.minecraft.world.inventory.*;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import org.jooq.impl.DSL;
 
 import javax.imageio.ImageIO;
@@ -114,7 +114,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         if (!item.isEmpty()) {
           var slotBuilder = InventorySlot.newBuilder()
             .setSlot(slot.index)
-            .setItemId(item.getItemHolder().getRegisteredName())
+            .setItemId(item.typeHolder().getRegisteredName())
             .setCount(item.getCount());
 
           // Check for custom display name
@@ -996,7 +996,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           .setButtonId(i)
           .setLabel(result.getCount() + "x " + result.getHoverName().getString())
           .setDescription(costDesc)
-          .setIconItemId(result.getItemHolder().getRegisteredName())
+          .setIconItemId(result.typeHolder().getRegisteredName())
           .setDisabled(offer.isOutOfStock())
           .build());
       }
@@ -1202,39 +1202,39 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         throw Status.FAILED_PRECONDITION.withDescription("Bot '%s' is not online".formatted(botId)).asRuntimeException();
       }
 
-      // Map proto ClickType to Minecraft ClickType and mouse button
+      // Map proto ClickType to Minecraft container input and mouse button
       var slotId = request.getSlot();
       int mouseButton;
-      ClickType clickType;
+      ContainerInput clickType;
 
       switch (request.getClickType()) {
         case LEFT_CLICK -> {
           mouseButton = 0;
-          clickType = ClickType.PICKUP;
+          clickType = ContainerInput.PICKUP;
         }
         case RIGHT_CLICK -> {
           mouseButton = 1;
-          clickType = ClickType.PICKUP;
+          clickType = ContainerInput.PICKUP;
         }
         case SHIFT_LEFT_CLICK -> {
           mouseButton = 0;
-          clickType = ClickType.QUICK_MOVE;
+          clickType = ContainerInput.QUICK_MOVE;
         }
         case DROP_ONE -> {
           mouseButton = 0;
-          clickType = ClickType.THROW;
+          clickType = ContainerInput.THROW;
         }
         case DROP_ALL -> {
           mouseButton = 1;
-          clickType = ClickType.THROW;
+          clickType = ContainerInput.THROW;
         }
         case SWAP_HOTBAR -> {
           mouseButton = request.getHotbarSlot(); // 0-8 for hotbar slots
-          clickType = ClickType.SWAP;
+          clickType = ContainerInput.SWAP;
         }
         case MIDDLE_CLICK -> {
           mouseButton = 2;
-          clickType = ClickType.CLONE;
+          clickType = ContainerInput.CLONE;
         }
         default -> {
           responseObserver.onNext(BotInventoryClickResponse.newBuilder()
@@ -1257,7 +1257,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         var containerId = player.containerMenu.containerId;
         activeBot.botControl().registerControllingTask(
           ControllingTask.singleTick(() ->
-            gameMode.handleInventoryMouseClick(containerId, slotId, mouseButton, clickType, player)));
+            gameMode.handleContainerInput(containerId, slotId, mouseButton, clickType, player)));
 
         return BotInventoryClickResponse.newBuilder()
           .setSuccess(true)
@@ -1505,7 +1505,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           if (!item.isEmpty()) {
             var slotBuilder = InventorySlot.newBuilder()
               .setSlot(slot.index)
-              .setItemId(item.getItemHolder().getRegisteredName())
+              .setItemId(item.typeHolder().getRegisteredName())
               .setCount(item.getCount());
 
             if (item.has(DataComponents.CUSTOM_NAME)) {
@@ -1520,7 +1520,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         if (!carried.isEmpty()) {
           var carriedBuilder = InventorySlot.newBuilder()
             .setSlot(-1)
-            .setItemId(carried.getItemHolder().getRegisteredName())
+            .setItemId(carried.typeHolder().getRegisteredName())
             .setCount(carried.getCount());
 
           if (carried.has(DataComponents.CUSTOM_NAME)) {

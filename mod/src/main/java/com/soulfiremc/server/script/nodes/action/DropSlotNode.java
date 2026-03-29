@@ -18,7 +18,7 @@
 package com.soulfiremc.server.script.nodes.action;
 
 import com.soulfiremc.server.script.*;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -57,13 +57,13 @@ public final class DropSlotNode extends AbstractScriptNode {
         var containerId = player.containerMenu.containerId;
 
         // Step 1: Left-click the slot to pick up the item onto the cursor
-        gameMode.handleInventoryMouseClick(
-          containerId, slot, 0, ClickType.PICKUP, player
+        gameMode.handleContainerInput(
+          containerId, slot, 0, ContainerInput.PICKUP, player
         );
 
         // Step 2: Left-click outside the inventory (slot -999) to drop the cursor item
-        gameMode.handleInventoryMouseClick(
-          containerId, -999, 0, ClickType.PICKUP, player
+        gameMode.handleContainerInput(
+          containerId, -999, 0, ContainerInput.PICKUP, player
         );
       }
     });

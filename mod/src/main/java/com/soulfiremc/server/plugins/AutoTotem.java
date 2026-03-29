@@ -30,7 +30,7 @@ import com.soulfiremc.server.util.SFInventoryHelpers;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import net.lenni0451.lambdaevents.EventHandler;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.Items;
 
@@ -86,13 +86,13 @@ public final class AutoTotem extends InternalPlugin {
         var gameMode = connection.minecraft().gameMode;
         connection.botControl().maybeRegister(ControllingTask.staged(List.of(
           new ControllingTask.RunnableStage(player::sendOpenInventory),
-          new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ClickType.PICKUP, player)),
+          new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player)),
           new ControllingTask.WaitDelayStage(() -> 50L),
-          new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, InventoryMenu.SHIELD_SLOT, 0, ClickType.PICKUP, player)),
+          new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, InventoryMenu.SHIELD_SLOT, 0, ContainerInput.PICKUP, player)),
           new ControllingTask.WaitDelayStage(() -> 50L),
           new ControllingTask.RunnableStage(() -> {
             if (!playerInventory.getCarried().isEmpty()) {
-              gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ClickType.PICKUP, player);
+              gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player);
             }
           }),
           new ControllingTask.WaitDelayStage(() -> 50L),

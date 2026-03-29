@@ -77,7 +77,7 @@ public final class FindItemNode extends AbstractScriptNode {
       if (foodOnly && !SFItemHelpers.isGoodEdibleFood(itemStack)) {
         return false;
       }
-      if (!itemIdFilter.isEmpty() && !itemStack.getItemHolder().getRegisteredName().equals(itemIdFilter)) {
+      if (!itemIdFilter.isEmpty() && !itemStack.typeHolder().getRegisteredName().equals(itemIdFilter)) {
         return false;
       }
       return true;
@@ -98,7 +98,7 @@ public final class FindItemNode extends AbstractScriptNode {
     return completedMono(results(
       "found", true,
       "slot", slot,
-      "itemId", item.getItemHolder().getRegisteredName(),
+      "itemId", item.typeHolder().getRegisteredName(),
       "count", item.getCount(),
       "isHotbar", isHotbar,
       "hotbarIndex", hotbarIndex

@@ -33,7 +33,7 @@ import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 
@@ -133,13 +133,13 @@ public final class AutoArmor extends InternalPlugin {
     var gameMode = connection.minecraft().gameMode;
     connection.botControl().maybeRegister(ControllingTask.staged(List.of(
       new ControllingTask.RunnableStage(player::sendOpenInventory),
-      new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, bestItemSlot.index, 0, ClickType.PICKUP, player)),
+      new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, bestItemSlot.index, 0, ContainerInput.PICKUP, player)),
       new ControllingTask.WaitDelayStage(() -> 50L),
-      new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, equipmentSlot.index, 0, ClickType.PICKUP, player)),
+      new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, equipmentSlot.index, 0, ContainerInput.PICKUP, player)),
       new ControllingTask.WaitDelayStage(() -> 50L),
       new ControllingTask.RunnableStage(() -> {
         if (!player.inventoryMenu.getCarried().isEmpty()) {
-          gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, bestItemSlot.index, 0, ClickType.PICKUP, player);
+          gameMode.handleContainerInput(player.inventoryMenu.containerId, bestItemSlot.index, 0, ContainerInput.PICKUP, player);
         }
       }),
       new ControllingTask.WaitDelayStage(() -> 50L),

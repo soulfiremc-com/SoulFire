@@ -45,12 +45,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class SFMinecraftDownloader {
-  public static final boolean IS_OBFUSCATED_RELEASE = Boolean.parseBoolean(System.getProperty("sf.obfuscatedRelease", "false"));
-  public static final String CLIENT_URL_OVERRIDE = System.getProperty("sf.clientUrlOverride", "https://piston-data.mojang.com/v1/objects/4509ee9b65f226be61142d37bf05f8d28b03417b/client.jar");
-  private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "1.21.11_unobfuscated");
+  private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "26.1");
   private static final String MINECRAFT_CLIENT_JAR_NAME = "minecraft-%s-client.jar".formatted(MINECRAFT_VERSION);
-  private static final String MINECRAFT_CLIENT_MAPPINGS_PROGUARD_NAME = "minecraft-%s-client-mappings.txt".formatted(MINECRAFT_VERSION);
-  private static final String MINECRAFT_CLIENT_MAPPINGS_TINY_NAME = "minecraft-%s-client-mappings.tiny".formatted(MINECRAFT_VERSION);
   private static final String MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
   private SFMinecraftDownloader() {
@@ -70,14 +66,6 @@ public final class SFMinecraftDownloader {
 
   private static Path getMinecraftClientJarPath(Path basePath) {
     return getAndCreateDownloadDirectory(basePath).resolve(MINECRAFT_CLIENT_JAR_NAME);
-  }
-
-  private static Path getMinecraftClientMappingsProguardPath(Path basePath) {
-    return getAndCreateDownloadDirectory(basePath).resolve(MINECRAFT_CLIENT_MAPPINGS_PROGUARD_NAME);
-  }
-
-  private static Path getMinecraftClientMappingsTinyPath(Path basePath) {
-    return getAndCreateDownloadDirectory(basePath).resolve(MINECRAFT_CLIENT_MAPPINGS_TINY_NAME);
   }
 
   private static JsonObject getUrl(String url) {
@@ -117,9 +105,7 @@ public final class SFMinecraftDownloader {
   @SneakyThrows
   public static void loadAndInjectMinecraftJar(Path basePath) {
     var minecraftJarPath = getMinecraftClientJarPath(basePath);
-    var minecraftMappingsProguardPath = getMinecraftClientMappingsProguardPath(basePath);
-    if (Files.exists(minecraftJarPath)
-      && (!IS_OBFUSCATED_RELEASE || Files.exists(minecraftMappingsProguardPath))) {
+    if (Files.exists(minecraftJarPath)) {
       IO.println("Minecraft already downloaded, continuing");
     } else {
       IO.println("Downloading Minecraft...");
@@ -137,11 +123,11 @@ public final class SFMinecraftDownloader {
       });
 
       if (!Files.exists(minecraftJarPath)) {
-        var clientUrl = CLIENT_URL_OVERRIDE.isBlank() ? versionInfo.get()
+        var clientUrl = versionInfo.get()
           .getAsJsonObject("downloads")
           .getAsJsonObject("client")
           .get("url")
-          .getAsString() : CLIENT_URL_OVERRIDE;
+          .getAsString();
 
         IO.println("Downloading Minecraft client jar from: " + clientUrl);
         var tempJarPath = Files.createTempFile("sf-mc-jar-download-", "-" + MINECRAFT_CLIENT_JAR_NAME);
@@ -156,63 +142,10 @@ public final class SFMinecraftDownloader {
         Files.deleteIfExists(tempJarPath);
         IO.println("Minecraft client jar downloaded and saved to: " + minecraftJarPath);
       }
-
-      if (IS_OBFUSCATED_RELEASE && !Files.exists(minecraftMappingsProguardPath)) {
-        var clientMappingsUrl = versionInfo.get()
-          .getAsJsonObject("downloads")
-          .getAsJsonObject("client_mappings")
-          .get("url")
-          .getAsString();
-
-        IO.println("Downloading Minecraft client mappings from: " + clientMappingsUrl);
-        var tempMappingsPath = Files.createTempFile("sf-mc-mappings-download-", ".txt");
-        try (var in = URI.create(clientMappingsUrl).toURL().openStream()) {
-          Files.copy(in, tempMappingsPath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception e) {
-          Files.deleteIfExists(tempMappingsPath);
-          throw new RuntimeException("Failed to download Minecraft client mappings from " + clientMappingsUrl, e);
-        }
-
-        Files.copy(tempMappingsPath, minecraftMappingsProguardPath);
-        Files.deleteIfExists(tempMappingsPath);
-        IO.println("Minecraft client mappings downloaded and saved to: " + minecraftMappingsProguardPath);
-      }
-    }
-
-    var minecraftMappingsTinyPath = getMinecraftClientMappingsTinyPath(basePath);
-    if (IS_OBFUSCATED_RELEASE && !Files.exists(minecraftMappingsTinyPath)) {
-      try (var proguardReader = Files.newBufferedReader(minecraftMappingsProguardPath);
-           var intermediaryReader = new InputStreamReader(
-             Objects.requireNonNull(
-               MappingConfiguration.class.getClassLoader().getResourceAsStream(
-                 "mappings/mappings.tiny"
-               )
-             )
-           );
-           var writer = Files.newBufferedWriter(minecraftMappingsTinyPath)) {
-        var mappingTree = new MemoryMappingTree();
-        ProGuardFileReader.read(proguardReader, "named", "official", mappingTree);
-        Tiny2FileReader.read(intermediaryReader, mappingTree);
-
-        var tiny2Writer = new Tiny2FileWriter(writer, false);
-        mappingTree.accept(tiny2Writer);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to read/write mappings", e);
-      }
     }
 
     System.setProperty(SystemProperties.GAME_MAPPING_NAMESPACE, "official");
     System.setProperty(SystemProperties.GAME_JAR_PATH_CLIENT, minecraftJarPath.toString());
-    if (IS_OBFUSCATED_RELEASE) {
-      System.setProperty(SystemProperties.MAPPING_PATH, minecraftMappingsTinyPath.toAbsolutePath().toString());
-      if (Boolean.getBoolean("sf.remapToNamed")) {
-        System.setProperty(SystemProperties.RUNTIME_MAPPING_NAMESPACE, "named");
-        setRemapClasspath(basePath);
-      } else {
-        System.setProperty(SystemProperties.RUNTIME_MAPPING_NAMESPACE, "intermediary");
-      }
-    } else {
-      System.setProperty(SystemProperties.RUNTIME_MAPPING_NAMESPACE, "official");
-    }
+    System.setProperty(SystemProperties.RUNTIME_MAPPING_NAMESPACE, "official");
   }
 }

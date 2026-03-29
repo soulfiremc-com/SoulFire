@@ -24,7 +24,7 @@ import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.ControllingTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import net.kyori.adventure.text.Component;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -37,7 +37,7 @@ public final class InventoryCommand {
   }
 
   private static String format(ItemStack item) {
-    return item.isEmpty() ? "empty" : item.getItemHolder().getRegisteredName() + " x" + item.getCount();
+    return item.isEmpty() ? "empty" : item.typeHolder().getRegisteredName() + " x" + item.getCount();
   }
 
   private static String format(Slot slot) {
@@ -130,7 +130,7 @@ public final class InventoryCommand {
                         c,
                         bot -> {
                           var slot = IntegerArgumentType.getInteger(c, "slot");
-                          return performClick(bot, slot, 0, ClickType.PICKUP);
+                          return performClick(bot, slot, 0, ContainerInput.PICKUP);
                         })))))
         .then(
           literal("right-click")
@@ -144,7 +144,7 @@ public final class InventoryCommand {
                         c,
                         bot -> {
                           var slot = IntegerArgumentType.getInteger(c, "slot");
-                          return performClick(bot, slot, 1, ClickType.PICKUP);
+                          return performClick(bot, slot, 1, ContainerInput.PICKUP);
                         })))))
         .then(
           literal("left-click-outside")
@@ -154,7 +154,7 @@ public final class InventoryCommand {
                 c ->
                   forEveryBot(
                     c,
-                    bot -> performClick(bot, -999, 0, ClickType.PICKUP)))))
+                    bot -> performClick(bot, -999, 0, ContainerInput.PICKUP)))))
         .then(
           literal("right-click-outside")
             .executes(
@@ -163,7 +163,7 @@ public final class InventoryCommand {
                 c ->
                   forEveryBot(
                     c,
-                    bot -> performClick(bot, -999, 1, ClickType.PICKUP)))))
+                    bot -> performClick(bot, -999, 1, ContainerInput.PICKUP)))))
         .then(
           literal("middle-click")
             .then(
@@ -176,7 +176,7 @@ public final class InventoryCommand {
                         c,
                         bot -> {
                           var slot = IntegerArgumentType.getInteger(c, "slot");
-                          return performClick(bot, slot, 2, ClickType.CLONE);
+                          return performClick(bot, slot, 2, ContainerInput.CLONE);
                         })))))
         .then(
           literal("drop-one")
@@ -190,7 +190,7 @@ public final class InventoryCommand {
                         c,
                         bot -> {
                           var slot = IntegerArgumentType.getInteger(c, "slot");
-                          return performClick(bot, slot, 0, ClickType.THROW);
+                          return performClick(bot, slot, 0, ContainerInput.THROW);
                         })))))
         .then(
           literal("drop-all")
@@ -204,11 +204,11 @@ public final class InventoryCommand {
                         c,
                         bot -> {
                           var slot = IntegerArgumentType.getInteger(c, "slot");
-                          return performClick(bot, slot, 1, ClickType.THROW);
+                          return performClick(bot, slot, 1, ContainerInput.THROW);
                         }))))));
   }
 
-  private static int performClick(BotConnection bot, int slotId, int mouseButton, ClickType clickType) {
+  private static int performClick(BotConnection bot, int slotId, int mouseButton, ContainerInput clickType) {
     var player = bot.minecraft().player;
     var gameMode = bot.minecraft().gameMode;
     if (player == null || gameMode == null) {
@@ -217,7 +217,7 @@ public final class InventoryCommand {
 
     var container = player.containerMenu;
     bot.botControl().registerControllingTask(ControllingTask.singleTick(
-      () -> gameMode.handleInventoryMouseClick(container.containerId, slotId, mouseButton, clickType, player)));
+      () -> gameMode.handleContainerInput(container.containerId, slotId, mouseButton, clickType, player)));
     return Command.SINGLE_SUCCESS;
   }
 }

@@ -28,8 +28,13 @@ import com.soulfiremc.test.utils.TestBlockAccessorBuilder;
 import com.soulfiremc.test.utils.TestBootstrap;
 import com.soulfiremc.test.utils.TestMiningCostCalculator;
 import com.soulfiremc.test.utils.TestPathConstraint;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.Tool;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -50,6 +55,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 final class PathfindingTest {
+  private static ItemStack itemStack(net.minecraft.world.item.Item item) {
+    return itemStack(item, 1);
+  }
+
+  private static ItemStack itemStack(net.minecraft.world.item.Item item, int count) {
+    var itemStack = new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
+    if (item == Items.DIAMOND_PICKAXE) {
+      itemStack.set(
+        DataComponents.TOOL,
+        new Tool(
+          List.of(Tool.Rule.minesAndDrops(HolderSet.direct(Holder.direct(Blocks.STONE)), 8.0F)),
+          1.0F,
+          1,
+          false));
+    }
+
+    return itemStack;
+  }
+
   @BeforeAll
   static void setup() {
     // Bootstrap mixins and Minecraft registries
@@ -408,7 +432,7 @@ final class PathfindingTest {
     var accessor = new TestBlockAccessorBuilder();
     accessor.setBlockAt(0, 0, 0, Blocks.STONE);
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.STONE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.STONE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -428,7 +452,7 @@ final class PathfindingTest {
     var accessor = new TestBlockAccessorBuilder();
     accessor.setBlockAt(0, 0, 0, Blocks.STONE);
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.STONE, amount)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.STONE, amount)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -453,7 +477,7 @@ final class PathfindingTest {
     accessor.setBlockAt(0, 0, 0, Blocks.STONE);
     accessor.setBlockAt(0, -1, 0, Blocks.STONE);
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -476,7 +500,7 @@ final class PathfindingTest {
     accessor.setBlockAt(1, 2, 0, Blocks.STONE);
     accessor.setBlockAt(2, 0, 0, Blocks.STONE);
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -500,7 +524,7 @@ final class PathfindingTest {
       accessor.setBlockAt(1, 3, 0, Blocks.WATER);
     }
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -529,7 +553,7 @@ final class PathfindingTest {
       accessor.setBlockAt(1, 0, 0, Blocks.LAVA);
     }
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,
@@ -560,7 +584,7 @@ final class PathfindingTest {
 
     accessor.setBlockAt(0, -level, 0, Blocks.STONE);
 
-    var inventory = new ProjectedInventory(List.of(new ItemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(itemStack(Items.DIAMOND_PICKAXE)), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(
       accessor.build(),
       inventory,

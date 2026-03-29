@@ -65,7 +65,7 @@ public final class GetInventoryNode extends AbstractScriptNode {
     }
 
     return completedMono(results(
-      "itemId", item.getItemHolder().getRegisteredName(),
+      "itemId", item.typeHolder().getRegisteredName(),
       "count", item.getCount(),
       "isEmpty", false
     ));

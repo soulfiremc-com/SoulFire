@@ -20,6 +20,7 @@ package com.soulfiremc.mod.mixin.soulfire.optimization;
 import com.mojang.datafixers.DSL;
 import com.mojang.datafixers.DataFixerBuilder;
 import net.minecraft.util.datafix.DataFixers;
+import net.minecraft.util.filefix.FileFixerUpper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -37,7 +38,7 @@ public class MixinDataFixers {
   }
 
   @Inject(method = "addFixers", at = @At("HEAD"), cancellable = true)
-  private static void addFixers(DataFixerBuilder builder, CallbackInfo ci) {
+  private static void addFixers(DataFixerBuilder builder, FileFixerUpper.Builder fileFixerBuilder, CallbackInfo ci) {
     ci.cancel();
   }
 }

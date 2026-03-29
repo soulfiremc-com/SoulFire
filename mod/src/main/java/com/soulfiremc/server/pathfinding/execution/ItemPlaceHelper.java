@@ -26,7 +26,7 @@ import com.soulfiremc.server.util.TimeUtil;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
@@ -132,13 +132,13 @@ public final class ItemPlaceHelper {
       return true;
     } else {
       player.sendOpenInventory();
-      gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, slot, 0, ClickType.PICKUP, player);
+      gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player);
       TimeUtil.waitTime(50, TimeUnit.MILLISECONDS);
-      gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ClickType.PICKUP, player);
+      gameMode.handleContainerInput(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ContainerInput.PICKUP, player);
       TimeUtil.waitTime(50, TimeUnit.MILLISECONDS);
 
       if (!player.inventoryMenu.getCarried().isEmpty()) {
-        gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, slot, 0, ClickType.PICKUP, player);
+        gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player);
         TimeUtil.waitTime(50, TimeUnit.MILLISECONDS);
       }
 

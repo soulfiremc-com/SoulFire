@@ -25,6 +25,7 @@ import com.soulfiremc.server.command.brigadier.EntityArgumentType;
 import com.soulfiremc.server.command.brigadier.EnumArgumentType;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.phys.EntityHitResult;
 
 import java.util.stream.StreamSupport;
 
@@ -71,7 +72,7 @@ public final class InteractCommand {
                               return;
                             }
 
-                            if (gameMode.interact(player, entity.get(), hand) instanceof InteractionResult.Success success) {
+                            if (gameMode.interact(player, entity.get(), new EntityHitResult(entity.get()), hand) instanceof InteractionResult.Success success) {
                               if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
                                 player.swing(hand);
                               }

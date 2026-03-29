@@ -32,7 +32,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 
 import java.util.List;
@@ -103,13 +103,13 @@ public final class AutoEat extends InternalPlugin {
         } else {
           connection.botControl().maybeRegister(ControllingTask.staged(List.of(
             new ControllingTask.RunnableStage(player::sendOpenInventory),
-            new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, slot, 0, ClickType.PICKUP, player)),
+            new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player)),
             new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(() -> gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ClickType.PICKUP, player)),
+            new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ContainerInput.PICKUP, player)),
             new ControllingTask.WaitDelayStage(() -> 50L),
             new ControllingTask.RunnableStage(() -> {
               if (!player.inventoryMenu.getCarried().isEmpty()) {
-                gameMode.handleInventoryMouseClick(player.inventoryMenu.containerId, slot, 0, ClickType.PICKUP, player);
+                gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player);
               }
             }),
             new ControllingTask.WaitDelayStage(() -> 50L),

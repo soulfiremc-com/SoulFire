@@ -70,7 +70,7 @@ public class MixinMinecraft implements IMinecraft {
     soulfire$setGameConfig(gameConfig);
   }
 
-  @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;<init>(Ljava/lang/String;)V", shift = At.Shift.AFTER))
+  @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;<init>(Ljava/lang/String;Z)V", shift = At.Shift.AFTER))
   private void injectLocalHook(GameConfig arg, CallbackInfo ci) {
     SFConstants.MINECRAFT_INSTANCE.set((Minecraft) (Object) this);
   }

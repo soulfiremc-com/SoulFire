@@ -99,7 +99,7 @@ public final class MouseClickHelper {
 
     if (entityHitResult != null && entityHitResult.getEntity() != null) {
       // Interact with entity
-      if (gameMode.interact(player, entityHitResult.getEntity(), hand) instanceof InteractionResult.Success success) {
+      if (gameMode.interact(player, entityHitResult.getEntity(), entityHitResult, hand) instanceof InteractionResult.Success success) {
         if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
           player.swing(hand);
         }

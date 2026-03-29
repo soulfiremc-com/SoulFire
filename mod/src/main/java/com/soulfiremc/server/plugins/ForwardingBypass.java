@@ -39,8 +39,6 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.fabricmc.fabric.impl.networking.payload.PacketByteBufLoginQueryRequestPayload;
-import net.fabricmc.fabric.impl.networking.payload.PacketByteBufLoginQueryResponse;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
@@ -48,6 +46,8 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.protocol.handshake.ClientIntentionPacket;
 import net.minecraft.network.protocol.login.ClientboundCustomQueryPacket;
 import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
+import net.minecraft.network.protocol.login.custom.CustomQueryAnswerPayload;
+import net.minecraft.network.protocol.login.custom.CustomQueryPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.ProfileKeyPair;
@@ -136,9 +136,7 @@ public final class ForwardingBypass extends InternalPlugin {
       return;
     }
 
-    var castedPayload = (PacketByteBufLoginQueryRequestPayload) payload;
-
-    if (!castedPayload.id().equals(PlayerDataForwarding.CHANNEL)) {
+    if (!payload.id().equals(PlayerDataForwarding.CHANNEL)) {
       return;
     }
 
@@ -157,10 +155,12 @@ public final class ForwardingBypass extends InternalPlugin {
 
     var requestedForwardingVersion = PlayerDataForwarding.MODERN_DEFAULT;
     {
-      var buf = castedPayload.data();
+      var buf = new FriendlyByteBuf(Unpooled.buffer());
+      payload.write(buf);
       if (buf.readableBytes() == 1) {
         requestedForwardingVersion = buf.readByte();
       }
+      buf.release();
     }
 
     var key = connection.minecraft().getProfileKeyPairManager().prepareKeyPair().join().orElse(null);
@@ -174,8 +174,15 @@ public final class ForwardingBypass extends InternalPlugin {
         key,
         requestedForwardingVersion);
 
-    var response = new ServerboundCustomQueryAnswerPacket(transactionId, new PacketByteBufLoginQueryResponse(new FriendlyByteBuf(forwardingData)));
+    var response = new ServerboundCustomQueryAnswerPacket(transactionId, new ByteBufCustomQueryAnswerPayload(forwardingData));
     Objects.requireNonNull(connection.minecraft().getConnection()).send(response);
+  }
+
+  private record ByteBufCustomQueryAnswerPayload(ByteBuf data) implements CustomQueryAnswerPayload {
+    @Override
+    public void write(FriendlyByteBuf buf) {
+      buf.writeBytes(data.duplicate());
+    }
   }
 
   private static final class PlayerDataForwarding {

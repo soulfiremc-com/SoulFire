@@ -18,7 +18,7 @@
 package com.soulfiremc.server.script.nodes.action;
 
 import com.soulfiremc.server.script.*;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -57,8 +57,8 @@ public final class DropItemNode extends AbstractScriptNode {
       var player = bot.minecraft().player;
       var gameMode = bot.minecraft().gameMode;
       if (player != null && gameMode != null) {
-        gameMode.handleInventoryMouseClick(
-          player.containerMenu.containerId, -999, button, ClickType.PICKUP, player
+        gameMode.handleContainerInput(
+          player.containerMenu.containerId, -999, button, ContainerInput.PICKUP, player
         );
       }
     });
