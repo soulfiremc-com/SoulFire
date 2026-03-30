@@ -295,6 +295,136 @@ check_port() {
   return 0
 }
 
+is_valid_domain() {
+  local domain="$1"
+  [[ "$domain" =~ ^([a-zA-Z0-9]([-a-zA-Z0-9]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
+}
+
+is_valid_email() {
+  local email="$1"
+  [[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
+}
+
+is_valid_ipv4() {
+  local ip="$1"
+  local IFS=.
+  local -a octets
+  read -r -a octets <<< "$ip"
+
+  if [[ ${#octets[@]} -ne 4 ]]; then
+    return 1
+  fi
+
+  for octet in "${octets[@]}"; do
+    if ! [[ "$octet" =~ ^[0-9]+$ ]] || ((octet < 0 || octet > 255)); then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+app_container_id() {
+  docker compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null
+}
+
+app_container_state() {
+  local container_id
+  container_id=$(app_container_id)
+
+  if [[ -z "$container_id" ]]; then
+    echo "not found"
+    return 0
+  fi
+
+  docker inspect --format '{{.State.Status}}' "$container_id" 2>/dev/null || echo "unknown"
+}
+
+app_container_health() {
+  local container_id
+  container_id=$(app_container_id)
+
+  if [[ -z "$container_id" ]]; then
+    echo "not found"
+    return 0
+  fi
+
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id" 2>/dev/null || echo "unknown"
+}
+
+access_mode_name() {
+  case "$1" in
+    cloudflared) echo "Cloudflared Tunnel" ;;
+    traefik)     echo "Traefik + Domain HTTPS" ;;
+    traefik-ip)  echo "Traefik + IP HTTPS" ;;
+    http)        echo "HTTP Only" ;;
+    *)           echo "Unknown" ;;
+  esac
+}
+
+access_mode_summary() {
+  case "$1" in
+    cloudflared) echo "Public HTTPS through Cloudflare Tunnel without opening ports 80/443 on your server." ;;
+    traefik)     echo "Public HTTPS on your own domain using Traefik and a Let's Encrypt certificate." ;;
+    traefik-ip)  echo "Public HTTPS directly on your server's public IPv4 using Traefik and Let's Encrypt." ;;
+    http)        echo "Plain HTTP only. Suitable for local testing or when another reverse proxy already handles HTTPS." ;;
+    *)           echo "Unknown access method." ;;
+  esac
+}
+
+access_mode_requirements() {
+  case "$1" in
+    cloudflared) echo "Requirements: Cloudflare account, browser access to the Cloudflare dashboard, and an existing tunnel token." ;;
+    traefik)     echo "Requirements: a domain pointing to this server, ports 80/443 reachable from the internet, and an email for Let's Encrypt." ;;
+    traefik-ip)  echo "Requirements: public IPv4 address, ports 80/443 reachable from the internet, and an email for Let's Encrypt." ;;
+    http)        echo "Requirements: port ${SF_PORT} reachable to your clients, or another reverse proxy in front of SoulFire." ;;
+    *)           echo "Requirements unavailable." ;;
+  esac
+}
+
+access_mode_caveats() {
+  case "$1" in
+    cloudflared) echo "Caveats: this script cannot create the tunnel for you. You must complete the Cloudflare-side setup in a browser first." ;;
+    traefik)     echo "Caveats: DNS must already point at this server and certificate issuance can fail if ports 80/443 are blocked." ;;
+    traefik-ip)  echo "Caveats: IP-based certificates are more niche and less predictable than domain-based HTTPS." ;;
+    http)        echo "Caveats: some clients may reject or degrade plain HTTP connections, especially browsers or HTTPS-enforcing clients." ;;
+    *)           echo "Caveats unavailable." ;;
+  esac
+}
+
+selected_access_url() {
+  case "$1" in
+    cloudflared) echo "the URL configured in your Cloudflare tunnel" ;;
+    traefik)     echo "https://${DOMAIN}" ;;
+    traefik-ip)  echo "https://${PUBLIC_IP}" ;;
+    http)        echo "http://<server-ip>:${SF_PORT}" ;;
+    *)           echo "unknown" ;;
+  esac
+}
+
+load_existing_config() {
+  SSL_MODE=""
+  DOMAIN=""
+  EMAIL=""
+  PUBLIC_IP=""
+  TUNNEL_TOKEN=""
+
+  if [[ -f "$ENV_FILE" ]]; then
+    # shellcheck source=/dev/null
+    . "$ENV_FILE"
+  fi
+
+  if [[ -n "$TUNNEL_TOKEN" ]]; then
+    SSL_MODE="cloudflared"
+  elif [[ -n "$DOMAIN" ]]; then
+    SSL_MODE="traefik"
+  elif [[ -n "$PUBLIC_IP" ]]; then
+    SSL_MODE="traefik-ip"
+  else
+    SSL_MODE="http"
+  fi
+}
+
 # --- Compose template generators ---
 
 generate_cloudflared_compose() {
@@ -468,30 +598,173 @@ EMAIL=${EMAIL}"
 
 # --- SSL menu and prompts ---
 
-show_ssl_menu() {
-  local choice
-  choice=$(tui_menu "SSL Configuration" "How should SoulFire be exposed?" \
-    "cloudflared"  "Cloudflared Tunnel (Recommended)" \
-    "traefik"      "Traefik + Domain SSL (Let's Encrypt)" \
-    "traefik-ip"   "Traefik + IP SSL (Let's Encrypt)" \
-    "http"         "HTTP Only (Insecure)") || {
-    msg_info "Setup cancelled"
-    exit 0
-  }
+show_before_you_start() {
+  tui_msgbox "Before You Start" \
+    "This installer can set up Docker, generate a Docker Compose stack, and start SoulFire.\n\nSome access methods still require work outside this script:\n  - Cloudflared needs a Cloudflare account, browser access, and an existing tunnel/token\n  - Domain HTTPS needs DNS pointed to this server\n  - HTTPS certificate issuance requires public reachability for validation"
 
-  SSL_MODE="$choice"
+  tui_msgbox "HTTPS and Let's Encrypt" \
+    "HTTPS encrypts the connection between SoulFire and its clients.\n\nLet's Encrypt is the certificate authority used by the Traefik options. It issues the certificate that lets clients trust your server instead of showing security warnings.\n\nIf validation cannot reach your server on ports 80/443, certificate issuance will fail."
+}
 
-  case "$SSL_MODE" in
-    cloudflared) prompt_cloudflared ;;
-    traefik)     prompt_traefik_domain ;;
-    traefik-ip)  prompt_traefik_ip ;;
-    http)        confirm_http_warning ;;
+show_access_method_overview() {
+  tui_msgbox "Access Methods" \
+    "Choose how clients should reach SoulFire:\n\n  - Cloudflared Tunnel: easiest public HTTPS if you already use Cloudflare\n  - Traefik + Domain HTTPS: best general-purpose production setup\n  - Traefik + IP HTTPS: HTTPS without a domain, but more niche\n  - HTTP Only: for local testing, LAN use, or when another proxy already handles HTTPS"
+}
+
+show_cloudflared_info() {
+  tui_msgbox "Cloudflared Tunnel" \
+    "Use this when you already use Cloudflare and want public HTTPS without opening ports 80/443.\n\nRequires:\n  - Cloudflare account\n  - Browser access to the Cloudflare dashboard\n  - A tunnel created in Cloudflare Zero Trust\n  - A valid tunnel token\n\nThis script only runs the connector. It does not create the tunnel for you."
+}
+
+show_traefik_domain_info() {
+  tui_msgbox "Traefik + Domain HTTPS" \
+    "This is the most standard public deployment option.\n\nTraefik listens on ports 80 and 443 and requests a Let's Encrypt certificate for your domain.\n\nRequires:\n  - A domain you control\n  - DNS already pointing to this server\n  - Ports 80 and 443 reachable from the internet\n  - Browser or DNS-panel access to manage your domain"
+}
+
+show_traefik_ip_info() {
+  tui_msgbox "Traefik + IP HTTPS" \
+    "This option requests a certificate for the server's public IPv4 address instead of a domain.\n\nUse it when you need HTTPS but do not have a domain.\n\nCaveats:\n  - More niche than domain-based HTTPS\n  - Depends on public IPv4 reachability\n  - Ports 80 and 443 must be reachable from the internet\n  - Some environments are less thoroughly tested than standard domain HTTPS"
+}
+
+show_http_info() {
+  tui_msgbox "HTTP Only" \
+    "HTTP mode does not use encryption.\n\nUse it only when:\n  - you are testing locally\n  - clients connect over a trusted LAN\n  - another reverse proxy already provides HTTPS in front of SoulFire\n\nCaveats:\n  - credentials and traffic are sent in cleartext\n  - some clients may refuse or warn on plain HTTP\n  - browser-based flows and HTTPS-enforcing environments can break"
+}
+
+show_access_method_details() {
+  show_cloudflared_info
+  show_traefik_domain_info
+  show_traefik_ip_info
+  show_http_info
+}
+
+recommend_access_method() {
+  if tui_yesno "Recommendation Wizard" \
+    "Is this mainly for local testing, LAN use, or behind an existing HTTPS reverse proxy?"; then
+    echo "http"
+    return 0
+  fi
+
+  if tui_yesno "Recommendation Wizard" \
+    "Do you already use Cloudflare and want to expose SoulFire through Cloudflare Tunnel?"; then
+    echo "cloudflared"
+    return 0
+  fi
+
+  if tui_yesno "Recommendation Wizard" \
+    "Do you have a domain name that you can point to this server?"; then
+    echo "traefik"
+    return 0
+  fi
+
+  if tui_yesno "Recommendation Wizard" \
+    "Can this server accept inbound traffic on ports 80 and 443 from the public internet?"; then
+    echo "traefik-ip"
+    return 0
+  fi
+
+  echo "http"
+}
+
+confirm_access_selection() {
+  local access_mode="$1"
+  if tui_yesno "Use This Access Method?" \
+    "Selected: $(access_mode_name "$access_mode")\n\n$(access_mode_summary "$access_mode")\n\n$(access_mode_requirements "$access_mode")\n\n$(access_mode_caveats "$access_mode")\n\nUse this method?"; then
+    return 0
+  fi
+
+  return 1
+}
+
+confirm_configuration_summary() {
+  local access_mode="$1"
+  local details=""
+
+  case "$access_mode" in
+    cloudflared)
+      details="Tunnel token: configured"
+      ;;
+    traefik)
+      details="Domain: ${DOMAIN}\nLet's Encrypt email: ${EMAIL}\nPorts required: 80 and 443"
+      ;;
+    traefik-ip)
+      details="Public IP: ${PUBLIC_IP}\nLet's Encrypt email: ${EMAIL}\nPorts required: 80 and 443"
+      ;;
+    http)
+      details="Published port: ${SF_PORT}\nTLS: disabled"
+      ;;
   esac
+
+  tui_yesno "Confirm Configuration" \
+    "Please review the configuration before continuing.\n\nAccess method: $(access_mode_name "$access_mode")\nAccess URL: $(selected_access_url "$access_mode")\n\n${details}\n\n$(access_mode_caveats "$access_mode")\n\nProceed with this configuration?"
+}
+
+show_ssl_menu() {
+  local choice recommended
+  SSL_MODE=""
+
+  while true; do
+    show_access_method_overview
+
+    if tui_yesno "Guided Recommendation" \
+      "Would you like the installer to recommend an access method based on your setup?"; then
+      recommended=$(recommend_access_method)
+      if confirm_access_selection "$recommended"; then
+        SSL_MODE="$recommended"
+      fi
+    fi
+
+    while [[ -z "$SSL_MODE" ]]; do
+      choice=$(tui_menu "Access Method" "How should SoulFire be exposed?" \
+        "cloudflared"  "Cloudflared Tunnel" \
+        "traefik"      "Traefik + Domain HTTPS" \
+        "traefik-ip"   "Traefik + IP HTTPS" \
+        "http"         "HTTP Only" \
+        "details"      "Explain the options and caveats" \
+        "cancel"       "Cancel setup") || {
+          msg_info "Setup cancelled"
+          exit 0
+        }
+
+      case "$choice" in
+        cloudflared|traefik|traefik-ip|http)
+          if confirm_access_selection "$choice"; then
+            SSL_MODE="$choice"
+          fi
+          ;;
+        details) show_access_method_details ;;
+        cancel)
+          msg_info "Setup cancelled"
+          exit 0
+          ;;
+      esac
+    done
+
+    case "$SSL_MODE" in
+      cloudflared) prompt_cloudflared ;;
+      traefik)     prompt_traefik_domain ;;
+      traefik-ip)  prompt_traefik_ip ;;
+      http)
+        if ! confirm_http_warning; then
+          SSL_MODE=""
+          continue
+        fi
+        ;;
+    esac
+
+    if confirm_configuration_summary "$SSL_MODE"; then
+      return 0
+    fi
+
+    SSL_MODE=""
+  done
 }
 
 prompt_cloudflared() {
+  show_cloudflared_info
+
   TUNNEL_TOKEN=$(tui_inputbox "Cloudflared Tunnel" \
-    "Enter your Cloudflare Tunnel token.\n\nGet one from the Cloudflare Zero Trust dashboard:\nhttps://one.dash.cloudflare.com" \
+    "Enter your Cloudflare Tunnel token.\n\nGet it from the Cloudflare Zero Trust dashboard after creating a tunnel in your browser:\nhttps://one.dash.cloudflare.com" \
     "") || {
     msg_info "Setup cancelled"
     exit 0
@@ -504,6 +777,8 @@ prompt_cloudflared() {
 }
 
 prompt_traefik_domain() {
+  show_traefik_domain_info
+
   DOMAIN=$(tui_inputbox "Domain Configuration" \
     "Enter the domain pointing to this server.\n\nMake sure DNS is configured before proceeding." \
     "") || {
@@ -517,8 +792,14 @@ prompt_traefik_domain() {
     return
   fi
 
+  if ! is_valid_domain "$DOMAIN"; then
+    msg_error "Domain format looks invalid: $DOMAIN"
+    prompt_traefik_domain
+    return
+  fi
+
   EMAIL=$(tui_inputbox "Let's Encrypt Email" \
-    "Enter your email for Let's Encrypt certificate notifications." \
+    "Enter your email for Let's Encrypt certificate notifications.\n\nLet's Encrypt uses this address for expiry and validation notices." \
     "") || {
     msg_info "Setup cancelled"
     exit 0
@@ -530,6 +811,12 @@ prompt_traefik_domain() {
     return
   fi
 
+  if ! is_valid_email "$EMAIL"; then
+    msg_error "Email format looks invalid: $EMAIL"
+    prompt_traefik_domain
+    return
+  fi
+
   if ! check_port 80 || ! check_port 443; then
     tui_msgbox "Port Conflict" "Ports 80 and/or 443 are already in use.\nTraefik needs these ports to be available.\n\nPlease stop the conflicting service and try again."
     exit 1
@@ -537,6 +824,8 @@ prompt_traefik_domain() {
 }
 
 prompt_traefik_ip() {
+  show_traefik_ip_info
+
   tui_msgbox "IP SSL Information" \
     "IP SSL uses Let's Encrypt to issue certificates for your server's\npublic IP address (no domain needed).\n\nRequirements:\n- Traefik v3.6.7+ (handled automatically)\n- Ports 80 and 443 open to the internet\n- Certificates are short-lived (~6 days, auto-renewed)"
 
@@ -566,8 +855,14 @@ prompt_traefik_ip() {
     return
   fi
 
+  if ! is_valid_ipv4 "$PUBLIC_IP"; then
+    msg_error "Public IPv4 format looks invalid: $PUBLIC_IP"
+    prompt_traefik_ip
+    return
+  fi
+
   EMAIL=$(tui_inputbox "Let's Encrypt Email" \
-    "Enter your email for Let's Encrypt certificate notifications." \
+    "Enter your email for Let's Encrypt certificate notifications.\n\nLet's Encrypt uses this address for expiry and validation notices." \
     "") || {
     msg_info "Setup cancelled"
     exit 0
@@ -579,6 +874,12 @@ prompt_traefik_ip() {
     return
   fi
 
+  if ! is_valid_email "$EMAIL"; then
+    msg_error "Email format looks invalid: $EMAIL"
+    prompt_traefik_ip
+    return
+  fi
+
   if ! check_port 80 || ! check_port 443; then
     tui_msgbox "Port Conflict" "Ports 80 and/or 443 are already in use.\nTraefik needs these ports to be available.\n\nPlease stop the conflicting service and try again."
     exit 1
@@ -586,15 +887,19 @@ prompt_traefik_ip() {
 }
 
 confirm_http_warning() {
+  show_http_info
+
   if ! tui_yesno "Security Warning" \
-    "HTTP mode serves SoulFire WITHOUT encryption.\n\nAll traffic including credentials will be sent in cleartext\nand can be intercepted with Man-in-the-Middle attacks.\n\nThis is NOT recommended for production use.\n\nContinue with HTTP only?"; then
-    show_ssl_menu
+    "HTTP mode serves SoulFire WITHOUT encryption.\n\nAll traffic including credentials will be sent in cleartext and can be intercepted.\n\nSome clients may not work correctly over plain HTTP, especially browser-based flows or environments that expect HTTPS by default.\n\nThis is not recommended for public production use.\n\nContinue with HTTP only?"; then
+    return 1
   fi
 
   if ! check_port "$SF_PORT"; then
     tui_msgbox "Port Conflict" "Port $SF_PORT is already in use.\n\nPlease stop the conflicting service and try again."
     exit 1
   fi
+
+  return 0
 }
 
 # --- Container helpers ---
@@ -607,20 +912,25 @@ wait_for_healthy() {
   local attempts=0
   local max_attempts=60
   local state=""
+  local health=""
   while true; do
     if [ "$attempts" -ge "$max_attempts" ]; then
       echo ""
-      msg_warn "Container did not start within ${max_attempts}s"
+      msg_warn "Container did not become ready within ${max_attempts}s"
       return 1
     fi
-    state="$(docker compose -f "$COMPOSE_FILE" ps --format '{{.State}}' app 2>/dev/null)" || state="unknown"
-    if [ "$state" = "running" ]; then
+
+    state="$(app_container_state)"
+    health="$(app_container_health)"
+
+    if [[ "$state" = "running" && ( "$health" = "healthy" || "$health" = "none" ) ]]; then
       echo ""
-      msg_ok "SoulFire is running"
+      msg_ok "SoulFire is ready"
       return 0
     fi
+
     attempts=$((attempts + 1))
-    echo -ne "\r\e[34m[INFO]\e[0m Waiting for container to start... (${attempts}s/${max_attempts}s) [state: ${state}]"
+    echo -ne "\r\e[34m[INFO]\e[0m Waiting for SoulFire to become ready... (${attempts}s/${max_attempts}s) [state: ${state}, health: ${health}]"
     sleep 1
   done
 }
@@ -629,11 +939,41 @@ wait_for_healthy() {
 
 show_welcome() {
   tui_msgbox "SoulFire Dedicated Server Setup" \
-    "Welcome to the SoulFire Dedicated Server installer!\n\nThis script will:\n  1. Update your system packages\n  2. Install Docker (if needed)\n  3. Configure SSL/HTTPS\n  4. Deploy SoulFire via Docker Compose\n\nInstall directory: /opt/soulfire/\n\nRe-run this script anytime to manage your installation."
+    "Welcome to the SoulFire Dedicated Server installer!\n\nThis script will:\n  1. Update your system packages\n  2. Install Docker (if needed)\n  3. Help you choose an access method\n  4. Deploy SoulFire via Docker Compose\n\nInstall directory: /opt/soulfire/\n\nAfter installation, the management menu will open automatically."
+}
+
+show_startup_troubleshooting() {
+  local details=""
+
+  case "$SSL_MODE" in
+    cloudflared)
+      details="Likely causes:\n  - SoulFire is still starting\n  - the Cloudflare tunnel token is invalid\n  - Cloudflared is connected but the app is not healthy yet"
+      ;;
+    traefik)
+      details="Likely causes:\n  - SoulFire is still starting\n  - DNS does not point to this server yet\n  - ports 80/443 are blocked by a firewall or router"
+      ;;
+    traefik-ip)
+      details="Likely causes:\n  - SoulFire is still starting\n  - the public IP is wrong or changed\n  - ports 80/443 are blocked by a firewall or router"
+      ;;
+    http)
+      details="Likely causes:\n  - SoulFire is still starting\n  - port ${SF_PORT} is blocked or already in use\n  - another service is interfering with the container"
+      ;;
+  esac
+  
+  tui_msgbox "Startup Taking Longer Than Expected" \
+    "SoulFire is taking longer than expected to become ready.\n\n${details}\n\nUseful commands:\n  docker compose -f $COMPOSE_FILE ps\n  docker compose -f $COMPOSE_FILE logs app\n  docker compose -f $COMPOSE_FILE logs --tail 100"
+}
+
+show_post_install_guidance() {
+  local access_url="$1"
+
+  tui_msgbox "Next Steps" \
+    "SoulFire is now running.\n\nAccess: ${access_url}\n\nRecommended next steps:\n  1. Open the management menu next\n  2. Attach to the SoulFire console\n  3. Run: generate-token api\n  4. Change the default root email if needed\n  5. Use logs/status if something is not reachable yet"
 }
 
 do_fresh_install() {
   show_welcome
+  show_before_you_start
 
   if tui_yesno "System Update" "Update system packages before installing?\n\n(Recommended for fresh servers)"; then
     update_system
@@ -650,22 +990,16 @@ do_fresh_install() {
 
   msg_info "Waiting for SoulFire to start..."
   if ! wait_for_healthy; then
-    tui_msgbox "Slow Start" \
-      "SoulFire is taking longer than expected to start.\nThis is normal on first run while Java initializes.\n\nCheck status with:\n  docker compose -f $COMPOSE_FILE ps\n  docker compose -f $COMPOSE_FILE logs app"
+    show_startup_troubleshooting
   fi
 
   local access_url
-  case "$SSL_MODE" in
-    cloudflared) access_url="the URL configured in your Cloudflare tunnel" ;;
-    traefik)     access_url="https://${DOMAIN}" ;;
-    traefik-ip)  access_url="https://${PUBLIC_IP}" ;;
-    http)        access_url="http://<server-ip>:${SF_PORT}" ;;
-  esac
+  access_url=$(selected_access_url "$SSL_MODE")
 
-  tui_msgbox "Installation Complete" \
-    "SoulFire is now running!\n\nAccess: ${access_url}\n\nTo generate an access token, run:\n  sudo bash $0\n  -> Attach to SoulFire console\n  -> Run: generate-token api\n\nRe-run this script to manage your installation."
+  show_post_install_guidance "$access_url"
 
   msg_ok "SoulFire installed successfully"
+  show_manage_menu
 }
 
 # --- Management menu ---
@@ -700,6 +1034,10 @@ do_update() {
   docker compose -f "$COMPOSE_FILE" pull
   msg_info "Recreating containers..."
   docker compose -f "$COMPOSE_FILE" up -d
+  msg_info "Waiting for SoulFire to become ready..."
+  if ! wait_for_healthy; then
+    show_startup_troubleshooting
+  fi
   msg_ok "SoulFire updated successfully"
 }
 
@@ -711,6 +1049,10 @@ do_reconfigure() {
   write_env_file
   msg_info "Starting with new configuration..."
   docker compose -f "$COMPOSE_FILE" up -d
+  msg_info "Waiting for SoulFire to become ready..."
+  if ! wait_for_healthy; then
+    show_startup_troubleshooting
+  fi
   msg_ok "SoulFire reconfigured successfully"
 }
 
@@ -733,6 +1075,12 @@ do_uninstall() {
 }
 
 do_status() {
+  load_existing_config
+  echo "Access method: $(access_mode_name "$SSL_MODE")"
+  echo "Expected access URL: $(selected_access_url "$SSL_MODE")"
+  echo "Container state: $(app_container_state)"
+  echo "Container health: $(app_container_health)"
+  echo ""
   docker compose -f "$COMPOSE_FILE" ps
   echo ""
   read -rp "Press Enter to continue..."
@@ -740,8 +1088,9 @@ do_status() {
 
 show_manage_menu() {
   while true; do
+    load_existing_config
     local choice
-    choice=$(tui_menu "SoulFire Management" "SoulFire is installed at $INSTALL_DIR" \
+    choice=$(tui_menu "SoulFire Management" "SoulFire is installed at $INSTALL_DIR\n\nAccess method: $(access_mode_name "$SSL_MODE")\nAccess URL: $(selected_access_url "$SSL_MODE")\nContainer: $(app_container_state) / $(app_container_health)" \
       "attach"      "Attach to SoulFire console" \
       "logs"        "View container logs" \
       "status"      "Show container status" \
