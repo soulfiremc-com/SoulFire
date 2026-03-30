@@ -303,6 +303,8 @@ services:
   app:
     image: ghcr.io/alexprogrammerde/soulfire
     restart: always
+    stdin_open: true
+    tty: true
     volumes:
       - app_data:/soulfire/data
 
@@ -325,6 +327,8 @@ services:
   app:
     image: ghcr.io/alexprogrammerde/soulfire
     restart: always
+    stdin_open: true
+    tty: true
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.soulfire.rule=Host(`${DOMAIN}`)"
@@ -367,6 +371,8 @@ services:
   app:
     image: ghcr.io/alexprogrammerde/soulfire
     restart: always
+    stdin_open: true
+    tty: true
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.soulfire.rule=Host(`${PUBLIC_IP}`)"
@@ -411,6 +417,8 @@ services:
   app:
     image: ghcr.io/alexprogrammerde/soulfire
     restart: always
+    stdin_open: true
+    tty: true
     ports:
       - "38765:38765"
     volumes:
@@ -678,8 +686,8 @@ do_attach() {
       return
     fi
   fi
-  msg_info "Attaching to SoulFire console (type 'exit' to detach)..."
-  docker compose -f "$COMPOSE_FILE" exec app bash || true
+  msg_info "Attaching to SoulFire console (detach with Ctrl+P, Ctrl+Q)..."
+  docker compose -f "$COMPOSE_FILE" attach app || true
 }
 
 do_logs() {
