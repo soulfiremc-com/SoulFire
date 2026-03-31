@@ -1016,7 +1016,7 @@ verify_tls_access_ready() {
 
 wait_for_healthy() {
   local attempts=0
-  local max_attempts=60
+  local max_attempts=180
   local state=""
   local health=""
   while true; do
