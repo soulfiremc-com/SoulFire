@@ -17,6 +17,7 @@ TUNNEL_TOKEN=""
 DOMAIN=""
 EMAIL=""
 PUBLIC_IP=""
+RECOMMENDED_ACCESS_MODE=""
 
 # --- Output helpers ---
 
@@ -324,6 +325,13 @@ is_valid_ipv4() {
   return 0
 }
 
+is_known_access_mode() {
+  case "$1" in
+    cloudflared|traefik|traefik-ip|http) return 0 ;;
+    *)                                   return 1 ;;
+  esac
+}
+
 app_container_id() {
   docker compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null
 }
@@ -563,6 +571,11 @@ COMPOSE
 # --- Compose file writing ---
 
 write_compose_file() {
+  if ! is_known_access_mode "$SSL_MODE"; then
+    msg_error "Cannot write compose file: invalid access method '${SSL_MODE:-<empty>}'"
+    return 1
+  fi
+
   mkdir -p "$INSTALL_DIR"
   case "$SSL_MODE" in
     cloudflared) generate_cloudflared_compose > "$COMPOSE_FILE" ;;
@@ -575,6 +588,12 @@ write_compose_file() {
 
 write_env_file() {
   local env_content=""
+
+  if ! is_known_access_mode "$SSL_MODE"; then
+    msg_error "Cannot write environment file: invalid access method '${SSL_MODE:-<empty>}'"
+    return 1
+  fi
+
   case "$SSL_MODE" in
     cloudflared)
       env_content="TUNNEL_TOKEN=${TUNNEL_TOKEN}"
@@ -639,31 +658,34 @@ show_access_method_details() {
 }
 
 recommend_access_method() {
+  RECOMMENDED_ACCESS_MODE=""
+
   if tui_yesno "Recommendation Wizard" \
     "Is this mainly for local testing, LAN use, or behind an existing HTTPS reverse proxy?"; then
-    echo "http"
+    RECOMMENDED_ACCESS_MODE="http"
     return 0
   fi
 
   if tui_yesno "Recommendation Wizard" \
     "Do you already use Cloudflare and want to expose SoulFire through Cloudflare Tunnel?"; then
-    echo "cloudflared"
+    RECOMMENDED_ACCESS_MODE="cloudflared"
     return 0
   fi
 
   if tui_yesno "Recommendation Wizard" \
     "Do you have a domain name that you can point to this server?"; then
-    echo "traefik"
+    RECOMMENDED_ACCESS_MODE="traefik"
     return 0
   fi
 
   if tui_yesno "Recommendation Wizard" \
     "Can this server accept inbound traffic on ports 80 and 443 from the public internet?"; then
-    echo "traefik-ip"
+    RECOMMENDED_ACCESS_MODE="traefik-ip"
     return 0
   fi
 
-  echo "http"
+  RECOMMENDED_ACCESS_MODE="http"
+  return 0
 }
 
 confirm_access_selection() {
@@ -679,6 +701,12 @@ confirm_access_selection() {
 confirm_configuration_summary() {
   local access_mode="$1"
   local details=""
+
+  if ! is_known_access_mode "$access_mode"; then
+    tui_msgbox "Configuration Error" \
+      "The installer selected an invalid access method: ${access_mode:-<empty>}\n\nPlease go back and choose the access method again."
+    return 1
+  fi
 
   case "$access_mode" in
     cloudflared)
@@ -708,8 +736,13 @@ show_ssl_menu() {
 
     if tui_yesno "Guided Recommendation" \
       "Would you like the installer to recommend an access method based on your setup?"; then
-      recommended=$(recommend_access_method)
-      if confirm_access_selection "$recommended"; then
+      recommend_access_method
+      recommended="$RECOMMENDED_ACCESS_MODE"
+
+      if ! is_known_access_mode "$recommended"; then
+        tui_msgbox "Recommendation Error" \
+          "The installer produced an invalid access method: ${recommended:-<empty>}\n\nPlease choose the access method manually."
+      elif confirm_access_selection "$recommended"; then
         SSL_MODE="$recommended"
       fi
     fi
@@ -824,10 +857,8 @@ prompt_traefik_domain() {
 }
 
 prompt_traefik_ip() {
-  show_traefik_ip_info
-
   tui_msgbox "IP SSL Information" \
-    "IP SSL uses Let's Encrypt to issue certificates for your server's\npublic IP address (no domain needed).\n\nRequirements:\n- Traefik v3.6.7+ (handled automatically)\n- Ports 80 and 443 open to the internet\n- Certificates are short-lived (~6 days, auto-renewed)"
+    "Traefik + IP HTTPS uses Let's Encrypt to issue certificates for your server's public IPv4 address instead of a domain.\n\nRequirements:\n- Traefik v3.6.7+ (handled automatically)\n- Ports 80 and 443 open to the internet\n- Certificates are short-lived (~6 days, auto-renewed)\n\nCaveats:\n- More niche than domain-based HTTPS\n- Depends on public IPv4 reachability\n- Some environments are less thoroughly tested than standard domain HTTPS"
 
   msg_info "Detecting public IP address..."
   local detected_ip
@@ -981,8 +1012,14 @@ do_fresh_install() {
 
   install_docker
   show_ssl_menu
-  write_compose_file
-  write_env_file
+
+  if ! is_known_access_mode "$SSL_MODE"; then
+    msg_error "Installer aborted: invalid access method '${SSL_MODE:-<empty>}'"
+    exit 1
+  fi
+
+  write_compose_file || exit 1
+  write_env_file || exit 1
 
   msg_info "Starting SoulFire..."
   docker compose -f "$COMPOSE_FILE" pull
