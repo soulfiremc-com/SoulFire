@@ -517,6 +517,8 @@ services:
       - "traefik.http.services.soulfire.loadbalancer.server.port=38765"
       - "traefik.http.routers.soulfire.entrypoints=websecure"
       - "traefik.http.routers.soulfire.tls.certresolver=myresolver"
+      - "traefik.tls.stores.default.defaultgeneratedcert.resolver=myresolver"
+      - "traefik.tls.stores.default.defaultgeneratedcert.domain.main=${PUBLIC_IP}"
     volumes:
       - app_data:/soulfire/data
 
