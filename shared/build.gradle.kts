@@ -13,7 +13,7 @@ dependencies {
   api("org.ow2.asm:asm-tree:9.9.1")
   api("org.ow2.asm:asm-util:9.9.1")
   api("net.fabricmc:sponge-mixin:0.17.0+mixin.0.8.7")
-  api("net.fabricmc:fabric-loader:0.18.5")
+  api("net.fabricmc:fabric-loader:0.18.6")
   api("net.fabricmc:mapping-io:0.8.0")
 
   api("at.yawk.lz4:lz4-java:1.10.4")
