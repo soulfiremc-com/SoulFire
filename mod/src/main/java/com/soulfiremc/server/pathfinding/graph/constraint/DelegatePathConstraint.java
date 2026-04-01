@@ -20,6 +20,7 @@ package com.soulfiremc.server.pathfinding.graph.constraint;
 import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.graph.DiagonalCollisionCalculator;
 import com.soulfiremc.server.pathfinding.graph.GraphInstructions;
+import com.soulfiremc.server.settings.property.MinMaxProperty;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -100,23 +101,13 @@ public interface DelegatePathConstraint extends PathConstraint {
   }
 
   @Override
-  default double yawJitterMin() {
-    return delegate().yawJitterMin();
+  default MinMaxProperty.DataLayout yawJitter() {
+    return delegate().yawJitter();
   }
 
   @Override
-  default double yawJitterMax() {
-    return delegate().yawJitterMax();
-  }
-
-  @Override
-  default double pitchJitterMin() {
-    return delegate().pitchJitterMin();
-  }
-
-  @Override
-  default double pitchJitterMax() {
-    return delegate().pitchJitterMax();
+  default MinMaxProperty.DataLayout pitchJitter() {
+    return delegate().pitchJitter();
   }
 
   PathConstraint delegate();

@@ -20,6 +20,7 @@ package com.soulfiremc.test.utils;
 import com.soulfiremc.server.pathfinding.graph.constraint.DelegatePathConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraintImpl;
+import com.soulfiremc.server.settings.property.MinMaxProperty;
 import org.jspecify.annotations.NonNull;
 
 public final class TestPathConstraint implements DelegatePathConstraint {
@@ -36,10 +37,8 @@ public final class TestPathConstraint implements DelegatePathConstraint {
     5,      // placeBlockPenalty
     180,    // expireTimeout
     false,   // disablePruning
-    -25,  // yawJitterMin
-    25,   // yawJitterMax
-    -4,   // pitchJitterMin
-    4   // pitchJitterMax
+    new MinMaxProperty.DataLayout(-25, 25), // yawJitter
+    new MinMaxProperty.DataLayout(-4, 4) // pitchJitter
   );
 
   private TestPathConstraint() {}

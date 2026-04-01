@@ -30,12 +30,12 @@ import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @RequiredArgsConstructor
 public final class MovementAction implements WorldAction {
-  private static final Random rand = new Random();
+  private static final ThreadLocalRandom rand = ThreadLocalRandom.current();
 
   private static final double STEP_HEIGHT = 0.6;
   private final SFVec3i blockPosition;
@@ -98,11 +98,11 @@ public final class MovementAction implements WorldAction {
     var xRotation = 0f;
     var yRotation = 0f;
 
-    if (settings.yawJitterMin() < settings.yawJitterMax()) {
-      yRotation = rand.nextFloat((float) settings.yawJitterMin(), (float) settings.yawJitterMax());
+    if (settings.yawJitter().min() < settings.yawJitter().max()) {
+      yRotation = rand.nextFloat((float) settings.yawJitter().min(), (float) settings.yawJitter().max());
     }
-    if (settings.pitchJitterMin() < settings.pitchJitterMax()) {
-      xRotation = rand.nextFloat((float) settings.pitchJitterMin(), (float) settings.pitchJitterMax());
+    if (settings.pitchJitter().min() < settings.pitchJitter().max()) {
+      xRotation = rand.nextFloat((float) settings.pitchJitter().min(), (float) settings.pitchJitter().max());
     }
 
     clientEntity.setYRot(clientEntity.getYRot() + yRotation);
