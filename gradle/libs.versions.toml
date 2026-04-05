@@ -19,7 +19,7 @@ jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooq" }
 gradle-plugin-shadow = "gradle.plugin.com.github.johnrengelman:shadow:8.0.0"
 gradle-plugin-lombok = "io.freefair.gradle:lombok-plugin:9.2.0"
 gradle-plugin-indra-git = "net.kyori:indra-git:4.0.0"
-gradle-plugin-loom = "net.fabricmc:fabric-loom:1.15.5"
+gradle-plugin-loom = "net.fabricmc:fabric-loom:1.16.1"
 gradle-plugin-spotless = "com.diffplug.spotless:spotless-plugin-gradle:8.4.0"
 gradle-plugin-freefair = "io.freefair.gradle:maven-plugin:9.2.0"
 log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }

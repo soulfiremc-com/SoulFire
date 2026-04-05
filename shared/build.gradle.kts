@@ -12,13 +12,13 @@ dependencies {
   api("org.ow2.asm:asm-commons:9.9.1")
   api("org.ow2.asm:asm-tree:9.9.1")
   api("org.ow2.asm:asm-util:9.9.1")
-  api("net.fabricmc:sponge-mixin:0.17.0+mixin.0.8.7")
+  api("net.fabricmc:sponge-mixin:0.17.1+mixin.0.8.7")
   api("net.fabricmc:fabric-loader:0.18.6")
   api("net.fabricmc:mapping-io:0.8.0")
 
   api("at.yawk.lz4:lz4-java:1.10.4")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:6.10.0")
+  api("com.github.oshi:oshi-core:6.11.0")
   api("com.google.code.gson:gson:2.13.2")
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.5.0-jre")
@@ -54,7 +54,7 @@ dependencies {
   api("org.slf4j:slf4j-api:2.0.17")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.3")
-  api("org.checkerframework:checker-qual:3.54.0")
+  api("org.checkerframework:checker-qual:3.55.1")
 
   api(projects.buildData)
 
