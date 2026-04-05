@@ -35,8 +35,6 @@ import java.util.concurrent.ThreadLocalRandom;
 @Slf4j
 @RequiredArgsConstructor
 public final class MovementAction implements WorldAction {
-  private static final ThreadLocalRandom rand = ThreadLocalRandom.current();
-
   private static final double STEP_HEIGHT = 0.6;
   private final SFVec3i blockPosition;
   // Corner jumps normally require you to stand closer to the block to jump
@@ -99,10 +97,10 @@ public final class MovementAction implements WorldAction {
     var yRot = 0f;
 
     if (settings.yRotJitter().min() < settings.yRotJitter().max()) {
-      yRot = rand.nextFloat((float) settings.yRotJitter().min(), (float) settings.yRotJitter().max());
+      yRot = ThreadLocalRandom.current().nextFloat((float) settings.yRotJitter().min(), (float) settings.yRotJitter().max());
     }
     if (settings.xRotJitter().min() < settings.xRotJitter().max()) {
-      xRot = rand.nextFloat((float) settings.xRotJitter().min(), (float) settings.xRotJitter().max());
+      xRot = ThreadLocalRandom.current().nextFloat((float) settings.xRotJitter().min(), (float) settings.xRotJitter().max());
     }
 
     clientEntity.setYRot(clientEntity.getYRot() + yRot);
