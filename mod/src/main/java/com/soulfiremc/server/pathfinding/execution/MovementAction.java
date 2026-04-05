@@ -95,18 +95,18 @@ public final class MovementAction implements WorldAction {
     var previousYRot = clientEntity.getYRot();
     clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, targetMiddleBlock);
 
-    var xRotation = 0f;
-    var yRotation = 0f;
+    var xRot = 0f;
+    var yRot = 0f;
 
-    if (settings.yawJitter().min() < settings.yawJitter().max()) {
-      yRotation = rand.nextFloat((float) settings.yawJitter().min(), (float) settings.yawJitter().max());
+    if (settings.yRotJitter().min() < settings.yRotJitter().max()) {
+      yRot = rand.nextFloat((float) settings.yRotJitter().min(), (float) settings.yRotJitter().max());
     }
-    if (settings.pitchJitter().min() < settings.pitchJitter().max()) {
-      xRotation = rand.nextFloat((float) settings.pitchJitter().min(), (float) settings.pitchJitter().max());
+    if (settings.xRotJitter().min() < settings.xRotJitter().max()) {
+      xRot = rand.nextFloat((float) settings.xRotJitter().min(), (float) settings.xRotJitter().max());
     }
 
-    clientEntity.setYRot(clientEntity.getYRot() + yRotation);
-    clientEntity.setXRot(xRotation);
+    clientEntity.setYRot(clientEntity.getYRot() + yRot);
+    clientEntity.setXRot(xRot);
     var newYRot = clientEntity.getYRot();
 
     var yRotDifference = Math.abs(MathHelper.wrapDegrees(newYRot - previousYRot));

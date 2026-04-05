@@ -37,8 +37,8 @@ public final class TestPathConstraint implements DelegatePathConstraint {
     5,      // placeBlockPenalty
     180,    // expireTimeout
     false,   // disablePruning
-    new MinMaxProperty.DataLayout(-25, 25), // yawJitter
-    new MinMaxProperty.DataLayout(-4, 4) // pitchJitter
+    new MinMaxProperty.DataLayout(-25, 25), // yRotJitter
+    new MinMaxProperty.DataLayout(-4, 4) // xRotJitter
   );
 
   private TestPathConstraint() {}

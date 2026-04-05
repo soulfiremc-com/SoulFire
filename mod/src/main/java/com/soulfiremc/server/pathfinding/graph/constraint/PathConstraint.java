@@ -60,7 +60,7 @@ public interface PathConstraint {
   /// Returns whether pruning of the pathfinding search space is disabled.
   boolean disablePruning();
 
-  MinMaxProperty.DataLayout yawJitter();
+  MinMaxProperty.DataLayout yRotJitter();
 
-  MinMaxProperty.DataLayout pitchJitter();
+  MinMaxProperty.DataLayout xRotJitter();
 }

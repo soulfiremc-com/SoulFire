@@ -57,8 +57,8 @@ public final class PathConstraintImpl implements PathConstraint {
   private final int placeBlockPenalty;
   private final int expireTimeout;
   private final boolean disablePruning;
-  private final MinMaxProperty.DataLayout yawJitter;
-  private final MinMaxProperty.DataLayout pitchJitter;
+  private final MinMaxProperty.DataLayout yRotJitter;
+  private final MinMaxProperty.DataLayout xRotJitter;
   private final CachedLazyObject<List<EntityRangeData>> unfriendlyEntities = new CachedLazyObject<>(this::getUnfriendlyEntitiesExpensive, 10, TimeUnit.SECONDS);
 
   public PathConstraintImpl(
@@ -72,8 +72,8 @@ public final class PathConstraintImpl implements PathConstraint {
     int placeBlockPenalty,
     int expireTimeout,
     boolean disablePruning,
-    MinMaxProperty.DataLayout yawJitter,
-    MinMaxProperty.DataLayout pitchJitter) {
+    MinMaxProperty.DataLayout yRotJitter,
+    MinMaxProperty.DataLayout xRotJitter) {
     this.entity = entity;
     this.levelHeightAccessor = levelHeightAccessor;
     this.allowBreakingUndiggable = allowBreakingUndiggable;
@@ -84,8 +84,8 @@ public final class PathConstraintImpl implements PathConstraint {
     this.placeBlockPenalty = placeBlockPenalty;
     this.expireTimeout = expireTimeout;
     this.disablePruning = disablePruning;
-    this.yawJitter = yawJitter;
-    this.pitchJitter = yawJitter;
+    this.yRotJitter = yRotJitter;
+    this.xRotJitter = xRotJitter;
   }
 
   public PathConstraintImpl(BotConnection botConnection) {
@@ -111,8 +111,8 @@ public final class PathConstraintImpl implements PathConstraint {
       settingsSource.get(PathfindingSettings.PLACE_BLOCK_PENALTY),
       settingsSource.get(PathfindingSettings.EXPIRE_TIMEOUT),
       settingsSource.get(PathfindingSettings.DISABLE_PRUNING),
-      settingsSource.get(PathfindingSettings.YAW_JITTER),
-      settingsSource.get(PathfindingSettings.PITCH_JITTER)
+      settingsSource.get(PathfindingSettings.Y_ROT_JITTER),
+      settingsSource.get(PathfindingSettings.X_ROT_JITTER)
     );
   }
 
@@ -223,13 +223,13 @@ public final class PathConstraintImpl implements PathConstraint {
   }
 
   @Override
-  public MinMaxProperty.DataLayout yawJitter() {
-    return yawJitter;
+  public MinMaxProperty.DataLayout yRotJitter() {
+    return yRotJitter;
   }
 
   @Override
-  public MinMaxProperty.DataLayout pitchJitter() {
-    return pitchJitter;
+  public MinMaxProperty.DataLayout xRotJitter() {
+    return xRotJitter;
   }
 
   private List<EntityRangeData> getUnfriendlyEntitiesExpensive() {

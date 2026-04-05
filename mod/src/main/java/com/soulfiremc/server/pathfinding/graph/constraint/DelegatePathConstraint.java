@@ -101,13 +101,13 @@ public interface DelegatePathConstraint extends PathConstraint {
   }
 
   @Override
-  default MinMaxProperty.DataLayout yawJitter() {
-    return delegate().yawJitter();
+  default MinMaxProperty.DataLayout yRotJitter() {
+    return delegate().yRotJitter();
   }
 
   @Override
-  default MinMaxProperty.DataLayout pitchJitter() {
-    return delegate().pitchJitter();
+  default MinMaxProperty.DataLayout xRotJitter() {
+    return delegate().xRotJitter();
   }
 
   PathConstraint delegate();
