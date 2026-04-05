@@ -127,11 +127,7 @@ public final class ClientSettingsManager {
   private void loadFromString(UUID instanceId, String data, AuthType authType) {
     try {
       var newAccounts =
-        fromStringList(instanceId, data.lines()
-          .map(String::strip)
-          .filter(Predicate.not(String::isBlank))
-          .distinct()
-          .toList(), authType);
+        fromStringList(instanceId, splitAccountPayloads(data, authType), authType);
 
       if (newAccounts.isEmpty()) {
         log.warn("No accounts found in the provided data!");
@@ -169,5 +165,39 @@ public final class ClientSettingsManager {
       log.error("Failed to load account from string", e);
       throw new RuntimeException(e);
     }
+  }
+
+  private List<String> splitAccountPayloads(String data, AuthType authType) {
+    if (authType == AuthType.MICROSOFT_JAVA_COOKIES) {
+      var trimmed = data.strip();
+      if (trimmed.isEmpty()) {
+        return List.of();
+      }
+
+      if (looksLikeCookieJar(trimmed) || looksLikeCookieEditorJson(trimmed)) {
+        return Arrays.stream(trimmed.split("(?:\\r?\\n){2,}"))
+          .map(String::strip)
+          .filter(Predicate.not(String::isBlank))
+          .distinct()
+          .toList();
+      }
+    }
+
+    return data.lines()
+      .map(String::strip)
+      .filter(Predicate.not(String::isBlank))
+      .distinct()
+      .toList();
+  }
+
+  private boolean looksLikeCookieJar(String input) {
+    return input.contains("\t") && input.contains("login.live.com");
+  }
+
+  private boolean looksLikeCookieEditorJson(String input) {
+    return input.startsWith("[")
+      && input.endsWith("]")
+      && input.contains("\"name\"")
+      && input.contains("\"value\"");
   }
 }
