@@ -12,6 +12,10 @@ accessible field net/minecraft/client/Minecraft packetProcessor Lnet/minecraft/n
 accessible field net/minecraft/util/thread/BlockableEventLoop pendingRunnables Ljava/util/Queue;
 accessible field net/minecraft/client/Minecraft toastManager Lnet/minecraft/client/gui/components/toasts/ToastManager;
 accessible field net/minecraft/client/Minecraft gui Lnet/minecraft/client/gui/Gui;
+accessible field net/minecraft/client/Minecraft chatListener Lnet/minecraft/client/multiplayer/chat/ChatListener;
+accessible field net/minecraft/client/Minecraft playerSocialManager Lnet/minecraft/client/gui/screens/social/PlayerSocialManager;
+accessible field net/minecraft/client/Minecraft profileKeyPairManager Lnet/minecraft/client/multiplayer/ProfileKeyPairManager;
+accessible field net/minecraft/client/Minecraft reportingContext Lnet/minecraft/client/multiplayer/chat/report/ReportingContext;
 accessible field net/minecraft/client/Minecraft running Z
 accessible field net/minecraft/client/Minecraft user Lnet/minecraft/client/User;
 accessible field net/minecraft/client/Minecraft deltaTracker Lnet/minecraft/client/DeltaTracker$Timer;
@@ -23,6 +27,10 @@ mutable field net/minecraft/client/Minecraft packetProcessor Lnet/minecraft/netw
 mutable field net/minecraft/util/thread/BlockableEventLoop pendingRunnables Ljava/util/Queue;
 mutable field net/minecraft/client/Minecraft toastManager Lnet/minecraft/client/gui/components/toasts/ToastManager;
 mutable field net/minecraft/client/Minecraft gui Lnet/minecraft/client/gui/Gui;
+mutable field net/minecraft/client/Minecraft chatListener Lnet/minecraft/client/multiplayer/chat/ChatListener;
+mutable field net/minecraft/client/Minecraft playerSocialManager Lnet/minecraft/client/gui/screens/social/PlayerSocialManager;
+mutable field net/minecraft/client/Minecraft profileKeyPairManager Lnet/minecraft/client/multiplayer/ProfileKeyPairManager;
+mutable field net/minecraft/client/Minecraft reportingContext Lnet/minecraft/client/multiplayer/chat/report/ReportingContext;
 mutable field net/minecraft/client/Minecraft running Z
 mutable field net/minecraft/client/Minecraft user Lnet/minecraft/client/User;
 mutable field net/minecraft/client/Minecraft deltaTracker Lnet/minecraft/client/DeltaTracker$Timer;

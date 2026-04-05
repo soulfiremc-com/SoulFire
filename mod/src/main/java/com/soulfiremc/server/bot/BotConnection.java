@@ -19,6 +19,7 @@ package com.soulfiremc.server.bot;
 
 import com.google.common.collect.Queues;
 import com.google.gson.JsonElement;
+import com.mojang.authlib.minecraft.UserApiService;
 import com.soulfiremc.mod.access.IMinecraft;
 import com.soulfiremc.mod.util.SFConstants;
 import com.soulfiremc.mod.util.SFModHelpers;
@@ -56,10 +57,15 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+import net.minecraft.client.gui.screens.social.PlayerSocialManager;
 import net.minecraft.client.main.GameConfig;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ProfileKeyPairManager;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerStatusPinger;
+import net.minecraft.client.multiplayer.chat.ChatListener;
+import net.minecraft.client.multiplayer.chat.report.ReportEnvironment;
+import net.minecraft.client.multiplayer.chat.report.ReportingContext;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.resources.server.DownloadedPackSource;
 import net.minecraft.network.PacketProcessor;
@@ -156,6 +162,7 @@ public final class BotConnection {
   @SneakyThrows
   private Minecraft createMinecraftCopy(MinecraftAccount minecraftAccount) {
     var newInstance = SFModHelpers.deepCopy(SFConstants.BASE_MC_INSTANCE);
+    var userApiService = UserApiService.OFFLINE;
 
     //noinspection DataFlowIssue
     newInstance.packetProcessor = new PacketProcessor(null); // Null until we spawn game thread
@@ -175,6 +182,12 @@ public final class BotConnection {
       Optional.empty(),
       Optional.empty()
     );
+    newInstance.playerSocialManager = new PlayerSocialManager(newInstance, userApiService);
+    newInstance.profileKeyPairManager =
+      ProfileKeyPairManager.create(userApiService, newInstance.user, newInstance.gameDirectory.toPath());
+    newInstance.chatListener = new ChatListener(newInstance);
+    newInstance.chatListener.setMessageDelay(newInstance.options.chatDelay().get());
+    newInstance.reportingContext = ReportingContext.create(ReportEnvironment.local(), userApiService);
     newInstance.deltaTracker = new DeltaTracker.Timer(20.0F, 0L, newInstance::getTickTargetMillis);
     newInstance.reloadStateTracker = new ResourceLoadStateTracker();
     var javaProxy = proxy != null
