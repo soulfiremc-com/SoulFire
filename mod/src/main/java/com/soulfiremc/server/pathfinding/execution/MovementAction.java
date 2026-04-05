@@ -39,7 +39,7 @@ public final class MovementAction implements WorldAction {
   private final SFVec3i blockPosition;
   // Corner jumps normally require you to stand closer to the block to jump
   private final boolean walkFewTicksNoJump;
-  private final PathConstraint settings;
+  private final PathConstraint pathConstraint;
   private boolean didLook;
   private boolean lockYRot;
   private boolean wasStill;
@@ -96,11 +96,13 @@ public final class MovementAction implements WorldAction {
     var xRot = 0f;
     var yRot = 0f;
 
-    if (settings.yRotJitter().min() < settings.yRotJitter().max()) {
-      yRot = ThreadLocalRandom.current().nextFloat((float) settings.yRotJitter().min(), (float) settings.yRotJitter().max());
+    if (pathConstraint.yRotJitter().min() < pathConstraint.yRotJitter().max()) {
+      yRot =
+        ThreadLocalRandom.current().nextFloat((float) pathConstraint.yRotJitter().min(), (float) pathConstraint.yRotJitter().max());
     }
-    if (settings.xRotJitter().min() < settings.xRotJitter().max()) {
-      xRot = ThreadLocalRandom.current().nextFloat((float) settings.xRotJitter().min(), (float) settings.xRotJitter().max());
+    if (pathConstraint.xRotJitter().min() < pathConstraint.xRotJitter().max()) {
+      xRot =
+        ThreadLocalRandom.current().nextFloat((float) pathConstraint.xRotJitter().min(), (float) pathConstraint.xRotJitter().max());
     }
 
     clientEntity.setYRot(clientEntity.getYRot() + yRot);
