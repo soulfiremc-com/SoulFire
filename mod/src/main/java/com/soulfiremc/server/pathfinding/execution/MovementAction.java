@@ -105,8 +105,8 @@ public final class MovementAction implements WorldAction {
         ThreadLocalRandom.current().nextFloat((float) pathConstraint.xRotJitter().min(), (float) pathConstraint.xRotJitter().max());
     }
 
-    clientEntity.setYRot(clientEntity.getYRot() + yRot);
-    clientEntity.setXRot(xRot);
+    clientEntity.setYRot(MathHelper.wrapDegrees(clientEntity.getYRot() + yRot));
+    clientEntity.setXRot(clientEntity.getXRot() + xRot);
     var newYRot = clientEntity.getYRot();
 
     var yRotDifference = Math.abs(MathHelper.wrapDegrees(newYRot - previousYRot));
