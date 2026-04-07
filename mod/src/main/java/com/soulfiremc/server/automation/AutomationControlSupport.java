@@ -46,6 +46,7 @@ public final class AutomationControlSupport {
 
   public static void applyInstancePresetSettings(InstanceManager instance, AutomationSettings.Preset preset) {
     instance.updateInstanceSetting(AutomationSettings.PRESET, GsonInstance.GSON.toJsonTree(preset.name()));
+    instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, GsonInstance.GSON.toJsonTree(AutomationSettings.ObjectiveOverride.AUTO.name()));
     switch (preset) {
       case BALANCED_TEAM -> {
         instance.updateInstanceSetting(AutomationSettings.TEAM_COLLABORATION, GsonInstance.GSON.toJsonTree(true));
@@ -78,6 +79,7 @@ public final class AutomationControlSupport {
                                             UUID botId,
                                             AutomationSettings.Preset preset) {
     instance.updateBotSetting(botId, AutomationSettings.ENABLED, GsonInstance.GSON.toJsonTree(true));
+    instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, GsonInstance.GSON.toJsonTree(AutomationSettings.RoleOverride.AUTO.name()));
     switch (preset) {
       case BALANCED_TEAM -> {
         instance.updateBotSetting(botId, AutomationSettings.ALLOW_DEATH_RECOVERY, GsonInstance.GSON.toJsonTree(true));

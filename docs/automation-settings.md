@@ -16,10 +16,14 @@ Current settings in the `automation` namespace:
 
 - `enabled` (bot scope)
   Turns SoulFire-native automation on or off for an individual bot.
+- `role-override` (bot scope)
+  Forces an individual bot into a specific automation role such as `lead` or `stronghold-scout`. `auto` clears the override.
 - `team-collaboration` (instance scope)
   Turns team orchestration on or off for the instance. When off, bots do not share roles, claims, structure estimates, or team-wide progression state.
 - `role-policy` (instance scope)
   Controls whether bots use the shared static team-role layout or behave as independent runners.
+- `objective-override` (instance scope)
+  Forces a specific shared automation objective such as `nether-progress` or `end-assault`. `auto` clears the override.
 - `shared-structure-intel` (instance scope)
   Controls whether bots reuse each other's portal hints, stronghold hints, fortress hints, and eye-of-ender samples.
 - `shared-target-claims` (instance scope)
@@ -53,10 +57,14 @@ Current `automation` command surface:
   Resumes automation for selected paused bots.
 - `automation collaboration <true|false>`
   Toggles team orchestration for the visible instances. `false` switches the instance to the `independent-runners` preset.
+- `automation objective <objective>`
+  Forces or clears the shared automation objective for the visible instances. Use `auto` to clear the override.
 - `automation sharedstructures <true|false>`
   Toggles whether bots share structure and portal intelligence across the visible instances.
 - `automation sharedclaims <true|false>`
   Toggles whether bots reserve shared automation targets across the visible instances.
+- `automation role <role>`
+  Forces or clears the automation role override for the selected bots. Use `auto` to clear the override.
 - `automation queue`
   Shows the current requirement queue for the selected bots.
 - `automation memorystatus [maxEntries]`
@@ -102,10 +110,14 @@ Current gRPC RPCs:
   Applies a named automation preset to the instance and persists matching per-bot automation defaults.
 - `SetAutomationCollaboration`
   Toggles team orchestration by switching between collaborative and independent preset behavior.
+- `SetAutomationObjectiveOverride`
+  Forces or clears the shared automation objective override for the instance.
 - `SetAutomationSharedStructures`
   Enables or disables cross-bot sharing of structure and portal intelligence.
 - `SetAutomationSharedClaims`
   Enables or disables cross-bot target reservation.
+- `SetAutomationRoleOverride`
+  Forces or clears per-bot automation role overrides for selected configured bots.
 - `ResetAutomationMemory`
   Clears remembered automation world state for the selected connected bots and forces replanning.
 - `ResetAutomationCoordinationState`
@@ -124,8 +136,10 @@ Matching MCP tools are also available:
 - `stop_automation`
 - `apply_automation_preset`
 - `set_automation_collaboration`
+- `set_automation_objective_override`
 - `set_automation_shared_structures`
 - `set_automation_shared_claims`
+- `set_automation_role_override`
 - `reset_automation_memory`
 - `reset_automation_coordination_state`
 
@@ -134,6 +148,8 @@ Matching MCP tools are also available:
 - When automation is disabled for a bot, the automation controller stands down and releases its claims.
 - When team collaboration is disabled, bots stop using shared roles, shared claims, shared structure estimates, and shared progression quotas.
 - When the role policy is set to independent mode, bots behave like independent runners even if collaboration remains enabled at the instance level.
+- An objective override forces the effective team objective for the instance until it is cleared, even if the inferred coordinator objective would differ.
+- A role override forces one bot's effective automation role until it is cleared, even if the coordinator would normally rebalance that bot into another role.
 - When shared structure intel is disabled, bots stop reusing other bots' shared portal, fortress, stronghold, and eye-of-ender observations, but still retain their own local automation memory.
 - When shared target claims are disabled, bots stop reserving shared targets across the instance and may duplicate teammate work more often.
 - Exact item requirement keys are now centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
@@ -151,6 +167,7 @@ This is not the finished automation surface. Major missing pieces are still trac
 - GUI dashboards and operator controls
 - richer settings coverage and presets
 - automation event streams, planner traces, and run-report export
+- richer operator overrides such as manual claim release, force-target, and force-phase controls
 - manual coordination edits such as releasing individual claims or editing shared structure hints
 - soak testing and long-run reliability hardening
 - broader survival and task parity work

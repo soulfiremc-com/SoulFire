@@ -42,6 +42,16 @@ public final class AutomationSettings implements SettingsObject {
       .description("Master switch for SoulFire-native automation on this bot")
       .defaultValue(true)
       .build();
+  public static final ComboProperty<SettingsSource.Bot> ROLE_OVERRIDE =
+    ImmutableComboProperty.<SettingsSource.Bot>builder()
+      .sourceType(SettingsSource.Bot.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("role-override")
+      .uiName("Role Override")
+      .description("Force this bot into a specific automation role instead of using the coordinator's automatic role assignment. Auto clears the override.")
+      .defaultValue(RoleOverride.AUTO.name())
+      .addOptions(roleOverrideOptions())
+      .build();
   public static final ComboProperty<SettingsSource.Instance> PRESET =
     ImmutableComboProperty.<SettingsSource.Instance>builder()
       .sourceType(SettingsSource.Instance.INSTANCE)
@@ -70,6 +80,16 @@ public final class AutomationSettings implements SettingsObject {
       .description("How the automation coordinator assigns roles. Independent mode disables cross-bot orchestration even if team collaboration remains enabled.")
       .defaultValue(RolePolicy.STATIC_TEAM.name())
       .addOptions(rolePolicyOptions())
+      .build();
+  public static final ComboProperty<SettingsSource.Instance> OBJECTIVE_OVERRIDE =
+    ImmutableComboProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("objective-override")
+      .uiName("Objective Override")
+      .description("Force the team coordinator to use a specific automation objective instead of the automatically inferred one. Auto clears the override.")
+      .defaultValue(ObjectiveOverride.AUTO.name())
+      .addOptions(objectiveOverrideOptions())
       .build();
   public static final BooleanProperty<SettingsSource.Instance> SHARED_STRUCTURE_INTEL =
     ImmutableBooleanProperty.<SettingsSource.Instance>builder()
@@ -170,6 +190,20 @@ public final class AutomationSettings implements SettingsObject {
       ignored -> null);
   }
 
+  private static ComboOption[] roleOverrideOptions() {
+    return ComboProperty.optionsFromEnum(
+      RoleOverride.values(),
+      ComboProperty::capitalizeEnum,
+      ignored -> null);
+  }
+
+  private static ComboOption[] objectiveOverrideOptions() {
+    return ComboProperty.optionsFromEnum(
+      ObjectiveOverride.values(),
+      ComboProperty::capitalizeEnum,
+      ignored -> null);
+  }
+
   private static ComboOption[] presetOptions() {
     return ComboProperty.optionsFromEnum(
       Preset.values(),
@@ -180,6 +214,24 @@ public final class AutomationSettings implements SettingsObject {
   public enum RolePolicy {
     STATIC_TEAM,
     INDEPENDENT
+  }
+
+  public enum RoleOverride {
+    AUTO,
+    LEAD,
+    PORTAL_ENGINEER,
+    NETHER_RUNNER,
+    STRONGHOLD_SCOUT,
+    END_SUPPORT
+  }
+
+  public enum ObjectiveOverride {
+    AUTO,
+    BOOTSTRAP,
+    NETHER_PROGRESS,
+    STRONGHOLD_HUNT,
+    END_ASSAULT,
+    COMPLETE
   }
 
   public enum Preset {

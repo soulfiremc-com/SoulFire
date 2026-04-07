@@ -174,6 +174,38 @@ public final class AutomationCommand {
               return Command.SINGLE_SUCCESS;
             });
           }))));
+    root.then(literal("objective")
+      .then(argument("objective", StringArgumentType.word())
+        .suggests(ObjectiveOverrideSuggestionProvider.INSTANCE)
+        .executes(help(
+          "Forces or clears the shared automation objective for the visible instances",
+          c -> {
+            var objectiveOverride = parseObjectiveOverride(StringArgumentType.getString(c, "objective"));
+            return forEveryInstance(c, instance -> {
+              instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, GsonInstance.GSON.toJsonTree(objectiveOverride.name()));
+              instance.addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "objective-override=" + formatEnumId(objectiveOverride));
+              c.getSource().source().sendInfo("%s: automation objective override set to %s".formatted(
+                instance.friendlyNameCache().get(),
+                AutomationControlSupport.formatEnumId(objectiveOverride)));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
+    root.then(literal("role")
+      .then(argument("role", StringArgumentType.word())
+        .suggests(RoleOverrideSuggestionProvider.INSTANCE)
+        .executes(help(
+          "Forces or clears the automation role override for the selected bots",
+          c -> {
+            var roleOverride = parseRoleOverride(StringArgumentType.getString(c, "role"));
+            return forEveryBot(c, bot -> {
+              bot.instanceManager().updateBotSetting(bot.accountProfileId(), AutomationSettings.ROLE_OVERRIDE, GsonInstance.GSON.toJsonTree(roleOverride.name()));
+              bot.instanceManager().addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "role-override=%s bot=%s".formatted(formatEnumId(roleOverride), bot.accountName()));
+              c.getSource().source().sendInfo("%s: automation role override set to %s".formatted(
+                bot.accountName(),
+                AutomationControlSupport.formatEnumId(roleOverride)));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
     root.then(literal("sharedendentry")
       .then(argument("enabled", BoolArgumentType.bool())
         .executes(help(
@@ -289,10 +321,11 @@ public final class AutomationCommand {
             }
 
             c.getSource().source().sendInfo(instance.friendlyNameCache().get()
-              + ": preset=%s collaboration=%s rolePolicy=%s sharedStructureIntel=%s sharedClaims=%s sharedEndEntry=%s maxEndBots=%d objective=%s bots=%d blaze=%d/%d pearls=%d/%d eyes=%d/%d arrows=%d/%d beds=%d/%d".formatted(
+              + ": preset=%s collaboration=%s rolePolicy=%s objectiveOverride=%s sharedStructureIntel=%s sharedClaims=%s sharedEndEntry=%s maxEndBots=%d objective=%s bots=%d blaze=%d/%d pearls=%d/%d eyes=%d/%d arrows=%d/%d beds=%d/%d".formatted(
               formatEnumId(summary.preset()),
               summary.collaborationEnabled() ? "on" : "off",
               AutomationControlSupport.formatEnumId(summary.rolePolicy()),
+              summary.objectiveOverride() == null ? "auto" : formatEnumId(summary.objectiveOverride()),
               summary.sharedStructureIntel() ? "on" : "off",
               summary.sharedTargetClaims() ? "on" : "off",
               summary.sharedEndEntry() ? "on" : "off",
@@ -316,9 +349,10 @@ public final class AutomationCommand {
                 : "%d,%d,%d".formatted((int) Math.floor(status.position().x), (int) Math.floor(status.position().y), (int) Math.floor(status.position().z));
               var phase = status.phase() == null ? "-" : status.phase().toLowerCase();
               var recovery = status.lastRecoveryReason() == null ? "-" : status.lastRecoveryReason();
+              var role = status.role().name().toLowerCase(Locale.ROOT) + (status.roleOverride() == null ? "" : " (forced)");
               c.getSource().source().sendInfo("  %s: role=%s, status=%s, phase=%s, dim=%s, pos=%s, deaths=%d, timeouts=%d, recoveries=%d, last=%s".formatted(
                 status.accountName(),
-                status.role().name().toLowerCase(Locale.ROOT),
+                role,
                 status.status(),
                 phase,
                 dimension,
@@ -534,6 +568,14 @@ public final class AutomationCommand {
     return AutomationSettings.RolePolicy.valueOf(normalizeEnumId(raw));
   }
 
+  private static AutomationSettings.RoleOverride parseRoleOverride(String raw) {
+    return AutomationSettings.RoleOverride.valueOf(normalizeEnumId(raw));
+  }
+
+  private static AutomationSettings.ObjectiveOverride parseObjectiveOverride(String raw) {
+    return AutomationSettings.ObjectiveOverride.valueOf(normalizeEnumId(raw));
+  }
+
   private static String normalizeEnumId(String raw) {
     return raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
   }
@@ -583,6 +625,34 @@ public final class AutomationCommand {
       com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
       for (var rolePolicy : AutomationSettings.RolePolicy.values()) {
         builder.suggest(formatEnumId(rolePolicy));
+      }
+      return builder.buildFuture();
+    }
+  }
+
+  private static final class RoleOverrideSuggestionProvider implements SuggestionProvider<CommandSourceStack> {
+    private static final RoleOverrideSuggestionProvider INSTANCE = new RoleOverrideSuggestionProvider();
+
+    @Override
+    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
+      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+      for (var roleOverride : AutomationSettings.RoleOverride.values()) {
+        builder.suggest(formatEnumId(roleOverride));
+      }
+      return builder.buildFuture();
+    }
+  }
+
+  private static final class ObjectiveOverrideSuggestionProvider implements SuggestionProvider<CommandSourceStack> {
+    private static final ObjectiveOverrideSuggestionProvider INSTANCE = new ObjectiveOverrideSuggestionProvider();
+
+    @Override
+    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
+      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+      for (var objectiveOverride : AutomationSettings.ObjectiveOverride.values()) {
+        builder.suggest(formatEnumId(objectiveOverride));
       }
       return builder.buildFuture();
     }

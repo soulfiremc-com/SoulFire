@@ -43,6 +43,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -485,6 +486,34 @@ public final class MCPService {
             .setInstanceId(str(args, "instance_id"))
             .setEnabled(bool(args, "enabled"))
             .build(), o)))));
+
+    tools.add(tool("set_automation_objective_override",
+      "Force or clear the shared automation objective override for an instance. Use 'auto' to clear the override.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "objective", prop("string", "One of: auto, bootstrap, nether-progress, stronghold-hunt, end-assault, complete")),
+      List.of("instance_id", "objective"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationObjectiveOverride(
+          SetAutomationObjectiveOverrideRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setObjective(parseAutomationObjective(str(args, "objective")))
+            .build(), o)))));
+
+    tools.add(tool("set_automation_role_override",
+      "Force or clear the automation role override for configured bots in an instance. Omit bot_ids to target all configured bots. Use 'auto' to clear the override.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "bot_ids", arrayProp("Optional list of bot UUIDs. Omit to target all configured bots in the instance."),
+        "role", prop("string", "One of: auto, lead, portal-engineer, nether-runner, stronghold-scout, end-support")),
+      List.of("instance_id", "role"),
+      authed((exchange, args) -> {
+        var builder = SetAutomationRoleOverrideRequest.newBuilder()
+          .setInstanceId(str(args, "instance_id"))
+          .setRole(parseAutomationRole(str(args, "role")));
+        ifPresent(args, "bot_ids", ignored -> builder.addAllBotIds(strList(args, "bot_ids")));
+        return grpc(o -> automationService.setAutomationRoleOverride(builder.build(), o));
+      })));
 
     tools.add(tool("reset_automation_memory",
       "Clear remembered automation world state for connected bots in an instance and force replanning. Omit bot_ids to target all connected bots.",
@@ -1107,5 +1136,21 @@ public final class MCPService {
     } else {
       return Value.newBuilder().setStringValue(value.toString()).build();
     }
+  }
+
+  private static AutomationTeamObjective parseAutomationObjective(String raw) {
+    var normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    return switch (normalized) {
+      case "AUTO" -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_UNSPECIFIED;
+      default -> AutomationTeamObjective.valueOf("AUTOMATION_TEAM_OBJECTIVE_" + normalized);
+    };
+  }
+
+  private static AutomationTeamRole parseAutomationRole(String raw) {
+    var normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    return switch (normalized) {
+      case "AUTO" -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_UNSPECIFIED;
+      default -> AutomationTeamRole.valueOf("AUTOMATION_TEAM_ROLE_" + normalized);
+    };
   }
 }

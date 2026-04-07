@@ -79,6 +79,7 @@ message AutomationBotSettings {
   int32 memory_scan_interval_ticks = 4;
   int32 retreat_health_threshold = 5;
   int32 retreat_food_threshold = 6;
+  AutomationTeamRole role_override = 7;
 }
 
 message AutomationInstanceSettings {
@@ -89,6 +90,7 @@ message AutomationInstanceSettings {
   int32 max_end_bots = 5;
   bool shared_structure_intel = 6;
   bool shared_target_claims = 7;
+  AutomationTeamObjective objective_override = 8;
 }
 
 message AutomationResourceQuota {
@@ -352,6 +354,25 @@ message SetAutomationSharedClaimsResponse {
   AutomationInstanceSettings settings = 1;
 }
 
+message SetAutomationObjectiveOverrideRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  AutomationTeamObjective objective = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationObjectiveOverrideResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
+message SetAutomationRoleOverrideRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  repeated string bot_ids = 2 [(soulfire.v1.api_field).format = "uuid"];
+  AutomationTeamRole role = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationRoleOverrideResponse {
+  repeated AutomationBotActionResult results = 1;
+}
+
 service AutomationService {
   rpc GetAutomationTeamState (GetAutomationTeamStateRequest) returns (GetAutomationTeamStateResponse) {
     option (google.api.http) = { get: "/v1/instances/{instance_id}/automation" };
@@ -503,6 +524,32 @@ service AutomationService {
       permissions: "UPDATE_INSTANCE_CONFIG"
       scope: "instance"
       side_effects: "Enables or disables cross-bot target reservation for shared automation work."
+    };
+  }
+
+  rpc SetAutomationObjectiveOverride (SetAutomationObjectiveOverrideRequest) returns (SetAutomationObjectiveOverrideResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setObjectiveOverride"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation objective override"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Forces or clears the team automation objective override for the instance."
+    };
+  }
+
+  rpc SetAutomationRoleOverride (SetAutomationRoleOverrideRequest) returns (SetAutomationRoleOverrideResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setRoleOverride"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation role override"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      side_effects: "Forces or clears the automation role override for the selected configured bots."
     };
   }
 

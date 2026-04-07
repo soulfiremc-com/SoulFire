@@ -240,7 +240,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     try {
       var instance = requireInstance(instanceId);
       var preset = fromProto(request.getPreset());
-      var targetBots = targetConfiguredBots(instance, request.getBotIdsList());
+      var targetBots = targetConfiguredBots(instance, request.getBotIdsList(), "preset updated");
       AutomationControlSupport.applyPreset(instance, targetBots.validBotIds(), preset);
       instance.addAuditLog(user, AuditLogType.AUTOMATION_APPLY_PRESET, "preset=" + AutomationControlSupport.formatEnumId(preset));
 
@@ -319,6 +319,55 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       responseObserver.onCompleted();
     } catch (Throwable t) {
       log.error("Error setting automation shared claims", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
+  public void setAutomationObjectiveOverride(SetAutomationObjectiveOverrideRequest request,
+                                             StreamObserver<SetAutomationObjectiveOverrideResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      var override = fromProtoObjectiveOverride(request.getObjective());
+      instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "objective-override=" + AutomationControlSupport.formatEnumId(override));
+
+      responseObserver.onNext(SetAutomationObjectiveOverrideResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation objective override", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
+  public void setAutomationRoleOverride(SetAutomationRoleOverrideRequest request,
+                                        StreamObserver<SetAutomationRoleOverrideResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_BOT_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      var override = fromProtoRoleOverride(request.getRole());
+      var targetBots = targetConfiguredBots(instance, request.getBotIdsList(), "role override updated");
+      for (var botId : targetBots.validBotIds()) {
+        instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+      }
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "role-override=" + AutomationControlSupport.formatEnumId(override));
+
+      responseObserver.onNext(SetAutomationRoleOverrideResponse.newBuilder()
+        .addAllResults(targetBots.results())
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation role override", t);
       throw statusFromThrowable(t);
     }
   }
@@ -541,6 +590,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
           .setMemoryScanIntervalTicks(bot.settingsSource().get(AutomationSettings.MEMORY_SCAN_INTERVAL_TICKS))
           .setRetreatHealthThreshold(bot.settingsSource().get(AutomationSettings.RETREAT_HEALTH_THRESHOLD))
           .setRetreatFoodThreshold(bot.settingsSource().get(AutomationSettings.RETREAT_FOOD_THRESHOLD))
+          .setRoleOverride(toProto(bot.settingsSource().get(AutomationSettings.ROLE_OVERRIDE, AutomationSettings.RoleOverride.class)))
           .build());
 
       if (snapshot.beatPhase() != null) {
@@ -584,6 +634,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       null,
       null,
       instance.automationCoordinator().roleFor(bot),
+      null,
       instance.automationCoordinator().objectiveFor(bot),
       runtime.getStatusSummary(),
       runtime.hasBeatPhase() ? runtime.getBeatPhase().name() : null,
@@ -700,6 +751,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       .setMaxEndBots(instance.settingsSource().get(AutomationSettings.MAX_END_BOTS))
       .setSharedStructureIntel(instance.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL))
       .setSharedTargetClaims(instance.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS))
+      .setObjectiveOverride(toProto(instance.settingsSource().get(AutomationSettings.OBJECTIVE_OVERRIDE, AutomationSettings.ObjectiveOverride.class)))
       .build();
   }
 
@@ -739,12 +791,12 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     return new TargetedConnectedBots(validBots, results);
   }
 
-  private TargetedConfiguredBots targetConfiguredBots(InstanceManager instance, List<String> botIds) {
+  private TargetedConfiguredBots targetConfiguredBots(InstanceManager instance, List<String> botIds, String successMessage) {
     var accounts = instance.settingsSource().accounts();
     if (botIds.isEmpty()) {
       var results = accounts.values().stream()
         .sorted(Comparator.comparing(account -> account.lastKnownName().toLowerCase()))
-        .map(account -> successResult(account.profileId().toString(), account.lastKnownName(), "preset updated"))
+        .map(account -> successResult(account.profileId().toString(), account.lastKnownName(), successMessage))
         .toList();
       return new TargetedConfiguredBots(accounts.keySet().stream().toList(), results);
     }
@@ -767,7 +819,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       }
 
       validBotIds.add(botId);
-      results.add(successResult(botIdRaw, account.lastKnownName(), "preset updated"));
+      results.add(successResult(botIdRaw, account.lastKnownName(), successMessage));
     }
     return new TargetedConfiguredBots(validBotIds, results);
   }
@@ -853,6 +905,17 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     };
   }
 
+  private static AutomationTeamRole toProto(AutomationSettings.RoleOverride roleOverride) {
+    return switch (roleOverride) {
+      case AUTO -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_UNSPECIFIED;
+      case LEAD -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_LEAD;
+      case PORTAL_ENGINEER -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_PORTAL_ENGINEER;
+      case NETHER_RUNNER -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_NETHER_RUNNER;
+      case STRONGHOLD_SCOUT -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_STRONGHOLD_SCOUT;
+      case END_SUPPORT -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_END_SUPPORT;
+    };
+  }
+
   private static AutomationTeamRole toProto(AutomationTeamCoordinator.TeamRole role) {
     return switch (role) {
       case LEAD -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_LEAD;
@@ -870,6 +933,41 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       case STRONGHOLD_HUNT -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_STRONGHOLD_HUNT;
       case END_ASSAULT -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_END_ASSAULT;
       case COMPLETE -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_COMPLETE;
+    };
+  }
+
+  private static AutomationTeamObjective toProto(AutomationSettings.ObjectiveOverride objectiveOverride) {
+    return switch (objectiveOverride) {
+      case AUTO -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_UNSPECIFIED;
+      case BOOTSTRAP -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_BOOTSTRAP;
+      case NETHER_PROGRESS -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_NETHER_PROGRESS;
+      case STRONGHOLD_HUNT -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_STRONGHOLD_HUNT;
+      case END_ASSAULT -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_END_ASSAULT;
+      case COMPLETE -> AutomationTeamObjective.AUTOMATION_TEAM_OBJECTIVE_COMPLETE;
+    };
+  }
+
+  private static AutomationSettings.RoleOverride fromProtoRoleOverride(AutomationTeamRole role) {
+    return switch (role) {
+      case AUTOMATION_TEAM_ROLE_UNSPECIFIED -> AutomationSettings.RoleOverride.AUTO;
+      case AUTOMATION_TEAM_ROLE_LEAD -> AutomationSettings.RoleOverride.LEAD;
+      case AUTOMATION_TEAM_ROLE_PORTAL_ENGINEER -> AutomationSettings.RoleOverride.PORTAL_ENGINEER;
+      case AUTOMATION_TEAM_ROLE_NETHER_RUNNER -> AutomationSettings.RoleOverride.NETHER_RUNNER;
+      case AUTOMATION_TEAM_ROLE_STRONGHOLD_SCOUT -> AutomationSettings.RoleOverride.STRONGHOLD_SCOUT;
+      case AUTOMATION_TEAM_ROLE_END_SUPPORT -> AutomationSettings.RoleOverride.END_SUPPORT;
+      case UNRECOGNIZED -> throw Status.INVALID_ARGUMENT.withDescription("Unsupported automation team role: " + role).asRuntimeException();
+    };
+  }
+
+  private static AutomationSettings.ObjectiveOverride fromProtoObjectiveOverride(AutomationTeamObjective objective) {
+    return switch (objective) {
+      case AUTOMATION_TEAM_OBJECTIVE_UNSPECIFIED -> AutomationSettings.ObjectiveOverride.AUTO;
+      case AUTOMATION_TEAM_OBJECTIVE_BOOTSTRAP -> AutomationSettings.ObjectiveOverride.BOOTSTRAP;
+      case AUTOMATION_TEAM_OBJECTIVE_NETHER_PROGRESS -> AutomationSettings.ObjectiveOverride.NETHER_PROGRESS;
+      case AUTOMATION_TEAM_OBJECTIVE_STRONGHOLD_HUNT -> AutomationSettings.ObjectiveOverride.STRONGHOLD_HUNT;
+      case AUTOMATION_TEAM_OBJECTIVE_END_ASSAULT -> AutomationSettings.ObjectiveOverride.END_ASSAULT;
+      case AUTOMATION_TEAM_OBJECTIVE_COMPLETE -> AutomationSettings.ObjectiveOverride.COMPLETE;
+      case UNRECOGNIZED -> throw Status.INVALID_ARGUMENT.withDescription("Unsupported automation team objective: " + objective).asRuntimeException();
     };
   }
 

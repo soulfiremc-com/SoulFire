@@ -17,9 +17,11 @@
  */
 package com.soulfiremc.server.automation;
 
+import com.soulfiremc.server.account.MinecraftAccount;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
+import com.soulfiremc.server.util.structs.GsonInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -411,6 +413,10 @@ public final class AutomationTeamCoordinator {
 
   public synchronized TeamRole roleFor(BotConnection bot) {
     prune(System.currentTimeMillis());
+    var override = roleOverride(bot.accountProfileId());
+    if (override != null) {
+      return override;
+    }
     if (independentMode()) {
       return TeamRole.LEAD;
     }
@@ -420,12 +426,20 @@ public final class AutomationTeamCoordinator {
 
   public synchronized TeamObjective objective() {
     prune(System.currentTimeMillis());
+    var override = objectiveOverride();
+    if (override != null) {
+      return override;
+    }
     updateObjective();
     return objective;
   }
 
   public synchronized TeamObjective objectiveFor(BotConnection bot) {
     prune(System.currentTimeMillis());
+    var override = objectiveOverride();
+    if (override != null) {
+      return override;
+    }
     if (!independentMode()) {
       updateObjective();
       return objective;
@@ -572,6 +586,7 @@ public final class AutomationTeamCoordinator {
         snapshot.dimension,
         snapshot.position,
         roleForBotId(snapshot.botId()),
+        roleOverride(snapshot.botId()),
         objectiveForBotId(snapshot.botId()),
         snapshot.status,
         snapshot.phase,
@@ -596,6 +611,7 @@ public final class AutomationTeamCoordinator {
       instanceManager.settingsSource().get(AutomationSettings.PRESET, AutomationSettings.Preset.class),
       collaborationEnabled(),
       instanceManager.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class),
+      objectiveOverride(),
       instanceManager.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL),
       instanceManager.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS),
       instanceManager.settingsSource().get(AutomationSettings.SHARED_END_ENTRY),
@@ -796,6 +812,10 @@ public final class AutomationTeamCoordinator {
   }
 
   private TeamObjective objectiveForBotId(UUID botId) {
+    var override = objectiveOverride();
+    if (override != null) {
+      return override;
+    }
     if (!independentMode()) {
       return objective;
     }
@@ -837,6 +857,10 @@ public final class AutomationTeamCoordinator {
   }
 
   private TeamRole roleForBotId(UUID botId) {
+    var override = roleOverride(botId);
+    if (override != null) {
+      return override;
+    }
     if (independentMode()) {
       return TeamRole.LEAD;
     }
@@ -846,6 +870,21 @@ public final class AutomationTeamCoordinator {
 
   private boolean collaborationEnabled() {
     return instanceManager.settingsSource().get(AutomationSettings.TEAM_COLLABORATION);
+  }
+
+  private @Nullable TeamObjective objectiveOverride() {
+    return switch (instanceManager.settingsSource().get(AutomationSettings.OBJECTIVE_OVERRIDE, AutomationSettings.ObjectiveOverride.class)) {
+      case AUTO -> null;
+      case BOOTSTRAP -> TeamObjective.BOOTSTRAP;
+      case NETHER_PROGRESS -> TeamObjective.NETHER_PROGRESS;
+      case STRONGHOLD_HUNT -> TeamObjective.STRONGHOLD_HUNT;
+      case END_ASSAULT -> TeamObjective.END_ASSAULT;
+      case COMPLETE -> TeamObjective.COMPLETE;
+    };
+  }
+
+  private @Nullable TeamRole roleOverride(UUID botId) {
+    return configuredRoleOverride(instanceManager.settingsSource().accounts().get(botId));
   }
 
   private boolean sharedStructureIntelEnabled() {
@@ -861,6 +900,25 @@ public final class AutomationTeamCoordinator {
   private boolean independentMode() {
     return !collaborationEnabled()
       || instanceManager.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class) == AutomationSettings.RolePolicy.INDEPENDENT;
+  }
+
+  private static @Nullable TeamRole configuredRoleOverride(@Nullable MinecraftAccount account) {
+    if (account == null) {
+      return null;
+    }
+
+    var configured = account.get(AutomationSettings.ROLE_OVERRIDE)
+      .map(json -> GsonInstance.GSON.fromJson(json, String.class))
+      .map(AutomationSettings.RoleOverride::valueOf)
+      .orElse(AutomationSettings.RoleOverride.AUTO);
+    return switch (configured) {
+      case AUTO -> null;
+      case LEAD -> TeamRole.LEAD;
+      case PORTAL_ENGINEER -> TeamRole.PORTAL_ENGINEER;
+      case NETHER_RUNNER -> TeamRole.NETHER_RUNNER;
+      case STRONGHOLD_SCOUT -> TeamRole.STRONGHOLD_SCOUT;
+      case END_SUPPORT -> TeamRole.END_SUPPORT;
+    };
   }
 
   private static int soloTarget(String requirementKey) {
@@ -971,6 +1029,7 @@ public final class AutomationTeamCoordinator {
                           @Nullable ResourceKey<Level> dimension,
                           @Nullable Vec3 position,
                           TeamRole role,
+                          @Nullable TeamRole roleOverride,
                           TeamObjective objective,
                           String status,
                           @Nullable String phase,
@@ -984,6 +1043,7 @@ public final class AutomationTeamCoordinator {
   public record TeamSummary(AutomationSettings.Preset preset,
                             boolean collaborationEnabled,
                             AutomationSettings.RolePolicy rolePolicy,
+                            @Nullable TeamObjective objectiveOverride,
                             boolean sharedStructureIntel,
                             boolean sharedTargetClaims,
                             boolean sharedEndEntry,
