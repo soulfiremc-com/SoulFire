@@ -21,6 +21,8 @@ These gaps were closed in the current implementation slice:
 - server-side proto, gRPC, and MCP support for `SetAutomationRolePolicy`, `SetAutomationSharedEndEntry`, and `SetAutomationMaxEndBots`
 - explicit automation quota overrides for blaze rods, pearls, eyes, arrows, and beds
 - first-class CLI, gRPC, MCP, and dashboard controls for team quota overrides instead of leaving them only in the generic settings model
+- sparse per-bot automation settings patching over gRPC and MCP instead of forcing operators through one-off setters or the generic settings API
+- dedicated dashboard controls for per-bot automation enablement, death recovery, scan tuning, retreat thresholds, and role override
 - refreshed operator docs for automation settings, commands, APIs, and current GUI behavior
 
 ## Remaining gaps by area
@@ -34,7 +36,7 @@ These gaps were closed in the current implementation slice:
 - Add safety policy settings for retreat aggression, exploration spacing, loot contention, and abandonment thresholds.
 - Add shared-economy settings for handoffs, chest drop-offs, stockpile behavior, and stash use.
 - Add richer preset coverage for solo farming, structure search, logistics, and soak-test modes.
-- Add inline defaults, safe ranges, and rationale for every automation setting in the operator UI.
+- Finish inline defaults, safe ranges, and rationale for every automation setting across both team and bot control surfaces.
 
 ### Team coordination and collaboration
 
@@ -69,7 +71,7 @@ These gaps were closed in the current implementation slice:
 - Add better stuck-bot diagnostics that explain what a bot is waiting for and why.
 - Add run history, incident history, and post-run summaries.
 - Add timeline views for deaths, recoveries, claim churn, and phase transitions.
-- Add richer settings forms with inline documentation and validation for every automation option.
+- Finish richer settings forms with inline documentation and validation for every automation option, including the still-generic settings-page-only fields.
 - Add operator notifications for repeated failures, death spikes, low-confidence searches, and degraded team health.
 
 ### Core automation parity and feature breadth

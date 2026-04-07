@@ -288,6 +288,58 @@ public final class AutomationCommand {
               return Command.SINGLE_SUCCESS;
             });
           }))));
+    root.then(literal("memoryscanradius")
+      .then(argument("radius", IntegerArgumentType.integer(8, 96))
+        .executes(help(
+          "Sets the automation memory scan radius for the selected bots",
+          c -> {
+            var radius = IntegerArgumentType.getInteger(c, "radius");
+            return forEveryBot(c, bot -> {
+              AutomationControlSupport.setBotIntSetting(bot.instanceManager(), bot.accountProfileId(), AutomationSettings.MEMORY_SCAN_RADIUS, radius);
+              bot.instanceManager().addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "memory-scan-radius=%d bot=%s".formatted(radius, bot.accountName()));
+              c.getSource().source().sendInfo("%s: memory scan radius set to %d".formatted(bot.accountName(), radius));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
+    root.then(literal("memoryscaninterval")
+      .then(argument("ticks", IntegerArgumentType.integer(1, 200))
+        .executes(help(
+          "Sets the automation memory scan interval for the selected bots",
+          c -> {
+            var ticks = IntegerArgumentType.getInteger(c, "ticks");
+            return forEveryBot(c, bot -> {
+              AutomationControlSupport.setBotIntSetting(bot.instanceManager(), bot.accountProfileId(), AutomationSettings.MEMORY_SCAN_INTERVAL_TICKS, ticks);
+              bot.instanceManager().addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "memory-scan-interval-ticks=%d bot=%s".formatted(ticks, bot.accountName()));
+              c.getSource().source().sendInfo("%s: memory scan interval set to %d ticks".formatted(bot.accountName(), ticks));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
+    root.then(literal("retreathealth")
+      .then(argument("health", IntegerArgumentType.integer(1, 20))
+        .executes(help(
+          "Sets the automation retreat health threshold for the selected bots",
+          c -> {
+            var health = IntegerArgumentType.getInteger(c, "health");
+            return forEveryBot(c, bot -> {
+              AutomationControlSupport.setBotIntSetting(bot.instanceManager(), bot.accountProfileId(), AutomationSettings.RETREAT_HEALTH_THRESHOLD, health);
+              bot.instanceManager().addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "retreat-health-threshold=%d bot=%s".formatted(health, bot.accountName()));
+              c.getSource().source().sendInfo("%s: retreat health threshold set to %d".formatted(bot.accountName(), health));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
+    root.then(literal("retreatfood")
+      .then(argument("food", IntegerArgumentType.integer(1, 20))
+        .executes(help(
+          "Sets the automation eat-food threshold for the selected bots",
+          c -> {
+            var food = IntegerArgumentType.getInteger(c, "food");
+            return forEveryBot(c, bot -> {
+              AutomationControlSupport.setBotIntSetting(bot.instanceManager(), bot.accountProfileId(), AutomationSettings.RETREAT_FOOD_THRESHOLD, food);
+              bot.instanceManager().addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "retreat-food-threshold=%d bot=%s".formatted(food, bot.accountName()));
+              c.getSource().source().sendInfo("%s: retreat food threshold set to %d".formatted(bot.accountName(), food));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
     root.then(literal("status")
       .executes(help(
         "Shows the current automation status for selected bots",

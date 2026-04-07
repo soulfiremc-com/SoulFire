@@ -151,6 +151,21 @@ public final class AutomationControlSupport {
     return TARGET_QUOTA_OVERRIDES.values();
   }
 
+  public static void setBotIntSetting(InstanceManager instance,
+                                      UUID botId,
+                                      IntProperty<SettingsSource.Bot> property,
+                                      int value) {
+    validateBotIntSetting(property, value);
+    instance.updateBotSetting(botId, property, GsonInstance.GSON.toJsonTree(value));
+  }
+
+  public static void validateBotIntSetting(IntProperty<SettingsSource.Bot> property, int value) {
+    if (value < property.minValue() || value > property.maxValue()) {
+      throw new IllegalArgumentException("%s must be between %d and %d"
+        .formatted(property.uiName(), property.minValue(), property.maxValue()));
+    }
+  }
+
   private static void validateTargetOverride(TargetQuotaOverride targetOverride, int targetCount) {
     if (targetCount < targetOverride.property().minValue() || targetCount > targetOverride.property().maxValue()) {
       throw new IllegalArgumentException("%s must be between %d and %d"

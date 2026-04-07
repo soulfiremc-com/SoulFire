@@ -435,6 +435,22 @@ message SetAutomationRoleOverrideResponse {
   repeated AutomationBotActionResult results = 1;
 }
 
+message UpdateAutomationBotSettingsRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  repeated string bot_ids = 2 [(soulfire.v1.api_field).format = "uuid"];
+  optional bool enabled = 3;
+  optional bool allow_death_recovery = 4;
+  optional int32 memory_scan_radius = 5;
+  optional int32 memory_scan_interval_ticks = 6;
+  optional int32 retreat_health_threshold = 7;
+  optional int32 retreat_food_threshold = 8;
+  optional AutomationTeamRole role_override = 9;
+}
+
+message UpdateAutomationBotSettingsResponse {
+  repeated AutomationBotActionResult results = 1;
+}
+
 service AutomationService {
   rpc GetAutomationTeamState (GetAutomationTeamStateRequest) returns (GetAutomationTeamStateResponse) {
     option (google.api.http) = { get: "/v1/instances/{instance_id}/automation" };
@@ -664,6 +680,19 @@ service AutomationService {
       permissions: "UPDATE_BOT_CONFIG"
       scope: "instance.bot"
       side_effects: "Forces or clears the automation role override for the selected configured bots."
+    };
+  }
+
+  rpc UpdateAutomationBotSettings (UpdateAutomationBotSettingsRequest) returns (UpdateAutomationBotSettingsResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:updateBotSettings"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update automation bot settings"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      side_effects: "Updates one or more persisted automation bot settings for the selected configured bots, including enablement, recovery, scan tuning, retreat thresholds, and role override."
     };
   }
 

@@ -22,19 +22,19 @@ The GUI settings sidebar now also discovers the built-in automation settings pag
 Current settings in the `automation` namespace:
 
 - `enabled` (bot scope)
-  Master switch for SoulFire-native automation on an individual bot.
+  Master switch for SoulFire-native automation on an individual bot. The dedicated automation dashboard now exposes this directly per bot.
 - `role-override` (bot scope)
   Forces an individual bot into a specific automation role such as `lead` or `stronghold-scout`. `auto` clears the override.
 - `allow-death-recovery` (bot scope)
-  Controls whether automation attempts to recover dropped items after death.
+  Controls whether automation attempts to recover dropped items after death. Default `true`.
 - `memory-scan-radius` (bot scope)
-  Controls the automation world-memory scan radius.
+  Controls the automation world-memory scan radius. Default `48`, valid range `8-96`.
 - `memory-scan-interval-ticks` (bot scope)
-  Controls how frequently automation performs a full block-memory scan.
+  Controls how frequently automation performs a full block-memory scan. Default `20`, valid range `1-200`.
 - `retreat-health-threshold` (bot scope)
-  Controls the health threshold for flee interrupts.
+  Controls the health threshold for flee interrupts. Default `8`, valid range `1-20`.
 - `retreat-food-threshold` (bot scope)
-  Controls the food threshold for eat interrupts.
+  Controls the food threshold for eat interrupts. Default `12`, valid range `1-20`.
 - `preset` (instance scope)
   Named automation preset that captures the intended coordination style for the instance.
 - `team-collaboration` (instance scope)
@@ -98,6 +98,14 @@ Current `automation` command surface:
   Enables or disables automation for the selected bots.
 - `automation deathrecovery <true|false>`
   Enables or disables death-recovery behavior for the selected bots.
+- `automation memoryscanradius <radius>`
+  Sets the automation world-memory scan radius for the selected bots. Valid range `8-96`.
+- `automation memoryscaninterval <ticks>`
+  Sets the automation world-memory scan interval for the selected bots. Valid range `1-200`.
+- `automation retreathealth <health>`
+  Sets the automation retreat-health threshold for the selected bots. Valid range `1-20`.
+- `automation retreatfood <food>`
+  Sets the automation eat-food threshold for the selected bots. Valid range `1-20`.
 - `automation status`
   Shows current bot-level automation state.
 - `automation queue`
@@ -163,6 +171,8 @@ Current gRPC RPCs:
   Forces or clears the shared automation objective override for the instance.
 - `SetAutomationRoleOverride`
   Forces or clears per-bot automation role overrides for selected configured bots.
+- `UpdateAutomationBotSettings`
+  Applies a sparse bot-settings patch for selected configured bots, covering enablement, death recovery, scan tuning, retreat thresholds, and role override in one call.
 - `ResetAutomationMemory`
   Clears remembered automation world state for the selected connected bots and forces replanning.
 - `ReleaseAutomationClaim`
@@ -193,6 +203,7 @@ Matching MCP tools are also available:
 - `set_automation_quota_override`
 - `set_automation_objective_override`
 - `set_automation_role_override`
+- `update_automation_bot_settings`
 - `reset_automation_memory`
 - `release_automation_claim`
 - `release_automation_bot_claims`
@@ -207,7 +218,7 @@ The current `SoulFireClient` automation dashboard provides:
 - team-level quick actions for beat, acquire, pause, resume, stop, and coordination reset
 - instance-level coordination controls for preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, max End bots, and team quota overrides
 - direct navigation to the built-in automation settings page when the page is available for the instance
-- per-bot runtime cards with role override, status summary, role, objective, phase, location, current action, queued targets, recovery counters, and recent progress timestamps
+- per-bot runtime cards with editable automation enablement, death recovery, scan tuning, retreat thresholds, role override, status summary, role, objective, phase, location, current action, queued targets, recovery counters, and recent progress timestamps
 - shared coordination inspection for claims, shared structure hints, and eye-of-ender samples
 
 This is a first operator dashboard rather than a finished automation control center. Missing client parity work is tracked in [automation-gap-audit.md](automation-gap-audit.md) and [automation-roadmap.md](automation-roadmap.md).
@@ -223,6 +234,7 @@ This is a first operator dashboard rather than a finished automation control cen
 - When shared target claims are disabled, bots stop reserving shared targets across the instance and may duplicate teammate work more often.
 - Shared End entry can throttle how many bots enter the End simultaneously.
 - Team requirement quotas for blaze rods, pearls, eyes, arrows, and beds can now be overridden explicitly from CLI, gRPC, MCP, the built-in settings page, and the automation dashboard while keeping `0` as the automatic team-size-based mode.
+- Dedicated per-bot automation tuning now exists in the automation dashboard and over the dedicated automation API, so operators can change enablement, recovery, scan cadence, retreat thresholds, and role override without dropping back to the generic settings surface.
 - Exact item requirement keys are centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
 - Requirement queues are exposed over both CLI and gRPC/MCP state snapshots.
 - Per-bot automation memory can be inspected and reset from both the CLI and the dedicated automation API.

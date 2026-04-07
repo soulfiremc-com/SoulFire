@@ -469,6 +469,41 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   }
 
   @Override
+  public void updateAutomationBotSettings(UpdateAutomationBotSettingsRequest request,
+                                          StreamObserver<UpdateAutomationBotSettingsResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_BOT_CONFIG, instanceId));
+
+    if (!hasAnyBotSettingsPatch(request)) {
+      throw Status.INVALID_ARGUMENT.withDescription("At least one automation bot setting must be provided").asRuntimeException();
+    }
+
+    try {
+      var instance = requireInstance(instanceId);
+      var targetBots = targetConfiguredBots(instance, request.getBotIdsList(), "automation settings updated");
+      var connectedBots = instance.getConnectedBots().stream()
+        .collect(LinkedHashMap<UUID, BotConnection>::new, (map, bot) -> map.put(bot.accountProfileId(), bot), Map::putAll);
+
+      for (var botId : targetBots.validBotIds()) {
+        applyBotSettingsPatch(instance, connectedBots.get(botId), botId, request);
+      }
+      instance.addAuditLog(
+        user,
+        AuditLogType.AUTOMATION_UPDATE_SETTINGS,
+        "%s bot-count=%d".formatted(describeBotSettingsPatch(request), targetBots.validBotIds().size()));
+
+      responseObserver.onNext(UpdateAutomationBotSettingsResponse.newBuilder()
+        .addAllResults(targetBots.results())
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error updating automation bot settings", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
   public void resetAutomationMemory(ResetAutomationMemoryRequest request,
                                     StreamObserver<ResetAutomationMemoryResponse> responseObserver) {
     runBotAction(
@@ -911,6 +946,73 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       .setTargetArrows(instance.settingsSource().get(AutomationSettings.TARGET_ARROWS))
       .setTargetBeds(instance.settingsSource().get(AutomationSettings.TARGET_BEDS))
       .build();
+  }
+
+  private void applyBotSettingsPatch(InstanceManager instance,
+                                     BotConnection connectedBot,
+                                     UUID botId,
+                                     UpdateAutomationBotSettingsRequest request) {
+    if (request.hasEnabled()) {
+      instance.updateBotSetting(botId, AutomationSettings.ENABLED, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      if (!request.getEnabled() && connectedBot != null) {
+        connectedBot.automation().stop();
+      }
+    }
+    if (request.hasAllowDeathRecovery()) {
+      instance.updateBotSetting(botId, AutomationSettings.ALLOW_DEATH_RECOVERY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getAllowDeathRecovery()));
+    }
+    if (request.hasMemoryScanRadius()) {
+      AutomationControlSupport.setBotIntSetting(instance, botId, AutomationSettings.MEMORY_SCAN_RADIUS, request.getMemoryScanRadius());
+    }
+    if (request.hasMemoryScanIntervalTicks()) {
+      AutomationControlSupport.setBotIntSetting(instance, botId, AutomationSettings.MEMORY_SCAN_INTERVAL_TICKS, request.getMemoryScanIntervalTicks());
+    }
+    if (request.hasRetreatHealthThreshold()) {
+      AutomationControlSupport.setBotIntSetting(instance, botId, AutomationSettings.RETREAT_HEALTH_THRESHOLD, request.getRetreatHealthThreshold());
+    }
+    if (request.hasRetreatFoodThreshold()) {
+      AutomationControlSupport.setBotIntSetting(instance, botId, AutomationSettings.RETREAT_FOOD_THRESHOLD, request.getRetreatFoodThreshold());
+    }
+    if (request.hasRoleOverride()) {
+      var override = fromProtoRoleOverride(request.getRoleOverride());
+      instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+    }
+  }
+
+  private static boolean hasAnyBotSettingsPatch(UpdateAutomationBotSettingsRequest request) {
+    return request.hasEnabled()
+      || request.hasAllowDeathRecovery()
+      || request.hasMemoryScanRadius()
+      || request.hasMemoryScanIntervalTicks()
+      || request.hasRetreatHealthThreshold()
+      || request.hasRetreatFoodThreshold()
+      || request.hasRoleOverride();
+  }
+
+  private static String describeBotSettingsPatch(UpdateAutomationBotSettingsRequest request) {
+    var parts = new ArrayList<String>();
+    if (request.hasEnabled()) {
+      parts.add("enabled=" + request.getEnabled());
+    }
+    if (request.hasAllowDeathRecovery()) {
+      parts.add("allow-death-recovery=" + request.getAllowDeathRecovery());
+    }
+    if (request.hasMemoryScanRadius()) {
+      parts.add("memory-scan-radius=" + request.getMemoryScanRadius());
+    }
+    if (request.hasMemoryScanIntervalTicks()) {
+      parts.add("memory-scan-interval-ticks=" + request.getMemoryScanIntervalTicks());
+    }
+    if (request.hasRetreatHealthThreshold()) {
+      parts.add("retreat-health-threshold=" + request.getRetreatHealthThreshold());
+    }
+    if (request.hasRetreatFoodThreshold()) {
+      parts.add("retreat-food-threshold=" + request.getRetreatFoodThreshold());
+    }
+    if (request.hasRoleOverride()) {
+      parts.add("role-override=" + AutomationControlSupport.formatEnumId(fromProtoRoleOverride(request.getRoleOverride())));
+    }
+    return String.join(" ", parts);
   }
 
   private Map<UUID, AutomationTeamCoordinator.BotStatus> indexBotStatuses(Iterable<AutomationTeamCoordinator.BotStatus> statuses) {

@@ -569,6 +569,33 @@ public final class MCPService {
         return grpc(o -> automationService.setAutomationRoleOverride(builder.build(), o));
       })));
 
+    tools.add(tool("update_automation_bot_settings",
+      "Update one or more persisted automation bot settings for configured bots in an instance. Omit bot_ids to target all configured bots. Only provided fields are changed.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "bot_ids", arrayProp("Optional list of bot UUIDs. Omit to target all configured bots in the instance."),
+        "enabled", prop("boolean", "Whether automation is enabled for the targeted bots."),
+        "allow_death_recovery", prop("boolean", "Whether the targeted bots may recover dropped items after death."),
+        "memory_scan_radius", prop("integer", "Block-memory scan radius for the targeted bots (8-96)."),
+        "memory_scan_interval_ticks", prop("integer", "Ticks between full block-memory scans for the targeted bots (1-200)."),
+        "retreat_health_threshold", prop("integer", "Health threshold for retreat behavior (1-20)."),
+        "retreat_food_threshold", prop("integer", "Food threshold for eat interrupts (1-20)."),
+        "role_override", prop("string", "Optional role override: auto, lead, portal-engineer, nether-runner, stronghold-scout, or end-support")),
+      List.of("instance_id"),
+      authed((exchange, args) -> {
+        var builder = UpdateAutomationBotSettingsRequest.newBuilder()
+          .setInstanceId(str(args, "instance_id"));
+        ifPresent(args, "bot_ids", ignored -> builder.addAllBotIds(strList(args, "bot_ids")));
+        ifPresent(args, "enabled", ignored -> builder.setEnabled(bool(args, "enabled")));
+        ifPresent(args, "allow_death_recovery", ignored -> builder.setAllowDeathRecovery(bool(args, "allow_death_recovery")));
+        ifPresent(args, "memory_scan_radius", ignored -> builder.setMemoryScanRadius(num(args, "memory_scan_radius")));
+        ifPresent(args, "memory_scan_interval_ticks", ignored -> builder.setMemoryScanIntervalTicks(num(args, "memory_scan_interval_ticks")));
+        ifPresent(args, "retreat_health_threshold", ignored -> builder.setRetreatHealthThreshold(num(args, "retreat_health_threshold")));
+        ifPresent(args, "retreat_food_threshold", ignored -> builder.setRetreatFoodThreshold(num(args, "retreat_food_threshold")));
+        ifPresent(args, "role_override", ignored -> builder.setRoleOverride(parseAutomationRole(str(args, "role_override"))));
+        return grpc(o -> automationService.updateAutomationBotSettings(builder.build(), o));
+      })));
+
     tools.add(tool("reset_automation_memory",
       "Clear remembered automation world state for connected bots in an instance and force replanning. Omit bot_ids to target all connected bots.",
       Map.of(

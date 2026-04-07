@@ -19,7 +19,10 @@ package com.soulfiremc.server.automation;
 
 import org.junit.jupiter.api.Test;
 
+import com.soulfiremc.server.settings.instance.AutomationSettings;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class AutomationControlSupportTest {
@@ -53,5 +56,14 @@ final class AutomationControlSupportTest {
     assertThrows(
       IllegalArgumentException.class,
       () -> AutomationControlSupport.targetQuotaOverride("diamond_pickaxe"));
+  }
+
+  @Test
+  void validatesBotIntSettingRanges() {
+    assertDoesNotThrow(() ->
+      AutomationControlSupport.validateBotIntSetting(AutomationSettings.MEMORY_SCAN_RADIUS, 48));
+    assertThrows(
+      IllegalArgumentException.class,
+      () -> AutomationControlSupport.validateBotIntSetting(AutomationSettings.MEMORY_SCAN_RADIUS, 7));
   }
 }
