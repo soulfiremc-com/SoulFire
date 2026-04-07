@@ -200,7 +200,7 @@ final class OpenApiSpecGenerator {
     for (var index = 0; index < endpoints.size(); index++) {
       var endpoint = endpoints.get(index);
       var path = openApiPath(endpoint, examplePaths, index);
-      var pathItem = paths.with(path);
+      var pathItem = literalPathItem(paths, path);
       var httpMethod = method.httpMethod().name().toLowerCase(Locale.ROOT);
       if (pathItem.has(httpMethod)) {
         continue;
@@ -777,6 +777,18 @@ final class OpenApiSpecGenerator {
     }
 
     return normalizePath(endpoint.pathMapping());
+  }
+
+  static ObjectNode literalPathItem(ObjectNode paths, String path) {
+    var existing = paths.get(path);
+    if (existing instanceof ObjectNode objectNode) {
+      return objectNode;
+    }
+    if (existing != null) {
+      throw new IllegalStateException("OpenAPI path '%s' is not an object node".formatted(path));
+    }
+
+    return paths.putObject(path);
   }
 
   private static String methodKey(String serviceName, String methodName) {
