@@ -17,6 +17,7 @@ SoulFire now has:
 - A native automation controller and shared team coordinator.
 - Item acquisition, crafting, smelting, looting, bartering, and beat-game phase orchestration.
 - Shared world memory, shared exploration claims, stronghold estimates, and team status reporting.
+- Shared coordination inspection and reset hooks over CLI, gRPC, and MCP.
 - Native portal construction and portal casting paths.
 - Basic end-fight targeting, ranged attacks, and death/stall recovery hooks.
 
@@ -27,9 +28,9 @@ That is enough for a prototype automation stack. It is not yet the same as a pro
 These are worth stating directly based on the current repository state:
 
 - The current command surface is still CLI-first, even though a first dedicated automation API now exists.
-- A first `AutomationSettings` page now exists, but it still only covers an initial execution and coordination slice.
-- A first automation proto, gRPC, and MCP surface now exists for state snapshots and core control actions, but it is still far from complete.
-- Team collaboration is now configurable, but it is still much narrower than the full coordination model described below.
+- A first `AutomationSettings` page now exists, but it still only covers an initial execution, coordination, and observability slice.
+- A first automation proto, gRPC, and MCP surface now exists for state snapshots, coordination snapshots, and core control actions, but it is still far from complete.
+- Team collaboration is now configurable, including structure-intel and target-claim sharing, but it is still much narrower than the full coordination model described below.
 - GUI automation controls and dashboards still live outside this repository and are not yet implemented end-to-end.
 
 ## P0: reliability for 10 parallel beat-game bots
@@ -192,8 +193,9 @@ The current team coordinator is useful, but still too fixed and too implicit.
 ### Collaboration settings
 
 - Expand the existing automation settings page beyond the current first execution and coordination slice.
-- Keep the simple on/off collaboration toggle, but add more granular collaboration controls underneath it.
-- Add toggles for role specialization, shared looting, shared structures, and shared End entry.
+- Keep the simple on/off collaboration toggle, but continue adding more granular collaboration controls underneath it.
+- Shared structure-intel and shared target-claim toggles now exist; shared looting, shared handoffs, and shared stash policies still do not.
+- Add toggles for role specialization, shared looting, and shared End entry policy beyond the current boolean throttle.
 - Add caps for how many bots may enter the nether, stronghold, and End at once.
 - Add settings for shared exploration spacing and structure claim lease time.
 - Add settings for whether death recovery is attempted.
@@ -246,14 +248,16 @@ These key names are illustrative rather than final, but the product needs this l
 ### Commands
 
 - Expand the automation command set beyond `beat`, `get`, `status`, `teamstatus`, and `stop`.
-- `pause`, `resume`, queue inspection, and per-bot memory reset now exist.
+- `pause`, `resume`, queue inspection, per-bot memory reset, coordination inspection, coordination reset, and granular collaboration toggles now exist.
 - Add `restart-phase` and `abort-phase`.
 - Add commands to set roles and objectives manually.
 - Add commands to claim or release targets manually.
 - Expand queue inspection beyond the current requirement list into richer planner-decision visibility.
 - Expand memory inspection beyond the current per-bot remembered-state dump and per-bot reset flow.
+- Add JSON or structured export modes for queue, memory, and coordination inspection instead of text-only CLI output.
 - Add commands to toggle collaboration on and off without restarting the instance.
 - Add commands to apply automation presets and diff automation settings against defaults.
+- Add commands to diff current automation settings against a named preset.
 - Add commands to quarantine, unquarantine, or reassign a bot during a team run.
 - Add commands to force portal strategy, force structure target, or skip a failed phase.
 - Add commands to export run reports and last-failure context.
@@ -263,10 +267,12 @@ These key names are illustrative rather than final, but the product needs this l
 - Expand the new explicit automation RPCs instead of relying on generic command dispatch for advanced operations.
 - Add automation status streaming and event streaming.
 - Expose the automation phase, current action, planner queue, role, objective, and recovery state over RPC.
-- Expose team summaries, claims, and shared memory snapshots over RPC.
+- Team summaries, claims, shared block hints, eye samples, and per-bot memory snapshots now exist as point-in-time RPCs.
 - Expand the new automation MCP tooling so external agents can inspect and control automation directly beyond the first action set.
 - Add versioned proto messages for automation settings and telemetry.
 - Add automation-specific audit log events.
+- Add server-pushed subscriptions for queue changes, phase changes, recoveries, and coordination-claim churn.
+- Add explicit operator override RPCs for claims, roles, objectives, and target abandonment.
 
 ### Suggested automation API surface
 
@@ -275,6 +281,7 @@ At minimum, the dedicated automation API likely needs:
 Already implemented in the first API slice:
 
 - `GetAutomationTeamState`
+- `GetAutomationCoordinationState`
 - `GetAutomationBotState`
 - `GetAutomationMemoryState`
 - `StartAutomationBeat`
@@ -284,7 +291,10 @@ Already implemented in the first API slice:
 - `StopAutomation`
 - `ApplyAutomationPreset`
 - `SetAutomationCollaboration`
+- `SetAutomationSharedStructures`
+- `SetAutomationSharedClaims`
 - `ResetAutomationMemory`
+- `ResetAutomationCoordinationState`
 
 - `StartAutomationRun`
 - `StopAutomationRun`
@@ -325,6 +335,7 @@ The proto layer should clearly separate:
 The official GUI client is in a different repository, but the following features are still needed:
 
 - Dedicated automation settings page.
+- Dedicated coordination-inspection page or panel.
 - Dedicated automation dashboard per instance.
 - Per-bot automation panels showing phase, task tree, planner queue, deaths, and last recovery.
 - Team view showing roles, quotas, structure targets, and shared objective.
@@ -382,6 +393,7 @@ The documentation effort should follow Diataxis rather than living as one giant 
 
 - Add automation command documentation.
 - Add automation settings reference documentation.
+- Add automation coordination-state reference documentation.
 - Add a guide for running a collaborative beat-game team.
 - Add safety guidance for using automation on allowed/private servers only.
 - Add troubleshooting docs for common automation failure modes.
@@ -391,6 +403,7 @@ The documentation effort should follow Diataxis rather than living as one giant 
 
 - Document every automation command and response shape.
 - Document every automation settings key, default, type, and safe range.
+- Document every coordination snapshot field and reset behavior.
 - Document every automation phase, role, objective, claim type, and recovery reason.
 - Document the automation proto services, messages, and events once they exist.
 
@@ -458,7 +471,7 @@ If the goal is "10 SoulFire bots reliably beat the game in parallel", the highes
 These are worth calling out explicitly because they are easy to overlook:
 
 - The current automation proto/gRPC/MCP surface does not yet include streams, planner traces, force actions, or run-report export.
-- The current automation memory surface is per-bot only; shared-memory and claim inspection is still missing.
+- Shared-memory and claim inspection now exist, but historical timelines, subscriptions, and manual claim editing still do not.
 - No dedicated GUI client automation dashboard exists in this repository.
 - No dedicated automation event stream or run-report export exists yet.
 - No automation-specific permission model exists yet.

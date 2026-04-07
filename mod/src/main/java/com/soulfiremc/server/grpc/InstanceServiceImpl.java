@@ -743,6 +743,7 @@ public final class InstanceServiceImpl extends InstanceServiceGrpc.InstanceServi
             case AUTOMATION_UPDATE_SETTINGS -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_UPDATE_SETTINGS;
             case AUTOMATION_APPLY_PRESET -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_APPLY_PRESET;
             case AUTOMATION_RESET_MEMORY -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_RESET_MEMORY;
+            case AUTOMATION_RESET_COORDINATION -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_RESET_COORDINATION;
           })
           .setTimestamp(Timestamps.fromMillis(auditLog.getCreatedAt().toInstant(ZoneOffset.UTC).toEpochMilli()))
           .setData(auditLog.getData() != null ? auditLog.getData() : "")

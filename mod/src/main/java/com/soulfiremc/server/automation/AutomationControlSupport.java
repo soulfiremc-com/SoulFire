@@ -50,18 +50,24 @@ public final class AutomationControlSupport {
       case BALANCED_TEAM -> {
         instance.updateInstanceSetting(AutomationSettings.TEAM_COLLABORATION, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, GsonInstance.GSON.toJsonTree(AutomationSettings.RolePolicy.STATIC_TEAM.name()));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, GsonInstance.GSON.toJsonTree(true));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, GsonInstance.GSON.toJsonTree(3));
       }
       case INDEPENDENT_RUNNERS -> {
         instance.updateInstanceSetting(AutomationSettings.TEAM_COLLABORATION, GsonInstance.GSON.toJsonTree(false));
         instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, GsonInstance.GSON.toJsonTree(AutomationSettings.RolePolicy.INDEPENDENT.name()));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, GsonInstance.GSON.toJsonTree(false));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, GsonInstance.GSON.toJsonTree(false));
         instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, GsonInstance.GSON.toJsonTree(false));
         instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, GsonInstance.GSON.toJsonTree(10));
       }
       case CAUTIOUS_TEAM -> {
         instance.updateInstanceSetting(AutomationSettings.TEAM_COLLABORATION, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, GsonInstance.GSON.toJsonTree(AutomationSettings.RolePolicy.STATIC_TEAM.name()));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, GsonInstance.GSON.toJsonTree(true));
+        instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, GsonInstance.GSON.toJsonTree(true));
         instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, GsonInstance.GSON.toJsonTree(2));
       }

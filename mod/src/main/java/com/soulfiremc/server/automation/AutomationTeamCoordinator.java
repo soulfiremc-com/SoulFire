@@ -134,6 +134,15 @@ public final class AutomationTeamCoordinator {
     telemetry.remove(bot.accountProfileId());
   }
 
+  public synchronized void resetCoordinationState() {
+    sharedBlocks.clear();
+    claims.clear();
+    eyeSamples.clear();
+    sharedInventory.clear();
+    roleAssignments.clear();
+    objective = TeamObjective.BOOTSTRAP;
+  }
+
   public synchronized Optional<SharedBlock> findNearestBlock(BotConnection bot,
                                                              ResourceKey<Level> dimension,
                                                              Predicate<BlockState> predicate) {
@@ -159,32 +168,35 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<SharedBlock> findNearestPortal(BotConnection bot, ResourceKey<Level> dimension) {
-    if (independentMode()) {
+    if (!sharedStructureIntelEnabled()) {
       return Optional.empty();
     }
     return findNearestBlock(bot, dimension, state -> state.getBlock() == Blocks.NETHER_PORTAL);
   }
 
   public synchronized Optional<SharedBlock> findNearestRuinedPortalHint(BotConnection bot, ResourceKey<Level> dimension) {
-    if (independentMode()) {
+    if (!sharedStructureIntelEnabled()) {
       return Optional.empty();
     }
     return findNearestBlock(bot, dimension, AutomationTeamCoordinator::isRuinedPortalMarker);
   }
 
   public synchronized Optional<SharedBlock> findNearestFortressHint(BotConnection bot) {
-    if (independentMode()) {
+    if (!sharedStructureIntelEnabled()) {
       return Optional.empty();
     }
     return findNearestBlock(bot, Level.NETHER, AutomationTeamCoordinator::isFortressMarker);
   }
 
   public synchronized Optional<Vec3> fortressEstimate() {
+    if (!sharedStructureIntelEnabled()) {
+      return Optional.empty();
+    }
     return centroid(Level.NETHER, AutomationTeamCoordinator::isFortressMarker, 70.0);
   }
 
   public synchronized Optional<Vec3> fortressEstimate(BotConnection bot) {
-    if (!independentMode()) {
+    if (sharedStructureIntelEnabled()) {
       return fortressEstimate();
     }
 
@@ -278,6 +290,9 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<Vec3> strongholdEstimate() {
+    if (!sharedStructureIntelEnabled()) {
+      return Optional.empty();
+    }
     var now = System.currentTimeMillis();
     prune(now);
 
@@ -328,7 +343,7 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<Vec3> strongholdEstimate(BotConnection bot) {
-    if (!independentMode()) {
+    if (sharedStructureIntelEnabled()) {
       return strongholdEstimate();
     }
 
@@ -362,6 +377,9 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<Vec3> portalRoomEstimate() {
+    if (!sharedStructureIntelEnabled()) {
+      return Optional.empty();
+    }
     var now = System.currentTimeMillis();
     prune(now);
 
@@ -376,7 +394,7 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<Vec3> portalRoomEstimate(BotConnection bot) {
-    if (!independentMode()) {
+    if (sharedStructureIntelEnabled()) {
       return portalRoomEstimate();
     }
 
@@ -578,6 +596,8 @@ public final class AutomationTeamCoordinator {
       instanceManager.settingsSource().get(AutomationSettings.PRESET, AutomationSettings.Preset.class),
       collaborationEnabled(),
       instanceManager.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class),
+      instanceManager.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL),
+      instanceManager.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS),
       instanceManager.settingsSource().get(AutomationSettings.SHARED_END_ENTRY),
       instanceManager.settingsSource().get(AutomationSettings.MAX_END_BOTS),
       objective,
@@ -594,10 +614,66 @@ public final class AutomationTeamCoordinator {
       teamTarget(AutomationRequirements.ANY_BED));
   }
 
+  public synchronized CoordinationSnapshot coordinationSnapshot(int maxEntries) {
+    prune(System.currentTimeMillis());
+    rebalanceRoles();
+    updateObjective();
+
+    var cappedEntries = Math.max(1, maxEntries);
+    var sharedCounts = TEAM_SHARED_REQUIREMENTS.stream()
+      .map(requirement -> new SharedRequirementCountSnapshot(
+        requirement,
+        sharedCount(requirement),
+        teamTarget(requirement)))
+      .toList();
+    var blockSnapshots = sharedBlocks.entrySet().stream()
+      .flatMap(entry -> entry.getValue().values().stream()
+        .map(block -> new SharedBlockSnapshot(
+          block.observerBotId(),
+          accountNameFor(block.observerBotId()),
+          entry.getKey(),
+          block.pos(),
+          block.state(),
+          block.lastSeenMillis())))
+      .sorted(Comparator.comparingLong(SharedBlockSnapshot::lastSeenMillis).reversed())
+      .limit(cappedEntries)
+      .toList();
+    var claimSnapshots = claims.values().stream()
+      .sorted(Comparator.comparingLong(Claim::expiresAtMillis).reversed())
+      .limit(cappedEntries)
+      .map(claim -> new ClaimSnapshot(
+        claim.key(),
+        claim.owner(),
+        accountNameFor(claim.owner()),
+        claim.target(),
+        claim.expiresAtMillis()))
+      .toList();
+    var eyeSampleSnapshots = eyeSamples.stream()
+      .sorted(Comparator.comparingLong(EyeSample::recordedAtMillis).reversed())
+      .limit(cappedEntries)
+      .map(sample -> new EyeSampleSnapshot(
+        sample.botId(),
+        accountNameFor(sample.botId()),
+        sample.origin(),
+        sample.direction(),
+        sample.recordedAtMillis()))
+      .toList();
+
+    return new CoordinationSnapshot(
+      teamSummary(),
+      blockSnapshots,
+      claimSnapshots,
+      eyeSampleSnapshots,
+      sharedCounts,
+      sharedBlocks.values().stream().mapToInt(Map::size).sum(),
+      claims.size(),
+      eyeSamples.size());
+  }
+
   private boolean claim(UUID owner, String key, @Nullable Vec3 target, long leaseMillis) {
     var now = System.currentTimeMillis();
     prune(now);
-    if (independentMode()) {
+    if (independentMode() || !sharedTargetClaimsEnabled()) {
       key = owner + ":" + key;
     }
 
@@ -772,6 +848,16 @@ public final class AutomationTeamCoordinator {
     return instanceManager.settingsSource().get(AutomationSettings.TEAM_COLLABORATION);
   }
 
+  private boolean sharedStructureIntelEnabled() {
+    return !independentMode()
+      && instanceManager.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL);
+  }
+
+  private boolean sharedTargetClaimsEnabled() {
+    return !independentMode()
+      && instanceManager.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS);
+  }
+
   private boolean independentMode() {
     return !collaborationEnabled()
       || instanceManager.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class) == AutomationSettings.RolePolicy.INDEPENDENT;
@@ -806,10 +892,19 @@ public final class AutomationTeamCoordinator {
 
   private java.util.stream.Stream<SharedBlock> observedBlocks(@Nullable UUID botId, ResourceKey<Level> dimension) {
     var blocks = sharedBlocks.getOrDefault(dimension, Map.of()).values().stream();
-    if (botId != null && independentMode()) {
+    if (botId != null && (!sharedStructureIntelEnabled() || independentMode())) {
       return blocks.filter(block -> block.observerBotId().equals(botId));
     }
+    if (botId == null && !sharedStructureIntelEnabled()) {
+      return java.util.stream.Stream.empty();
+    }
     return blocks;
+  }
+
+  private String accountNameFor(UUID botId) {
+    return Optional.ofNullable(botSnapshots.get(botId))
+      .map(BotSnapshot::accountName)
+      .orElse(botId.toString());
   }
 
   private static Optional<Vec3> centroidVectors(List<Vec3> matches, double y) {
@@ -889,6 +984,8 @@ public final class AutomationTeamCoordinator {
   public record TeamSummary(AutomationSettings.Preset preset,
                             boolean collaborationEnabled,
                             AutomationSettings.RolePolicy rolePolicy,
+                            boolean sharedStructureIntel,
+                            boolean sharedTargetClaims,
                             boolean sharedEndEntry,
                             int maxEndBots,
                             TeamObjective objective,
@@ -903,6 +1000,41 @@ public final class AutomationTeamCoordinator {
                             int targetArrows,
                             int beds,
                             int targetBeds) {
+  }
+
+  public record CoordinationSnapshot(TeamSummary summary,
+                                     List<SharedBlockSnapshot> sharedBlocks,
+                                     List<ClaimSnapshot> claims,
+                                     List<EyeSampleSnapshot> eyeSamples,
+                                     List<SharedRequirementCountSnapshot> sharedCounts,
+                                     int sharedBlockCount,
+                                     int claimCount,
+                                     int eyeSampleCount) {
+  }
+
+  public record SharedRequirementCountSnapshot(String requirementKey, int currentCount, int targetCount) {
+  }
+
+  public record SharedBlockSnapshot(UUID observerBotId,
+                                    String observerAccountName,
+                                    ResourceKey<Level> dimension,
+                                    BlockPos pos,
+                                    BlockState state,
+                                    long lastSeenMillis) {
+  }
+
+  public record ClaimSnapshot(String key,
+                              UUID ownerBotId,
+                              String ownerAccountName,
+                              @Nullable Vec3 target,
+                              long expiresAtMillis) {
+  }
+
+  public record EyeSampleSnapshot(UUID botId,
+                                  String accountName,
+                                  Vec3 origin,
+                                  Vec3 direction,
+                                  long recordedAtMillis) {
   }
 
   private record Claim(String key, UUID owner, @Nullable Vec3 target, long expiresAtMillis) {

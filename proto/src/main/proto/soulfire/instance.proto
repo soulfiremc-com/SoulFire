@@ -524,6 +524,8 @@ message InstanceAuditLogResponse {
     AUTOMATION_APPLY_PRESET = 10;
     // Automation memory was reset.
     AUTOMATION_RESET_MEMORY = 11;
+    // Shared automation coordination state was reset.
+    AUTOMATION_RESET_COORDINATION = 12;
   }
 
   // A single entry in the audit log.

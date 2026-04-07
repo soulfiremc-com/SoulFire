@@ -87,6 +87,8 @@ message AutomationInstanceSettings {
   AutomationRolePolicy role_policy = 3;
   bool shared_end_entry = 4;
   int32 max_end_bots = 5;
+  bool shared_structure_intel = 6;
+  bool shared_target_claims = 7;
 }
 
 message AutomationResourceQuota {
@@ -127,6 +129,55 @@ message AutomationTeamState {
   int32 active_bots = 5;
   repeated AutomationResourceQuota quotas = 6;
   repeated AutomationBotState bots = 7;
+}
+
+message AutomationCoordinationSharedBlock {
+  string observer_bot_id = 1;
+  string observer_account_name = 2;
+  string dimension = 3;
+  int32 x = 4;
+  int32 y = 5;
+  int32 z = 6;
+  string block_id = 7;
+  google.protobuf.Timestamp last_seen_at = 8;
+}
+
+message AutomationCoordinationClaim {
+  string key = 1;
+  string owner_bot_id = 2;
+  string owner_account_name = 3;
+  AutomationPosition target = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message AutomationCoordinationEyeSample {
+  string bot_id = 1;
+  string account_name = 2;
+  AutomationPosition origin = 3;
+  AutomationPosition direction = 4;
+  google.protobuf.Timestamp recorded_at = 5;
+}
+
+message AutomationSharedRequirementCount {
+  string requirement_key = 1;
+  string display_name = 2;
+  int32 current_count = 3;
+  int32 target_count = 4;
+}
+
+message AutomationCoordinationState {
+  string instance_id = 1;
+  string friendly_name = 2;
+  AutomationInstanceSettings settings = 3;
+  AutomationTeamObjective objective = 4;
+  int32 active_bots = 5;
+  int32 shared_block_count = 6;
+  int32 claim_count = 7;
+  int32 eye_sample_count = 8;
+  repeated AutomationSharedRequirementCount shared_counts = 9;
+  repeated AutomationCoordinationSharedBlock shared_blocks = 10;
+  repeated AutomationCoordinationClaim claims = 11;
+  repeated AutomationCoordinationEyeSample eye_samples = 12;
 }
 
 message AutomationMemoryBlock {
@@ -195,6 +246,15 @@ message GetAutomationTeamStateResponse {
   AutomationTeamState state = 1;
 }
 
+message GetAutomationCoordinationStateRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  int32 max_entries = 2;
+}
+
+message GetAutomationCoordinationStateResponse {
+  AutomationCoordinationState state = 1;
+}
+
 message GetAutomationBotStateRequest {
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
@@ -246,6 +306,14 @@ message ResetAutomationMemoryResponse {
   repeated AutomationBotActionResult results = 1;
 }
 
+message ResetAutomationCoordinationStateRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+}
+
+message ResetAutomationCoordinationStateResponse {
+  AutomationCoordinationState state = 1;
+}
+
 message ApplyAutomationPresetRequest {
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   repeated string bot_ids = 2 [(soulfire.v1.api_field).format = "uuid"];
@@ -266,11 +334,38 @@ message SetAutomationCollaborationResponse {
   AutomationInstanceSettings settings = 1;
 }
 
+message SetAutomationSharedStructuresRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  bool enabled = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationSharedStructuresResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
+message SetAutomationSharedClaimsRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  bool enabled = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationSharedClaimsResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
 service AutomationService {
   rpc GetAutomationTeamState (GetAutomationTeamStateRequest) returns (GetAutomationTeamStateResponse) {
     option (google.api.http) = { get: "/v1/instances/{instance_id}/automation" };
     option (soulfire.v1.api_method) = {
       display_name: "Get automation team state"
+      permissions: "READ_BOT_INFO"
+      scope: "instance"
+    };
+  }
+
+  rpc GetAutomationCoordinationState (GetAutomationCoordinationStateRequest) returns (GetAutomationCoordinationStateResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/automation/coordination" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get automation coordination state"
       permissions: "READ_BOT_INFO"
       scope: "instance"
     };
@@ -385,6 +480,32 @@ service AutomationService {
     };
   }
 
+  rpc SetAutomationSharedStructures (SetAutomationSharedStructuresRequest) returns (SetAutomationSharedStructuresResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setSharedStructures"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation shared structures"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Enables or disables cross-bot sharing of structure hints and portal/eye intelligence."
+    };
+  }
+
+  rpc SetAutomationSharedClaims (SetAutomationSharedClaimsRequest) returns (SetAutomationSharedClaimsResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setSharedClaims"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation shared claims"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Enables or disables cross-bot target reservation for shared automation work."
+    };
+  }
+
   rpc ResetAutomationMemory (ResetAutomationMemoryRequest) returns (ResetAutomationMemoryResponse) {
     option (google.api.http) = {
       post: "/v1/instances/{instance_id}/automation:resetMemory"
@@ -395,6 +516,19 @@ service AutomationService {
       permissions: "INSTANCE_COMMAND_EXECUTION"
       scope: "instance"
       side_effects: "Clears remembered automation world state for the selected connected bots and forces replanning."
+    };
+  }
+
+  rpc ResetAutomationCoordinationState (ResetAutomationCoordinationStateRequest) returns (ResetAutomationCoordinationStateResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:resetCoordination"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Reset automation coordination state"
+      permissions: "INSTANCE_COMMAND_EXECUTION"
+      scope: "instance"
+      side_effects: "Clears shared automation claims, shared structure intelligence, and eye samples for the instance."
     };
   }
 }

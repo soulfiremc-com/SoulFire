@@ -71,6 +71,24 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   }
 
   @Override
+  public void getAutomationCoordinationState(GetAutomationCoordinationStateRequest request,
+                                             StreamObserver<GetAutomationCoordinationStateResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    ServerRPCConstants.USER_CONTEXT_KEY.get().hasPermissionOrThrow(PermissionContext.instance(InstancePermission.READ_BOT_INFO, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      responseObserver.onNext(GetAutomationCoordinationStateResponse.newBuilder()
+        .setState(buildCoordinationState(instance, resolveMaxEntries(request.getMaxEntries())))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error getting automation coordination state", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
   public void getAutomationBotState(GetAutomationBotStateRequest request,
                                     StreamObserver<GetAutomationBotStateResponse> responseObserver) {
     var instanceId = parseUuid(request.getInstanceId(), "instance_id");
@@ -262,6 +280,50 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   }
 
   @Override
+  public void setAutomationSharedStructures(SetAutomationSharedStructuresRequest request,
+                                            StreamObserver<SetAutomationSharedStructuresResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-structure-intel=" + request.getEnabled());
+
+      responseObserver.onNext(SetAutomationSharedStructuresResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation shared structures", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
+  public void setAutomationSharedClaims(SetAutomationSharedClaimsRequest request,
+                                        StreamObserver<SetAutomationSharedClaimsResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-target-claims=" + request.getEnabled());
+
+      responseObserver.onNext(SetAutomationSharedClaimsResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation shared claims", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
   public void resetAutomationMemory(ResetAutomationMemoryRequest request,
                                     StreamObserver<ResetAutomationMemoryResponse> responseObserver) {
     runBotAction(
@@ -294,6 +356,28 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
           responseObserver.onCompleted();
         }
       });
+  }
+
+  @Override
+  public void resetAutomationCoordinationState(ResetAutomationCoordinationStateRequest request,
+                                               StreamObserver<ResetAutomationCoordinationStateResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.INSTANCE_COMMAND_EXECUTION, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      instance.automationCoordinator().resetCoordinationState();
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_RESET_COORDINATION, "instance=" + instance.id());
+
+      responseObserver.onNext(ResetAutomationCoordinationStateResponse.newBuilder()
+        .setState(buildCoordinationState(instance, 8))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error resetting automation coordination state", t);
+      throw statusFromThrowable(t);
+    }
   }
 
   private void runBotAction(String instanceIdRaw,
@@ -366,6 +450,75 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
         quota(AutomationRequirements.ANY_BED, teamSummary.beds(), teamSummary.targetBeds())))
       .addAllBots(bots)
       .build();
+  }
+
+  private AutomationCoordinationState buildCoordinationState(InstanceManager instance, int maxEntries) {
+    var snapshot = instance.automationCoordinator().coordinationSnapshot(maxEntries);
+    var builder = AutomationCoordinationState.newBuilder()
+      .setInstanceId(instance.id().toString())
+      .setFriendlyName(instance.friendlyNameCache().get())
+      .setSettings(buildInstanceSettings(instance))
+      .setObjective(toProto(snapshot.summary().objective()))
+      .setActiveBots(snapshot.summary().activeBots())
+      .setSharedBlockCount(snapshot.sharedBlockCount())
+      .setClaimCount(snapshot.claimCount())
+      .setEyeSampleCount(snapshot.eyeSampleCount());
+
+    builder.addAllSharedCounts(snapshot.sharedCounts().stream()
+      .map(count -> AutomationSharedRequirementCount.newBuilder()
+        .setRequirementKey(count.requirementKey())
+        .setDisplayName(AutomationRequirements.describe(count.requirementKey()))
+        .setCurrentCount(count.currentCount())
+        .setTargetCount(count.targetCount())
+        .build())
+      .toList());
+    builder.addAllSharedBlocks(snapshot.sharedBlocks().stream()
+      .map(block -> AutomationCoordinationSharedBlock.newBuilder()
+        .setObserverBotId(block.observerBotId().toString())
+        .setObserverAccountName(block.observerAccountName())
+        .setDimension(block.dimension().identifier().toString())
+        .setX(block.pos().getX())
+        .setY(block.pos().getY())
+        .setZ(block.pos().getZ())
+        .setBlockId(BuiltInRegistries.BLOCK.getKey(block.state().getBlock()).toString())
+        .setLastSeenAt(Timestamps.fromMillis(block.lastSeenMillis()))
+        .build())
+      .toList());
+    builder.addAllClaims(snapshot.claims().stream()
+      .map(claim -> {
+        var claimBuilder = AutomationCoordinationClaim.newBuilder()
+          .setKey(claim.key())
+          .setOwnerBotId(claim.ownerBotId().toString())
+          .setOwnerAccountName(claim.ownerAccountName())
+          .setExpiresAt(Timestamps.fromMillis(claim.expiresAtMillis()));
+        if (claim.target() != null) {
+          claimBuilder.setTarget(AutomationPosition.newBuilder()
+            .setX(claim.target().x)
+            .setY(claim.target().y)
+            .setZ(claim.target().z)
+            .build());
+        }
+        return claimBuilder.build();
+      })
+      .toList());
+    builder.addAllEyeSamples(snapshot.eyeSamples().stream()
+      .map(sample -> AutomationCoordinationEyeSample.newBuilder()
+        .setBotId(sample.botId().toString())
+        .setAccountName(sample.accountName())
+        .setOrigin(AutomationPosition.newBuilder()
+          .setX(sample.origin().x)
+          .setY(sample.origin().y)
+          .setZ(sample.origin().z)
+          .build())
+        .setDirection(AutomationPosition.newBuilder()
+          .setX(sample.direction().x)
+          .setY(sample.direction().y)
+          .setZ(sample.direction().z)
+          .build())
+        .setRecordedAt(Timestamps.fromMillis(sample.recordedAtMillis()))
+        .build())
+      .toList());
+    return builder.build();
   }
 
   private AutomationBotState buildBotState(InstanceManager instance,
@@ -545,6 +698,8 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       .setRolePolicy(toProto(instance.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class)))
       .setSharedEndEntry(instance.settingsSource().get(AutomationSettings.SHARED_END_ENTRY))
       .setMaxEndBots(instance.settingsSource().get(AutomationSettings.MAX_END_BOTS))
+      .setSharedStructureIntel(instance.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL))
+      .setSharedTargetClaims(instance.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS))
       .build();
   }
 

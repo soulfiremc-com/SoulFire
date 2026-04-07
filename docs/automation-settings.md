@@ -20,6 +20,10 @@ Current settings in the `automation` namespace:
   Turns team orchestration on or off for the instance. When off, bots do not share roles, claims, structure estimates, or team-wide progression state.
 - `role-policy` (instance scope)
   Controls whether bots use the shared static team-role layout or behave as independent runners.
+- `shared-structure-intel` (instance scope)
+  Controls whether bots reuse each other's portal hints, stronghold hints, fortress hints, and eye-of-ender samples.
+- `shared-target-claims` (instance scope)
+  Controls whether bots reserve shared work targets like portal frames, exploration cells, and end crystals.
 - `shared-end-entry` (instance scope)
   Controls whether End entry is throttled across the team.
 - `max-end-bots` (instance scope)
@@ -49,12 +53,20 @@ Current `automation` command surface:
   Resumes automation for selected paused bots.
 - `automation collaboration <true|false>`
   Toggles team orchestration for the visible instances. `false` switches the instance to the `independent-runners` preset.
+- `automation sharedstructures <true|false>`
+  Toggles whether bots share structure and portal intelligence across the visible instances.
+- `automation sharedclaims <true|false>`
+  Toggles whether bots reserve shared automation targets across the visible instances.
 - `automation queue`
   Shows the current requirement queue for the selected bots.
 - `automation memorystatus [maxEntries]`
   Shows a capped snapshot of remembered automation world state for the selected bots.
 - `automation resetmemory`
   Clears remembered automation world state for the selected bots and forces replanning.
+- `automation coordinationstatus [maxEntries]`
+  Shows capped shared coordination state for the visible instances, including shared claims, shared structure hints, eye samples, and team requirement counts.
+- `automation resetcoordination`
+  Clears shared automation claims, shared structure hints, and shared eye samples for the visible instances.
 - `automation status`
   Shows current bot-level automation state.
 - `automation teamstatus`
@@ -70,6 +82,8 @@ Current gRPC RPCs:
 
 - `GetAutomationTeamState`
   Returns instance-level automation settings, team objective, team quotas, and structured per-bot runtime state.
+- `GetAutomationCoordinationState`
+  Returns shared instance-level coordination state, including shared claims, shared structure hints, eye samples, and team requirement counts.
 - `GetAutomationBotState`
   Returns structured automation state for one connected bot, including the queued requirement targets.
 - `GetAutomationMemoryState`
@@ -88,12 +102,19 @@ Current gRPC RPCs:
   Applies a named automation preset to the instance and persists matching per-bot automation defaults.
 - `SetAutomationCollaboration`
   Toggles team orchestration by switching between collaborative and independent preset behavior.
+- `SetAutomationSharedStructures`
+  Enables or disables cross-bot sharing of structure and portal intelligence.
+- `SetAutomationSharedClaims`
+  Enables or disables cross-bot target reservation.
 - `ResetAutomationMemory`
   Clears remembered automation world state for the selected connected bots and forces replanning.
+- `ResetAutomationCoordinationState`
+  Clears shared automation claims, shared structure hints, and eye samples for the instance.
 
 Matching MCP tools are also available:
 
 - `get_automation_team_state`
+- `get_automation_coordination_state`
 - `get_automation_bot_state`
 - `get_automation_memory_state`
 - `start_automation_beat`
@@ -103,19 +124,25 @@ Matching MCP tools are also available:
 - `stop_automation`
 - `apply_automation_preset`
 - `set_automation_collaboration`
+- `set_automation_shared_structures`
+- `set_automation_shared_claims`
 - `reset_automation_memory`
+- `reset_automation_coordination_state`
 
 ## Current behavior notes
 
 - When automation is disabled for a bot, the automation controller stands down and releases its claims.
 - When team collaboration is disabled, bots stop using shared roles, shared claims, shared structure estimates, and shared progression quotas.
 - When the role policy is set to independent mode, bots behave like independent runners even if collaboration remains enabled at the instance level.
+- When shared structure intel is disabled, bots stop reusing other bots' shared portal, fortress, stronghold, and eye-of-ender observations, but still retain their own local automation memory.
+- When shared target claims are disabled, bots stop reserving shared targets across the instance and may duplicate teammate work more often.
 - Exact item requirement keys are now centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
 - Shared End entry can now throttle how many bots enter the End simultaneously.
 - Death recovery can now be disabled per bot.
 - A dedicated automation gRPC/MCP control surface now exists for runtime inspection and control.
 - Requirement queues are now exposed over both CLI and gRPC/MCP state snapshots.
 - Per-bot automation memory can now be inspected and reset from both the CLI and the dedicated automation API.
+- Shared coordination state can now be inspected and reset from both the CLI and the dedicated automation API.
 
 ## Still missing
 
@@ -124,6 +151,6 @@ This is not the finished automation surface. Major missing pieces are still trac
 - GUI dashboards and operator controls
 - richer settings coverage and presets
 - automation event streams, planner traces, and run-report export
-- team shared-memory and claim inspection
+- manual coordination edits such as releasing individual claims or editing shared structure hints
 - soak testing and long-run reliability hardening
 - broader survival and task parity work

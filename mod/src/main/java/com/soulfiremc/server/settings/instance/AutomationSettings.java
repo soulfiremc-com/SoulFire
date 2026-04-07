@@ -71,6 +71,24 @@ public final class AutomationSettings implements SettingsObject {
       .defaultValue(RolePolicy.STATIC_TEAM.name())
       .addOptions(rolePolicyOptions())
       .build();
+  public static final BooleanProperty<SettingsSource.Instance> SHARED_STRUCTURE_INTEL =
+    ImmutableBooleanProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("shared-structure-intel")
+      .uiName("Shared Structure Intel")
+      .description("Allow bots to reuse each other's observed structure hints, portal sightings, and eye-of-ender samples when team orchestration is active")
+      .defaultValue(true)
+      .build();
+  public static final BooleanProperty<SettingsSource.Instance> SHARED_TARGET_CLAIMS =
+    ImmutableBooleanProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("shared-target-claims")
+      .uiName("Shared Target Claims")
+      .description("Allow bots to reserve shared targets such as portal frames, crystals, and exploration cells so teammates avoid colliding on the same work")
+      .defaultValue(true)
+      .build();
   public static final BooleanProperty<SettingsSource.Instance> SHARED_END_ENTRY =
     ImmutableBooleanProperty.<SettingsSource.Instance>builder()
       .sourceType(SettingsSource.Instance.INSTANCE)

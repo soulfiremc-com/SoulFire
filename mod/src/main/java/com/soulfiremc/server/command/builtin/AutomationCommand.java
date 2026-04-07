@@ -128,6 +128,36 @@ public final class AutomationCommand {
               return Command.SINGLE_SUCCESS;
             });
           }))));
+    root.then(literal("sharedstructures")
+      .then(argument("enabled", BoolArgumentType.bool())
+        .executes(help(
+          "Toggles whether bots share portal hints, structure observations, and eye-of-ender intelligence across the instance",
+          c -> {
+            var enabled = BoolArgumentType.getBool(c, "enabled");
+            return forEveryInstance(c, instance -> {
+              instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, GsonInstance.GSON.toJsonTree(enabled));
+              instance.addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-structure-intel=" + enabled);
+              c.getSource().source().sendInfo("%s: shared structure intel %s".formatted(
+                instance.friendlyNameCache().get(),
+                enabled ? "enabled" : "disabled"));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
+    root.then(literal("sharedclaims")
+      .then(argument("enabled", BoolArgumentType.bool())
+        .executes(help(
+          "Toggles whether bots reserve shared targets like crystals, portal frames, and exploration cells across the instance",
+          c -> {
+            var enabled = BoolArgumentType.getBool(c, "enabled");
+            return forEveryInstance(c, instance -> {
+              instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, GsonInstance.GSON.toJsonTree(enabled));
+              instance.addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-target-claims=" + enabled);
+              c.getSource().source().sendInfo("%s: shared target claims %s".formatted(
+                instance.friendlyNameCache().get(),
+                enabled ? "enabled" : "disabled"));
+              return Command.SINGLE_SUCCESS;
+            });
+          }))));
     root.then(literal("rolepolicy")
       .then(argument("policy", StringArgumentType.word())
         .suggests(RolePolicySuggestionProvider.INSTANCE)
@@ -259,10 +289,12 @@ public final class AutomationCommand {
             }
 
             c.getSource().source().sendInfo(instance.friendlyNameCache().get()
-              + ": preset=%s collaboration=%s rolePolicy=%s sharedEndEntry=%s maxEndBots=%d objective=%s bots=%d blaze=%d/%d pearls=%d/%d eyes=%d/%d arrows=%d/%d beds=%d/%d".formatted(
+              + ": preset=%s collaboration=%s rolePolicy=%s sharedStructureIntel=%s sharedClaims=%s sharedEndEntry=%s maxEndBots=%d objective=%s bots=%d blaze=%d/%d pearls=%d/%d eyes=%d/%d arrows=%d/%d beds=%d/%d".formatted(
               formatEnumId(summary.preset()),
               summary.collaborationEnabled() ? "on" : "off",
               AutomationControlSupport.formatEnumId(summary.rolePolicy()),
+              summary.sharedStructureIntel() ? "on" : "off",
+              summary.sharedTargetClaims() ? "on" : "off",
               summary.sharedEndEntry() ? "on" : "off",
               summary.maxEndBots(),
               summary.objective().name().toLowerCase(),
@@ -299,6 +331,23 @@ public final class AutomationCommand {
           }
           return Command.SINGLE_SUCCESS;
         })));
+    root.then(literal("coordinationstatus")
+      .executes(help(
+        "Shows shared automation coordination state, including shared claims, structure hints, and eye samples",
+        c -> showCoordinationStatus(c, 8)))
+      .then(argument("maxEntries", IntegerArgumentType.integer(1, 32))
+        .executes(help(
+          "Shows shared automation coordination state with a configurable entry cap per category",
+          c -> showCoordinationStatus(c, IntegerArgumentType.getInteger(c, "maxEntries"))))));
+    root.then(literal("resetcoordination")
+      .executes(help(
+        "Clears shared automation claims, shared structure intelligence, and eye samples for the visible instances",
+        c -> forEveryInstance(c, instance -> {
+          instance.automationCoordinator().resetCoordinationState();
+          instance.addAuditLog(c.getSource().source(), AuditLogType.AUTOMATION_RESET_COORDINATION, "instance=" + instance.id());
+          c.getSource().source().sendInfo("Reset automation coordination state for " + instance.friendlyNameCache().get());
+          return Command.SINGLE_SUCCESS;
+        }))));
     root.then(literal("stop")
       .executes(help(
         "Stops automation for selected bots",
@@ -390,6 +439,68 @@ public final class AutomationCommand {
             pos.pos().getY(),
             pos.pos().getZ(),
             pos.untilTick()))
+          .toList());
+      }
+      return Command.SINGLE_SUCCESS;
+    });
+  }
+
+  private static int showCoordinationStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
+                                            int maxEntries) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+    return forEveryInstance(context, instance -> {
+      var snapshot = instance.automationCoordinator().coordinationSnapshot(maxEntries);
+      var summary = snapshot.summary();
+      context.getSource().source().sendInfo("%s: objective=%s collaboration=%s sharedStructureIntel=%s sharedClaims=%s sharedBlocks=%d claims=%d eyeSamples=%d".formatted(
+        instance.friendlyNameCache().get(),
+        summary.objective().name().toLowerCase(Locale.ROOT),
+        summary.collaborationEnabled() ? "on" : "off",
+        summary.sharedStructureIntel() ? "on" : "off",
+        summary.sharedTargetClaims() ? "on" : "off",
+        snapshot.sharedBlockCount(),
+        snapshot.claimCount(),
+        snapshot.eyeSampleCount()));
+
+      if (!snapshot.sharedCounts().isEmpty()) {
+        context.getSource().source().sendInfo("  shared counts: " + snapshot.sharedCounts().stream()
+          .map(count -> "%s=%d/%d".formatted(
+            AutomationRequirements.describe(count.requirementKey()),
+            count.currentCount(),
+            count.targetCount()))
+          .toList());
+      }
+      if (!snapshot.claims().isEmpty()) {
+        context.getSource().source().sendInfo("  claims: " + snapshot.claims().stream()
+          .map(claim -> {
+            var target = claim.target() == null
+              ? "none"
+              : "%d,%d,%d".formatted(
+              (int) Math.floor(claim.target().x),
+              (int) Math.floor(claim.target().y),
+              (int) Math.floor(claim.target().z));
+            return "%s owner=%s target=%s".formatted(claim.key(), claim.ownerAccountName(), target);
+          })
+          .toList());
+      }
+      if (!snapshot.eyeSamples().isEmpty()) {
+        context.getSource().source().sendInfo("  eye samples: " + snapshot.eyeSamples().stream()
+          .map(sample -> "%s origin=%d,%d,%d dir=%.2f,%.2f".formatted(
+            sample.accountName(),
+            (int) Math.floor(sample.origin().x),
+            (int) Math.floor(sample.origin().y),
+            (int) Math.floor(sample.origin().z),
+            sample.direction().x,
+            sample.direction().z))
+          .toList());
+      }
+      if (!snapshot.sharedBlocks().isEmpty()) {
+        context.getSource().source().sendInfo("  shared blocks: " + snapshot.sharedBlocks().stream()
+          .map(block -> "%s %s@%d,%d,%d by=%s".formatted(
+            block.dimension().identifier(),
+            block.state().getBlock().getName().getString(),
+            block.pos().getX(),
+            block.pos().getY(),
+            block.pos().getZ(),
+            block.observerAccountName()))
           .toList());
       }
       return Command.SINGLE_SUCCESS;

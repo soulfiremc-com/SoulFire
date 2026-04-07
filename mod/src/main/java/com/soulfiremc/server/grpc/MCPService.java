@@ -322,6 +322,19 @@ public final class MCPService {
             .setInstanceId(str(args, "instance_id"))
             .build(), o)))));
 
+    tools.add(tool("get_automation_coordination_state",
+      "Get shared automation coordination state for an instance, including shared structure hints, cross-bot claims, eye samples, and shared requirement counts.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "max_entries", prop("integer", "Optional cap per coordination entry type. Defaults to 8 and is capped server-side.")),
+      List.of("instance_id"),
+      authed((exchange, args) -> {
+        var builder = GetAutomationCoordinationStateRequest.newBuilder()
+          .setInstanceId(str(args, "instance_id"));
+        ifPresent(args, "max_entries", value -> builder.setMaxEntries(((Number) value).intValue()));
+        return grpc(o -> automationService.getAutomationCoordinationState(builder.build(), o));
+      })));
+
     tools.add(tool("get_automation_bot_state",
       "Get structured automation state for a connected bot, including mode, phase, current action, target requirement, and automation settings.",
       Map.of(
@@ -447,6 +460,32 @@ public final class MCPService {
             .setEnabled(bool(args, "enabled"))
             .build(), o)))));
 
+    tools.add(tool("set_automation_shared_structures",
+      "Toggle whether bots share portal hints, structure observations, and eye-of-ender samples across the instance.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "enabled", prop("boolean", "Whether shared structure intelligence should be enabled")),
+      List.of("instance_id", "enabled"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationSharedStructures(
+          SetAutomationSharedStructuresRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setEnabled(bool(args, "enabled"))
+            .build(), o)))));
+
+    tools.add(tool("set_automation_shared_claims",
+      "Toggle whether bots reserve shared targets such as portal frames, exploration cells, and end crystals across the instance.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "enabled", prop("boolean", "Whether shared target claims should be enabled")),
+      List.of("instance_id", "enabled"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationSharedClaims(
+          SetAutomationSharedClaimsRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setEnabled(bool(args, "enabled"))
+            .build(), o)))));
+
     tools.add(tool("reset_automation_memory",
       "Clear remembered automation world state for connected bots in an instance and force replanning. Omit bot_ids to target all connected bots.",
       Map.of(
@@ -459,6 +498,16 @@ public final class MCPService {
         ifPresent(args, "bot_ids", ignored -> builder.addAllBotIds(strList(args, "bot_ids")));
         return grpc(o -> automationService.resetAutomationMemory(builder.build(), o));
       })));
+
+    tools.add(tool("reset_automation_coordination_state",
+      "Clear shared automation claims, shared structure hints, and eye samples for an instance.",
+      Map.of("instance_id", prop("string", "UUID of the instance")),
+      List.of("instance_id"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.resetAutomationCoordinationState(
+          ResetAutomationCoordinationStateRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .build(), o)))));
 
     tools.add(tool("set_bot_movement",
       "Control bot movement (WASD keys, jump, sneak, sprint). Only set the fields you want to change.",
