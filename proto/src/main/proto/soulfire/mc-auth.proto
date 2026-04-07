@@ -6,6 +6,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
 // Request message for credentials-based Minecraft account authentication.
 // Supports bulk authentication of multiple accounts in a single request.
@@ -13,7 +16,7 @@ message CredentialsAuthRequest {
   // The UUID of the SoulFire instance to authenticate accounts for.
   // Must be a valid UUID string. The instance must exist and the caller
   // must have AUTHENTICATE_MC_ACCOUNT permission for this instance.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The authentication service type to use.
   // Determines how the payload strings are interpreted:
@@ -21,7 +24,7 @@ message CredentialsAuthRequest {
   // - MICROSOFT_BEDROCK_CREDENTIALS: Payload format is "email:password"
   // - OFFLINE: Payload is the username to use (no authentication performed)
   // - MICROSOFT_JAVA_REFRESH_TOKEN: Payload is a Microsoft refresh token
-  AccountTypeCredentials service = 2;
+  AccountTypeCredentials service = 2 [(google.api.field_behavior) = REQUIRED];
 
   // List of authentication credentials/data strings.
   // Each string is processed according to the service type.
@@ -74,12 +77,12 @@ message DeviceCodeAuthRequest {
   // The UUID of the SoulFire instance to authenticate the account for.
   // Must be a valid UUID string. The instance must exist and the caller
   // must have AUTHENTICATE_MC_ACCOUNT permission for this instance.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The device code authentication service type to use:
   // - MICROSOFT_JAVA_DEVICE_CODE: Microsoft Java Edition account
   // - MICROSOFT_BEDROCK_DEVICE_CODE: Microsoft Bedrock Edition account
-  AccountTypeDeviceCode service = 2;
+  AccountTypeDeviceCode service = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Microsoft OAuth device code information for user authentication.
@@ -128,13 +131,13 @@ message RefreshRequest {
   // The UUID of the SoulFire instance context for the refresh operation.
   // Must be a valid UUID string. The instance must exist and the caller
   // must have AUTHENTICATE_MC_ACCOUNT permission for this instance.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The existing Minecraft account to refresh.
   // Must include valid account data with refresh tokens.
   // The account type determines which refresh mechanism is used.
   // Offline accounts are returned unchanged (they never expire).
-  MinecraftAccountProto account = 2;
+  MinecraftAccountProto account = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response message containing the refreshed Minecraft account.
@@ -171,7 +174,15 @@ service MCAuthService {
   // - INTERNAL: Authentication error (logged server-side with details)
   //
   // Timeout: 2 minutes per account
-  rpc LoginCredentials (CredentialsAuthRequest) returns (stream CredentialsAuthResponse) {}
+  rpc LoginCredentials (CredentialsAuthRequest) returns (stream CredentialsAuthResponse) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Authenticate Minecraft accounts"
+      permissions: "AUTHENTICATE_MC_ACCOUNT"
+      scope: "instance"
+      execution: "Server streaming"
+      side_effects: "Streams per-account authentication results as they complete."
+    };
+  }
 
   // Authenticates a Minecraft account using the Microsoft OAuth device code flow.
   // This is an interactive flow that requires user action in a web browser.
@@ -187,7 +198,15 @@ service MCAuthService {
   // - INTERNAL: Authentication error (e.g., user denied access, timeout)
   //
   // Timeout: 15 minutes (Microsoft device codes typically expire after this)
-  rpc LoginDeviceCode (DeviceCodeAuthRequest) returns (stream DeviceCodeAuthResponse) {}
+  rpc LoginDeviceCode (DeviceCodeAuthRequest) returns (stream DeviceCodeAuthResponse) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Start device-code Minecraft auth"
+      permissions: "AUTHENTICATE_MC_ACCOUNT"
+      scope: "instance"
+      execution: "Server streaming"
+      side_effects: "Streams device-code instructions followed by the authenticated account."
+    };
+  }
 
   // Refreshes the authentication tokens for an existing Minecraft account.
   // Used to renew expired access tokens using stored refresh tokens.
@@ -202,5 +221,16 @@ service MCAuthService {
   // - INTERNAL: Refresh error (e.g., refresh token expired or revoked)
   //
   // Timeout: 2 minutes
-  rpc Refresh (RefreshRequest) returns (RefreshResponse) {}
+  rpc Refresh (RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/mc-auth:refresh"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Refresh Minecraft account"
+      permissions: "AUTHENTICATE_MC_ACCOUNT"
+      scope: "instance"
+      side_effects: "Refreshes the account's authentication tokens."
+    };
+  }
 }

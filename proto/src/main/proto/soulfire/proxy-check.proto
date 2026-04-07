@@ -6,6 +6,8 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/field_behavior.proto";
 
 // Request message for checking the validity of one or more proxies.
 // The check is performed by attempting to connect to a Minecraft server
@@ -16,7 +18,7 @@ message ProxyCheckRequest {
   // (configured via ProxySettings.PROXY_CHECK_ADDRESS, defaults to "mc.hypixel.net"),
   // the protocol version, and concurrency settings.
   // The user must have CHECK_PROXY permission on this instance.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED];
 
   // List of proxies to check. Each proxy will be tested by attempting to
   // establish a connection to the configured Minecraft server through it.
@@ -102,5 +104,13 @@ service ProxyCheckService {
   //
   // The stream can be cancelled by the client at any time, which will
   // terminate any in-progress proxy checks.
-  rpc Check (ProxyCheckRequest) returns (stream ProxyCheckResponse) {}
+  rpc Check (ProxyCheckRequest) returns (stream ProxyCheckResponse) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Check proxies"
+      permissions: "CHECK_PROXY"
+      scope: "instance"
+      execution: "Server streaming"
+      side_effects: "Streams proxy-check results as each proxy finishes."
+    };
+  }
 }

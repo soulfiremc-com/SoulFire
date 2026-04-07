@@ -5,6 +5,10 @@ option java_multiple_files = true;
 
 package soulfire.v1;
 
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+
 // Represents an unrestricted global command scope.
 // Commands executed in this scope have access to all instances and bots.
 // Requires the GLOBAL_COMMAND_EXECUTION permission.
@@ -17,7 +21,7 @@ message GlobalCommandScope {
 message InstanceCommandScope {
   // The unique identifier (UUID) of the instance to scope commands to.
   // Must be a valid UUID string.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Represents a command scope restricted to a specific bot within an instance.
@@ -26,10 +30,10 @@ message InstanceCommandScope {
 message BotCommandScope {
   // The unique identifier (UUID) of the instance containing the bot.
   // Must be a valid UUID string.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   // The unique identifier (UUID) of the bot (profile ID) to scope commands to.
   // Must be a valid UUID string matching the bot's account profile ID.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Defines the execution context for a command, determining which instances
@@ -49,11 +53,11 @@ message CommandScope {
 message CommandRequest {
   // The execution scope that determines which instances/bots the command can affect
   // and what permissions are required. Must be set to one of the scope options.
-  CommandScope scope = 4;
+  CommandScope scope = 4 [(google.api.field_behavior) = REQUIRED];
   // The command string to execute. This follows the Brigadier command format,
   // e.g., "help", "move 100 64 200", "say Hello world".
   // Leading/trailing whitespace will be stripped before execution.
-  string command = 3;
+  string command = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response message containing the result of command execution.
@@ -70,14 +74,14 @@ message CommandResponse {
 message CommandCompletionRequest {
   // The execution scope that determines which instances/bots are visible
   // for completion suggestions. Must be set to one of the scope options.
-  CommandScope scope = 5;
+  CommandScope scope = 5 [(google.api.field_behavior) = REQUIRED];
   // The partial command string to complete. May be an incomplete command
   // that the user is typing, e.g., "mov" or "move 100 ".
-  string command = 3;
+  string command = 3 [(google.api.field_behavior) = REQUIRED];
   // The cursor position within the command string (0-indexed).
   // Completions will be generated for the token at this position.
   // Typically this is the length of the command string for end-of-line completion.
-  int32 cursor = 4;
+  int32 cursor = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // A single tab-completion suggestion.
@@ -120,7 +124,17 @@ service CommandService {
   // - INVALID_ARGUMENT: If the scope is not set
   // - PERMISSION_DENIED: If the user lacks required permissions
   // - INTERNAL: If an unexpected error occurs during execution
-  rpc ExecuteCommand (CommandRequest) returns (CommandResponse) {}
+  rpc ExecuteCommand (CommandRequest) returns (CommandResponse) {
+    option (google.api.http) = {
+      post: "/v1/commands:execute"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Execute command"
+      scope: "command.scope"
+      side_effects: "Executes a Brigadier command in the requested scope."
+    };
+  }
 
   // Retrieves tab-completion suggestions for a partial command.
   // Uses Brigadier's completion system to generate context-aware suggestions
@@ -135,5 +149,14 @@ service CommandService {
   // - INVALID_ARGUMENT: If the scope is not set
   // - PERMISSION_DENIED: If the user lacks required permissions
   // - INTERNAL: If an unexpected error occurs during completion
-  rpc TabCompleteCommand (CommandCompletionRequest) returns (CommandCompletionResponse) {}
+  rpc TabCompleteCommand (CommandCompletionRequest) returns (CommandCompletionResponse) {
+    option (google.api.http) = {
+      post: "/v1/commands:complete"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Complete command"
+      scope: "command.scope"
+    };
+  }
 }

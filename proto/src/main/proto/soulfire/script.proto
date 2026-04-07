@@ -5,6 +5,8 @@ option java_multiple_files = true;
 
 package soulfire.v1;
 
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
@@ -826,13 +828,31 @@ service ScriptService {
   // Errors: NOT_FOUND if instance does not exist
   // Errors: PERMISSION_DENIED if user lacks script creation permission
   // Errors: INVALID_ARGUMENT if required fields are missing or invalid
-  rpc CreateScript (CreateScriptRequest) returns (CreateScriptResponse) {}
+  rpc CreateScript (CreateScriptRequest) returns (CreateScriptResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/scripts"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Create script"
+      permissions: "UPDATE_SCRIPT"
+      scope: "instance.script"
+      side_effects: "Creates and stores a new script graph."
+    };
+  }
 
   // Retrieves a specific script by its ID.
   // Returns the complete script data including all nodes and edges.
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script read permission
-  rpc GetScript (GetScriptRequest) returns (GetScriptResponse) {}
+  rpc GetScript (GetScriptRequest) returns (GetScriptResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/scripts/{script_id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get script"
+      permissions: "READ_SCRIPT"
+      scope: "instance.script"
+    };
+  }
 
   // Updates an existing script's metadata and/or node graph.
   // Only specified fields are updated; others remain unchanged.
@@ -840,21 +860,47 @@ service ScriptService {
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script update permission
   // Errors: INVALID_ARGUMENT if update data is invalid
-  rpc UpdateScript (UpdateScriptRequest) returns (UpdateScriptResponse) {}
+  rpc UpdateScript (UpdateScriptRequest) returns (UpdateScriptResponse) {
+    option (google.api.http) = {
+      patch: "/v1/instances/{instance_id}/scripts/{script_id}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update script"
+      permissions: "UPDATE_SCRIPT"
+      scope: "instance.script"
+      side_effects: "Persists script metadata and graph updates."
+    };
+  }
 
   // Permanently deletes a script.
   // If the script is currently active, it will be deactivated first.
   // This operation cannot be undone.
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script delete permission
-  rpc DeleteScript (DeleteScriptRequest) returns (DeleteScriptResponse) {}
+  rpc DeleteScript (DeleteScriptRequest) returns (DeleteScriptResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{instance_id}/scripts/{script_id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Delete script"
+      permissions: "UPDATE_SCRIPT"
+      scope: "instance.script"
+      side_effects: "Deletes the target script."
+    };
+  }
 
   // Lists all scripts in the specified instance.
   // Returns summary information (ScriptInfo) without full node/edge data
   // to reduce response size.
   // Errors: NOT_FOUND if instance does not exist
   // Errors: PERMISSION_DENIED if user lacks script read permission
-  rpc ListScripts (ListScriptsRequest) returns (ListScriptsResponse) {}
+  rpc ListScripts (ListScriptsRequest) returns (ListScriptsResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/scripts" };
+    option (soulfire.v1.api_method) = {
+      display_name: "List scripts"
+      permissions: "READ_SCRIPT"
+      scope: "instance.script"
+    };
+  }
 
   // Activates a script by registering its trigger event listeners.
   // The script will begin responding to trigger events (tick, chat, etc.).
@@ -864,47 +910,110 @@ service ScriptService {
   // Errors: PERMISSION_DENIED if user lacks script execution permission
   // Errors: FAILED_PRECONDITION if script is already active
   // Errors: INVALID_ARGUMENT if script graph is invalid (e.g., no trigger nodes)
-  rpc ActivateScript (ActivateScriptRequest) returns (stream ScriptEvent) {}
+  rpc ActivateScript (ActivateScriptRequest) returns (stream ScriptEvent) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Activate script"
+      permissions: "EXECUTE_SCRIPT"
+      scope: "instance.script"
+      execution: "Server streaming"
+      side_effects: "Activates the script and streams runtime events."
+    };
+  }
 
   // Deactivates an active script.
   // Unregisters all event listeners and cancels any pending async operations.
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script execution permission
   // Errors: FAILED_PRECONDITION if script is not active
-  rpc DeactivateScript (DeactivateScriptRequest) returns (DeactivateScriptResponse) {}
+  rpc DeactivateScript (DeactivateScriptRequest) returns (DeactivateScriptResponse) {
+    option (google.api.http) = { post: "/v1/instances/{instance_id}/scripts/{script_id}:deactivate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Deactivate script"
+      permissions: "EXECUTE_SCRIPT"
+      scope: "instance.script"
+      side_effects: "Stops the active script and unregisters listeners."
+    };
+  }
 
   // Gets the current status of a script.
   // Returns whether the script is active, which node is executing, and activation count.
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script read permission
-  rpc GetScriptStatus (GetScriptStatusRequest) returns (GetScriptStatusResponse) {}
+  rpc GetScriptStatus (GetScriptStatusRequest) returns (GetScriptStatusResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/scripts/{script_id}/status" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get script status"
+      permissions: "READ_SCRIPT"
+      scope: "instance.script"
+    };
+  }
 
   // Subscribes to log entries generated during script execution.
   // Returns a stream of log entries at or above the specified minimum level.
   // The stream remains open until cancelled by the client.
   // Errors: NOT_FOUND if instance or script does not exist
   // Errors: PERMISSION_DENIED if user lacks script log subscription permission
-  rpc SubscribeScriptLogs (SubscribeScriptLogsRequest) returns (stream ScriptLogEntry) {}
+  rpc SubscribeScriptLogs (SubscribeScriptLogsRequest) returns (stream ScriptLogEntry) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Subscribe to script logs"
+      permissions: "READ_SCRIPT"
+      scope: "instance.script"
+      execution: "Server streaming"
+      side_effects: "Opens a live stream of script log entries."
+    };
+  }
 
   // Gets all available node types with their metadata.
   // This enables clients to render the node editor without hardcoded knowledge
   // of specific node types. The response includes port definitions, categories,
   // display names, and all other information needed to render and validate nodes.
   // This endpoint is cacheable - node types only change between server versions.
-  rpc GetNodeTypes (GetNodeTypesRequest) returns (GetNodeTypesResponse) {}
+  rpc GetNodeTypes (GetNodeTypesRequest) returns (GetNodeTypesResponse) {
+    option (google.api.http) = { get: "/v1/scripts/node-types" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get node types"
+      permissions: "READ_SCRIPT"
+      scope: "script.catalog"
+    };
+  }
 
   // Gets Minecraft registry data for autocomplete and validation.
   // Returns blocks, entities, items, and biomes that can be used in scripts.
   // This endpoint is cacheable - registry data only changes between server versions.
-  rpc GetRegistryData (GetRegistryDataRequest) returns (GetRegistryDataResponse) {}
+  rpc GetRegistryData (GetRegistryDataRequest) returns (GetRegistryDataResponse) {
+    option (google.api.http) = { get: "/v1/scripts/registry" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get script registry data"
+      permissions: "READ_SCRIPT"
+      scope: "script.catalog"
+    };
+  }
 
   // Validates a script graph without saving it.
   // Returns all diagnostics (errors and warnings) for the given nodes and edges.
   // Useful for live validation in the editor without requiring a save.
-  rpc ValidateScript (ValidateScriptRequest) returns (ValidateScriptResponse) {}
+  rpc ValidateScript (ValidateScriptRequest) returns (ValidateScriptResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/scripts:validate"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Validate script"
+      permissions: "UPDATE_SCRIPT"
+      scope: "instance.script"
+    };
+  }
 
   // Dry-runs a script from a specified trigger with mock inputs.
   // Executes the graph without requiring an active instance.
   // Returns execution events as a stream for the editor to display.
-  rpc DryRunScript (DryRunScriptRequest) returns (stream ScriptEvent) {}
+  rpc DryRunScript (DryRunScriptRequest) returns (stream ScriptEvent) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Dry-run script"
+      permissions: "EXECUTE_SCRIPT"
+      scope: "instance.script"
+      execution: "Server streaming"
+      side_effects: "Streams runtime events for a dry-run execution."
+    };
+  }
 }

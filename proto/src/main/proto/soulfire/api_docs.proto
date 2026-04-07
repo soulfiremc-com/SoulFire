@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option java_package = "com.soulfiremc.grpc.generated";
+option java_multiple_files = true;
+option java_outer_classname = "ApiDocsProto";
+
+package soulfire.v1;
+
+import "google/protobuf/descriptor.proto";
+
+message ApiMethodDocs {
+  string display_name = 1;
+  string description = 2;
+  repeated string permissions = 3;
+  string scope = 4;
+  repeated string preconditions = 5;
+  string execution = 6;
+  repeated string side_effects = 7;
+}
+
+message ApiFieldDocs {
+  string format = 1;
+  string example = 2;
+}
+
+extend google.protobuf.MethodOptions {
+  ApiMethodDocs api_method = 51001;
+}
+
+extend google.protobuf.FieldOptions {
+  ApiFieldDocs api_field = 51002;
+}

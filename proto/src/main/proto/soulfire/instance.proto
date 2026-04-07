@@ -6,6 +6,8 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
@@ -549,148 +551,374 @@ service InstanceService {
   // Requires: CREATE_INSTANCE global permission
   // Returns: The UUID of the newly created instance
   // Errors: INTERNAL if creation fails
-  rpc CreateInstance (InstanceCreateRequest) returns (InstanceCreateResponse) {}
+  rpc CreateInstance (InstanceCreateRequest) returns (InstanceCreateResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Create instance"
+      permissions: "CREATE_INSTANCE"
+      scope: "instance"
+      side_effects: "Creates a new instance in the stopped state."
+    };
+  }
 
   // Permanently deletes an instance and all its data.
   // If the instance is running, it will be stopped first.
   // This operation cannot be undone.
   // Requires: DELETE_INSTANCE permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc DeleteInstance (InstanceDeleteRequest) returns (InstanceDeleteResponse) {}
+  rpc DeleteInstance (InstanceDeleteRequest) returns (InstanceDeleteResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Delete instance"
+      permissions: "DELETE_INSTANCE"
+      scope: "instance"
+      side_effects: "Deletes the target instance and its stored data."
+    };
+  }
 
   // Lists all instances the current user has permission to view.
   // Only instances where the user has READ_INSTANCE permission are returned.
   // Returns summary information for each instance.
-  rpc ListInstances (InstanceListRequest) returns (InstanceListResponse) {}
+  rpc ListInstances (InstanceListRequest) returns (InstanceListResponse) {
+    option (google.api.http) = { get: "/v1/instances" };
+    option (soulfire.v1.api_method) = {
+      display_name: "List instances"
+      scope: "instance"
+    };
+  }
 
   // Gets detailed information about a specific instance.
   // Supports conditional requests via if_modified_since to reduce bandwidth.
   // Requires: READ_INSTANCE permission on the instance
   // Returns: Full instance info or not_modified status
   // Errors: NOT_FOUND if instance does not exist
-  rpc GetInstanceInfo (InstanceInfoRequest) returns (InstanceInfoResponse) {}
+  rpc GetInstanceInfo (InstanceInfoRequest) returns (InstanceInfoResponse) {
+    option (google.api.http) = { get: "/v1/instances/{id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get instance"
+      permissions: "READ_INSTANCE"
+      scope: "instance"
+    };
+  }
 
   // Updates instance metadata (friendly name or icon).
   // Only one field can be updated per request.
   // Requires: UPDATE_INSTANCE_META permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc UpdateInstanceMeta (InstanceUpdateMetaRequest) returns (InstanceUpdateMetaResponse) {}
+  rpc UpdateInstanceMeta (InstanceUpdateMetaRequest) returns (InstanceUpdateMetaResponse) {
+    option (google.api.http) = {
+      patch: "/v1/instances/{id}/meta"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update instance metadata"
+      permissions: "UPDATE_INSTANCE_META"
+      scope: "instance"
+      side_effects: "Updates the instance's friendly name or icon."
+    };
+  }
 
   // Replaces the entire instance configuration.
   // Used primarily for profile import operations.
   // For individual setting changes, use UpdateInstanceConfigEntry instead.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc UpdateInstanceConfig (InstanceUpdateConfigRequest) returns (InstanceUpdateConfigResponse) {}
+  rpc UpdateInstanceConfig (InstanceUpdateConfigRequest) returns (InstanceUpdateConfigResponse) {
+    option (google.api.http) = {
+      patch: "/v1/instances/{id}/config"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update instance config"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Replaces the stored instance configuration."
+    };
+  }
 
   // Updates a single configuration entry by namespace and key.
   // More efficient than UpdateInstanceConfig for individual changes.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc UpdateInstanceConfigEntry (InstanceUpdateConfigEntryRequest) returns (InstanceUpdateConfigEntryResponse) {}
+  rpc UpdateInstanceConfigEntry (InstanceUpdateConfigEntryRequest) returns (InstanceUpdateConfigEntryResponse) {
+    option (google.api.http) = {
+      put: "/v1/instances/{id}/config/namespaces/{namespace}/entries/{key}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update instance config entry"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Persists a single instance setting entry."
+    };
+  }
 
   // Adds a Minecraft account to the instance.
   // The account's profile_id must be unique within the instance.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc AddInstanceAccount (InstanceAddAccountRequest) returns (InstanceAddAccountResponse) {}
+  rpc AddInstanceAccount (InstanceAddAccountRequest) returns (InstanceAddAccountResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/accounts"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Add instance account"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account"
+    };
+  }
 
   // Removes a Minecraft account from the instance by profile_id.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc RemoveInstanceAccount (InstanceRemoveAccountRequest) returns (InstanceRemoveAccountResponse) {}
+  rpc RemoveInstanceAccount (InstanceRemoveAccountRequest) returns (InstanceRemoveAccountResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{id}/accounts/{profile_id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Remove instance account"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account"
+    };
+  }
 
   // Updates an existing Minecraft account in the instance.
   // The account is matched by profile_id and replaced.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc UpdateInstanceAccount (InstanceUpdateAccountRequest) returns (InstanceUpdateAccountResponse) {}
+  rpc UpdateInstanceAccount (InstanceUpdateAccountRequest) returns (InstanceUpdateAccountResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/accounts:update"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update instance account"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account"
+    };
+  }
 
   // Adds multiple Minecraft accounts to the instance in a single operation.
   // More efficient than multiple AddInstanceAccount calls.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc AddInstanceAccountsBatch (InstanceAddAccountsBatchRequest) returns (InstanceAddAccountsBatchResponse) {}
+  rpc AddInstanceAccountsBatch (InstanceAddAccountsBatchRequest) returns (InstanceAddAccountsBatchResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/accounts:batchAdd"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Batch add instance accounts"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account"
+    };
+  }
 
   // Removes multiple Minecraft accounts from the instance by their profile_ids.
   // More efficient than multiple RemoveInstanceAccount calls.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc RemoveInstanceAccountsBatch (InstanceRemoveAccountsBatchRequest) returns (InstanceRemoveAccountsBatchResponse) {}
+  rpc RemoveInstanceAccountsBatch (InstanceRemoveAccountsBatchRequest) returns (InstanceRemoveAccountsBatchResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/accounts:batchRemove"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Batch remove instance accounts"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account"
+    };
+  }
 
   // Adds a proxy to the instance.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc AddInstanceProxy (InstanceAddProxyRequest) returns (InstanceAddProxyResponse) {}
+  rpc AddInstanceProxy (InstanceAddProxyRequest) returns (InstanceAddProxyResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/proxies"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Add instance proxy"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.proxy"
+    };
+  }
 
   // Removes a proxy from the instance by its index.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
   // Errors: INVALID_ARGUMENT if index is out of bounds
-  rpc RemoveInstanceProxy (InstanceRemoveProxyRequest) returns (InstanceRemoveProxyResponse) {}
+  rpc RemoveInstanceProxy (InstanceRemoveProxyRequest) returns (InstanceRemoveProxyResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{id}/proxies/{index}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Remove instance proxy"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.proxy"
+    };
+  }
 
   // Updates an existing proxy in the instance by its index.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
   // Errors: INVALID_ARGUMENT if index is out of bounds
-  rpc UpdateInstanceProxy (InstanceUpdateProxyRequest) returns (InstanceUpdateProxyResponse) {}
+  rpc UpdateInstanceProxy (InstanceUpdateProxyRequest) returns (InstanceUpdateProxyResponse) {
+    option (google.api.http) = {
+      put: "/v1/instances/{id}/proxies/{index}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update instance proxy"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.proxy"
+    };
+  }
 
   // Adds multiple proxies to the instance in a single operation.
   // More efficient than multiple AddInstanceProxy calls.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc AddInstanceProxiesBatch (InstanceAddProxiesBatchRequest) returns (InstanceAddProxiesBatchResponse) {}
+  rpc AddInstanceProxiesBatch (InstanceAddProxiesBatchRequest) returns (InstanceAddProxiesBatchResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/proxies:batchAdd"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Batch add instance proxies"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.proxy"
+    };
+  }
 
   // Removes multiple proxies from the instance by their addresses.
   // More efficient than multiple RemoveInstanceProxy calls.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc RemoveInstanceProxiesBatch (InstanceRemoveProxiesBatchRequest) returns (InstanceRemoveProxiesBatchResponse) {}
+  rpc RemoveInstanceProxiesBatch (InstanceRemoveProxiesBatchRequest) returns (InstanceRemoveProxiesBatchResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}/proxies:batchRemove"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Batch remove instance proxies"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.proxy"
+    };
+  }
 
   // Changes the lifecycle state of an instance.
   // Used to start, pause, resume, or stop bot sessions.
   // The operation blocks until the state transition is complete.
   // Requires: CHANGE_INSTANCE_STATE permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc ChangeInstanceState (InstanceStateChangeRequest) returns (InstanceStateChangeResponse) {}
+  rpc ChangeInstanceState (InstanceStateChangeRequest) returns (InstanceStateChangeResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{id}:changeState"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Change instance state"
+      permissions: "CHANGE_INSTANCE_STATE"
+      scope: "instance"
+      execution: "Blocking until transition completes"
+      side_effects: "Starts, pauses, resumes, or stops the instance."
+    };
+  }
 
   // Retrieves the audit log for an instance.
   // Returns a list of recorded actions ordered by timestamp (newest first).
   // Requires: READ_INSTANCE_AUDIT_LOGS permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc GetAuditLog (InstanceAuditLogRequest) returns (InstanceAuditLogResponse) {}
+  rpc GetAuditLog (InstanceAuditLogRequest) returns (InstanceAuditLogResponse) {
+    option (google.api.http) = { get: "/v1/instances/{id}/audit-log" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get audit log"
+      permissions: "READ_INSTANCE_AUDIT_LOGS"
+      scope: "instance"
+    };
+  }
 
   // Gets persistent metadata for a Minecraft account.
   // Persistent metadata survives bot restarts and session changes.
   // Requires: READ_BOT_INFO permission on the instance
   // Errors: NOT_FOUND if instance or account does not exist
-  rpc GetAccountMetadata (GetAccountMetadataRequest) returns (GetAccountMetadataResponse) {}
+  rpc GetAccountMetadata (GetAccountMetadataRequest) returns (GetAccountMetadataResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/accounts/{account_id}/metadata" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get account metadata"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.account.metadata"
+    };
+  }
 
   // Sets a single persistent metadata entry for a Minecraft account.
   // Creates the namespace and key if they don't exist, or updates if they do.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc SetAccountMetadataEntry (SetAccountMetadataEntryRequest) returns (SetAccountMetadataEntryResponse) {}
+  rpc SetAccountMetadataEntry (SetAccountMetadataEntryRequest) returns (SetAccountMetadataEntryResponse) {
+    option (google.api.http) = {
+      put: "/v1/instances/{instance_id}/accounts/{account_id}/metadata/namespaces/{namespace}/entries/{key}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set account metadata entry"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account.metadata"
+    };
+  }
 
   // Deletes a persistent metadata entry from a Minecraft account.
   // Requires: UPDATE_INSTANCE_CONFIG permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc DeleteAccountMetadataEntry (DeleteAccountMetadataEntryRequest) returns (DeleteAccountMetadataEntryResponse) {}
+  rpc DeleteAccountMetadataEntry (DeleteAccountMetadataEntryRequest) returns (DeleteAccountMetadataEntryResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{instance_id}/accounts/{account_id}/metadata/namespaces/{namespace}/entries/{key}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Delete account metadata entry"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance.account.metadata"
+    };
+  }
 
   // Gets persistent metadata for the instance itself.
   // Persistent metadata survives restarts and session changes.
   // Requires: READ_INSTANCE permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc GetInstanceMetadata (GetInstanceMetadataRequest) returns (GetInstanceMetadataResponse) {}
+  rpc GetInstanceMetadata (GetInstanceMetadataRequest) returns (GetInstanceMetadataResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/metadata" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get instance metadata"
+      permissions: "READ_INSTANCE"
+      scope: "instance.metadata"
+    };
+  }
 
   // Sets a single persistent metadata entry for the instance.
   // Creates the namespace and key if they don't exist, or updates if they do.
   // Requires: UPDATE_INSTANCE_META permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc SetInstanceMetadataEntry (SetInstanceMetadataEntryRequest) returns (SetInstanceMetadataEntryResponse) {}
+  rpc SetInstanceMetadataEntry (SetInstanceMetadataEntryRequest) returns (SetInstanceMetadataEntryResponse) {
+    option (google.api.http) = {
+      put: "/v1/instances/{instance_id}/metadata/namespaces/{namespace}/entries/{key}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set instance metadata entry"
+      permissions: "UPDATE_INSTANCE_META"
+      scope: "instance.metadata"
+    };
+  }
 
   // Deletes a persistent metadata entry from the instance.
   // Requires: UPDATE_INSTANCE_META permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc DeleteInstanceMetadataEntry (DeleteInstanceMetadataEntryRequest) returns (DeleteInstanceMetadataEntryResponse) {}
+  rpc DeleteInstanceMetadataEntry (DeleteInstanceMetadataEntryRequest) returns (DeleteInstanceMetadataEntryResponse) {
+    option (google.api.http) = { delete: "/v1/instances/{instance_id}/metadata/namespaces/{namespace}/entries/{key}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Delete instance metadata entry"
+      permissions: "UPDATE_INSTANCE_META"
+      scope: "instance.metadata"
+    };
+  }
 }

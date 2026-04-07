@@ -6,6 +6,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 
 // Request message for creating a new user account in the SoulFire system.
@@ -16,22 +19,22 @@ message UserCreateRequest {
   // Must begin with an alphanumeric character, followed by alphanumeric characters or dashes,
   // and end with an alphanumeric character.
   // Must be unique across all users.
-  string username = 1;
+  string username = 1 [(google.api.field_behavior) = REQUIRED];
   // The role to assign to the user. Determines what permissions the user has.
   // ADMIN users have all permissions, while USER role has limited permissions
   // controlled by server settings.
-  UserRole role = 2;
+  UserRole role = 2 [(google.api.field_behavior) = REQUIRED];
   // The email address for the user.
   // Must be a valid email format and unique across all users.
   // Maximum length is 255 characters.
-  string email = 3;
+  string email = 3 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "email"];
 }
 
 // Response message returned after successfully creating a new user.
 message UserCreateResponse {
   // The unique identifier (UUID) assigned to the newly created user.
   // This ID should be used for all subsequent operations on this user.
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Request message for deleting an existing user from the system.
@@ -85,7 +88,7 @@ message UserListResponse {
 // Request message for retrieving detailed information about a specific user.
 message UserInfoRequest {
   // The unique identifier (UUID) of the user to retrieve information for.
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response message containing detailed information about a specific user.
@@ -116,7 +119,7 @@ message InvalidateSessionsRequest {
   // The unique identifier (UUID) of the user whose sessions should be invalidated.
   // Cannot be the ID of the requesting user (cannot invalidate own sessions via this method).
   // Cannot be the root user ID (00000000-0000-0000-0000-000000000000).
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response message returned after successfully invalidating all sessions.
@@ -130,20 +133,20 @@ message UpdateUserRequest {
   // The unique identifier (UUID) of the user to update.
   // Cannot be the ID of the requesting user (cannot update self via this method).
   // Cannot be the root user ID (00000000-0000-0000-0000-000000000000).
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   // The new username for the user.
   // Must be lowercase, between 3 and 32 characters.
   // Must begin with an alphanumeric character, followed by alphanumeric characters or dashes,
   // and end with an alphanumeric character.
   // Must be unique across all users.
-  string username = 2;
+  string username = 2 [(google.api.field_behavior) = REQUIRED];
   // The new role to assign to the user.
   // ADMIN users have all permissions, while USER role has limited permissions.
-  UserRole role = 3;
+  UserRole role = 3 [(google.api.field_behavior) = REQUIRED];
   // The new email address for the user.
   // Must be a valid email format and unique across all users.
   // Maximum length is 255 characters.
-  string email = 4;
+  string email = 4 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "email"];
 }
 
 // Response message returned after successfully updating a user.
@@ -157,7 +160,7 @@ message GenerateUserAPITokenRequest {
   // The unique identifier (UUID) of the user to generate a token for.
   // Cannot be the ID of the requesting user (cannot generate token for self via this method).
   // Cannot be the root user ID (00000000-0000-0000-0000-000000000000).
-  string id = 1;
+  string id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response message containing the newly generated API token.
@@ -183,7 +186,18 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If username or email already exists, or validation fails
   //   - PERMISSION_DENIED: If caller lacks CREATE_USER permission
-  rpc CreateUser (UserCreateRequest) returns (UserCreateResponse) {}
+  rpc CreateUser (UserCreateRequest) returns (UserCreateResponse) {
+    option (google.api.http) = {
+      post: "/v1/users"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Create user"
+      permissions: "CREATE_USER"
+      scope: "server.user"
+      side_effects: "Creates a new user account."
+    };
+  }
 
   // Deletes an existing user from the system.
   // Requires the DELETE_USER global permission.
@@ -192,7 +206,15 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If user not found, or attempting to delete self/root user
   //   - PERMISSION_DENIED: If caller lacks DELETE_USER permission
-  rpc DeleteUser (UserDeleteRequest) returns (UserDeleteResponse) {}
+  rpc DeleteUser (UserDeleteRequest) returns (UserDeleteResponse) {
+    option (google.api.http) = { delete: "/v1/users/{id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Delete user"
+      permissions: "DELETE_USER"
+      scope: "server.user"
+      side_effects: "Deletes the user and related owned data."
+    };
+  }
 
   // Lists all users in the system.
   // Requires the READ_USER global permission.
@@ -200,14 +222,28 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If database query fails
   //   - PERMISSION_DENIED: If caller lacks READ_USER permission
-  rpc ListUsers (UserListRequest) returns (UserListResponse) {}
+  rpc ListUsers (UserListRequest) returns (UserListResponse) {
+    option (google.api.http) = { get: "/v1/users" };
+    option (soulfire.v1.api_method) = {
+      display_name: "List users"
+      permissions: "READ_USER"
+      scope: "server.user"
+    };
+  }
 
   // Retrieves detailed information about a specific user.
   // Requires the READ_USER global permission.
   // Error cases:
   //   - INTERNAL: If user not found
   //   - PERMISSION_DENIED: If caller lacks READ_USER permission
-  rpc GetUserInfo (UserInfoRequest) returns (UserInfoResponse) {}
+  rpc GetUserInfo (UserInfoRequest) returns (UserInfoResponse) {
+    option (google.api.http) = { get: "/v1/users/{id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get user"
+      permissions: "READ_USER"
+      scope: "server.user"
+    };
+  }
 
   // Invalidates all active sessions for a user by updating their min_issued_at timestamp.
   // Requires the INVALIDATE_SESSIONS global permission.
@@ -216,7 +252,15 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If user not found, or attempting to invalidate self/root user sessions
   //   - PERMISSION_DENIED: If caller lacks INVALIDATE_SESSIONS permission
-  rpc InvalidateSessions (InvalidateSessionsRequest) returns (InvalidateSessionsResponse) {}
+  rpc InvalidateSessions (InvalidateSessionsRequest) returns (InvalidateSessionsResponse) {
+    option (google.api.http) = { post: "/v1/users/{id}/sessions:invalidate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Invalidate user sessions"
+      permissions: "INVALIDATE_SESSIONS"
+      scope: "server.user"
+      side_effects: "Revokes previously issued tokens for the target user."
+    };
+  }
 
   // Updates an existing user's profile information.
   // Requires the UPDATE_USER global permission.
@@ -224,7 +268,18 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If user not found, attempting to update self/root user, or validation fails
   //   - PERMISSION_DENIED: If caller lacks UPDATE_USER permission
-  rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse) {}
+  rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse) {
+    option (google.api.http) = {
+      patch: "/v1/users/{id}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update user"
+      permissions: "UPDATE_USER"
+      scope: "server.user"
+      side_effects: "Persists the updated username, role, and email."
+    };
+  }
 
   // Generates a new API token (JWT) for a specific user.
   // Requires the GENERATE_API_TOKEN global permission.
@@ -233,5 +288,13 @@ service UserService {
   // Error cases:
   //   - INTERNAL: If user not found, or attempting to generate token for self/root user
   //   - PERMISSION_DENIED: If caller lacks GENERATE_API_TOKEN permission
-  rpc GenerateUserAPIToken (GenerateUserAPITokenRequest) returns (GenerateUserAPITokenResponse) {}
+  rpc GenerateUserAPIToken (GenerateUserAPITokenRequest) returns (GenerateUserAPITokenResponse) {
+    option (google.api.http) = { post: "/v1/users/{id}/tokens/api:generate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Generate user API token"
+      permissions: "GENERATE_API_TOKEN"
+      scope: "server.user"
+      side_effects: "Issues a new API JWT for the target user."
+    };
+  }
 }

@@ -5,13 +5,17 @@ option java_multiple_files = true;
 
 package soulfire.v1;
 
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+
 // Request message for initiating a login flow with an email address.
 message LoginRequest {
   // The email address of the user attempting to log in.
   // If a user with this email exists, a six-digit verification code will be sent to this address.
   // For security reasons, the response is the same whether or not the email is registered,
   // preventing enumeration attacks.
-  string email = 1;
+  string email = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "email"];
 }
 
 // Response message representing the next step in the authentication flow.
@@ -49,7 +53,7 @@ message NextAuthFlowResponse {
   // A unique token identifying this authentication flow session.
   // This token must be included in subsequent requests (e.g., EmailCodeRequest) to continue the flow.
   // The token is a UUID string and expires after 15 minutes of inactivity.
-  string auth_flow_token = 1;
+  string auth_flow_token = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The next step in the authentication flow. Exactly one of these will be set.
   oneof next {
@@ -76,7 +80,7 @@ message EmailCodeRequest {
 
   // The six-digit verification code that was sent to the user's email address.
   // Must exactly match the code that was emailed to the user.
-  string code = 2;
+  string code = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Service for authenticating users via email-based passwordless login.
@@ -113,7 +117,17 @@ service LoginService {
   // - RESOURCE_EXHAUSTED: Too many login attempts from this origin
   // - UNAUTHENTICATED: Missing origin header
   // - INTERNAL: Server error (e.g., database or email sending failure)
-  rpc Login (LoginRequest) returns (NextAuthFlowResponse) {}
+  rpc Login (LoginRequest) returns (NextAuthFlowResponse) {
+    option (google.api.http) = {
+      post: "/v1/login"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Start login flow"
+      scope: "public.login"
+      side_effects: "Starts an email login flow and may send a verification code."
+    };
+  }
 
   // Verifies an email verification code to complete authentication.
   //
@@ -131,5 +145,15 @@ service LoginService {
   // - RESOURCE_EXHAUSTED: Too many login attempts from this origin
   // - UNAUTHENTICATED: Missing origin header
   // - INTERNAL: Server error (e.g., JWT generation failure)
-  rpc EmailCode (EmailCodeRequest) returns (NextAuthFlowResponse) {}
+  rpc EmailCode (EmailCodeRequest) returns (NextAuthFlowResponse) {
+    option (google.api.http) = {
+      post: "/v1/login/email-code"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Verify email code"
+      scope: "public.login"
+      side_effects: "Completes the login flow and may issue an API JWT."
+    };
+  }
 }

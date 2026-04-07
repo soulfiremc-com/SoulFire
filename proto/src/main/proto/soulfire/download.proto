@@ -6,6 +6,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
 // Represents a single HTTP header as a key-value pair.
 // Used for both request headers (sent to the target server) and
@@ -27,12 +30,12 @@ message DownloadRequest {
   // The UUID of the SoulFire instance to associate this download with.
   // Used for permission checking - the caller must have DOWNLOAD_URL permission
   // for this instance. Must be a valid UUID string (e.g., "550e8400-e29b-41d4-a716-446655440000").
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The URI to download content from. Must be a valid, fully-formed URI
   // (e.g., "https://example.com/resource.json"). The server will make an HTTP GET
   // request to this URI.
-  string uri = 2;
+  string uri = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uri"];
 
   // Optional HTTP headers to include in the request to the target server.
   // These headers are added on top of the default headers set by the server
@@ -107,5 +110,16 @@ service DownloadService {
   // Errors:
   //   PERMISSION_DENIED - Caller lacks DOWNLOAD_URL permission for the instance
   //   INTERNAL - Network error, connection timeout, invalid URI, or other server error
-  rpc Download (DownloadRequest) returns (DownloadResponse) {}
+  rpc Download (DownloadRequest) returns (DownloadResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/downloads:fetch"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Download URL"
+      permissions: "DOWNLOAD_URL"
+      scope: "instance"
+      side_effects: "Fetches remote content through the server's network stack."
+    };
+  }
 }

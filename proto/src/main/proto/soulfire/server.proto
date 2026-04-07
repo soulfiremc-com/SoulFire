@@ -16,6 +16,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/struct.proto";
 
 // ServerConfig represents the complete server-level configuration.
@@ -44,7 +47,7 @@ message ServerInfoRequest {
 message ServerInfoResponse {
   // The current server configuration containing all persisted settings values.
   // If no configuration has been saved yet, this will contain default/empty values.
-  ServerConfig config = 1;
+  ServerConfig config = 1 [(google.api.field_behavior) = REQUIRED];
 
   // All available settings definitions that can be rendered by identifier.
   // Each definition includes the setting's type (string, int, bool, etc.),
@@ -89,12 +92,12 @@ message ServerUpdateConfigEntryRequest {
   // The namespace of the setting to update.
   // Namespaces group related settings together (e.g., "dev" for developer settings).
   // Must match an existing namespace or a new namespace will be created.
-  string namespace = 1;
+  string namespace = 1 [(google.api.field_behavior) = REQUIRED];
 
   // The key identifying the specific setting within the namespace.
   // Combined with namespace, this uniquely identifies the setting.
   // Example: namespace="dev", key="soulfire-debug" for the SoulFire debug setting.
-  string key = 2;
+  string key = 2 [(google.api.field_behavior) = REQUIRED];
 
   // The new value for the setting.
   // Uses google.protobuf.Value to support various JSON types:
@@ -103,7 +106,7 @@ message ServerUpdateConfigEntryRequest {
   // - bool_value for boolean settings
   // - list_value for string list settings
   // - struct_value for complex settings like min/max ranges
-  google.protobuf.Value value = 3;
+  google.protobuf.Value value = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response message for UpdateServerConfigEntry RPC.
@@ -145,7 +148,14 @@ service ServerService {
   // Returns: ServerInfoResponse with all server configuration and metadata
   // Errors: PERMISSION_DENIED if caller lacks READ_SERVER_CONFIG permission
   //         INTERNAL if a database error occurs while retrieving configuration
-  rpc GetServerInfo (ServerInfoRequest) returns (ServerInfoResponse) {}
+  rpc GetServerInfo (ServerInfoRequest) returns (ServerInfoResponse) {
+    option (google.api.http) = { get: "/v1/server" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get server info"
+      permissions: "READ_SERVER_CONFIG"
+      scope: "server"
+    };
+  }
 
   // Replaces the entire server configuration with the provided values.
   // This is a bulk update operation primarily used for profile import functionality.
@@ -162,7 +172,18 @@ service ServerService {
   // Returns: Empty ServerUpdateConfigResponse on success
   // Errors: PERMISSION_DENIED if caller lacks UPDATE_SERVER_CONFIG permission
   //         INTERNAL if a database error occurs while saving configuration
-  rpc UpdateServerConfig (ServerUpdateConfigRequest) returns (ServerUpdateConfigResponse) {}
+  rpc UpdateServerConfig (ServerUpdateConfigRequest) returns (ServerUpdateConfigResponse) {
+    option (google.api.http) = {
+      patch: "/v1/server/config"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update server config"
+      permissions: "UPDATE_SERVER_CONFIG"
+      scope: "server"
+      side_effects: "Replaces the persisted server configuration."
+    };
+  }
 
   // Updates a single configuration entry identified by namespace and key.
   // This is a granular update operation for modifying individual settings.
@@ -182,5 +203,16 @@ service ServerService {
   // Returns: Empty ServerUpdateConfigEntryResponse on success
   // Errors: PERMISSION_DENIED if caller lacks UPDATE_SERVER_CONFIG permission
   //         INTERNAL if a database error occurs while saving the entry
-  rpc UpdateServerConfigEntry (ServerUpdateConfigEntryRequest) returns (ServerUpdateConfigEntryResponse) {}
+  rpc UpdateServerConfigEntry (ServerUpdateConfigEntryRequest) returns (ServerUpdateConfigEntryResponse) {
+    option (google.api.http) = {
+      put: "/v1/server/config/namespaces/{namespace}/entries/{key}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update server config entry"
+      permissions: "UPDATE_SERVER_CONFIG"
+      scope: "server"
+      side_effects: "Persists a single server setting entry."
+    };
+  }
 }

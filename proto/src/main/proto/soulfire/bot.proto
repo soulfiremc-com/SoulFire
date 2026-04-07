@@ -6,6 +6,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
@@ -34,11 +37,11 @@ import "google/protobuf/struct.proto";
 message BotInfoRequest {
   // The UUID of the SoulFire instance containing the bot.
   // Must be a valid UUID string format (e.g., "550e8400-e29b-41d4-a716-446655440000").
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot (Minecraft account UUID).
   // Must be a valid UUID string format.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Request message for listing all bots in an instance.
@@ -46,7 +49,7 @@ message BotInfoRequest {
 message BotListRequest {
   // The UUID of the SoulFire instance to list bots from.
   // Must be a valid UUID string format.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Entry representing a single bot in the bot list.
@@ -201,22 +204,22 @@ message BotInfoResponse {
 // This allows granular updates without replacing the entire configuration.
 message BotUpdateConfigEntryRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to update configuration for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The settings namespace (e.g., plugin ID or "bot" for core bot settings).
   // Examples: "bot", "auto-reconnect", "chat-message-controller"
-  string namespace = 3;
+  string namespace = 3 [(google.api.field_behavior) = REQUIRED];
 
   // The key within the namespace to update.
   // Must be a valid setting key defined for that namespace.
-  string key = 4;
+  string key = 4 [(google.api.field_behavior) = REQUIRED];
 
   // The new value to set for this configuration entry.
   // Must be a valid protobuf Value (null, number, string, bool, list, or struct).
-  google.protobuf.Value value = 5;
+  google.protobuf.Value value = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for bot configuration entry update.
@@ -228,22 +231,22 @@ message BotUpdateConfigEntryResponse {
 // Uses software rendering to generate a PNG image of what the bot "sees".
 message BotRenderPovRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to render POV for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Desired image width in pixels.
   // Default: 854 (if 0 or not provided).
   // Maximum: 1920 (values above this are clamped).
   // Minimum: 1 (values below this are clamped).
-  int32 width = 3;
+  int32 width = 3 [(google.api.field_behavior) = REQUIRED];
 
   // Desired image height in pixels.
   // Default: 480 (if 0 or not provided).
   // Maximum: 1080 (values above this are clamped).
   // Minimum: 1 (values below this are clamped).
-  int32 height = 4;
+  int32 height = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response containing the rendered POV image.
@@ -262,19 +265,19 @@ message BotRenderPovResponse {
 // Simulates the various mouse click interactions available in Minecraft inventory UIs.
 message BotInventoryClickRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot performing the inventory action.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The slot index to click.
   // Valid range depends on the currently open container.
   // Special value: -999 for clicking outside the inventory (dropping items).
-  int32 slot = 3;
+  int32 slot = 3 [(google.api.field_behavior) = REQUIRED];
 
   // The type of click to perform.
   // Different click types have different effects on items.
-  ClickType click_type = 4;
+  ClickType click_type = 4 [(google.api.field_behavior) = REQUIRED];
 
   // For SWAP_HOTBAR click type: which hotbar slot to swap with.
   // Range: 0-8 (corresponding to hotbar slots 1-9).
@@ -341,10 +344,10 @@ message BotInventoryClickResponse {
 // Request to get the current state of the bot's open container/inventory.
 message BotInventoryStateRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to get inventory state for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Describes how a region of slots should be rendered in the UI.
@@ -516,10 +519,10 @@ message BotInventoryStateResponse {
 // Request to close the currently open container.
 message BotCloseContainerRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to close container for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response for container close action.
@@ -532,10 +535,10 @@ message BotCloseContainerResponse {
 // This sends a packet to the server to open the inventory UI.
 message BotOpenInventoryRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to open inventory for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response for inventory open action.
@@ -552,13 +555,13 @@ message BotOpenInventoryResponse {
 // Used for attacking entities, breaking blocks, using items, and interacting with blocks/entities.
 message BotMouseClickRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot performing the click.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Which mouse button to simulate clicking.
-  MouseButton button = 3;
+  MouseButton button = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Mouse buttons for world interaction.
@@ -590,10 +593,10 @@ message BotMouseClickResponse {
 // Used for stonecutter recipes, enchantment selection, villager trades, beacon effects, etc.
 message BotContainerButtonClickRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot clicking the button.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The button ID to click.
   // Valid values depend on container type:
@@ -604,7 +607,7 @@ message BotContainerButtonClickRequest {
   // - Beacon: mob effect registry ID, -1 for confirm
   // - Crafter: 0-8 (slot toggle index)
   // - Lectern: 1=prev page, 2=next page, 3=take book
-  int32 button_id = 3;
+  int32 button_id = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for container button click action.
@@ -621,18 +624,18 @@ message BotContainerButtonClickResponse {
 // Currently only supports anvil item renaming.
 message BotSetContainerTextRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot setting the text.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Which field to set the text for.
   // Currently supported: "item_name" (anvil rename)
-  string field_id = 3;
+  string field_id = 3 [(google.api.field_behavior) = REQUIRED];
 
   // The text value to set.
   // For anvil: max 50 characters for the item name.
-  string text = 4;
+  string text = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for container text input action.
@@ -648,14 +651,14 @@ message BotSetContainerTextResponse {
 // Request to change the selected hotbar slot.
 message BotSetHotbarSlotRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to change hotbar selection for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Hotbar slot index to select.
   // Range: 0-8 (corresponding to slots 1-9 in the UI).
-  int32 slot = 3;
+  int32 slot = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for hotbar slot selection.
@@ -679,10 +682,10 @@ message BotSetHotbarSlotResponse {
 // The movement state persists until explicitly changed or reset.
 message BotSetMovementStateRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to control.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // W key state - move forward.
   // true = pressing W, false = not pressing W
@@ -729,10 +732,10 @@ message BotSetMovementStateResponse {
 // Equivalent to releasing all movement keys (WASD, Space, Shift, Ctrl).
 message BotResetMovementRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to stop movement for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response for movement reset.
@@ -753,20 +756,20 @@ message BotResetMovementResponse {
 // Used to aim the bot's view at specific targets or directions.
 message BotSetRotationRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to rotate.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Horizontal rotation angle in degrees (yaw).
   // Range: -180 to 180 (values outside this range are normalized).
   // Direction mapping: 0 = South, 90 = West, -90 = East, +/-180 = North.
-  float yaw = 3;
+  float yaw = 3 [(google.api.field_behavior) = REQUIRED];
 
   // Vertical rotation angle in degrees (pitch).
   // Range: -90 to 90 (values outside this range are clamped).
   // Direction mapping: -90 = looking up, 0 = horizon, 90 = looking down.
-  float pitch = 4;
+  float pitch = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for rotation update.
@@ -1174,10 +1177,10 @@ message ServerDialog {
 // Request to get the currently displayed dialog (if any).
 message BotGetDialogRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to get dialog for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response containing the current dialog state.
@@ -1191,10 +1194,10 @@ message BotGetDialogResponse {
 // Used for dialogs that have input fields requiring user data.
 message BotSubmitDialogRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot submitting the dialog.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Map of input key to value for each input field.
   // Keys must match the `key` field of DialogInput elements.
@@ -1214,17 +1217,17 @@ message BotSubmitDialogResponse {
 // Request to click a button in the current dialog.
 message BotClickDialogButtonRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot clicking the button.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // Index of the button to click.
   // For NOTICE: 0 for the action button
   // For CONFIRMATION: 0 for yes, 1 for no
   // For MULTI_ACTION: index into the actions list
   // Special value: -1 to close/escape the dialog
-  int32 button_index = 3;
+  int32 button_index = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response for dialog button click.
@@ -1240,10 +1243,10 @@ message BotClickDialogButtonResponse {
 // Request to close/dismiss the current dialog.
 message BotCloseDialogRequest {
   // The UUID of the SoulFire instance containing the bot.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 
   // The profile UUID of the bot to close dialog for.
-  string bot_id = 2;
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response for dialog close.
@@ -1277,116 +1280,315 @@ service BotService {
   // Includes both online and offline bots with their current status.
   // For online bots, includes live state (position, health, etc.) but NOT full inventory data.
   // Requires READ_BOT_INFO permission.
-  rpc GetBotList (BotListRequest) returns (BotListResponse) {}
+  rpc GetBotList (BotListRequest) returns (BotListResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/bots" };
+    option (soulfire.v1.api_method) = {
+      display_name: "List bots"
+      permissions: "READ_BOT_INFO"
+      scope: "instance"
+    };
+  }
 
   // Returns detailed information about a specific bot.
   // Includes full live state with complete inventory data when the bot is online.
   // Requires READ_BOT_INFO permission.
-  rpc GetBotInfo (BotInfoRequest) returns (BotInfoResponse) {}
+  rpc GetBotInfo (BotInfoRequest) returns (BotInfoResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/bots/{bot_id}" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get bot"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+    };
+  }
 
   // Updates a single configuration entry for a specific bot.
   // The configuration is persisted to the database immediately.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc UpdateBotConfigEntry (BotUpdateConfigEntryRequest) returns (BotUpdateConfigEntryResponse) {}
+  rpc UpdateBotConfigEntry (BotUpdateConfigEntryRequest) returns (BotUpdateConfigEntryResponse) {
+    option (google.api.http) = {
+      patch: "/v1/instances/{instance_id}/bots/{bot_id}/config/namespaces/{namespace}/entries/{key}"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update bot config entry"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      side_effects: "Persists the new setting value immediately."
+    };
+  }
 
   // Renders the bot's point-of-view as a PNG image using software rendering.
   // The bot must be online with a valid player and level.
   // Uses the bot's current render distance setting.
   // Requires READ_BOT_INFO permission.
-  rpc RenderBotPov (BotRenderPovRequest) returns (BotRenderPovResponse) {}
+  rpc RenderBotPov (BotRenderPovRequest) returns (BotRenderPovResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/bots/{bot_id}/pov:render" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Render bot POV"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Player and level state must be available."
+      execution: "Immediate"
+    };
+  }
 
   // Performs a click action on an inventory/container slot.
   // Supports various click types (left, right, shift, drop, swap, middle).
   // The bot must be online with a valid player and gameMode.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc ClickInventorySlot (BotInventoryClickRequest) returns (BotInventoryClickResponse) {}
+  rpc ClickInventorySlot (BotInventoryClickRequest) returns (BotInventoryClickResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/inventory/slots/{slot}:click"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Click inventory slot"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Player and game mode state must be available."
+      execution: "Immediate"
+      side_effects: "Clicks the open container or player inventory."
+    };
+  }
 
   // Returns the current state of the bot's open container/inventory.
   // Includes layout information, slot contents, and carried item.
   // The bot must be online with a valid player.
   // Requires READ_BOT_INFO permission.
-  rpc GetInventoryState (BotInventoryStateRequest) returns (BotInventoryStateResponse) {}
+  rpc GetInventoryState (BotInventoryStateRequest) returns (BotInventoryStateResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/bots/{bot_id}/inventory" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get inventory state"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot should be online for live container data."
+    };
+  }
 
   // Closes the currently open container (chest, crafting table, etc.).
   // Returns to the player inventory view.
   // The bot must be online with a valid player.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc CloseContainer (BotCloseContainerRequest) returns (BotCloseContainerResponse) {}
+  rpc CloseContainer (BotCloseContainerRequest) returns (BotCloseContainerResponse) {
+    option (google.api.http) = { post: "/v1/instances/{instance_id}/bots/{bot_id}/container:close" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Close container"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Player state must be available."
+      execution: "Immediate"
+      side_effects: "Closes the current container view."
+    };
+  }
 
   // Opens the player's inventory screen.
   // Sends a packet to the server to display the inventory UI.
   // The bot must be online with a valid player.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc OpenInventory (BotOpenInventoryRequest) returns (BotOpenInventoryResponse) {}
+  rpc OpenInventory (BotOpenInventoryRequest) returns (BotOpenInventoryResponse) {
+    option (google.api.http) = { post: "/v1/instances/{instance_id}/bots/{bot_id}/inventory:open" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Open inventory"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Player state must be available."
+      execution: "Immediate"
+      side_effects: "Opens the player inventory screen."
+    };
+  }
 
   // Simulates a mouse click in the game world.
   // Left click: attack entity or start breaking block.
   // Right click: use item or interact with entity/block.
   // The bot must be online with valid player, level, and gameMode.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc MouseClick (BotMouseClickRequest) returns (BotMouseClickResponse) {}
+  rpc MouseClick (BotMouseClickRequest) returns (BotMouseClickResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/mouse:click"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Mouse click"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Player, level, and game mode state must be available."
+      execution: "Immediate"
+      side_effects: "Triggers a world interaction using the selected mouse button."
+    };
+  }
 
   // Clicks a container-specific action button.
   // Used for: stonecutter recipes, enchanting, loom patterns, villager trades,
   // beacon effects, crafter slot toggles, lectern page navigation.
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc ClickContainerButton (BotContainerButtonClickRequest) returns (BotContainerButtonClickResponse) {}
+  rpc ClickContainerButton (BotContainerButtonClickRequest) returns (BotContainerButtonClickResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/container/buttons/{button_id}:click"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Click container button"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Activates the selected container-specific action button."
+    };
+  }
 
   // Sets text in a container's text input field.
   // Currently only supports anvil item renaming (field_id: "item_name").
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc SetContainerText (BotSetContainerTextRequest) returns (BotSetContainerTextResponse) {}
+  rpc SetContainerText (BotSetContainerTextRequest) returns (BotSetContainerTextResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/container/text-inputs/{field_id}:set"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set container text"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Updates the selected container text input."
+    };
+  }
 
   // Changes the selected hotbar slot.
   // Valid slot range: 0-8 (corresponding to slots 1-9 in the UI).
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc SetHotbarSlot (BotSetHotbarSlotRequest) returns (BotSetHotbarSlotResponse) {}
+  rpc SetHotbarSlot (BotSetHotbarSlotRequest) returns (BotSetHotbarSlotResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/hotbar/{slot}:select"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Select hotbar slot"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Changes the selected hotbar slot."
+    };
+  }
 
   // Updates the bot's movement state (WASD, jump, sneak, sprint).
   // Only specified fields are changed; omitted fields retain their current value.
   // Movement persists until explicitly changed or reset.
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc SetMovementState (BotSetMovementStateRequest) returns (BotSetMovementStateResponse) {}
+  rpc SetMovementState (BotSetMovementStateRequest) returns (BotSetMovementStateResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/movement:set"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set movement state"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Updates the persisted movement control state."
+    };
+  }
 
   // Resets all movement to stopped state.
   // Equivalent to releasing all movement keys.
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc ResetMovement (BotResetMovementRequest) returns (BotResetMovementResponse) {}
+  rpc ResetMovement (BotResetMovementRequest) returns (BotResetMovementResponse) {
+    option (google.api.http) = { post: "/v1/instances/{instance_id}/bots/{bot_id}/movement:reset" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Reset movement"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Clears all movement inputs."
+    };
+  }
 
   // Sets the bot's view rotation (look direction).
   // Yaw is normalized to -180 to 180, pitch is clamped to -90 to 90.
   // The action is queued and executed on the next game tick.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc SetRotation (BotSetRotationRequest) returns (BotSetRotationResponse) {}
+  rpc SetRotation (BotSetRotationRequest) returns (BotSetRotationResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/rotation:set"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set bot rotation"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Queued for the next game tick"
+      side_effects: "Updates the bot's look direction."
+    };
+  }
 
   // Returns the currently displayed server dialog (Minecraft 1.21.6+).
   // Dialogs are server-sent UI screens for custom interactions.
   // Returns empty response if no dialog is being shown.
   // Does not require the bot to be online (but dialog will be absent).
   // Requires READ_BOT_INFO permission.
-  rpc GetDialog (BotGetDialogRequest) returns (BotGetDialogResponse) {}
+  rpc GetDialog (BotGetDialogRequest) returns (BotGetDialogResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/bots/{bot_id}/dialog" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get dialog"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+    };
+  }
 
   // Submits a dialog with input values.
   // Used for dialogs containing text fields, checkboxes, dropdowns, or sliders.
   // The dialog is closed after submission.
   // Note: Full dialog response packets are not yet implemented; this clears local state.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc SubmitDialog (BotSubmitDialogRequest) returns (BotSubmitDialogResponse) {}
+  rpc SubmitDialog (BotSubmitDialogRequest) returns (BotSubmitDialogResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/dialog:submit"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Submit dialog"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Immediate"
+      side_effects: "Submits the current dialog and clears the local dialog state."
+    };
+  }
 
   // Clicks a button in the current dialog.
   // Button index depends on dialog type (see BotClickDialogButtonRequest).
   // The dialog is typically closed after the button click.
   // Note: Full dialog button packets are not yet implemented; this clears local state.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc ClickDialogButton (BotClickDialogButtonRequest) returns (BotClickDialogButtonResponse) {}
+  rpc ClickDialogButton (BotClickDialogButtonRequest) returns (BotClickDialogButtonResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/dialog/buttons/{button_index}:click"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Click dialog button"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Immediate"
+      side_effects: "Invokes a dialog action and usually clears the local dialog state."
+    };
+  }
 
   // Closes/dismisses the current dialog.
   // Clears the local dialog state.
   // Requires UPDATE_BOT_CONFIG permission.
-  rpc CloseDialog (BotCloseDialogRequest) returns (BotCloseDialogResponse) {}
+  rpc CloseDialog (BotCloseDialogRequest) returns (BotCloseDialogResponse) {
+    option (google.api.http) = { post: "/v1/instances/{instance_id}/bots/{bot_id}/dialog:close" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Close dialog"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Immediate"
+      side_effects: "Closes the current dialog and clears the local dialog state."
+    };
+  }
 }

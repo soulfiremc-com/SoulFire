@@ -6,6 +6,9 @@ option java_multiple_files = true;
 package soulfire.v1;
 
 import "soulfire/common.proto";
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
 // Request message for retrieving client data.
 // This is an empty message as the server identifies the client from the authentication context.
@@ -94,7 +97,7 @@ message GenerateAPITokenResponse {
 message UpdateSelfUsernameRequest {
   // The new username to set for the current user.
   // This will replace the existing username in the database.
-  string username = 1;
+  string username = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response message for username update operation.
@@ -106,7 +109,7 @@ message UpdateSelfUsernameResponse {
 message UpdateSelfEmailRequest {
   // The new email address to set for the current user.
   // This will replace the existing email in the database.
-  string email = 1;
+  string email = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "email"];
 }
 
 // Response message for email update operation.
@@ -135,7 +138,14 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks READ_CLIENT_DATA permission
   //   - INTERNAL: Server error while fetching client data
-  rpc GetClientData (ClientDataRequest) returns (ClientDataResponse) {}
+  rpc GetClientData (ClientDataRequest) returns (ClientDataResponse) {
+    option (google.api.http) = { get: "/v1/client" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get client data"
+      permissions: "READ_CLIENT_DATA"
+      scope: "client.self"
+    };
+  }
 
   // Generates a new JWT token specifically for WebDAV authentication.
   // The generated token has the "webdav" audience and can only be used for WebDAV access.
@@ -143,7 +153,15 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks GENERATE_SELF_WEBDAV_TOKEN permission
   //   - INTERNAL: Server error while generating token (e.g., user not found)
-  rpc GenerateWebDAVToken (GenerateWebDAVTokenRequest) returns (GenerateWebDAVTokenResponse) {}
+  rpc GenerateWebDAVToken (GenerateWebDAVTokenRequest) returns (GenerateWebDAVTokenResponse) {
+    option (google.api.http) = { post: "/v1/client/tokens/webdav:generate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Generate WebDAV token"
+      permissions: "GENERATE_SELF_WEBDAV_TOKEN"
+      scope: "client.self"
+      side_effects: "Issues a new JWT with the webdav audience."
+    };
+  }
 
   // Generates a new JWT token for API authentication.
   // The generated token has the "api" audience and can be used for gRPC/HTTP API calls.
@@ -151,7 +169,15 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks GENERATE_SELF_API_TOKEN permission
   //   - INTERNAL: Server error while generating token (e.g., user not found)
-  rpc GenerateAPIToken (GenerateAPITokenRequest) returns (GenerateAPITokenResponse) {}
+  rpc GenerateAPIToken (GenerateAPITokenRequest) returns (GenerateAPITokenResponse) {
+    option (google.api.http) = { post: "/v1/client/tokens/api:generate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Generate API token"
+      permissions: "GENERATE_SELF_API_TOKEN"
+      scope: "client.self"
+      side_effects: "Issues a new JWT with the api audience."
+    };
+  }
 
   // Updates the username of the currently authenticated user.
   // The change is persisted to the database immediately.
@@ -159,7 +185,18 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks UPDATE_SELF_USERNAME permission
   //   - INTERNAL: Server error while updating (e.g., user not found in database)
-  rpc UpdateSelfUsername (UpdateSelfUsernameRequest) returns (UpdateSelfUsernameResponse) {}
+  rpc UpdateSelfUsername (UpdateSelfUsernameRequest) returns (UpdateSelfUsernameResponse) {
+    option (google.api.http) = {
+      patch: "/v1/client/username"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update self username"
+      permissions: "UPDATE_SELF_USERNAME"
+      scope: "client.self"
+      side_effects: "Persists the new username immediately."
+    };
+  }
 
   // Updates the email address of the currently authenticated user.
   // The change is persisted to the database immediately.
@@ -167,7 +204,18 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks UPDATE_SELF_EMAIL permission
   //   - INTERNAL: Server error while updating (e.g., user not found in database)
-  rpc UpdateSelfEmail (UpdateSelfEmailRequest) returns (UpdateSelfEmailResponse) {}
+  rpc UpdateSelfEmail (UpdateSelfEmailRequest) returns (UpdateSelfEmailResponse) {
+    option (google.api.http) = {
+      patch: "/v1/client/email"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Update self email"
+      permissions: "UPDATE_SELF_EMAIL"
+      scope: "client.self"
+      side_effects: "Persists the new email address immediately."
+    };
+  }
 
   // Invalidates all existing sessions for the currently authenticated user.
   // This is done by setting the user's minIssuedAt timestamp to the current time,
@@ -177,5 +225,13 @@ service ClientService {
   // Error cases:
   //   - PERMISSION_DENIED: User lacks INVALIDATE_SELF_SESSIONS permission
   //   - INTERNAL: Server error while invalidating sessions (e.g., user not found)
-  rpc InvalidateSelfSessions (InvalidateSelfSessionsRequest) returns (InvalidateSelfSessionsResponse) {}
+  rpc InvalidateSelfSessions (InvalidateSelfSessionsRequest) returns (InvalidateSelfSessionsResponse) {
+    option (google.api.http) = { post: "/v1/client/sessions:invalidate" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Invalidate self sessions"
+      permissions: "INVALIDATE_SELF_SESSIONS"
+      scope: "client.self"
+      side_effects: "Revokes previously issued tokens for the current user."
+    };
+  }
 }

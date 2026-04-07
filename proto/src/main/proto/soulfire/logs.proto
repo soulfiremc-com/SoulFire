@@ -5,6 +5,9 @@ option java_multiple_files = true;
 
 package soulfire.v1;
 
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 
 // Represents a single log entry from the SoulFire logging system.
@@ -122,12 +125,12 @@ message LogScope {
 message PreviousLogRequest {
   // The scope defining which logs to retrieve. Personal logs are not included
   // in historical retrieval as they are not stored.
-  LogScope scope = 4;
+  LogScope scope = 4 [(google.api.field_behavior) = REQUIRED];
 
   // The maximum number of recent log entries to retrieve.
   // Must not exceed 300 (the server's maximum log buffer size).
   // Returns the newest entries that match the scope, up to this count.
-  int32 count = 3;
+  int32 count = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response containing historical log entries.
@@ -141,7 +144,7 @@ message PreviousLogResponse {
 message LogRequest {
   // The scope defining which logs to receive. The subscription will only
   // deliver logs that match this scope and that the user has permission to access.
-  LogScope scope = 3;
+  LogScope scope = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Response containing a single log entry from a subscription stream.
@@ -167,7 +170,16 @@ service LogsService {
   // - PERMISSION_DENIED: User lacks required permission for the requested scope
   // - INVALID_ARGUMENT: Scope not set or invalid UUID format
   // - INTERNAL: Server error while retrieving logs
-  rpc GetPrevious (PreviousLogRequest) returns (PreviousLogResponse) {}
+  rpc GetPrevious (PreviousLogRequest) returns (PreviousLogResponse) {
+    option (google.api.http) = {
+      post: "/v1/logs:history"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get log history"
+      scope: "log.scope"
+    };
+  }
 
   // Subscribes to a real-time stream of log entries matching the specified scope.
   // The stream remains open until cancelled by the client or the connection is lost.
@@ -185,5 +197,12 @@ service LogsService {
   // - PERMISSION_DENIED: User lacks required permission for the requested scope
   // - INVALID_ARGUMENT: Scope not set or invalid UUID format
   // - INTERNAL: Server error while setting up subscription
-  rpc Subscribe (LogRequest) returns (stream LogResponse) {}
+  rpc Subscribe (LogRequest) returns (stream LogResponse) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Subscribe to logs"
+      scope: "log.scope"
+      execution: "Server streaming"
+      side_effects: "Opens a live log stream until the client cancels the subscription."
+    };
+  }
 }

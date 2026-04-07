@@ -17,11 +17,16 @@
  */
 package com.soulfiremc.server.grpc;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.api.AnnotationsProto;
+import com.google.api.FieldBehavior;
+import com.google.api.FieldBehaviorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.MethodDescriptor;
 import com.google.protobuf.Descriptors.ServiceDescriptor;
 import com.google.protobuf.MessageOrBuilder;
@@ -32,6 +37,9 @@ import com.linecorp.armeria.server.ServiceConfig;
 import com.linecorp.armeria.server.docs.*;
 import com.linecorp.armeria.server.grpc.GrpcService;
 import com.soulfiremc.builddata.BuildData;
+import com.soulfiremc.grpc.generated.ApiDocsProto;
+import com.soulfiremc.grpc.generated.ApiFieldDocs;
+import com.soulfiremc.grpc.generated.ApiMethodDocs;
 import com.soulfiremc.grpc.generated.LoginServiceGrpc;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.protobuf.ProtoFileDescriptorSupplier;
@@ -44,6 +52,7 @@ import java.util.stream.StreamSupport;
 
 final class OpenApiSpecGenerator {
   private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+  private static final String HEALTH_SERVICE_NAME = "grpc.health.v1.Health";
   private static final String HTTP_SERVICE_SUFFIX = "_HTTP";
   private static final String OPEN_API_VERSION = "3.0.3";
   private static final String ERROR_SCHEMA_NAME = "SoulFireGrpcError";
@@ -59,7 +68,9 @@ final class OpenApiSpecGenerator {
   private final ServiceSpecification specification;
   private final String publicAddress;
   private final Map<String, ProtoMethodMetadata> protoMethodMetadata;
+  private final Map<String, ProtoFieldMetadata> protoFieldMetadata;
   private final Map<String, ServiceInfo> rawServiceByName;
+  private final Set<String> transcodedServiceNames;
   private final Map<String, StructInfo> structByTypeName;
   private final Map<String, EnumInfo> enumByTypeName;
   private final Map<String, String> canonicalSchemaNameByTypeName;
@@ -69,14 +80,20 @@ final class OpenApiSpecGenerator {
   private OpenApiSpecGenerator(
     ServiceSpecification specification,
     String publicAddress,
-    Map<String, ProtoMethodMetadata> protoMethodMetadata
+    ProtoDescriptorMetadata protoDescriptorMetadata
   ) {
     this.specification = specification;
     this.publicAddress = normalizeBaseUrl(publicAddress);
-    this.protoMethodMetadata = protoMethodMetadata;
+    this.protoMethodMetadata = protoDescriptorMetadata.methodMetadata();
+    this.protoFieldMetadata = protoDescriptorMetadata.fieldMetadata();
     this.rawServiceByName = specification.services().stream()
       .filter(service -> !service.name().endsWith(HTTP_SERVICE_SUFFIX))
       .collect(Collectors.toMap(ServiceInfo::name, Function.identity()));
+    this.transcodedServiceNames = specification.services().stream()
+      .filter(OpenApiSpecGenerator::isTranscodedService)
+      .map(ServiceInfo::name)
+      .map(OpenApiSpecGenerator::baseServiceName)
+      .collect(Collectors.toUnmodifiableSet());
     this.structByTypeName = createStructLookup(specification.structs());
     this.enumByTypeName = specification.enums().stream()
       .collect(Collectors.toMap(EnumInfo::name, Function.identity()));
@@ -87,8 +104,8 @@ final class OpenApiSpecGenerator {
 
   static ObjectNode generate(List<ServiceConfig> services, String publicAddress) {
     var serviceSpecification = buildServiceSpecification(services);
-    var protoMethodMetadata = loadProtoMethodMetadata(services);
-    return new OpenApiSpecGenerator(serviceSpecification, publicAddress, protoMethodMetadata).generate();
+    var protoDescriptorMetadata = loadProtoDescriptorMetadata(services);
+    return new OpenApiSpecGenerator(serviceSpecification, publicAddress, protoDescriptorMetadata).generate();
   }
 
   private ObjectNode generate() {
@@ -144,6 +161,8 @@ final class OpenApiSpecGenerator {
     specification.services().stream()
       .map(ServiceInfo::name)
       .map(OpenApiSpecGenerator::baseServiceName)
+      .filter(OpenApiSpecGenerator::isExportedService)
+      .filter(this::hasDocumentedUnaryMethods)
       .distinct()
       .sorted()
       .forEach(serviceName -> {
@@ -162,6 +181,7 @@ final class OpenApiSpecGenerator {
     var paths = JSON_MAPPER.createObjectNode();
 
     specification.services().stream()
+      .filter(service -> isExportedService(baseServiceName(service)))
       .sorted(Comparator.comparing(ServiceInfo::name))
       .forEach(service -> {
         var transcoded = isTranscodedService(service);
@@ -183,9 +203,13 @@ final class OpenApiSpecGenerator {
     MethodInfo method,
     boolean transcoded
   ) {
-    var methodKey = methodKey(baseServiceName(service), method.name());
+    var baseServiceName = baseServiceName(service);
+    var methodKey = methodKey(baseServiceName, method.name());
     var metadata = protoMethodMetadata.get(methodKey);
     if (metadata == null || !metadata.unary()) {
+      return;
+    }
+    if (!transcoded && metadata.hasHttpBindings() && transcodedServiceNames.contains(baseServiceName)) {
       return;
     }
 
@@ -222,8 +246,8 @@ final class OpenApiSpecGenerator {
     var inputStruct = findInputStruct(rawService, method, metadata);
     var operation = JSON_MAPPER.createObjectNode();
 
-    var description = operationDescription(baseServiceName, method.name(), transcoded);
-    var summary = firstSentence(description);
+    var description = operationDescription(baseServiceName, method.name(), metadata);
+    var summary = firstNonBlank(metadata.displayName(), firstSentence(description));
     if (!summary.isBlank()) {
       operation.put("summary", summary);
     }
@@ -237,6 +261,7 @@ final class OpenApiSpecGenerator {
     operation.put("x-soulfire-grpc-method", method.name());
     operation.put("x-soulfire-unary-only", true);
     operation.putArray("tags").add(simpleName(baseServiceName));
+    applyOperationMetadata(operation, metadata);
 
     if (LoginServiceGrpc.SERVICE_NAME.equals(baseServiceName)) {
       operation.set("security", JSON_MAPPER.createArrayNode());
@@ -265,15 +290,17 @@ final class OpenApiSpecGenerator {
         var parameterNode = parameters.addObject();
         parameterNode.put("name", parameter.name());
         parameterNode.put("in", parameter.location() == FieldLocation.PATH ? "path" : "query");
-        parameterNode.put("required", parameter.location() == FieldLocation.PATH
-          || parameter.requirement() == FieldRequirement.REQUIRED);
+        var fieldMetadata = findFieldMetadata(inputStruct, parameter.name());
+        parameterNode.put("required", parameter.location() == FieldLocation.PATH || isRequired(parameter.requirement(), fieldMetadata));
 
         var description = parameterDescription(serviceName, method.name(), parameter.name(), inputStruct);
         if (!description.isBlank()) {
           parameterNode.put("description", description);
         }
 
-        parameterNode.set("schema", schemaForType(parameter.typeSignature()));
+        var schema = schemaForType(parameter.typeSignature());
+        applyFieldSchemaMetadata(schema, fieldMetadata);
+        parameterNode.set("schema", schema);
       });
 
     return parameters;
@@ -339,12 +366,12 @@ final class OpenApiSpecGenerator {
     var required = schema.putArray("required");
 
     parameters.forEach(parameter -> {
+      var fieldMetadata = findFieldMetadata(inputStruct, parameter.name());
       properties.set(parameter.name(), schemaWithDescription(
-        schemaForType(parameter.typeSignature()),
+        applyFieldSchemaMetadata(schemaForType(parameter.typeSignature()), fieldMetadata),
         parameterDescription(serviceName, methodName, parameter.name(), inputStruct)
       ));
-      var description = parameterDescription(serviceName, methodName, parameter.name(), inputStruct);
-      if (parameter.requirement() == FieldRequirement.REQUIRED) {
+      if (isRequired(parameter.requirement(), fieldMetadata)) {
         required.add(parameter.name());
       }
     });
@@ -408,13 +435,17 @@ final class OpenApiSpecGenerator {
 
       var struct = structByTypeName.get(schemaName);
       if (struct != null) {
-        schemas.set(schemaName, buildStructSchema(struct, pending, generated));
+        var structSchema = buildStructSchema(struct, pending, generated);
+        schemas.set(schemaName, structSchema);
+        enqueueReferencedSchemaNames(structSchema, pending, generated);
         continue;
       }
 
       var enumInfo = enumByTypeName.get(schemaName);
       if (enumInfo != null) {
-        schemas.set(schemaName, buildEnumSchema(enumInfo));
+        var enumSchema = buildEnumSchema(enumInfo);
+        schemas.set(schemaName, enumSchema);
+        enqueueReferencedSchemaNames(enumSchema, pending, generated);
       }
     }
 
@@ -426,7 +457,7 @@ final class OpenApiSpecGenerator {
     schema.put("type", "object");
     schema.put("additionalProperties", false);
 
-    var description = firstNonBlank(struct.descriptionInfo().docString(), docString(struct.name()));
+    var description = firstNonBlank(normalizeDocBlock(struct.descriptionInfo().docString()), docString(struct.name()));
     if (!description.isBlank()) {
       schema.put("description", description);
     }
@@ -434,15 +465,19 @@ final class OpenApiSpecGenerator {
     var properties = schema.putObject("properties");
     var required = schema.putArray("required");
     for (var field : struct.fields()) {
+      var fieldMetadata = findFieldMetadata(struct, field.name());
       var fieldDescription = firstNonBlank(
-        field.descriptionInfo().docString(),
+        normalizeDocBlock(field.descriptionInfo().docString()),
         docString("%s/%s".formatted(struct.name(), field.name()))
       );
-      var fieldSchema = schemaWithDescription(schemaForType(field.typeSignature()), fieldDescription);
+      var fieldSchema = schemaWithDescription(
+        applyFieldSchemaMetadata(schemaForType(field.typeSignature()), fieldMetadata),
+        fieldDescription
+      );
       properties.set(field.name(), fieldSchema);
 
       collectReferencedSchemaNames(field.typeSignature(), pending, generated);
-      if (field.requirement() == FieldRequirement.REQUIRED) {
+      if (isRequired(field.requirement(), fieldMetadata)) {
         required.add(field.name());
       }
     }
@@ -453,7 +488,7 @@ final class OpenApiSpecGenerator {
   private ObjectNode buildEnumSchema(EnumInfo enumInfo) {
     var schema = JSON_MAPPER.createObjectNode();
     schema.put("type", "string");
-    var description = firstNonBlank(enumInfo.descriptionInfo().docString(), docString(enumInfo.name()));
+    var description = firstNonBlank(normalizeDocBlock(enumInfo.descriptionInfo().docString()), docString(enumInfo.name()));
     if (!description.isBlank()) {
       schema.put("description", description);
     }
@@ -546,18 +581,73 @@ final class OpenApiSpecGenerator {
     return extension;
   }
 
-  private String operationDescription(String serviceName, String methodName, boolean transcoded) {
-    var methodDescription = docString("%s/%s".formatted(serviceName, methodName));
-    var authDescription = LoginServiceGrpc.SERVICE_NAME.equals(serviceName)
-      ? "Authentication: public login endpoint."
-      : "Authentication: requires a SoulFire API token via Bearer or Basic auth.";
-    var transportDescription = transcoded
-      ? "Transport: Armeria HTTP/JSON transcoding route."
-      : "Transport: Armeria unframed JSON POST route.";
+  private String operationDescription(String serviceName, String methodName, ProtoMethodMetadata metadata) {
+    return firstNonBlank(metadata.description(), sanitizeMethodDescription(
+      docString("%s/%s".formatted(serviceName, methodName))
+    ));
+  }
 
-    return Stream.of(methodDescription, authDescription, transportDescription)
-      .filter(value -> value != null && !value.isBlank())
-      .collect(Collectors.joining("\n\n"));
+  private void applyOperationMetadata(ObjectNode operation, ProtoMethodMetadata metadata) {
+    if (!metadata.permissions().isEmpty()) {
+      var permissions = operation.putArray("x-soulfire-permissions");
+      metadata.permissions().forEach(permissions::add);
+    }
+    if (!metadata.scope().isBlank()) {
+      operation.put("x-soulfire-scope", metadata.scope());
+    }
+    if (!metadata.preconditions().isEmpty()) {
+      var preconditions = operation.putArray("x-soulfire-preconditions");
+      metadata.preconditions().forEach(preconditions::add);
+    }
+    if (!metadata.execution().isBlank()) {
+      operation.put("x-soulfire-execution", metadata.execution());
+    }
+    if (!metadata.sideEffects().isEmpty()) {
+      var sideEffects = operation.putArray("x-soulfire-side-effects");
+      metadata.sideEffects().forEach(sideEffects::add);
+    }
+  }
+
+  private static String sanitizeMethodDescription(String value) {
+    if (value == null || value.isBlank()) {
+      return "";
+    }
+
+    var sanitized = new ArrayList<String>();
+    for (var line : normalizeDocBlock(value).lines().toList()) {
+      if (line.isBlank()) {
+        if (!sanitized.isEmpty() && !sanitized.get(sanitized.size() - 1).isBlank()) {
+          sanitized.add("");
+        }
+        continue;
+      }
+
+      if (line.startsWith("Authentication:")
+        || line.startsWith("Transport:")
+        || line.startsWith("Required permission:")
+        || line.startsWith("Permissions required:")
+        || line.startsWith("Returns:")
+        || line.startsWith("Errors:")
+        || line.startsWith("Error cases:")
+        || line.startsWith("Parameters:")
+        || line.startsWith("Timeout:")
+        || line.startsWith("- Permission")
+        || line.startsWith("- Scope:")
+        || line.startsWith("- Requires:")
+        || line.startsWith("- Execution:")
+        || line.startsWith("- Side effects:")
+        || line.startsWith("Requires")) {
+        break;
+      }
+
+      sanitized.add(line);
+    }
+
+    while (!sanitized.isEmpty() && sanitized.get(sanitized.size() - 1).isBlank()) {
+      sanitized.remove(sanitized.size() - 1);
+    }
+
+    return String.join("\n", sanitized);
   }
 
   private String parameterDescription(
@@ -608,9 +698,63 @@ final class OpenApiSpecGenerator {
     }
 
     return firstNonBlank(
-      currentField.descriptionInfo().docString(),
+      normalizeDocBlock(currentField.descriptionInfo().docString()),
       docString("%s/%s".formatted(currentStruct.name(), currentField.name()))
     );
+  }
+
+  private ProtoFieldMetadata findFieldMetadata(StructInfo struct, String fieldPath) {
+    if (struct == null || fieldPath.isBlank()) {
+      return null;
+    }
+
+    var parts = fieldPath.split("\\.");
+    StructInfo currentStruct = struct;
+    FieldInfo currentField = null;
+    for (var part : parts) {
+      currentField = currentStruct.fields().stream()
+        .filter(field -> field.name().equals(part))
+        .findFirst()
+        .orElse(null);
+      if (currentField == null) {
+        return null;
+      }
+
+      if (!part.equals(parts[parts.length - 1])) {
+        currentStruct = structByTypeName.get(currentField.typeSignature().signature());
+        if (currentStruct == null) {
+          return null;
+        }
+      }
+    }
+
+    return currentField == null ? null : protoFieldMetadata.get(fieldKey(currentStruct.name(), currentField.name()));
+  }
+
+  private static boolean isRequired(FieldRequirement requirement, ProtoFieldMetadata fieldMetadata) {
+    return requirement == FieldRequirement.REQUIRED
+      || fieldMetadata != null && fieldMetadata.behaviors().contains(FieldBehavior.REQUIRED);
+  }
+
+  private ObjectNode applyFieldSchemaMetadata(ObjectNode schema, ProtoFieldMetadata metadata) {
+    if (metadata == null) {
+      return schema;
+    }
+
+    if (!metadata.format().isBlank()) {
+      schema.put("format", metadata.format());
+    }
+    if (!metadata.example().isBlank()) {
+      schema.set("example", tryReadJson(metadata.example()));
+    }
+    if (metadata.behaviors().contains(FieldBehavior.OUTPUT_ONLY)) {
+      schema.put("readOnly", true);
+    }
+    if (metadata.behaviors().contains(FieldBehavior.INPUT_ONLY)) {
+      schema.put("writeOnly", true);
+    }
+
+    return schema;
   }
 
   private StructInfo findInputStruct(ServiceInfo rawService, MethodInfo method, ProtoMethodMetadata metadata) {
@@ -705,6 +849,33 @@ final class OpenApiSpecGenerator {
     if (typeSignature instanceof ContainerTypeSignature containerTypeSignature) {
       containerTypeSignature.typeParameters().forEach(type ->
         collectReferencedSchemaNames(type, pending, generated));
+    }
+  }
+
+  private void enqueueReferencedSchemaNames(JsonNode node, Deque<String> pending, Set<String> generated) {
+    if (node == null) {
+      return;
+    }
+
+    if (node.isObject()) {
+      var refNode = node.get("$ref");
+      if (refNode != null && refNode.isTextual()) {
+        var ref = refNode.textValue();
+        var prefix = "#/components/schemas/";
+        if (ref.startsWith(prefix)) {
+          var schemaName = unescapeJsonPointerSegment(ref.substring(prefix.length()));
+          if (usedSchemaNames.add(schemaName) && !generated.contains(schemaName)) {
+            pending.add(schemaName);
+          }
+        }
+      }
+
+      node.elements().forEachRemaining(child -> enqueueReferencedSchemaNames(child, pending, generated));
+      return;
+    }
+
+    if (node.isArray()) {
+      node.elements().forEachRemaining(child -> enqueueReferencedSchemaNames(child, pending, generated));
     }
   }
 
@@ -817,7 +988,7 @@ final class OpenApiSpecGenerator {
   }
 
   private String docString(String key) {
-    return docStrings.getOrDefault(key, "");
+    return normalizeDocBlock(docStrings.getOrDefault(key, ""));
   }
 
   private static String firstSentence(String value) {
@@ -843,6 +1014,17 @@ final class OpenApiSpecGenerator {
     }
 
     return "";
+  }
+
+  private static String normalizeDocBlock(String value) {
+    if (value == null || value.isBlank()) {
+      return "";
+    }
+
+    return value.lines()
+      .map(String::strip)
+      .collect(Collectors.joining("\n"))
+      .trim();
   }
 
   private static String appendPath(String baseUrl, String path) {
@@ -878,8 +1060,25 @@ final class OpenApiSpecGenerator {
     return value.replaceAll("[^A-Za-z0-9_]+", "_");
   }
 
+  private static String fieldKey(String typeName, String fieldName) {
+    return typeName + '/' + fieldName;
+  }
+
+  private static boolean isExportedService(String serviceName) {
+    return !HEALTH_SERVICE_NAME.equals(serviceName);
+  }
+
+  private boolean hasDocumentedUnaryMethods(String serviceName) {
+    return protoMethodMetadata.values().stream()
+      .anyMatch(metadata -> metadata.serviceName().equals(serviceName) && metadata.unary());
+  }
+
   private static String escapeJsonPointerSegment(String value) {
     return value.replace("~", "~0").replace("/", "~1");
+  }
+
+  private static String unescapeJsonPointerSegment(String value) {
+    return value.replace("~1", "/").replace("~0", "~");
   }
 
   private static com.fasterxml.jackson.databind.JsonNode tryReadJson(String value) {
@@ -920,9 +1119,11 @@ final class OpenApiSpecGenerator {
     );
   }
 
-  private static Map<String, ProtoMethodMetadata> loadProtoMethodMetadata(List<ServiceConfig> services) {
-    var metadata = new LinkedHashMap<String, ProtoMethodMetadata>();
+  private static ProtoDescriptorMetadata loadProtoDescriptorMetadata(List<ServiceConfig> services) {
+    var methodMetadata = new LinkedHashMap<String, ProtoMethodMetadata>();
+    var fieldMetadata = new LinkedHashMap<String, ProtoFieldMetadata>();
     var processedServices = new HashSet<String>();
+    var processedFiles = new HashSet<String>();
 
     for (var serviceConfig : services) {
       var grpcService = serviceConfig.service().as(GrpcService.class);
@@ -941,6 +1142,7 @@ final class OpenApiSpecGenerator {
         }
 
         FileDescriptor fileDescriptor = supplier.getFileDescriptor();
+        collectFieldMetadata(fileDescriptor, fieldMetadata, processedFiles);
         var protoServiceDescriptor = fileDescriptor.getServices().stream()
           .filter(descriptor -> descriptor.getFullName().equals(grpcServiceDescriptor.getName()))
           .findFirst()
@@ -950,7 +1152,12 @@ final class OpenApiSpecGenerator {
         }
 
         for (MethodDescriptor method : protoServiceDescriptor.getMethods()) {
-          metadata.putIfAbsent(
+          var apiMethod = method.getOptions().hasExtension(ApiDocsProto.apiMethod)
+            ? method.getOptions().getExtension(ApiDocsProto.apiMethod)
+            : ApiMethodDocs.getDefaultInstance();
+          var hasHttpBindings = method.getOptions().hasExtension(AnnotationsProto.http)
+            && method.getOptions().getExtension(AnnotationsProto.http).getPatternCase().getNumber() != 0;
+          methodMetadata.putIfAbsent(
             methodKey(protoServiceDescriptor.getFullName(), method.getName()),
             new ProtoMethodMetadata(
               protoServiceDescriptor.getFullName(),
@@ -958,14 +1165,60 @@ final class OpenApiSpecGenerator {
               method.getInputType().getFullName(),
               method.getOutputType().getFullName(),
               !method.isClientStreaming() && !method.isServerStreaming(),
-              List.of()
+              List.of(),
+              apiMethod.getDisplayName(),
+              apiMethod.getDescription(),
+              List.copyOf(apiMethod.getPermissionsList()),
+              apiMethod.getScope(),
+              List.copyOf(apiMethod.getPreconditionsList()),
+              apiMethod.getExecution(),
+              List.copyOf(apiMethod.getSideEffectsList()),
+              hasHttpBindings
             )
           );
         }
       }
     }
 
-    return metadata;
+    return new ProtoDescriptorMetadata(Map.copyOf(methodMetadata), Map.copyOf(fieldMetadata));
+  }
+
+  private static void collectFieldMetadata(
+    FileDescriptor fileDescriptor,
+    Map<String, ProtoFieldMetadata> fieldMetadata,
+    Set<String> processedFiles
+  ) {
+    if (!processedFiles.add(fileDescriptor.getFullName())) {
+      return;
+    }
+
+    fileDescriptor.getDependencies().forEach(dependency ->
+      collectFieldMetadata(dependency, fieldMetadata, processedFiles));
+    fileDescriptor.getMessageTypes().forEach(descriptor -> collectFieldMetadata(descriptor, fieldMetadata));
+  }
+
+  private static void collectFieldMetadata(Descriptor descriptor, Map<String, ProtoFieldMetadata> fieldMetadata) {
+    for (FieldDescriptor field : descriptor.getFields()) {
+      var apiField = field.getOptions().hasExtension(ApiDocsProto.apiField)
+        ? field.getOptions().getExtension(ApiDocsProto.apiField)
+        : ApiFieldDocs.getDefaultInstance();
+      var configuredBehaviors = field.getOptions().getExtension(FieldBehaviorProto.fieldBehavior);
+      var behaviors = configuredBehaviors.isEmpty()
+        ? EnumSet.noneOf(FieldBehavior.class)
+        : EnumSet.copyOf(configuredBehaviors);
+      fieldMetadata.putIfAbsent(
+        fieldKey(descriptor.getFullName(), field.getName()),
+        new ProtoFieldMetadata(
+          descriptor.getFullName(),
+          field.getName(),
+          Set.copyOf(behaviors),
+          apiField.getFormat(),
+          apiField.getExample()
+        )
+      );
+    }
+
+    descriptor.getNestedTypes().forEach(nested -> collectFieldMetadata(nested, fieldMetadata));
   }
 
   private static Map<String, StructInfo> createStructLookup(Set<StructInfo> structs) {
@@ -1015,13 +1268,36 @@ final class OpenApiSpecGenerator {
     return List.copyOf(StreamSupport.stream(ServiceLoader.load(type, classLoader).spliterator(), false).toList());
   }
 
+  private record ProtoDescriptorMetadata(
+    Map<String, ProtoMethodMetadata> methodMetadata,
+    Map<String, ProtoFieldMetadata> fieldMetadata
+  ) {
+  }
+
   private record ProtoMethodMetadata(
     String serviceName,
     String methodName,
     String inputTypeName,
     String outputTypeName,
     boolean unary,
-    List<String> declaredExceptions
+    List<String> declaredExceptions,
+    String displayName,
+    String description,
+    List<String> permissions,
+    String scope,
+    List<String> preconditions,
+    String execution,
+    List<String> sideEffects,
+    boolean hasHttpBindings
+  ) {
+  }
+
+  private record ProtoFieldMetadata(
+    String typeName,
+    String fieldName,
+    Set<FieldBehavior> behaviors,
+    String format,
+    String example
   ) {
   }
 }

@@ -5,6 +5,9 @@ option java_multiple_files = true;
 
 package soulfire.v1;
 
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 
 // ============================================================================
@@ -102,7 +105,7 @@ message BotPosition {
 // Request to retrieve metrics for a specific instance.
 message GetInstanceMetricsRequest {
   // The UUID of the SoulFire instance to get metrics for.
-  string instance_id = 1;
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   // If set, only return snapshots taken after this timestamp.
   // Used for incremental fetching to reduce payload size.
   optional google.protobuf.Timestamp since = 2;
@@ -182,10 +185,24 @@ service MetricsService {
   // Supports incremental fetching via the "since" parameter.
   // Requires: READ_BOT_INFO permission on the instance
   // Errors: NOT_FOUND if instance does not exist
-  rpc GetInstanceMetrics (GetInstanceMetricsRequest) returns (GetInstanceMetricsResponse) {}
+  rpc GetInstanceMetrics (GetInstanceMetricsRequest) returns (GetInstanceMetricsResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/metrics" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get instance metrics"
+      permissions: "READ_BOT_INFO"
+      scope: "instance"
+    };
+  }
 
   // Returns server-level system metrics (CPU, memory, threads, GC, aggregate bots).
   // Supports incremental fetching via the "since" parameter.
   // Requires: READ_SERVER_CONFIG global permission
-  rpc GetServerMetrics (GetServerMetricsRequest) returns (GetServerMetricsResponse) {}
+  rpc GetServerMetrics (GetServerMetricsRequest) returns (GetServerMetricsResponse) {
+    option (google.api.http) = { get: "/v1/server/metrics" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get server metrics"
+      permissions: "READ_SERVER_CONFIG"
+      scope: "server"
+    };
+  }
 }
