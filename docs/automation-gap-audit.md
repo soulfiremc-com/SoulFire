@@ -23,6 +23,7 @@ These gaps were closed in the current implementation slice:
 - first-class CLI, gRPC, MCP, and dashboard controls for team quota overrides instead of leaving them only in the generic settings model
 - sparse per-bot automation settings patching over gRPC and MCP instead of forcing operators through one-off setters or the generic settings API
 - dedicated dashboard controls for per-bot automation enablement, death recovery, scan tuning, retreat thresholds, and role override
+- dashboard-level bot search, role/status/dimension filtering, selection state, bulk interventions, and bulk bot-settings patching
 - refreshed operator docs for automation settings, commands, APIs, and current GUI behavior
 
 ## Remaining gaps by area
@@ -66,7 +67,7 @@ These gaps were closed in the current implementation slice:
 - Add streaming subscriptions instead of 2-second polling.
 - Add a real shared-coordination view with maps, overlays, and structure confidence visualization.
 - Add a dedicated shared-memory browser instead of only team state and coordination summaries.
-- Add bulk bot selection, bulk actions, and filtered team views.
+- Add richer bulk workflows such as saved operator views, bulk acquire/goal actions, and bulk settings presets beyond the current intervention/toggle surface.
 - Add force-action controls such as quarantine, force objective, force target, and phase restart.
 - Add better stuck-bot diagnostics that explain what a bot is waiting for and why.
 - Add run history, incident history, and post-run summaries.

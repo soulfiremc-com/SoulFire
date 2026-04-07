@@ -219,6 +219,8 @@ The current `SoulFireClient` automation dashboard provides:
 - instance-level coordination controls for preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, max End bots, and team quota overrides
 - direct navigation to the built-in automation settings page when the page is available for the instance
 - per-bot runtime cards with editable automation enablement, death recovery, scan tuning, retreat thresholds, role override, status summary, role, objective, phase, location, current action, queued targets, recovery counters, and recent progress timestamps
+- bot search plus role, status, and dimension filters for narrowing large team views
+- dashboard selection state and bulk actions for pause, resume, stop, reset memory, release claims, and light bot-settings patching across selected bots
 - shared coordination inspection for claims, shared structure hints, and eye-of-ender samples
 
 This is a first operator dashboard rather than a finished automation control center. Missing client parity work is tracked in [automation-gap-audit.md](automation-gap-audit.md) and [automation-roadmap.md](automation-roadmap.md).

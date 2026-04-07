@@ -35,7 +35,7 @@ These are worth stating directly based on the current repository state:
 - A first automation proto, gRPC, and MCP surface now exists for state snapshots, coordination snapshots, bot-settings patching, and core control actions, but it is still far from complete.
 - Team collaboration is now configurable, including structure-intel and target-claim sharing, but it is still much narrower than the full coordination model described below.
 - Operator overrides now exist for forcing roles and objectives plus releasing claims, but not yet for claim creation, targets, phases, or subteams.
-- A first official automation dashboard now exists in `SoulFireClient`, including team controls and per-bot tuning, but it is still a polling-based operator view rather than a complete live control center.
+- A first official automation dashboard now exists in `SoulFireClient`, including team controls, per-bot tuning, filtered team views, and bulk interventions, but it is still a polling-based operator view rather than a complete live control center.
 
 ## P0: reliability for 10 parallel beat-game bots
 
