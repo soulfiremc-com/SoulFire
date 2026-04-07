@@ -22,7 +22,8 @@ import com.soulfiremc.server.api.InternalPluginClass;
 import com.soulfiremc.server.api.PluginInfo;
 import com.soulfiremc.server.api.event.bot.BotConnectionInitEvent;
 import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEvent;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
@@ -34,7 +35,6 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.Items;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @InternalPluginClass
@@ -84,20 +84,22 @@ public final class AutoTotem extends InternalPlugin {
         }
 
         var gameMode = connection.minecraft().gameMode;
-        connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-          new ControllingTask.RunnableStage(player::sendOpenInventory),
-          new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player)),
-          new ControllingTask.WaitDelayStage(() -> 50L),
-          new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, InventoryMenu.SHIELD_SLOT, 0, ContainerInput.PICKUP, player)),
-          new ControllingTask.WaitDelayStage(() -> 50L),
-          new ControllingTask.RunnableStage(() -> {
+        connection.botControl().tryStart(ControlTask.sequence(
+          "Auto totem",
+          ControlPriority.LOW,
+          ControlTask.action(player::sendOpenInventory),
+          ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player)),
+          ControlTask.waitMillis(50L),
+          ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, InventoryMenu.SHIELD_SLOT, 0, ContainerInput.PICKUP, player)),
+          ControlTask.waitMillis(50L),
+          ControlTask.action(() -> {
             if (!playerInventory.getCarried().isEmpty()) {
               gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player);
             }
           }),
-          new ControllingTask.WaitDelayStage(() -> 50L),
-          new ControllingTask.RunnableStage(player::closeContainer)
-        )));
+          ControlTask.waitMillis(50L),
+          ControlTask.action(player::closeContainer)
+        ));
       },
       settingsSource.getRandom(AutoTotemSettings.DELAY).asLongSupplier(),
       TimeUnit.SECONDS);

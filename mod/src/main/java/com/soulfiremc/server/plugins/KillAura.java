@@ -25,7 +25,8 @@ import com.soulfiremc.server.api.event.bot.BotPreEntityTickEvent;
 import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEvent;
 import com.soulfiremc.server.api.metadata.MetadataKey;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
@@ -75,7 +76,7 @@ public final class KillAura extends InternalPlugin {
 
     var control = bot.botControl();
     var localPlayer = bot.minecraft().player;
-    if (control.activelyControlled()) {
+    if (control.hasActiveTask()) {
       return;
     }
 
@@ -111,7 +112,9 @@ public final class KillAura extends InternalPlugin {
       return;
     }
 
-    control.registerControllingTask(ControllingTask.manual(new KillAuraMarker(target, distance)));
+    if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, new KillAuraMarker(target, distance)))) {
+      return;
+    }
     localPlayer.lookAt(EntityAnchorArgument.Anchor.EYES, bestVisiblePoint);
   }
 
@@ -130,7 +133,7 @@ public final class KillAura extends InternalPlugin {
       return;
     }
 
-    var marker = control.getMarkerAndUnregister(KillAuraMarker.class);
+    var marker = control.claimMarker(KillAuraMarker.class);
     if (marker == null) {
       return;
     }
@@ -406,6 +409,6 @@ public final class KillAura extends InternalPlugin {
         .build();
   }
 
-  private record KillAuraMarker(Entity attackEntity, double distance) implements ControllingTask.ManualTaskMarker {
+  private record KillAuraMarker(Entity attackEntity, double distance) {
   }
 }

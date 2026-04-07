@@ -19,7 +19,7 @@ package com.soulfiremc.server.script;
 
 import com.google.gson.JsonElement;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import reactor.core.publisher.Mono;
@@ -176,7 +176,7 @@ public abstract class AbstractScriptNode implements ScriptNode {
 
   /// Helper method to run an action on the tick thread.
   /// When executing synchronously on the tick thread (from entity tick triggers),
-  /// runs the action directly. Otherwise, defers via ControllingTask.singleTick().
+  /// runs the action directly. Otherwise, defers via ControlTask.once().
   ///
   /// @param runtime the node runtime (provides sync/async context)
   /// @param bot     the bot connection
@@ -185,7 +185,7 @@ public abstract class AbstractScriptNode implements ScriptNode {
     if (runtime.isTickSynchronous()) {
       action.run();
     } else {
-      bot.botControl().registerControllingTask(ControllingTask.singleTick(getClass().getSimpleName(), action));
+      bot.botControl().replace(ControlTask.once(getClass().getSimpleName(), action));
     }
   }
 

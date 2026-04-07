@@ -23,7 +23,8 @@ import com.soulfiremc.server.api.PluginInfo;
 import com.soulfiremc.server.api.event.bot.BotConnectionInitEvent;
 import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEvent;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
@@ -38,7 +39,6 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -131,20 +131,22 @@ public final class AutoArmor extends InternalPlugin {
     }
 
     var gameMode = connection.minecraft().gameMode;
-    connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-      new ControllingTask.RunnableStage(player::sendOpenInventory),
-      new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, bestItemSlot.index, 0, ContainerInput.PICKUP, player)),
-      new ControllingTask.WaitDelayStage(() -> 50L),
-      new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, equipmentSlot.index, 0, ContainerInput.PICKUP, player)),
-      new ControllingTask.WaitDelayStage(() -> 50L),
-      new ControllingTask.RunnableStage(() -> {
+    connection.botControl().tryStart(ControlTask.sequence(
+      "Auto armor",
+      ControlPriority.LOW,
+      ControlTask.action(player::sendOpenInventory),
+      ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, bestItemSlot.index, 0, ContainerInput.PICKUP, player)),
+      ControlTask.waitMillis(50L),
+      ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, equipmentSlot.index, 0, ContainerInput.PICKUP, player)),
+      ControlTask.waitMillis(50L),
+      ControlTask.action(() -> {
         if (!player.inventoryMenu.getCarried().isEmpty()) {
           gameMode.handleContainerInput(player.inventoryMenu.containerId, bestItemSlot.index, 0, ContainerInput.PICKUP, player);
         }
       }),
-      new ControllingTask.WaitDelayStage(() -> 50L),
-      new ControllingTask.RunnableStage(player::closeContainer)
-    )));
+      ControlTask.waitMillis(50L),
+      ControlTask.action(player::closeContainer)
+    ));
   }
 
   @EventHandler

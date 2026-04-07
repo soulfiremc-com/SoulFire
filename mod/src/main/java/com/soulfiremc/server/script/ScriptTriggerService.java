@@ -116,7 +116,7 @@ public final class ScriptTriggerService {
   /// Registers a synchronous tick-based trigger that executes on the tick thread.
   /// Instead of using a sink/subscription pattern, the script is executed directly
   /// on the event handler thread using .block(), ensuring action nodes can modify
-  /// game state immediately without ControllingTask deferral.
+  /// game state immediately without control-task deferral.
   private <E extends SoulFireEvent> void registerSyncTickTrigger(
     UUID scriptId,
     String nodeId,

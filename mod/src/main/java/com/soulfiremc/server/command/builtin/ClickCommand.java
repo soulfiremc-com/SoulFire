@@ -19,7 +19,7 @@ package com.soulfiremc.server.command.builtin;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.util.MouseClickHelper;
 
@@ -38,9 +38,9 @@ public final class ClickCommand {
               help(
                 "Simulates a left mouse button click for selected bots (attack/break)",
                 c -> forEveryBot(
-                  c,
-                  bot -> {
-                    bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                c,
+                bot -> {
+                    bot.botControl().replace(ControlTask.once(() -> {
                       var level = bot.minecraft().level;
                       var player = bot.minecraft().player;
                       var gameMode = bot.minecraft().gameMode;
@@ -58,9 +58,9 @@ public final class ClickCommand {
               help(
                 "Simulates a right mouse button click for selected bots (use/interact)",
                 c -> forEveryBot(
-                  c,
-                  bot -> {
-                    bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                c,
+                bot -> {
+                    bot.botControl().replace(ControlTask.once(() -> {
                       var level = bot.minecraft().level;
                       var player = bot.minecraft().player;
                       var gameMode = bot.minecraft().gameMode;

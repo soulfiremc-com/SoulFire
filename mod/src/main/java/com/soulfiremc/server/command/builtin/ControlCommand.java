@@ -19,7 +19,7 @@ package com.soulfiremc.server.command.builtin;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.*;
@@ -40,7 +40,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.up(!controlState.up());
@@ -57,7 +57,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.down(!controlState.down());
@@ -74,7 +74,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.left(!controlState.left());
@@ -91,7 +91,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.right(!controlState.right());
@@ -108,7 +108,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.jump(!controlState.jump());
@@ -124,7 +124,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.shift(!controlState.shift());
@@ -140,7 +140,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                      bot.botControl().replace(ControlTask.once(() -> {
                         var controlState = bot.controlState();
 
                         controlState.sprint(!controlState.sprint());
@@ -156,7 +156,7 @@ public final class ControlCommand {
                   forEveryBot(
                     c,
                     bot -> {
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(() ->
+                      bot.botControl().replace(ControlTask.once(() ->
                         bot.controlState().resetAll()));
                       return Command.SINGLE_SUCCESS;
                     }))))

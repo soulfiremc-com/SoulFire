@@ -22,7 +22,8 @@ import com.soulfiremc.server.api.InternalPluginClass;
 import com.soulfiremc.server.api.PluginInfo;
 import com.soulfiremc.server.api.event.bot.BotConnectionInitEvent;
 import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEvent;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
@@ -35,7 +36,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @InternalPluginClass
@@ -87,36 +87,44 @@ public final class AutoEat extends InternalPlugin {
 
         var gameMode = connection.minecraft().gameMode;
         if (slot == SFInventoryHelpers.getSelectedSlot(player.getInventory())) {
-          connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-            new ControllingTask.RunnableStage(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          )));
+          connection.botControl().tryStart(ControlTask.sequence(
+            "Auto eat",
+            ControlPriority.LOW,
+            ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
+          ));
         } else if (slot == InventoryMenu.SHIELD_SLOT) {
-          connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-            new ControllingTask.RunnableStage(() -> gameMode.useItem(player, InteractionHand.OFF_HAND))
-          )));
+          connection.botControl().tryStart(ControlTask.sequence(
+            "Auto eat",
+            ControlPriority.LOW,
+            ControlTask.action(() -> gameMode.useItem(player, InteractionHand.OFF_HAND))
+          ));
         } else if (SFInventoryHelpers.isSelectableHotbarSlot(slot)) {
-          connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-            new ControllingTask.RunnableStage(() -> player.getInventory().setSelectedSlot(SFInventoryHelpers.toHotbarIndex(slot))),
-            new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          )));
+          connection.botControl().tryStart(ControlTask.sequence(
+            "Auto eat",
+            ControlPriority.LOW,
+            ControlTask.action(() -> player.getInventory().setSelectedSlot(SFInventoryHelpers.toHotbarIndex(slot))),
+            ControlTask.waitMillis(50L),
+            ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
+          ));
         } else {
-          connection.botControl().maybeRegister(ControllingTask.staged(List.of(
-            new ControllingTask.RunnableStage(player::sendOpenInventory),
-            new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player)),
-            new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ContainerInput.PICKUP, player)),
-            new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(() -> {
+          connection.botControl().tryStart(ControlTask.sequence(
+            "Auto eat",
+            ControlPriority.LOW,
+            ControlTask.action(player::sendOpenInventory),
+            ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player)),
+            ControlTask.waitMillis(50L),
+            ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ContainerInput.PICKUP, player)),
+            ControlTask.waitMillis(50L),
+            ControlTask.action(() -> {
               if (!player.inventoryMenu.getCarried().isEmpty()) {
                 gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player);
               }
             }),
-            new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(player::closeContainer),
-            new ControllingTask.WaitDelayStage(() -> 50L),
-            new ControllingTask.RunnableStage(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          )));
+            ControlTask.waitMillis(50L),
+            ControlTask.action(player::closeContainer),
+            ControlTask.waitMillis(50L),
+            ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
+          ));
         }
       },
       settingsSource.getRandom(AutoEatSettings.DELAY).asLongSupplier(),

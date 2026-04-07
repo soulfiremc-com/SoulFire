@@ -23,7 +23,7 @@ import com.mojang.authlib.GameProfile;
 import com.soulfiremc.grpc.generated.*;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.plugins.DialogHandler;
 import com.soulfiremc.server.renderer.RenderConstants;
@@ -1255,8 +1255,8 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         }
 
         var containerId = player.containerMenu.containerId;
-        activeBot.botControl().registerControllingTask(
-          ControllingTask.singleTick(() ->
+        activeBot.botControl().replace(
+          ControlTask.once(() ->
             gameMode.handleContainerInput(containerId, slotId, mouseButton, clickType, player)));
 
         return BotInventoryClickResponse.newBuilder()
@@ -1296,7 +1296,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           throw Status.FAILED_PRECONDITION.withDescription("Bot player is not available").asRuntimeException();
         }
 
-        activeBot.botControl().registerControllingTask(ControllingTask.singleTick(player::closeContainer));
+        activeBot.botControl().replace(ControlTask.once(player::closeContainer));
         return BotCloseContainerResponse.newBuilder()
           .setSuccess(true)
           .build();
@@ -1334,7 +1334,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           throw Status.FAILED_PRECONDITION.withDescription("Bot player is not available").asRuntimeException();
         }
 
-        activeBot.botControl().registerControllingTask(ControllingTask.singleTick(player::sendOpenInventory));
+        activeBot.botControl().replace(ControlTask.once(player::sendOpenInventory));
         return BotOpenInventoryResponse.newBuilder()
           .setSuccess(true)
           .build();
@@ -1377,14 +1377,14 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
 
         return switch (request.getButton()) {
           case LEFT_BUTTON -> {
-            activeBot.botControl().registerControllingTask(ControllingTask.singleTick(() ->
+            activeBot.botControl().replace(ControlTask.once(() ->
               MouseClickHelper.performLeftClick(player, level, gameMode)));
             yield BotMouseClickResponse.newBuilder()
               .setSuccess(true)
               .build();
           }
           case RIGHT_BUTTON -> {
-            activeBot.botControl().registerControllingTask(ControllingTask.singleTick(() ->
+            activeBot.botControl().replace(ControlTask.once(() ->
               MouseClickHelper.performRightClick(player, level, gameMode)));
             yield BotMouseClickResponse.newBuilder()
               .setSuccess(true)
@@ -1453,8 +1453,8 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         }
 
         log.info("Clicking container button {} on container {} (type: {})", buttonId, container.containerId, container.getClass().getSimpleName());
-        activeBot.botControl().registerControllingTask(
-          ControllingTask.singleTick(() -> gameMode.handleInventoryButtonClick(container.containerId, buttonId)));
+        activeBot.botControl().replace(
+          ControlTask.once(() -> gameMode.handleInventoryButtonClick(container.containerId, buttonId)));
         return BotContainerButtonClickResponse.newBuilder()
           .setSuccess(true)
           .build();
@@ -1579,8 +1579,8 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
             throw Status.FAILED_PRECONDITION.withDescription("Bot network connection is not available").asRuntimeException();
           }
 
-          activeBot.botControl().registerControllingTask(
-            ControllingTask.singleTick(() -> anvilMenu.setItemName(text)));
+          activeBot.botControl().replace(
+            ControlTask.once(() -> anvilMenu.setItemName(text)));
           return BotSetContainerTextResponse.newBuilder()
             .setSuccess(true)
             .build();
@@ -1786,8 +1786,8 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
             .build();
         }
 
-        activeBot.botControl().registerControllingTask(
-          ControllingTask.singleTick(() -> player.getInventory().setSelectedSlot(slot)));
+        activeBot.botControl().replace(
+          ControlTask.once(() -> player.getInventory().setSelectedSlot(slot)));
         log.info("Setting hotbar slot to {} for bot {}", slot, botId);
         return BotSetHotbarSlotResponse.newBuilder()
           .setSuccess(true)
@@ -1821,7 +1821,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
       }
 
       // Apply movement state changes
-      activeBot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+      activeBot.botControl().replace(ControlTask.once(() -> {
         var controlState = activeBot.controlState();
 
         if (request.hasForward()) {
@@ -1876,7 +1876,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
       }
 
       // Reset all movement
-      activeBot.botControl().registerControllingTask(ControllingTask.singleTick(() ->
+      activeBot.botControl().replace(ControlTask.once(() ->
         activeBot.controlState().resetAll()));
 
       log.info("Reset movement for bot {}", botId);
@@ -1935,7 +1935,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
             .build();
         }
 
-        activeBot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+        activeBot.botControl().replace(ControlTask.once(() -> {
           player.setYRot(finalYaw);
           player.setXRot(finalPitch);
         }));

@@ -18,7 +18,9 @@
 package com.soulfiremc.server.pathfinding.execution;
 
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlStopReason;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.pathfinding.NodeState;
 import com.soulfiremc.server.pathfinding.RouteFinder;
 import com.soulfiremc.server.pathfinding.SFVec3i;
@@ -39,12 +41,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-public final class PathExecutor implements ControllingTask {
+public final class PathExecutor implements ControlTask {
   private static final int MAX_ERROR_DISTANCE = 20;
   private final Queue<WorldAction> worldActionQueue = new LinkedBlockingQueue<>();
   private final BotConnection connection;
   private final LiveRouteFinder findPath;
   private final CompletableFuture<Void> pathCompletionFuture;
+  private volatile boolean awaitingPath;
   private int totalMovements;
   private int ticks;
   private int movementNumber = 1;
@@ -84,9 +87,20 @@ public final class PathExecutor implements ControllingTask {
     bot.shutdownHooks().add(() -> pathCompletionFuture.cancel(true));
 
     var pathExecutor = new PathExecutor(bot, new LiveRouteFinder(bot, goalScorer, pathConstraint), pathCompletionFuture);
+    bot.botControl().replace(pathExecutor);
     pathExecutor.submitForPathCalculation(true);
 
     return pathCompletionFuture;
+  }
+
+  @Override
+  public ControlPriority priority() {
+    return ControlPriority.HIGH;
+  }
+
+  @Override
+  public String description() {
+    return "PathExecutor";
   }
 
   @Override
@@ -95,7 +109,13 @@ public final class PathExecutor implements ControllingTask {
   }
 
   public void submitForPathCalculation(boolean isInitial) {
-    unregister();
+    if (awaitingPath || isDone()) {
+      return;
+    }
+
+    awaitingPath = true;
+    worldActionQueue.clear();
+    connection.controlState().resetAll();
 
     connection.scheduler().schedule(() -> {
       try {
@@ -121,36 +141,35 @@ public final class PathExecutor implements ControllingTask {
             var newActions = repositionIfNeeded(foundRouteResult.actions(), routeSearchResult.start(), isInitial, this.findPath);
             if (newActions.isEmpty()) {
               log.info("We're already at the goal!");
+              awaitingPath = false;
+              pathCompletionFuture.complete(null);
               return;
             }
 
             log.info("Found path with {} actions!", newActions.size());
 
             preparePath(newActions);
-
-            // Register again
-            register();
           };
           case RouteFinder.NoRouteFoundResult _ -> throw new IllegalStateException("No route found to the goal!");
           case RouteFinder.PartialRouteResult partialRouteResult -> () -> {
             var newActions = addRecalculate(repositionIfNeeded(partialRouteResult.actions(), routeSearchResult.start(), isInitial, this.findPath));
             if (newActions.isEmpty()) {
               log.info("We're already at the goal!");
+              awaitingPath = false;
+              pathCompletionFuture.complete(null);
               return;
             }
 
             log.info("Found path with {} actions!", newActions.size());
 
             preparePath(newActions);
-
-            // Register again
-            register();
           };
           case RouteFinder.SearchExpiredResult _ -> throw new IllegalStateException("Route search expired before finding a route!");
           case RouteFinder.SearchInterruptedResult _ -> throw new IllegalStateException("Route search was interrupted before finding a route!");
         });
       } catch (Throwable t) {
         log.error("Error while calculating path", t);
+        awaitingPath = false;
         pathCompletionFuture.completeExceptionally(t);
       }
     });
@@ -162,24 +181,21 @@ public final class PathExecutor implements ControllingTask {
     this.totalMovements = worldActions.size();
     this.ticks = 0;
     this.movementNumber = 1;
+    this.awaitingPath = false;
   }
 
   @Override
   public void tick() {
-    // This method should not be called if the path is cancelled
     if (isDone()) {
-      unregister();
       return;
     }
 
-    if (worldActionQueue.isEmpty()) {
-      unregister();
+    if (awaitingPath || worldActionQueue.isEmpty()) {
       return;
     }
 
     var worldAction = worldActionQueue.peek();
     if (worldAction == null) {
-      unregister();
       return;
     }
 
@@ -218,7 +234,6 @@ public final class PathExecutor implements ControllingTask {
         log.info("Finished all goals!");
         connection.controlState().resetAll();
         pathCompletionFuture.complete(null);
-        unregister();
         return;
       }
 
@@ -236,24 +251,26 @@ public final class PathExecutor implements ControllingTask {
   }
 
   @Override
-  public void stop() {
-    if (!isDone()) {
+  public void onSuspended() {
+    connection.controlState().resetAll();
+  }
+
+  @Override
+  public void onResumed() {
+    if (!isDone() && !awaitingPath) {
+      log.info("Resuming path execution, recalculating path...");
+      recalculatePath();
+    }
+  }
+
+  @Override
+  public void onStopped(ControlStopReason reason, Throwable cause) {
+    if (reason != ControlStopReason.COMPLETED && !isDone()) {
       pathCompletionFuture.cancel(true);
     }
 
-    unregister();
-  }
-
-  public synchronized void register() {
-    if (isDone()) {
-      return;
-    }
-
-    connection.botControl().registerControllingTask(this);
-  }
-
-  public synchronized void unregister() {
-    connection.botControl().unregisterControllingTask(this);
+    awaitingPath = false;
+    worldActionQueue.clear();
     connection.controlState().resetAll();
   }
 

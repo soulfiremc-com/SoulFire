@@ -21,7 +21,7 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import net.kyori.adventure.text.Component;
 import net.minecraft.world.inventory.ContainerInput;
@@ -61,7 +61,7 @@ public final class InventoryCommand {
                         return Command.SINGLE_SUCCESS;
                       }
 
-                      bot.botControl().registerControllingTask(ControllingTask.singleTick(player::closeContainer));
+                      bot.botControl().replace(ControlTask.once(player::closeContainer));
                       return Command.SINGLE_SUCCESS;
                     }))))
         .then(
@@ -216,7 +216,7 @@ public final class InventoryCommand {
     }
 
     var container = player.containerMenu;
-    bot.botControl().registerControllingTask(ControllingTask.singleTick(
+    bot.botControl().replace(ControlTask.once(
       () -> gameMode.handleContainerInput(container.containerId, slotId, mouseButton, clickType, player)));
     return Command.SINGLE_SUCCESS;
   }

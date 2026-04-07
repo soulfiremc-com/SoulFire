@@ -61,7 +61,7 @@ public interface NodeRuntime {
 
   /// Returns whether this execution is running synchronously on the tick thread.
   /// When true, action nodes should execute game API calls directly instead of
-  /// deferring via ControllingTask.
+  /// deferring via the bot control task system.
   ///
   /// @return true if executing synchronously on the tick thread
   default boolean isTickSynchronous() {

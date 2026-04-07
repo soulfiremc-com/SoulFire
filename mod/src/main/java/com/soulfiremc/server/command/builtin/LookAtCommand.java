@@ -19,7 +19,7 @@ package com.soulfiremc.server.command.builtin;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.command.brigadier.DoubleAxisArgumentType;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
@@ -47,7 +47,7 @@ public final class LookAtCommand {
                     return forEveryBot(
                       c,
                       bot -> {
-                        bot.botControl().registerControllingTask(ControllingTask.singleTick(() -> {
+                        bot.botControl().replace(ControlTask.once(() -> {
                           var player = bot.minecraft().player;
                           if (player == null) {
                             return;

@@ -37,7 +37,7 @@ public final class StopTaskCommand {
               forEveryBot(
                 c,
                 bot -> {
-                  if (bot.botControl().stopControllingTask()) {
+                  if (bot.botControl().stopAll()) {
                     c.getSource().source().sendInfo("Stopped current task for " + bot.accountName());
                   } else {
                     c.getSource().source().sendWarn("No task was running!");

@@ -19,7 +19,9 @@ package com.soulfiremc.server.command.builtin;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.soulfiremc.server.bot.ControllingTask;
+import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlStopReason;
+import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.command.brigadier.EntityArgumentType;
 
@@ -60,7 +62,7 @@ public final class MimicCommand {
                     }
 
                     var offset = entity.get().position().subtract(player.position());
-                    bot.botControl().registerControllingTask(new ControllingTask() {
+                    bot.botControl().replace(new ControlTask() {
                       @Override
                       public void tick() {
                         bot.controlState().resetAll();
@@ -76,13 +78,23 @@ public final class MimicCommand {
                       }
 
                       @Override
-                      public void stop() {
-                        bot.controlState().resetAll();
+                      public boolean isDone() {
+                        return false;
                       }
 
                       @Override
-                      public boolean isDone() {
-                        return false;
+                      public ControlPriority priority() {
+                        return ControlPriority.HIGH;
+                      }
+
+                      @Override
+                      public String description() {
+                        return "Mimic";
+                      }
+
+                      @Override
+                      public void onStopped(ControlStopReason reason, Throwable cause) {
+                        bot.controlState().resetAll();
                       }
                     });
 
