@@ -239,7 +239,7 @@ public final class PathConstraintImpl implements PathConstraint {
 
     return StreamSupport.stream(((ClientLevel) entity.level()).entitiesForRendering().spliterator(), false)
       .filter(e -> e != entity)
-      .filter(_ -> !entity.getType().getCategory().isFriendly())
+      .filter(e -> !e.getType().getCategory().isFriendly())
       .flatMap(e -> e instanceof LivingEntity livingEntity
         && livingEntity.getAttributeValue(Attributes.FOLLOW_RANGE) > 0
         ? Stream.of(livingEntity) : Stream.empty())

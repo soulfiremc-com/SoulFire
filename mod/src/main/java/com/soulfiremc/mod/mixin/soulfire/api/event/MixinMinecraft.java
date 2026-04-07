@@ -35,8 +35,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinMinecraft {
   @Inject(method = "tick", at = @At("HEAD"))
   private void onTickPre(CallbackInfo ci) {
-    BotConnection.current().botControl().tick();
-    SoulFireAPI.postEvent(new BotPreTickEvent(BotConnection.current()));
+    var connection = BotConnection.current();
+    connection.automation().tick();
+    connection.botControl().tick();
+    SoulFireAPI.postEvent(new BotPreTickEvent(connection));
   }
 
   @Inject(method = "tick", at = @At("RETURN"))

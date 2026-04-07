@@ -26,6 +26,7 @@ import com.soulfiremc.mod.util.SFModHelpers;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.SoulFireScheduler;
 import com.soulfiremc.server.account.MinecraftAccount;
+import com.soulfiremc.server.automation.AutomationController;
 import com.soulfiremc.server.account.service.BedrockData;
 import com.soulfiremc.server.account.service.OfflineJavaData;
 import com.soulfiremc.server.account.service.OnlineChainJavaData;
@@ -90,6 +91,7 @@ public final class BotConnection {
   private final MetadataHolder<JsonElement> persistentMetadata;
   private final ControlState controlState = new ControlState();
   private final BotControlAPI botControl = new BotControlAPI();
+  private final AutomationController automation;
   private final SoulFireScheduler scheduler;
   private final BotConnectionFactory factory;
   private final InstanceManager instanceManager;
@@ -142,6 +144,7 @@ public final class BotConnection {
     this.persistentMetadata = fillPersistentMetadata(minecraftAccount);
     this.runnableWrapper = instanceManager.runnableWrapper().with(new BotRunnableWrapper(this));
     this.scheduler = new SoulFireScheduler(runnableWrapper);
+    this.automation = new AutomationController(this);
     this.serverAddress = serverAddress;
     this.proxy = proxyData;
     this.minecraft = createMinecraftCopy(minecraftAccount);
