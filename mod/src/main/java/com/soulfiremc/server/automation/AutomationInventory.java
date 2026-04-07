@@ -193,23 +193,24 @@ public final class AutomationInventory {
   }
 
   public static boolean hasRangedWeapon(BotConnection bot) {
-    return countInventory(bot, "item:minecraft:bow") > 0 && countInventory(bot, "item:minecraft:arrow") > 0;
+    return countInventory(bot, AutomationRequirements.BOW) > 0
+      && countInventory(bot, AutomationRequirements.ARROW) > 0;
   }
 
   public static int bestPickaxeTier(BotConnection bot) {
-    if (countInventory(bot, "item:minecraft:diamond_pickaxe") > 0) {
+    if (countInventory(bot, AutomationRequirements.DIAMOND_PICKAXE) > 0) {
       return 4;
     }
 
-    if (countInventory(bot, "item:minecraft:iron_pickaxe") > 0) {
+    if (countInventory(bot, AutomationRequirements.IRON_PICKAXE) > 0) {
       return 3;
     }
 
-    if (countInventory(bot, "item:minecraft:stone_pickaxe") > 0) {
+    if (countInventory(bot, AutomationRequirements.STONE_PICKAXE) > 0) {
       return 2;
     }
 
-    if (countInventory(bot, "item:minecraft:wooden_pickaxe") > 0) {
+    if (countInventory(bot, AutomationRequirements.WOODEN_PICKAXE) > 0) {
       return 1;
     }
 

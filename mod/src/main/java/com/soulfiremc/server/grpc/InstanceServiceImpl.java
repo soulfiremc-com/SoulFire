@@ -736,6 +736,12 @@ public final class InstanceServiceImpl extends InstanceServiceGrpc.InstanceServi
             case PAUSE_SESSION -> InstanceAuditLogResponse.AuditLogEntryType.PAUSE_SESSION;
             case RESUME_SESSION -> InstanceAuditLogResponse.AuditLogEntryType.RESUME_SESSION;
             case STOP_SESSION -> InstanceAuditLogResponse.AuditLogEntryType.STOP_SESSION;
+            case AUTOMATION_START -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_START;
+            case AUTOMATION_PAUSE -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_PAUSE;
+            case AUTOMATION_RESUME -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_RESUME;
+            case AUTOMATION_STOP -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_STOP;
+            case AUTOMATION_UPDATE_SETTINGS -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_UPDATE_SETTINGS;
+            case AUTOMATION_APPLY_PRESET -> InstanceAuditLogResponse.AuditLogEntryType.AUTOMATION_APPLY_PRESET;
           })
           .setTimestamp(Timestamps.fromMillis(auditLog.getCreatedAt().toInstant(ZoneOffset.UTC).toEpochMilli()))
           .setData(auditLog.getData() != null ? auditLog.getData() : "")

@@ -199,6 +199,41 @@ public final class InstanceManager {
     invalidateSettingsCache();
   }
 
+  public void updateBotSetting(UUID botId, Property<SettingsSource.Bot> property, JsonElement value) {
+    dsl.transaction(cfg -> {
+      var ctx = DSL.using(cfg);
+      var record = ctx.selectFrom(Tables.INSTANCES).where(Tables.INSTANCES.ID.eq(id.toString())).fetchOne();
+      if (record == null) {
+        throw new IllegalStateException("Instance not found");
+      }
+
+      var currentSettings = InstanceSettingsImpl.Stem.deserialize(GsonInstance.GSON.fromJson(record.getSettings(), JsonElement.class));
+      var updatedStem = currentSettings.withAccounts(currentSettings.accounts().stream()
+        .map(account -> {
+          if (!account.profileId().equals(botId)) {
+            return account;
+          }
+
+          var currentBotSettings = account.settings() == null ? Map.<String, Map<String, JsonElement>>of() : account.settings();
+          var updatedBotSettings = SettingsSource.Stem.withUpdatedEntry(
+            currentBotSettings,
+            property.namespace(),
+            property.key(),
+            value);
+          return account.withSettings(updatedBotSettings);
+        })
+        .toList());
+
+      ctx.update(Tables.INSTANCES)
+        .set(Tables.INSTANCES.SETTINGS, GsonInstance.GSON.toJson(updatedStem.serializeToTree()))
+        .set(Tables.INSTANCES.UPDATED_AT, LocalDateTime.now(ZoneOffset.UTC))
+        .where(Tables.INSTANCES.ID.eq(id.toString()))
+        .execute();
+    });
+
+    invalidateSettingsCache();
+  }
+
   private String fetchFriendlyName() {
     var record = dsl.selectFrom(Tables.INSTANCES).where(Tables.INSTANCES.ID.eq(id.toString())).fetchOne();
 

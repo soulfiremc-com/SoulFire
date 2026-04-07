@@ -510,6 +510,18 @@ message InstanceAuditLogResponse {
     RESUME_SESSION = 3;
     // The instance session was stopped.
     STOP_SESSION = 4;
+    // Beat or acquire automation was started.
+    AUTOMATION_START = 5;
+    // Automation was paused.
+    AUTOMATION_PAUSE = 6;
+    // Automation was resumed.
+    AUTOMATION_RESUME = 7;
+    // Automation was stopped.
+    AUTOMATION_STOP = 8;
+    // Automation settings were changed.
+    AUTOMATION_UPDATE_SETTINGS = 9;
+    // An automation preset was applied.
+    AUTOMATION_APPLY_PRESET = 10;
   }
 
   // A single entry in the audit log.

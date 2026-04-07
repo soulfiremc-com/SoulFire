@@ -42,13 +42,23 @@ public final class AutomationSettings implements SettingsObject {
       .description("Master switch for SoulFire-native automation on this bot")
       .defaultValue(true)
       .build();
+  public static final ComboProperty<SettingsSource.Instance> PRESET =
+    ImmutableComboProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("preset")
+      .uiName("Automation Preset")
+      .description("Named automation preset that captures the intended coordination style for this instance")
+      .defaultValue(Preset.BALANCED_TEAM.name())
+      .addOptions(presetOptions())
+      .build();
   public static final BooleanProperty<SettingsSource.Instance> TEAM_COLLABORATION =
     ImmutableBooleanProperty.<SettingsSource.Instance>builder()
       .sourceType(SettingsSource.Instance.INSTANCE)
       .namespace(NAMESPACE)
       .key("team-collaboration")
       .uiName("Team Collaboration")
-      .description("Allow bots in the same instance to share goals, roles, and team-wide automation state")
+      .description("Allow bots in the same instance to share roles, claims, structure knowledge, and team-wide automation state. When disabled, each bot runs as an isolated solo automation.")
       .defaultValue(true)
       .build();
   public static final ComboProperty<SettingsSource.Instance> ROLE_POLICY =
@@ -57,7 +67,7 @@ public final class AutomationSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("role-policy")
       .uiName("Role Policy")
-      .description("How the automation coordinator assigns or ignores bot roles during collaborative runs")
+      .description("How the automation coordinator assigns roles. Independent mode disables cross-bot orchestration even if team collaboration remains enabled.")
       .defaultValue(RolePolicy.STATIC_TEAM.name())
       .addOptions(rolePolicyOptions())
       .build();
@@ -142,8 +152,21 @@ public final class AutomationSettings implements SettingsObject {
       ignored -> null);
   }
 
+  private static ComboOption[] presetOptions() {
+    return ComboProperty.optionsFromEnum(
+      Preset.values(),
+      ComboProperty::capitalizeEnum,
+      ignored -> null);
+  }
+
   public enum RolePolicy {
     STATIC_TEAM,
     INDEPENDENT
+  }
+
+  public enum Preset {
+    BALANCED_TEAM,
+    INDEPENDENT_RUNNERS,
+    CAUTIOUS_TEAM
   }
 }

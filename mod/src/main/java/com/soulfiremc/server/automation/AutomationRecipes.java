@@ -17,7 +17,6 @@
  */
 package com.soulfiremc.server.automation;
 
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -37,7 +36,7 @@ public final class AutomationRecipes {
         CraftingStation.INVENTORY,
         List.of(new IngredientPlacement(1, AutomationRequirements.ANY_LOG))
       ));
-      case "item:minecraft:stick" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.STICK -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         4,
         CraftingStation.INVENTORY,
@@ -46,7 +45,7 @@ public final class AutomationRecipes {
           new IngredientPlacement(4, AutomationRequirements.ANY_PLANKS)
         )
       ));
-      case "item:minecraft:crafting_table" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.CRAFTING_TABLE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.INVENTORY,
@@ -57,7 +56,7 @@ public final class AutomationRecipes {
           new IngredientPlacement(4, AutomationRequirements.ANY_PLANKS)
         )
       ));
-      case "item:minecraft:wooden_pickaxe" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.WOODEN_PICKAXE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
@@ -65,143 +64,143 @@ public final class AutomationRecipes {
           new IngredientPlacement(1, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(2, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(3, AutomationRequirements.ANY_PLANKS),
-          new IngredientPlacement(5, "item:minecraft:stick"),
-          new IngredientPlacement(8, "item:minecraft:stick")
+          new IngredientPlacement(5, AutomationRequirements.STICK),
+          new IngredientPlacement(8, AutomationRequirements.STICK)
         )
       ));
-      case "item:minecraft:stone_pickaxe" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.STONE_PICKAXE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:cobblestone"),
-          new IngredientPlacement(2, "item:minecraft:cobblestone"),
-          new IngredientPlacement(3, "item:minecraft:cobblestone"),
-          new IngredientPlacement(5, "item:minecraft:stick"),
-          new IngredientPlacement(8, "item:minecraft:stick")
+          new IngredientPlacement(1, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(2, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(3, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(5, AutomationRequirements.STICK),
+          new IngredientPlacement(8, AutomationRequirements.STICK)
         )
       ));
-      case "item:minecraft:iron_pickaxe" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.IRON_PICKAXE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(2, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(3, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(5, "item:minecraft:stick"),
-          new IngredientPlacement(8, "item:minecraft:stick")
+          new IngredientPlacement(1, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(2, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(3, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(5, AutomationRequirements.STICK),
+          new IngredientPlacement(8, AutomationRequirements.STICK)
         )
       ));
-      case "item:minecraft:furnace" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.FURNACE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:cobblestone"),
-          new IngredientPlacement(2, "item:minecraft:cobblestone"),
-          new IngredientPlacement(3, "item:minecraft:cobblestone"),
-          new IngredientPlacement(4, "item:minecraft:cobblestone"),
-          new IngredientPlacement(6, "item:minecraft:cobblestone"),
-          new IngredientPlacement(7, "item:minecraft:cobblestone"),
-          new IngredientPlacement(8, "item:minecraft:cobblestone"),
-          new IngredientPlacement(9, "item:minecraft:cobblestone")
+          new IngredientPlacement(1, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(2, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(3, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(4, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(6, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(7, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(8, AutomationRequirements.COBBLESTONE),
+          new IngredientPlacement(9, AutomationRequirements.COBBLESTONE)
         )
       ));
-      case "item:minecraft:blaze_powder" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.BLAZE_POWDER -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         2,
         CraftingStation.INVENTORY,
-        List.of(new IngredientPlacement(1, "item:minecraft:blaze_rod"))
+        List.of(new IngredientPlacement(1, AutomationRequirements.BLAZE_ROD))
       ));
-      case "item:minecraft:ender_eye" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.ENDER_EYE -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.INVENTORY,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:ender_pearl"),
-          new IngredientPlacement(2, "item:minecraft:blaze_powder")
+          new IngredientPlacement(1, AutomationRequirements.ENDER_PEARL),
+          new IngredientPlacement(2, AutomationRequirements.BLAZE_POWDER)
         )
       ));
-      case "item:minecraft:flint_and_steel" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.FLINT_AND_STEEL -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.INVENTORY,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(4, "item:minecraft:flint")
+          new IngredientPlacement(1, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(4, AutomationRequirements.FLINT)
         )
       ));
-      case "item:minecraft:bucket" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.BUCKET -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.INVENTORY,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(3, "item:minecraft:iron_ingot"),
-          new IngredientPlacement(5, "item:minecraft:iron_ingot")
+          new IngredientPlacement(1, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(3, AutomationRequirements.IRON_INGOT),
+          new IngredientPlacement(5, AutomationRequirements.IRON_INGOT)
         )
       ));
-      case "item:minecraft:gold_ingot" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.GOLD_INGOT -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(2, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(3, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(4, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(5, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(6, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(7, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(8, "item:minecraft:gold_nugget"),
-          new IngredientPlacement(9, "item:minecraft:gold_nugget")
+          new IngredientPlacement(1, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(2, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(3, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(4, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(5, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(6, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(7, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(8, AutomationRequirements.GOLD_NUGGET),
+          new IngredientPlacement(9, AutomationRequirements.GOLD_NUGGET)
         )
       ));
-      case "item:minecraft:shield" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.SHIELD -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
           new IngredientPlacement(1, AutomationRequirements.ANY_PLANKS),
-          new IngredientPlacement(2, "item:minecraft:iron_ingot"),
+          new IngredientPlacement(2, AutomationRequirements.IRON_INGOT),
           new IngredientPlacement(3, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(4, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(5, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(6, AutomationRequirements.ANY_PLANKS)
         )
       ));
-      case "item:minecraft:bow" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.BOW -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:stick"),
-          new IngredientPlacement(2, "item:minecraft:string"),
-          new IngredientPlacement(4, "item:minecraft:stick"),
-          new IngredientPlacement(5, "item:minecraft:string"),
-          new IngredientPlacement(7, "item:minecraft:stick"),
-          new IngredientPlacement(8, "item:minecraft:string")
+          new IngredientPlacement(1, AutomationRequirements.STICK),
+          new IngredientPlacement(2, AutomationRequirements.STRING),
+          new IngredientPlacement(4, AutomationRequirements.STICK),
+          new IngredientPlacement(5, AutomationRequirements.STRING),
+          new IngredientPlacement(7, AutomationRequirements.STICK),
+          new IngredientPlacement(8, AutomationRequirements.STRING)
         )
       ));
-      case "item:minecraft:arrow" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.ARROW -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         4,
         CraftingStation.INVENTORY,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:flint"),
-          new IngredientPlacement(2, "item:minecraft:stick"),
-          new IngredientPlacement(3, "item:minecraft:feather")
+          new IngredientPlacement(1, AutomationRequirements.FLINT),
+          new IngredientPlacement(2, AutomationRequirements.STICK),
+          new IngredientPlacement(3, AutomationRequirements.FEATHER)
         )
       ));
-      case "item:minecraft:bed" -> Optional.of(new CraftingRecipeDefinition(
+      case AutomationRequirements.ANY_BED -> Optional.of(new CraftingRecipeDefinition(
         targetKey,
         1,
         CraftingStation.CRAFTING_TABLE,
         List.of(
-          new IngredientPlacement(1, "item:minecraft:white_wool"),
-          new IngredientPlacement(2, "item:minecraft:white_wool"),
-          new IngredientPlacement(3, "item:minecraft:white_wool"),
+          new IngredientPlacement(1, AutomationRequirements.WHITE_WOOL),
+          new IngredientPlacement(2, AutomationRequirements.WHITE_WOOL),
+          new IngredientPlacement(3, AutomationRequirements.WHITE_WOOL),
           new IngredientPlacement(4, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(5, AutomationRequirements.ANY_PLANKS),
           new IngredientPlacement(6, AutomationRequirements.ANY_PLANKS)
@@ -213,17 +212,17 @@ public final class AutomationRecipes {
 
   public static Optional<SmeltingRecipeDefinition> smeltingRecipe(String targetKey) {
     return switch (targetKey) {
-      case "item:minecraft:iron_ingot" -> Optional.of(new SmeltingRecipeDefinition(
+      case AutomationRequirements.IRON_INGOT -> Optional.of(new SmeltingRecipeDefinition(
         targetKey,
         1,
-        List.of("item:minecraft:raw_iron", "item:minecraft:iron_ore")
+        List.of(AutomationRequirements.RAW_IRON, AutomationRequirements.IRON_ORE)
       ));
-      case "item:minecraft:gold_ingot" -> Optional.of(new SmeltingRecipeDefinition(
+      case AutomationRequirements.GOLD_INGOT -> Optional.of(new SmeltingRecipeDefinition(
         targetKey,
         1,
-        List.of("item:minecraft:raw_gold", "item:minecraft:gold_ore")
+        List.of(AutomationRequirements.RAW_GOLD, AutomationRequirements.GOLD_ORE)
       ));
-      case "item:minecraft:charcoal" -> Optional.of(new SmeltingRecipeDefinition(
+      case AutomationRequirements.CHARCOAL -> Optional.of(new SmeltingRecipeDefinition(
         targetKey,
         1,
         List.of(AutomationRequirements.ANY_LOG)
@@ -238,27 +237,27 @@ public final class AutomationRecipes {
         state -> state.is(net.minecraft.tags.BlockTags.LOGS),
         ToolRequirement.NONE
       ));
-      case "item:minecraft:cobblestone" -> Optional.of(new MineableSource(
+      case AutomationRequirements.COBBLESTONE -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.STONE || state.getBlock() == Blocks.COBBLESTONE,
         ToolRequirement.WOOD_PICKAXE
       ));
-      case "item:minecraft:coal" -> Optional.of(new MineableSource(
+      case AutomationRequirements.COAL -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.COAL_ORE || state.getBlock() == Blocks.DEEPSLATE_COAL_ORE,
         ToolRequirement.WOOD_PICKAXE
       ));
-      case "item:minecraft:raw_iron", "item:minecraft:iron_ore" -> Optional.of(new MineableSource(
+      case AutomationRequirements.RAW_IRON, AutomationRequirements.IRON_ORE -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.IRON_ORE || state.getBlock() == Blocks.DEEPSLATE_IRON_ORE,
         ToolRequirement.STONE_PICKAXE
       ));
-      case "item:minecraft:raw_gold", "item:minecraft:gold_ore" -> Optional.of(new MineableSource(
+      case AutomationRequirements.RAW_GOLD, AutomationRequirements.GOLD_ORE -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.GOLD_ORE || state.getBlock() == Blocks.DEEPSLATE_GOLD_ORE,
         ToolRequirement.IRON_PICKAXE
       ));
-      case "item:minecraft:gold_nugget" -> Optional.of(new MineableSource(
+      case AutomationRequirements.GOLD_NUGGET -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.NETHER_GOLD_ORE,
         ToolRequirement.WOOD_PICKAXE
       ));
-      case "item:minecraft:flint" -> Optional.of(new MineableSource(
+      case AutomationRequirements.FLINT -> Optional.of(new MineableSource(
         state -> state.getBlock() == Blocks.GRAVEL,
         ToolRequirement.NONE
       ));
@@ -272,24 +271,24 @@ public final class AutomationRecipes {
         entity -> entity.isAnimal(),
         1
       ));
-      case "item:minecraft:blaze_rod" -> Optional.of(new EntitySource(
+      case AutomationRequirements.BLAZE_ROD -> Optional.of(new EntitySource(
         entity -> entity.isBlaze(),
         1
       ));
-      case "item:minecraft:ender_pearl" -> Optional.of(new EntitySource(
+      case AutomationRequirements.ENDER_PEARL -> Optional.of(new EntitySource(
         entity -> entity.type() == net.minecraft.world.entity.EntityType.ENDERMAN,
         1
       ));
-      case "item:minecraft:string" -> Optional.of(new EntitySource(
+      case AutomationRequirements.STRING -> Optional.of(new EntitySource(
         entity -> entity.type() == net.minecraft.world.entity.EntityType.SPIDER
           || entity.type() == net.minecraft.world.entity.EntityType.CAVE_SPIDER,
         1
       ));
-      case "item:minecraft:feather" -> Optional.of(new EntitySource(
+      case AutomationRequirements.FEATHER -> Optional.of(new EntitySource(
         entity -> entity.type() == net.minecraft.world.entity.EntityType.CHICKEN,
         1
       ));
-      case "item:minecraft:white_wool" -> Optional.of(new EntitySource(
+      case AutomationRequirements.WHITE_WOOL -> Optional.of(new EntitySource(
         entity -> entity.type() == net.minecraft.world.entity.EntityType.SHEEP,
         1
       ));

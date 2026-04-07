@@ -47,17 +47,17 @@ public final class AutomationTeamCoordinator {
   private static final double MAX_STRONGHOLD_DISTANCE = 30_000.0;
   private static final List<String> TEAM_SHARED_REQUIREMENTS = List.of(
     AutomationRequirements.FOOD,
-    "item:minecraft:blaze_rod",
-    "item:minecraft:ender_pearl",
-    "item:minecraft:ender_eye",
-    "item:minecraft:bow",
-    "item:minecraft:arrow",
-    "item:minecraft:shield",
-    "item:minecraft:water_bucket",
-    "item:minecraft:lava_bucket",
-    "item:minecraft:flint_and_steel",
-    "item:minecraft:obsidian",
-    "item:minecraft:bed"
+    AutomationRequirements.BLAZE_ROD,
+    AutomationRequirements.ENDER_PEARL,
+    AutomationRequirements.ENDER_EYE,
+    AutomationRequirements.BOW,
+    AutomationRequirements.ARROW,
+    AutomationRequirements.SHIELD,
+    AutomationRequirements.WATER_BUCKET,
+    AutomationRequirements.LAVA_BUCKET,
+    AutomationRequirements.FLINT_AND_STEEL,
+    AutomationRequirements.OBSIDIAN,
+    AutomationRequirements.ANY_BED
   );
 
   private final InstanceManager instanceManager;
@@ -107,7 +107,7 @@ public final class AutomationTeamCoordinator {
         continue;
       }
 
-      sharedDimensionBlocks.put(block.pos().asLong(), new SharedBlock(block.pos(), block.state(), now));
+      sharedDimensionBlocks.put(block.pos().asLong(), new SharedBlock(bot.accountProfileId(), block.pos(), block.state(), now));
     }
 
     rebalanceRoles();
@@ -137,7 +137,12 @@ public final class AutomationTeamCoordinator {
   public synchronized Optional<SharedBlock> findNearestBlock(BotConnection bot,
                                                              ResourceKey<Level> dimension,
                                                              Predicate<BlockState> predicate) {
-    return origin(bot).flatMap(origin -> findNearestBlock(origin, dimension, predicate));
+    return origin(bot).flatMap(origin -> {
+      var botId = independentMode() ? bot.accountProfileId() : null;
+      return observedBlocks(botId, dimension)
+        .filter(block -> predicate.test(block.state()))
+        .min((a, b) -> Double.compare(a.pos().distToCenterSqr(origin), b.pos().distToCenterSqr(origin)));
+    });
   }
 
   public synchronized Optional<SharedBlock> findNearestBlock(Vec3 origin,
@@ -154,19 +159,39 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Optional<SharedBlock> findNearestPortal(BotConnection bot, ResourceKey<Level> dimension) {
+    if (independentMode()) {
+      return Optional.empty();
+    }
     return findNearestBlock(bot, dimension, state -> state.getBlock() == Blocks.NETHER_PORTAL);
   }
 
   public synchronized Optional<SharedBlock> findNearestRuinedPortalHint(BotConnection bot, ResourceKey<Level> dimension) {
+    if (independentMode()) {
+      return Optional.empty();
+    }
     return findNearestBlock(bot, dimension, AutomationTeamCoordinator::isRuinedPortalMarker);
   }
 
   public synchronized Optional<SharedBlock> findNearestFortressHint(BotConnection bot) {
+    if (independentMode()) {
+      return Optional.empty();
+    }
     return findNearestBlock(bot, Level.NETHER, AutomationTeamCoordinator::isFortressMarker);
   }
 
   public synchronized Optional<Vec3> fortressEstimate() {
     return centroid(Level.NETHER, AutomationTeamCoordinator::isFortressMarker, 70.0);
+  }
+
+  public synchronized Optional<Vec3> fortressEstimate(BotConnection bot) {
+    if (!independentMode()) {
+      return fortressEstimate();
+    }
+
+    return centroid(observedBlocks(bot.accountProfileId(), Level.NETHER)
+      .filter(block -> isFortressMarker(block.state()))
+      .map(SharedBlock::pos)
+      .toList(), 70.0);
   }
 
   public synchronized boolean claimBlock(BotConnection bot,
@@ -302,6 +327,40 @@ public final class AutomationTeamCoordinator {
     return Optional.of(new Vec3(sumX / intersections.size(), 32.0, sumZ / intersections.size()));
   }
 
+  public synchronized Optional<Vec3> strongholdEstimate(BotConnection bot) {
+    if (!independentMode()) {
+      return strongholdEstimate();
+    }
+
+    var botId = bot.accountProfileId();
+    var frames = observedBlocks(botId, Level.OVERWORLD)
+      .filter(block -> block.state().getBlock() == Blocks.END_PORTAL_FRAME || block.state().getBlock() == Blocks.END_PORTAL)
+      .map(SharedBlock::pos)
+      .toList();
+    if (!frames.isEmpty()) {
+      return centroid(frames, 28.0);
+    }
+
+    var botSamples = eyeSamples.stream()
+      .filter(sample -> sample.botId().equals(botId))
+      .toList();
+    if (botSamples.size() == 1) {
+      var sample = botSamples.getFirst();
+      return Optional.of(sample.origin().add(sample.direction().scale(768.0)));
+    }
+
+    var intersections = new ArrayList<Vec3>();
+    for (int i = 0; i < botSamples.size(); i++) {
+      for (int j = i + 1; j < botSamples.size(); j++) {
+        var intersection = intersect(botSamples.get(i), botSamples.get(j));
+        if (intersection != null) {
+          intersections.add(intersection);
+        }
+      }
+    }
+    return centroidVectors(intersections, 32.0);
+  }
+
   public synchronized Optional<Vec3> portalRoomEstimate() {
     var now = System.currentTimeMillis();
     prune(now);
@@ -314,6 +373,22 @@ public final class AutomationTeamCoordinator {
     }
 
     return strongholdEstimate().map(pos -> new Vec3(pos.x, clampTargetY(Level.OVERWORLD, pos.y), pos.z));
+  }
+
+  public synchronized Optional<Vec3> portalRoomEstimate(BotConnection bot) {
+    if (!independentMode()) {
+      return portalRoomEstimate();
+    }
+
+    var frames = observedBlocks(bot.accountProfileId(), Level.OVERWORLD)
+      .filter(block -> block.state().getBlock() == Blocks.END_PORTAL_FRAME || block.state().getBlock() == Blocks.END_PORTAL)
+      .map(SharedBlock::pos)
+      .toList();
+    if (!frames.isEmpty()) {
+      return centroid(frames, 28.0);
+    }
+
+    return strongholdEstimate(bot).map(pos -> new Vec3(pos.x, clampTargetY(Level.OVERWORLD, pos.y), pos.z));
   }
 
   public synchronized TeamRole roleFor(BotConnection bot) {
@@ -362,17 +437,17 @@ public final class AutomationTeamCoordinator {
     var botCount = Math.max(1, botSnapshots.size());
     return switch (requirementKey) {
       case AutomationRequirements.FOOD -> Math.max(12, botCount * 8);
-      case "item:minecraft:blaze_rod" -> Math.max(8, botCount * 2);
-      case "item:minecraft:ender_pearl" -> Math.max(14, botCount * 2);
-      case "item:minecraft:ender_eye" -> Math.max(12, Math.min(24, botCount * 2));
-      case "item:minecraft:bow" -> Math.max(3, botCount / 2);
-      case "item:minecraft:arrow" -> Math.max(32, botCount * 16);
-      case "item:minecraft:shield" -> Math.max(2, botCount / 2);
-      case "item:minecraft:water_bucket" -> 1;
-      case "item:minecraft:lava_bucket" -> 1;
-      case "item:minecraft:flint_and_steel" -> 1;
-      case "item:minecraft:obsidian" -> 10;
-      case "item:minecraft:bed" -> Math.max(2, botCount / 3);
+      case AutomationRequirements.BLAZE_ROD -> Math.max(8, botCount * 2);
+      case AutomationRequirements.ENDER_PEARL -> Math.max(14, botCount * 2);
+      case AutomationRequirements.ENDER_EYE -> Math.max(12, Math.min(24, botCount * 2));
+      case AutomationRequirements.BOW -> Math.max(3, botCount / 2);
+      case AutomationRequirements.ARROW -> Math.max(32, botCount * 16);
+      case AutomationRequirements.SHIELD -> Math.max(2, botCount / 2);
+      case AutomationRequirements.WATER_BUCKET -> 1;
+      case AutomationRequirements.LAVA_BUCKET -> 1;
+      case AutomationRequirements.FLINT_AND_STEEL -> 1;
+      case AutomationRequirements.OBSIDIAN -> 10;
+      case AutomationRequirements.ANY_BED -> Math.max(2, botCount / 3);
       default -> botCount;
     };
   }
@@ -393,7 +468,8 @@ public final class AutomationTeamCoordinator {
 
     return switch (roleFor(bot)) {
       case LEAD, PORTAL_ENGINEER, NETHER_RUNNER -> objective.ordinal() <= TeamObjective.NETHER_PROGRESS.ordinal();
-      case STRONGHOLD_SCOUT -> objective == TeamObjective.NETHER_PROGRESS && countFor(bot, "item:minecraft:ender_eye") < targetFor(bot, "item:minecraft:ender_eye");
+      case STRONGHOLD_SCOUT -> objective == TeamObjective.NETHER_PROGRESS
+        && countFor(bot, AutomationRequirements.ENDER_EYE) < targetFor(bot, AutomationRequirements.ENDER_EYE);
       case END_SUPPORT -> false;
     };
   }
@@ -499,27 +575,31 @@ public final class AutomationTeamCoordinator {
     }
 
     return new TeamSummary(
+      instanceManager.settingsSource().get(AutomationSettings.PRESET, AutomationSettings.Preset.class),
       collaborationEnabled(),
       instanceManager.settingsSource().get(AutomationSettings.ROLE_POLICY, AutomationSettings.RolePolicy.class),
       instanceManager.settingsSource().get(AutomationSettings.SHARED_END_ENTRY),
       instanceManager.settingsSource().get(AutomationSettings.MAX_END_BOTS),
       objective,
       botSnapshots.size(),
-      counts.getOrDefault("item:minecraft:blaze_rod", 0),
-      teamTarget("item:minecraft:blaze_rod"),
-      counts.getOrDefault("item:minecraft:ender_pearl", 0),
-      teamTarget("item:minecraft:ender_pearl"),
-      counts.getOrDefault("item:minecraft:ender_eye", 0),
-      teamTarget("item:minecraft:ender_eye"),
-      counts.getOrDefault("item:minecraft:arrow", 0),
-      teamTarget("item:minecraft:arrow"),
-      counts.getOrDefault("item:minecraft:bed", 0),
-      teamTarget("item:minecraft:bed"));
+      counts.getOrDefault(AutomationRequirements.BLAZE_ROD, 0),
+      teamTarget(AutomationRequirements.BLAZE_ROD),
+      counts.getOrDefault(AutomationRequirements.ENDER_PEARL, 0),
+      teamTarget(AutomationRequirements.ENDER_PEARL),
+      counts.getOrDefault(AutomationRequirements.ENDER_EYE, 0),
+      teamTarget(AutomationRequirements.ENDER_EYE),
+      counts.getOrDefault(AutomationRequirements.ARROW, 0),
+      teamTarget(AutomationRequirements.ARROW),
+      counts.getOrDefault(AutomationRequirements.ANY_BED, 0),
+      teamTarget(AutomationRequirements.ANY_BED));
   }
 
   private boolean claim(UUID owner, String key, @Nullable Vec3 target, long leaseMillis) {
     var now = System.currentTimeMillis();
     prune(now);
+    if (independentMode()) {
+      key = owner + ":" + key;
+    }
 
     var existing = claims.get(key);
     if (existing != null && existing.expiresAtMillis() > now && !existing.owner().equals(owner)) {
@@ -588,12 +668,13 @@ public final class AutomationTeamCoordinator {
   }
 
   private Optional<Vec3> centroid(ResourceKey<Level> dimension, Predicate<BlockState> predicate, double y) {
-    var matches = sharedBlocks.getOrDefault(dimension, Map.of())
-      .values()
-      .stream()
+    return centroid(observedBlocks(null, dimension)
       .filter(block -> predicate.test(block.state()))
       .map(SharedBlock::pos)
-      .toList();
+      .toList(), y);
+  }
+
+  private Optional<Vec3> centroid(List<BlockPos> matches, double y) {
     if (matches.isEmpty()) {
       return Optional.empty();
     }
@@ -643,32 +724,36 @@ public final class AutomationTeamCoordinator {
       return objective;
     }
 
-    return computeObjective(sharedInventory.getOrDefault(botId, Map.of()), true);
+    return computeObjective(botId, sharedInventory.getOrDefault(botId, Map.of()), true);
   }
 
   private TeamObjective computeObjective(Map<String, Integer> inventoryCounts, boolean useSoloTargets) {
-    if (hasCompletedRun()) {
+    return computeObjective(null, inventoryCounts, useSoloTargets);
+  }
+
+  private TeamObjective computeObjective(@Nullable UUID botId, Map<String, Integer> inventoryCounts, boolean useSoloTargets) {
+    if (hasCompletedRun(botId)) {
       return TeamObjective.COMPLETE;
     }
 
-    if (sharedBlocks.getOrDefault(Level.END, Map.of()).values().stream()
+    if (observedBlocks(botId, Level.END)
       .anyMatch(block -> block.state().getBlock() == Blocks.DRAGON_EGG || block.state().getBlock() == Blocks.END_PORTAL)) {
       return TeamObjective.END_ASSAULT;
     }
 
-    if (sharedBlocks.getOrDefault(Level.OVERWORLD, Map.of()).values().stream()
+    if (observedBlocks(botId, Level.OVERWORLD)
       .anyMatch(block -> block.state().getBlock() == Blocks.END_PORTAL_FRAME || block.state().getBlock() == Blocks.END_PORTAL)
-      || inventoryCounts.getOrDefault("item:minecraft:ender_eye", 0) >= (useSoloTargets ? soloTarget("item:minecraft:ender_eye") : teamTarget("item:minecraft:ender_eye"))) {
+      || inventoryCounts.getOrDefault(AutomationRequirements.ENDER_EYE, 0) >= (useSoloTargets ? soloTarget(AutomationRequirements.ENDER_EYE) : teamTarget(AutomationRequirements.ENDER_EYE))) {
       return TeamObjective.STRONGHOLD_HUNT;
     }
 
-    if (inventoryCounts.getOrDefault("item:minecraft:blaze_rod", 0) >= (useSoloTargets ? soloTarget("item:minecraft:blaze_rod") : teamTarget("item:minecraft:blaze_rod"))
-      && inventoryCounts.getOrDefault("item:minecraft:ender_pearl", 0) >= (useSoloTargets ? soloTarget("item:minecraft:ender_pearl") : teamTarget("item:minecraft:ender_pearl"))) {
+    if (inventoryCounts.getOrDefault(AutomationRequirements.BLAZE_ROD, 0) >= (useSoloTargets ? soloTarget(AutomationRequirements.BLAZE_ROD) : teamTarget(AutomationRequirements.BLAZE_ROD))
+      && inventoryCounts.getOrDefault(AutomationRequirements.ENDER_PEARL, 0) >= (useSoloTargets ? soloTarget(AutomationRequirements.ENDER_PEARL) : teamTarget(AutomationRequirements.ENDER_PEARL))) {
       return TeamObjective.STRONGHOLD_HUNT;
     }
 
-    if (!useSoloTargets && sharedCount("item:minecraft:blaze_rod") >= teamTarget("item:minecraft:blaze_rod")
-      && sharedCount("item:minecraft:ender_pearl") >= teamTarget("item:minecraft:ender_pearl")) {
+    if (!useSoloTargets && sharedCount(AutomationRequirements.BLAZE_ROD) >= teamTarget(AutomationRequirements.BLAZE_ROD)
+      && sharedCount(AutomationRequirements.ENDER_PEARL) >= teamTarget(AutomationRequirements.ENDER_PEARL)) {
       return TeamObjective.STRONGHOLD_HUNT;
     }
 
@@ -695,25 +780,50 @@ public final class AutomationTeamCoordinator {
   private static int soloTarget(String requirementKey) {
     return switch (requirementKey) {
       case AutomationRequirements.FOOD -> 12;
-      case "item:minecraft:blaze_rod" -> 6;
-      case "item:minecraft:ender_pearl" -> 12;
-      case "item:minecraft:ender_eye" -> 12;
-      case "item:minecraft:bow" -> 1;
-      case "item:minecraft:arrow" -> 24;
-      case "item:minecraft:shield" -> 1;
-      case "item:minecraft:water_bucket" -> 1;
-      case "item:minecraft:lava_bucket" -> 1;
-      case "item:minecraft:flint_and_steel" -> 1;
-      case "item:minecraft:obsidian" -> 10;
-      case "item:minecraft:bed" -> 1;
+      case AutomationRequirements.BLAZE_ROD -> 6;
+      case AutomationRequirements.ENDER_PEARL -> 12;
+      case AutomationRequirements.ENDER_EYE -> 12;
+      case AutomationRequirements.BOW -> 1;
+      case AutomationRequirements.ARROW -> 24;
+      case AutomationRequirements.SHIELD -> 1;
+      case AutomationRequirements.WATER_BUCKET -> 1;
+      case AutomationRequirements.LAVA_BUCKET -> 1;
+      case AutomationRequirements.FLINT_AND_STEEL -> 1;
+      case AutomationRequirements.OBSIDIAN -> 10;
+      case AutomationRequirements.ANY_BED -> 1;
       default -> 1;
     };
   }
 
-  private boolean hasCompletedRun() {
-    return botSnapshots.values().stream().anyMatch(snapshot -> "COMPLETE".equals(snapshot.phase))
-      || sharedBlocks.getOrDefault(Level.END, Map.of()).values().stream()
+  private boolean hasCompletedRun(@Nullable UUID botId) {
+    var completedPhase = botId == null
+      ? botSnapshots.values().stream().anyMatch(snapshot -> "COMPLETE".equals(snapshot.phase))
+      : Optional.ofNullable(botSnapshots.get(botId)).map(snapshot -> "COMPLETE".equals(snapshot.phase)).orElse(false);
+    return completedPhase
+      || observedBlocks(botId, Level.END)
       .anyMatch(block -> block.state().getBlock() == Blocks.DRAGON_EGG);
+  }
+
+  private java.util.stream.Stream<SharedBlock> observedBlocks(@Nullable UUID botId, ResourceKey<Level> dimension) {
+    var blocks = sharedBlocks.getOrDefault(dimension, Map.of()).values().stream();
+    if (botId != null && independentMode()) {
+      return blocks.filter(block -> block.observerBotId().equals(botId));
+    }
+    return blocks;
+  }
+
+  private static Optional<Vec3> centroidVectors(List<Vec3> matches, double y) {
+    if (matches.isEmpty()) {
+      return Optional.empty();
+    }
+
+    var sumX = 0.0;
+    var sumZ = 0.0;
+    for (var pos : matches) {
+      sumX += pos.x;
+      sumZ += pos.z;
+    }
+    return Optional.of(new Vec3(sumX / matches.size(), y, sumZ / matches.size()));
   }
 
   private static int floorToGrid(double value, int spacing) {
@@ -758,7 +868,7 @@ public final class AutomationTeamCoordinator {
     return new Vec3(intersection.x, 32.0, intersection.z);
   }
 
-  public record SharedBlock(BlockPos pos, BlockState state, long lastSeenMillis) {
+  public record SharedBlock(UUID observerBotId, BlockPos pos, BlockState state, long lastSeenMillis) {
   }
 
   public record BotStatus(UUID botId,
@@ -776,7 +886,8 @@ public final class AutomationTeamCoordinator {
                           @Nullable String lastRecoveryReason) {
   }
 
-  public record TeamSummary(boolean collaborationEnabled,
+  public record TeamSummary(AutomationSettings.Preset preset,
+                            boolean collaborationEnabled,
                             AutomationSettings.RolePolicy rolePolicy,
                             boolean sharedEndEntry,
                             int maxEndBots,

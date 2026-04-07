@@ -17,7 +17,7 @@ Current settings in the `automation` namespace:
 - `enabled` (bot scope)
   Turns SoulFire-native automation on or off for an individual bot.
 - `team-collaboration` (instance scope)
-  Turns shared automation coordination on or off for the instance.
+  Turns team orchestration on or off for the instance. When off, bots do not share roles, claims, structure estimates, or team-wide progression state.
 - `role-policy` (instance scope)
   Controls whether bots use the shared static team-role layout or behave as independent runners.
 - `shared-end-entry` (instance scope)
@@ -48,7 +48,7 @@ Current `automation` command surface:
 - `automation resume`
   Resumes automation for selected paused bots.
 - `automation collaboration <true|false>`
-  Toggles shared team collaboration for the visible instances.
+  Toggles team orchestration for the visible instances. `false` switches the instance to the `independent-runners` preset.
 - `automation status`
   Shows current bot-level automation state.
 - `automation teamstatus`
@@ -59,8 +59,9 @@ Current `automation` command surface:
 ## Current behavior notes
 
 - When automation is disabled for a bot, the automation controller stands down and releases its claims.
-- When team collaboration is disabled, bots stop using shared team roles and shared team-wide progression quotas.
+- When team collaboration is disabled, bots stop using shared roles, shared claims, shared structure estimates, and shared progression quotas.
 - When the role policy is set to independent mode, bots behave like independent runners even if collaboration remains enabled at the instance level.
+- Exact item requirement keys are now centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
 - Shared End entry can now throttle how many bots enter the End simultaneously.
 - Death recovery can now be disabled per bot.
 

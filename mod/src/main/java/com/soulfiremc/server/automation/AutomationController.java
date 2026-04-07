@@ -78,18 +78,18 @@ public final class AutomationController {
   private static final long ACTION_TIMEOUT_TICKS = 20L * 45L;
   private static final List<String> TRACKED_TEAM_REQUIREMENTS = List.of(
     AutomationRequirements.FOOD,
-    "item:minecraft:blaze_rod",
-    "item:minecraft:ender_pearl",
-    "item:minecraft:ender_eye",
-    "item:minecraft:bow",
-    "item:minecraft:arrow",
-    "item:minecraft:shield",
-    "item:minecraft:bucket",
-    "item:minecraft:water_bucket",
-    "item:minecraft:lava_bucket",
-    "item:minecraft:flint_and_steel",
-    "item:minecraft:obsidian",
-    "item:minecraft:bed"
+    AutomationRequirements.BLAZE_ROD,
+    AutomationRequirements.ENDER_PEARL,
+    AutomationRequirements.ENDER_EYE,
+    AutomationRequirements.BOW,
+    AutomationRequirements.ARROW,
+    AutomationRequirements.SHIELD,
+    AutomationRequirements.BUCKET,
+    AutomationRequirements.WATER_BUCKET,
+    AutomationRequirements.LAVA_BUCKET,
+    AutomationRequirements.FLINT_AND_STEEL,
+    AutomationRequirements.OBSIDIAN,
+    AutomationRequirements.ANY_BED
   );
 
   private final BotConnection bot;
@@ -489,12 +489,15 @@ public final class AutomationController {
         }
 
         if (requirements.isEmpty()) {
-          if (teamNeeds("item:minecraft:blaze_rod")) {
-            pushRequirement(new RequirementGoal("item:minecraft:blaze_rod", role.isNetherSpecialist() ? REQUIRED_BLAZE_RODS : 1, "blaze rods"));
-          } else if (teamNeeds("item:minecraft:ender_pearl")) {
-            pushRequirement(new RequirementGoal("item:minecraft:ender_pearl", role.isNetherSpecialist() ? REQUIRED_ENDER_PEARLS : 1, "ender pearls"));
-          } else if (teamNeeds("item:minecraft:ender_eye")) {
-            pushRequirement(new RequirementGoal("item:minecraft:ender_eye", Math.min(REQUIRED_EYES, team().targetFor(bot, "item:minecraft:ender_eye")), "eyes of ender"));
+          if (teamNeeds(AutomationRequirements.BLAZE_ROD)) {
+            pushRequirement(new RequirementGoal(AutomationRequirements.BLAZE_ROD, role.isNetherSpecialist() ? REQUIRED_BLAZE_RODS : 1, "blaze rods"));
+          } else if (teamNeeds(AutomationRequirements.ENDER_PEARL)) {
+            pushRequirement(new RequirementGoal(AutomationRequirements.ENDER_PEARL, role.isNetherSpecialist() ? REQUIRED_ENDER_PEARLS : 1, "ender pearls"));
+          } else if (teamNeeds(AutomationRequirements.ENDER_EYE)) {
+            pushRequirement(new RequirementGoal(
+              AutomationRequirements.ENDER_EYE,
+              Math.min(REQUIRED_EYES, team().targetFor(bot, AutomationRequirements.ENDER_EYE)),
+              "eyes of ender"));
           } else {
             beatPhase = BeatPhase.RETURN_TO_OVERWORLD;
           }
@@ -565,15 +568,25 @@ public final class AutomationController {
         } else if (needsPortalEngineeringSupplies()) {
           queuePortalEngineeringRequirements();
         } else {
-          var ruinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
+          var ruinedPortal = worldMemory.findNearestBlock(bot, state ->
+            state.getBlock() == Blocks.CRYING_OBSIDIAN
+              || state.getBlock() == Blocks.GOLD_BLOCK
+              || state.getBlock() == Blocks.NETHERRACK
+              || state.getBlock() == Blocks.MAGMA_BLOCK
+              || state.getBlock() == Blocks.OBSIDIAN);
           if (ruinedPortal.isPresent()) {
             startAction(new MoveToPositionAction(ruinedPortal.get().pos().getCenter(), "approaching ruined portal"));
           } else {
-            var focus = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.LAVA || state.getBlock() == Blocks.WATER)
-              .map(AutomationWorldMemory.RememberedBlock::pos)
-              .map(BlockPos::getCenter)
-              .orElse(player.position());
-            startAction(new ExploreAction("searching for portal site", "nether-entry", focus, 96));
+            var sharedRuinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
+            if (sharedRuinedPortal.isPresent()) {
+              startAction(new MoveToPositionAction(sharedRuinedPortal.get().pos().getCenter(), "approaching ruined portal"));
+            } else {
+              var focus = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.LAVA || state.getBlock() == Blocks.WATER)
+                .map(AutomationWorldMemory.RememberedBlock::pos)
+                .map(BlockPos::getCenter)
+                .orElse(player.position());
+              startAction(new ExploreAction("searching for portal site", "nether-entry", focus, 96));
+            }
           }
         }
       }
@@ -591,8 +604,8 @@ public final class AutomationController {
         }
       }
       case STRONGHOLD_SEARCH -> {
-        if (AutomationInventory.countInventory(bot, "item:minecraft:ender_eye") <= 0) {
-          pushRequirement(new RequirementGoal("item:minecraft:ender_eye", 1, "stronghold search"));
+        if (AutomationInventory.countInventory(bot, AutomationRequirements.ENDER_EYE) <= 0) {
+          pushRequirement(new RequirementGoal(AutomationRequirements.ENDER_EYE, 1, "stronghold search"));
           return;
         }
 
@@ -602,16 +615,16 @@ public final class AutomationController {
           return;
         }
 
-        var strongholdEstimate = team().strongholdEstimate();
+        var strongholdEstimate = team().strongholdEstimate(bot);
         if (strongholdEstimate.isPresent() && player.position().distanceTo(strongholdEstimate.get()) > 64) {
           startAction(new MoveToPositionAction(strongholdEstimate.get(), "moving to stronghold estimate"));
-        } else if (team().portalRoomEstimate().isPresent()) {
+        } else if (team().portalRoomEstimate(bot).isPresent()) {
           startAction(new MoveToPositionAction(
             team().assignLayeredExplorationTarget(
               bot,
               level.dimension(),
               "stronghold-dig",
-              team().portalRoomEstimate().get(),
+              team().portalRoomEstimate(bot).get(),
               20,
               0, -8, 8, -16, 16),
             "probing stronghold tunnels"));
@@ -642,8 +655,8 @@ public final class AutomationController {
           return;
         }
 
-        if (AutomationInventory.countInventory(bot, "item:minecraft:ender_eye") <= 0) {
-          pushRequirement(new RequirementGoal("item:minecraft:ender_eye", 1, "activate portal"));
+        if (AutomationInventory.countInventory(bot, AutomationRequirements.ENDER_EYE) <= 0) {
+          pushRequirement(new RequirementGoal(AutomationRequirements.ENDER_EYE, 1, "activate portal"));
           return;
         }
 
@@ -651,7 +664,7 @@ public final class AutomationController {
         if (frame.isPresent() && team().claimBlock(bot, "portal-frame", level.dimension(), frame.get().pos(), 8_000L)) {
           startAction(new FillPortalFrameAction(frame.get().pos()));
         } else {
-          var focus = team().portalRoomEstimate().orElse(team().strongholdEstimate().orElse(player.position()));
+          var focus = team().portalRoomEstimate(bot).orElse(team().strongholdEstimate(bot).orElse(player.position()));
           startAction(new MoveToPositionAction(
             team().assignLayeredExplorationTarget(bot, level.dimension(), "portal-room", focus, 18, 0, -6, 6, -12, 12),
             "searching for portal room"));
@@ -683,34 +696,34 @@ public final class AutomationController {
   private void queuePreparationRequirements(AutomationTeamCoordinator.TeamRole role) {
     var goals = new ArrayList<RequirementGoal>();
     goals.add(new RequirementGoal(AutomationRequirements.FOOD, role.isNetherSpecialist() ? REQUIRED_FOOD : 8, "survival food"));
-    goals.add(new RequirementGoal("item:minecraft:stone_pickaxe", 1, "tools"));
-    goals.add(new RequirementGoal("item:minecraft:shield", 1, "survival"));
+    goals.add(new RequirementGoal(AutomationRequirements.STONE_PICKAXE, 1, "tools"));
+    goals.add(new RequirementGoal(AutomationRequirements.SHIELD, 1, "survival"));
 
     if (role.isNetherSpecialist()) {
-      goals.add(new RequirementGoal("item:minecraft:crafting_table", 1, "crafting"));
-      goals.add(new RequirementGoal("item:minecraft:furnace", 1, "smelting"));
-      goals.add(new RequirementGoal("item:minecraft:iron_ingot", role == AutomationTeamCoordinator.TeamRole.PORTAL_ENGINEER ? 10 : 7, "progression"));
-      goals.add(new RequirementGoal("item:minecraft:bucket", role == AutomationTeamCoordinator.TeamRole.PORTAL_ENGINEER ? 2 : 1, "fluids"));
-      goals.add(new RequirementGoal("item:minecraft:flint_and_steel", 1, "portal ignition"));
+      goals.add(new RequirementGoal(AutomationRequirements.CRAFTING_TABLE, 1, "crafting"));
+      goals.add(new RequirementGoal(AutomationRequirements.FURNACE, 1, "smelting"));
+      goals.add(new RequirementGoal(AutomationRequirements.IRON_INGOT, role == AutomationTeamCoordinator.TeamRole.PORTAL_ENGINEER ? 10 : 7, "progression"));
+      goals.add(new RequirementGoal(AutomationRequirements.BUCKET, role == AutomationTeamCoordinator.TeamRole.PORTAL_ENGINEER ? 2 : 1, "fluids"));
+      goals.add(new RequirementGoal(AutomationRequirements.FLINT_AND_STEEL, 1, "portal ignition"));
     }
 
     if (role.isEndSpecialist() && team().objectiveFor(bot).ordinal() >= AutomationTeamCoordinator.TeamObjective.STRONGHOLD_HUNT.ordinal()) {
-      goals.add(new RequirementGoal("item:minecraft:bow", 1, "end fight"));
-      goals.add(new RequirementGoal("item:minecraft:arrow", REQUIRED_ARROWS, "end fight"));
+      goals.add(new RequirementGoal(AutomationRequirements.BOW, 1, "end fight"));
+      goals.add(new RequirementGoal(AutomationRequirements.ARROW, REQUIRED_ARROWS, "end fight"));
     }
 
     pushRequirements(goals);
   }
 
   private void queueReturnGear(AutomationTeamCoordinator.TeamRole role) {
-    if (role.isEndSpecialist() && AutomationInventory.countInventory(bot, "item:minecraft:bow") < 1) {
-      pushRequirement(new RequirementGoal("item:minecraft:bow", 1, "end fight"));
-    } else if (role.isEndSpecialist() && AutomationInventory.countInventory(bot, "item:minecraft:arrow") < REQUIRED_ARROWS) {
-      pushRequirement(new RequirementGoal("item:minecraft:arrow", REQUIRED_ARROWS, "end fight"));
-    } else if (AutomationInventory.countInventory(bot, "item:minecraft:shield") < 1) {
-      pushRequirement(new RequirementGoal("item:minecraft:shield", 1, "survival"));
-    } else if (teamNeeds("item:minecraft:bed") && role.isEndSpecialist()) {
-      pushRequirement(new RequirementGoal("item:minecraft:bed", 1, "dragon finish"));
+    if (role.isEndSpecialist() && AutomationInventory.countInventory(bot, AutomationRequirements.BOW) < 1) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.BOW, 1, "end fight"));
+    } else if (role.isEndSpecialist() && AutomationInventory.countInventory(bot, AutomationRequirements.ARROW) < REQUIRED_ARROWS) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.ARROW, REQUIRED_ARROWS, "end fight"));
+    } else if (AutomationInventory.countInventory(bot, AutomationRequirements.SHIELD) < 1) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.SHIELD, 1, "survival"));
+    } else if (teamNeeds(AutomationRequirements.ANY_BED) && role.isEndSpecialist()) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.ANY_BED, 1, "dragon finish"));
     }
   }
 
@@ -726,27 +739,27 @@ public final class AutomationController {
       return false;
     }
 
-    var totalBuckets = AutomationInventory.countInventory(bot, "item:minecraft:bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:water_bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket");
-    return AutomationInventory.countInventory(bot, "item:minecraft:flint_and_steel") < 1
+    var totalBuckets = AutomationInventory.countInventory(bot, AutomationRequirements.BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET);
+    return AutomationInventory.countInventory(bot, AutomationRequirements.FLINT_AND_STEEL) < 1
       || totalBuckets < 2
-      || AutomationInventory.countInventory(bot, "item:minecraft:water_bucket") < 1
-      || AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket") < 1;
+      || AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET) < 1
+      || AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET) < 1;
   }
 
   private void queuePortalEngineeringRequirements() {
-    var totalBuckets = AutomationInventory.countInventory(bot, "item:minecraft:bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:water_bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket");
+    var totalBuckets = AutomationInventory.countInventory(bot, AutomationRequirements.BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET);
     if (totalBuckets < 2) {
-      pushRequirement(new RequirementGoal("item:minecraft:bucket", 2 - totalBuckets, "portal engineering"));
-    } else if (AutomationInventory.countInventory(bot, "item:minecraft:water_bucket") < 1) {
-      pushRequirement(new RequirementGoal("item:minecraft:water_bucket", 1, "portal casting"));
-    } else if (AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket") < 1) {
-      pushRequirement(new RequirementGoal("item:minecraft:lava_bucket", 1, "portal casting"));
-    } else if (AutomationInventory.countInventory(bot, "item:minecraft:flint_and_steel") < 1) {
-      pushRequirement(new RequirementGoal("item:minecraft:flint_and_steel", 1, "portal ignition"));
+      pushRequirement(new RequirementGoal(AutomationRequirements.BUCKET, 2 - totalBuckets, "portal engineering"));
+    } else if (AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET) < 1) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.WATER_BUCKET, 1, "portal casting"));
+    } else if (AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET) < 1) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.LAVA_BUCKET, 1, "portal casting"));
+    } else if (AutomationInventory.countInventory(bot, AutomationRequirements.FLINT_AND_STEEL) < 1) {
+      pushRequirement(new RequirementGoal(AutomationRequirements.FLINT_AND_STEEL, 1, "portal ignition"));
     }
   }
 
@@ -803,40 +816,50 @@ public final class AutomationController {
       return Plan.action(new InspectContainerAction(uninspectedContainer.get().pos()));
     }
 
-    if ("item:minecraft:water_bucket".equals(requirementKey)) {
-      if (AutomationInventory.countInventory(bot, "item:minecraft:bucket") < 1) {
-        return Plan.dependencies(List.of(new RequirementGoal("item:minecraft:bucket", 1, "water bucket")), "bucket dependency");
+    if (AutomationRequirements.WATER_BUCKET.equals(requirementKey)) {
+      if (AutomationInventory.countInventory(bot, AutomationRequirements.BUCKET) < 1) {
+        return Plan.dependencies(List.of(new RequirementGoal(AutomationRequirements.BUCKET, 1, "water bucket")), "bucket dependency");
       }
 
       var water = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.WATER);
       if (water.isPresent()) {
-        return Plan.action(new FillBucketAction(water.get().pos(), "item:minecraft:water_bucket", "collecting water"));
+        return Plan.action(new FillBucketAction(water.get().pos(), AutomationRequirements.WATER_BUCKET, "collecting water"));
       }
 
       return Plan.action(new ExploreAction("searching for water", "water-source", playerPosition(), 96));
     }
 
-    if ("item:minecraft:lava_bucket".equals(requirementKey)) {
-      if (AutomationInventory.countInventory(bot, "item:minecraft:bucket") < 1) {
-        return Plan.dependencies(List.of(new RequirementGoal("item:minecraft:bucket", 1, "lava bucket")), "bucket dependency");
+    if (AutomationRequirements.LAVA_BUCKET.equals(requirementKey)) {
+      if (AutomationInventory.countInventory(bot, AutomationRequirements.BUCKET) < 1) {
+        return Plan.dependencies(List.of(new RequirementGoal(AutomationRequirements.BUCKET, 1, "lava bucket")), "bucket dependency");
       }
 
       var lava = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.LAVA);
       if (lava.isPresent()) {
-        return Plan.action(new FillBucketAction(lava.get().pos(), "item:minecraft:lava_bucket", "collecting lava"));
+        return Plan.action(new FillBucketAction(lava.get().pos(), AutomationRequirements.LAVA_BUCKET, "collecting lava"));
       }
 
-      var ruinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
+      var ruinedPortal = worldMemory.findNearestBlock(bot, state ->
+        state.getBlock() == Blocks.CRYING_OBSIDIAN
+          || state.getBlock() == Blocks.GOLD_BLOCK
+          || state.getBlock() == Blocks.NETHERRACK
+          || state.getBlock() == Blocks.MAGMA_BLOCK
+          || state.getBlock() == Blocks.OBSIDIAN);
       if (ruinedPortal.isPresent()) {
         return Plan.action(new MoveToPositionAction(ruinedPortal.get().pos().getCenter(), "approaching portal ruins"));
+      }
+
+      var sharedRuinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
+      if (sharedRuinedPortal.isPresent()) {
+        return Plan.action(new MoveToPositionAction(sharedRuinedPortal.get().pos().getCenter(), "approaching portal ruins"));
       }
 
       return Plan.action(new ExploreAction("searching for lava", "lava-source", playerPosition(), 96));
     }
 
-    if ("item:minecraft:ender_pearl".equals(requirementKey)) {
+    if (AutomationRequirements.ENDER_PEARL.equals(requirementKey)) {
       var piglin = worldMemory.findNearestPiglin(bot);
-      if (piglin.isPresent() && AutomationInventory.countInventory(bot, "item:minecraft:gold_ingot") > 0) {
+      if (piglin.isPresent() && AutomationInventory.countInventory(bot, AutomationRequirements.GOLD_INGOT) > 0) {
         return Plan.action(new BarterAction(piglin.get().uuid()));
       }
     }
@@ -891,12 +914,20 @@ public final class AutomationController {
         return Plan.action(new KillEntityAction(entity.get().uuid(), "hunting " + AutomationRequirements.describe(requirementKey)));
       }
 
-      if ("item:minecraft:blaze_rod".equals(requirementKey) && level.dimension() == Level.NETHER) {
-        var fortress = team().findNearestFortressHint(bot);
+      if (AutomationRequirements.BLAZE_ROD.equals(requirementKey) && level.dimension() == Level.NETHER) {
+        var fortress = worldMemory.findNearestBlock(bot, state ->
+          state.getBlock() == Blocks.SPAWNER
+            || state.getBlock() == Blocks.NETHER_BRICKS
+            || state.getBlock() == Blocks.NETHER_BRICK_FENCE
+            || state.getBlock() == Blocks.NETHER_BRICK_STAIRS);
         if (fortress.isPresent()) {
           return Plan.action(new MoveToPositionAction(fortress.get().pos().getCenter(), "approaching fortress"));
         }
-        var fortressEstimate = team().fortressEstimate();
+        var sharedFortress = team().findNearestFortressHint(bot);
+        if (sharedFortress.isPresent()) {
+          return Plan.action(new MoveToPositionAction(sharedFortress.get().pos().getCenter(), "approaching fortress"));
+        }
+        var fortressEstimate = team().fortressEstimate(bot);
         if (fortressEstimate.isPresent()) {
           return Plan.action(new MoveToPositionAction(
             team().assignLayeredExplorationTarget(bot, level.dimension(), "nether-fortress", fortressEstimate.get(), 96, 0, 12, -12),
@@ -905,9 +936,9 @@ public final class AutomationController {
         return Plan.action(new ExploreAction("searching for fortress", "nether-fortress", playerPosition(), 160));
       }
 
-      if ("item:minecraft:ender_pearl".equals(requirementKey) && level.dimension() == Level.NETHER) {
-        if (AutomationInventory.countInventory(bot, "item:minecraft:gold_ingot") < 1) {
-          return Plan.dependencies(List.of(new RequirementGoal("item:minecraft:gold_ingot", 1, "piglin barter")), "barter gold");
+      if (AutomationRequirements.ENDER_PEARL.equals(requirementKey) && level.dimension() == Level.NETHER) {
+        if (AutomationInventory.countInventory(bot, AutomationRequirements.GOLD_INGOT) < 1) {
+          return Plan.dependencies(List.of(new RequirementGoal(AutomationRequirements.GOLD_INGOT, 1, "piglin barter")), "barter gold");
         }
       }
 
@@ -926,13 +957,13 @@ public final class AutomationController {
     var dependencies = new ArrayList<RequirementGoal>();
     if (recipe.station() == AutomationRecipes.CraftingStation.CRAFTING_TABLE
       && !hasRememberedBlock(state -> state.getBlock() == Blocks.CRAFTING_TABLE)
-      && AutomationInventory.countInventory(bot, "item:minecraft:crafting_table") <= 0) {
-      dependencies.add(new RequirementGoal("item:minecraft:crafting_table", 1, "crafting station"));
+      && AutomationInventory.countInventory(bot, AutomationRequirements.CRAFTING_TABLE) <= 0) {
+      dependencies.add(new RequirementGoal(AutomationRequirements.CRAFTING_TABLE, 1, "crafting station"));
     }
     if (recipe.station() == AutomationRecipes.CraftingStation.FURNACE
       && !hasRememberedBlock(state -> state.getBlock() == Blocks.FURNACE)
-      && AutomationInventory.countInventory(bot, "item:minecraft:furnace") <= 0) {
-      dependencies.add(new RequirementGoal("item:minecraft:furnace", 1, "furnace"));
+      && AutomationInventory.countInventory(bot, AutomationRequirements.FURNACE) <= 0) {
+      dependencies.add(new RequirementGoal(AutomationRequirements.FURNACE, 1, "furnace"));
     }
 
     recipe.ingredients().stream()
@@ -955,9 +986,9 @@ public final class AutomationController {
   private String requiredToolKey(AutomationRecipes.ToolRequirement requirement) {
     return switch (requirement) {
       case NONE -> AutomationRequirements.ANY_LOG;
-      case WOOD_PICKAXE -> "item:minecraft:wooden_pickaxe";
-      case STONE_PICKAXE -> "item:minecraft:stone_pickaxe";
-      case IRON_PICKAXE -> "item:minecraft:iron_pickaxe";
+      case WOOD_PICKAXE -> AutomationRequirements.WOODEN_PICKAXE;
+      case STONE_PICKAXE -> AutomationRequirements.STONE_PICKAXE;
+      case IRON_PICKAXE -> AutomationRequirements.IRON_PICKAXE;
     };
   }
 
@@ -1078,7 +1109,7 @@ public final class AutomationController {
       return existing;
     }
 
-    if (AutomationInventory.countInventory(bot, "item:minecraft:obsidian") < REQUIRED_PORTAL_OBSIDIAN) {
+    if (AutomationInventory.countInventory(bot, AutomationRequirements.OBSIDIAN) < REQUIRED_PORTAL_OBSIDIAN) {
       return Optional.empty();
     }
 
@@ -1180,7 +1211,7 @@ public final class AutomationController {
     if (requireExisting && existingRequiredFrameBlocks < 4) {
       return Optional.empty();
     }
-    if (missingRequiredFrameBlocks > AutomationInventory.countInventory(bot, "item:minecraft:obsidian")) {
+    if (missingRequiredFrameBlocks > AutomationInventory.countInventory(bot, AutomationRequirements.OBSIDIAN)) {
       return Optional.empty();
     }
 
@@ -1244,7 +1275,7 @@ public final class AutomationController {
   }
 
   private Optional<String> temporarySupportRequirement() {
-    for (var requirement : List.of("item:minecraft:cobblestone", AutomationRequirements.ANY_PLANKS, AutomationRequirements.ANY_LOG)) {
+    for (var requirement : List.of(AutomationRequirements.COBBLESTONE, AutomationRequirements.ANY_PLANKS, AutomationRequirements.ANY_LOG)) {
       if (AutomationInventory.countInventory(bot, requirement) > 0) {
         return Optional.of(requirement);
       }
@@ -1299,10 +1330,10 @@ public final class AutomationController {
       return false;
     }
 
-    var totalBuckets = AutomationInventory.countInventory(bot, "item:minecraft:bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:water_bucket")
-      + AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket");
-    if (totalBuckets < 2 || AutomationInventory.countInventory(bot, "item:minecraft:water_bucket") < 1) {
+    var totalBuckets = AutomationInventory.countInventory(bot, AutomationRequirements.BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET)
+      + AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET);
+    if (totalBuckets < 2 || AutomationInventory.countInventory(bot, AutomationRequirements.WATER_BUCKET) < 1) {
       return false;
     }
 
@@ -1677,7 +1708,7 @@ public final class AutomationController {
           worldMemory.markUnreachable(position);
           return ActionResult.FAILED;
         }
-        if (!AutomationInventory.ensureHolding(bot, "item:minecraft:bucket")) {
+        if (!AutomationInventory.ensureHolding(bot, AutomationRequirements.BUCKET)) {
           return ActionResult.FAILED;
         }
         interactFluid(position);
@@ -1782,7 +1813,7 @@ public final class AutomationController {
             return ActionResult.FAILED;
           }
           var against = new BlockPlaceAgainstData(SFVec3i.fromInt(waterSupport), BlockFace.TOP);
-          if (!useHeldItemAgainst("item:minecraft:water_bucket", against, ClipContext.Fluid.NONE)) {
+          if (!useHeldItemAgainst(AutomationRequirements.WATER_BUCKET, against, ClipContext.Fluid.NONE)) {
             return ActionResult.FAILED;
           }
           stageTick = worldMemory.ticks();
@@ -1808,7 +1839,7 @@ public final class AutomationController {
             return ActionResult.RUNNING;
           }
 
-          if (AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket") <= 0) {
+          if (AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET) <= 0) {
             future = PathExecutor.executePathfinding(bot, new CloseToPosGoal(SFVec3i.fromInt(lavaSource), 2), new PathConstraintImpl(bot));
             stage = 6;
             return ActionResult.RUNNING;
@@ -1822,7 +1853,7 @@ public final class AutomationController {
           if (future == null || !future.isDone()) {
             return ActionResult.RUNNING;
           }
-          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:bucket")) {
+          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.BUCKET)) {
             return ActionResult.FAILED;
           }
           interactFluid(lavaSource);
@@ -1831,7 +1862,7 @@ public final class AutomationController {
           return ActionResult.RUNNING;
         }
         case 7 -> {
-          if (AutomationInventory.countInventory(bot, "item:minecraft:lava_bucket") > 0) {
+          if (AutomationInventory.countInventory(bot, AutomationRequirements.LAVA_BUCKET) > 0) {
             future = PathExecutor.executePathfinding(bot, new CloseToPosGoal(SFVec3i.fromInt(currentTarget), 2), new PathConstraintImpl(bot));
             stage = 8;
             return ActionResult.RUNNING;
@@ -1846,7 +1877,7 @@ public final class AutomationController {
             return ActionResult.FAILED;
           }
           var against = findPlaceAgainst(currentTarget);
-          if (against.isEmpty() || !useHeldItemAgainst("item:minecraft:lava_bucket", against.get(), ClipContext.Fluid.NONE)) {
+          if (against.isEmpty() || !useHeldItemAgainst(AutomationRequirements.LAVA_BUCKET, against.get(), ClipContext.Fluid.NONE)) {
             return ActionResult.FAILED;
           }
           stageTick = worldMemory.ticks();
@@ -1874,7 +1905,7 @@ public final class AutomationController {
           if (future == null || !future.isDone()) {
             return ActionResult.RUNNING;
           }
-          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:bucket")) {
+          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.BUCKET)) {
             return ActionResult.FAILED;
           }
           interactFluid(waterSource);
@@ -1894,7 +1925,7 @@ public final class AutomationController {
           if (future == null || !future.isDone()) {
             return ActionResult.RUNNING;
           }
-          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:flint_and_steel")) {
+          if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.FLINT_AND_STEEL)) {
             return ActionResult.FAILED;
           }
           interactBlock(blueprint.interior().getFirst());
@@ -1982,7 +2013,7 @@ public final class AutomationController {
           stage = 0;
           return ActionResult.RUNNING;
         }
-        if (!placeBlockAt("item:minecraft:obsidian", currentTarget)) {
+        if (!placeBlockAt(AutomationRequirements.OBSIDIAN, currentTarget)) {
           return ActionResult.FAILED;
         }
         stage = 2;
@@ -2020,7 +2051,7 @@ public final class AutomationController {
         if (future == null || !future.isDone()) {
           return ActionResult.RUNNING;
         }
-        if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:flint_and_steel")) {
+        if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.FLINT_AND_STEEL)) {
           return ActionResult.FAILED;
         }
         interactBlock(ignitionTarget);
@@ -2277,9 +2308,9 @@ public final class AutomationController {
         var remembered = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.CRAFTING_TABLE);
         if (remembered.isPresent()) {
           stationPos = remembered.get().pos();
-        } else if (AutomationInventory.countInventory(bot, "item:minecraft:crafting_table") > 0) {
+        } else if (AutomationInventory.countInventory(bot, AutomationRequirements.CRAFTING_TABLE) > 0) {
           stationPos = findPlacementPos(Blocks.CRAFTING_TABLE);
-          placeBlock("item:minecraft:crafting_table", stationPos);
+          placeBlock(AutomationRequirements.CRAFTING_TABLE, stationPos);
           return null;
         } else {
           return null;
@@ -2334,9 +2365,9 @@ public final class AutomationController {
           var remembered = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.FURNACE);
           if (remembered.isPresent()) {
             furnacePos = remembered.get().pos();
-          } else if (AutomationInventory.countInventory(bot, "item:minecraft:furnace") > 0) {
+          } else if (AutomationInventory.countInventory(bot, AutomationRequirements.FURNACE) > 0) {
             furnacePos = findPlacementPos(Blocks.FURNACE);
-            placeBlock("item:minecraft:furnace", furnacePos);
+            placeBlock(AutomationRequirements.FURNACE, furnacePos);
             return ActionResult.RUNNING;
           } else {
             return ActionResult.FAILED;
@@ -2427,7 +2458,7 @@ public final class AutomationController {
         if (future == null || !future.isDone()) {
           return ActionResult.RUNNING;
         }
-        if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:gold_ingot")) {
+        if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.GOLD_INGOT)) {
           return ActionResult.FAILED;
         }
         player.lookAt(EntityAnchorArgument.Anchor.EYES, entity.get().getEyePosition());
@@ -2544,7 +2575,7 @@ public final class AutomationController {
     public ActionResult poll(AutomationController controller) {
       var player = bot.minecraft().player;
       var gameMode = bot.minecraft().gameMode;
-      if (player == null || gameMode == null || !AutomationInventory.ensureHolding(bot, "item:minecraft:ender_eye")) {
+      if (player == null || gameMode == null || !AutomationInventory.ensureHolding(bot, AutomationRequirements.ENDER_EYE)) {
         return ActionResult.FAILED;
       }
 
@@ -2598,7 +2629,7 @@ public final class AutomationController {
         return ActionResult.RUNNING;
       }
 
-      if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, "item:minecraft:ender_eye")) {
+      if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.ENDER_EYE)) {
         return ActionResult.FAILED;
       }
 
@@ -2871,7 +2902,7 @@ public final class AutomationController {
       var bot = BotConnection.current();
       var player = bot.minecraft().player;
       var gameMode = bot.minecraft().gameMode;
-      if (player == null || gameMode == null || !AutomationInventory.ensureHolding(bot, "item:minecraft:bow")) {
+      if (player == null || gameMode == null || !AutomationInventory.ensureHolding(bot, AutomationRequirements.BOW)) {
         done = true;
         return;
       }
@@ -2884,7 +2915,7 @@ public final class AutomationController {
         }
       }
 
-      if (target == null || !target.isAlive() || AutomationInventory.countInventory(bot, "item:minecraft:arrow") <= 0) {
+      if (target == null || !target.isAlive() || AutomationInventory.countInventory(bot, AutomationRequirements.ARROW) <= 0) {
         if (player.isUsingItem()) {
           player.releaseUsingItem();
         }
