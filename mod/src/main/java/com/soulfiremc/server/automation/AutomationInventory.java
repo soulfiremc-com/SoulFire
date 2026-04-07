@@ -19,8 +19,8 @@ package com.soulfiremc.server.automation;
 
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.util.SFInventoryHelpers;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.ChestMenu;
