@@ -13,7 +13,7 @@ It is intentionally scoped to what is shipped now:
 SoulFire now exposes automation controls in two places:
 
 - A built-in `Automation Settings` instance settings page in the server-backed settings model.
-- A dedicated `Automation` instance dashboard in the official `SoulFireClient` GUI that shows live team state, per-bot runtime state, quota progress, shared coordination state, and quick control actions.
+- A dedicated `Automation` instance dashboard in the official `SoulFireClient` GUI that shows live team state, per-bot runtime state, quota progress, shared coordination state, a dedicated per-bot memory browser, and quick control actions.
 
 The GUI settings sidebar now also discovers the built-in automation settings page automatically, so operators do not need a client-only hardcoded entry for it.
 
@@ -221,6 +221,7 @@ The current `SoulFireClient` automation dashboard provides:
 - per-bot runtime cards with editable automation enablement, death recovery, scan tuning, retreat thresholds, role override, status summary, role, objective, phase, location, current action, queued targets, recovery counters, and recent progress timestamps
 - bot search plus role, status, and dimension filters for narrowing large team views
 - dashboard selection state and bulk actions for pause, resume, stop, reset memory, release claims, and light bot-settings patching across selected bots
+- a dedicated per-bot memory browser with remembered block, container, entity, dropped-item, and unreachable-position snapshots plus direct inspect and reset actions
 - shared coordination inspection for claims, shared structure hints, and eye-of-ender samples
 
 This is a first operator dashboard rather than a finished automation control center. Missing client parity work is tracked in [automation-gap-audit.md](automation-gap-audit.md) and [automation-roadmap.md](automation-roadmap.md).
@@ -239,7 +240,7 @@ This is a first operator dashboard rather than a finished automation control cen
 - Dedicated per-bot automation tuning now exists in the automation dashboard and over the dedicated automation API, so operators can change enablement, recovery, scan cadence, retreat thresholds, and role override without dropping back to the generic settings surface.
 - Exact item requirement keys are centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
 - Requirement queues are exposed over both CLI and gRPC/MCP state snapshots.
-- Per-bot automation memory can be inspected and reset from both the CLI and the dedicated automation API.
+- Per-bot automation memory can be inspected and reset from the CLI, the dedicated automation API, and the official automation dashboard.
 - Shared coordination state can be inspected and reset from both the CLI and the dedicated automation API.
 - Shared coordination claims can be released manually, either by exact claim key or by releasing all claims owned by selected bots.
 
