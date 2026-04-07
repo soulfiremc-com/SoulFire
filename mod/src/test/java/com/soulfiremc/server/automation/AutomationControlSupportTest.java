@@ -20,6 +20,7 @@ package com.soulfiremc.server.automation;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class AutomationControlSupportTest {
   @Test
@@ -35,5 +36,22 @@ final class AutomationControlSupportTest {
   @Test
   void clampsFallbackTargetToAtLeastOne() {
     assertEquals(1, AutomationControlSupport.resolveTargetOverride(0, 0));
+  }
+
+  @Test
+  void mapsQuotaTargetAliasesToSupportedRequirementKeys() {
+    assertEquals(
+      AutomationRequirements.BLAZE_ROD,
+      AutomationControlSupport.targetQuotaOverride("rod").requirementKey());
+    assertEquals(
+      AutomationRequirements.ANY_BED,
+      AutomationControlSupport.targetQuotaOverride("bed").requirementKey());
+  }
+
+  @Test
+  void rejectsUnsupportedQuotaTargets() {
+    assertThrows(
+      IllegalArgumentException.class,
+      () -> AutomationControlSupport.targetQuotaOverride("diamond_pickaxe"));
   }
 }

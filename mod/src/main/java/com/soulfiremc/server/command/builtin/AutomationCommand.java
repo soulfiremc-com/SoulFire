@@ -236,6 +236,29 @@ public final class AutomationCommand {
               return Command.SINGLE_SUCCESS;
             });
           }))));
+    root.then(literal("quota")
+      .then(argument("target", StringArgumentType.word())
+        .suggests(QuotaTargetSuggestionProvider.INSTANCE)
+        .then(argument("count", IntegerArgumentType.integer(0))
+          .executes(help(
+            "Overrides one shared automation quota such as blaze rods, pearls, eyes, arrows, or beds. Use 0 to restore automatic team-size-based behavior.",
+            c -> {
+              var target = StringArgumentType.getString(c, "target");
+              var count = IntegerArgumentType.getInteger(c, "count");
+              return forEveryInstance(c, instance -> {
+                var normalizedRequirementKey = AutomationControlSupport.setTargetOverride(instance, target, count);
+                instance.addAuditLog(
+                  c.getSource().source(),
+                  AuditLogType.AUTOMATION_UPDATE_SETTINGS,
+                  "quota-override=%s target-count=%d".formatted(normalizedRequirementKey, count));
+                c.getSource().source().sendInfo("%s: automation quota %s set to %d%s".formatted(
+                  instance.friendlyNameCache().get(),
+                  AutomationRequirements.describe(normalizedRequirementKey),
+                  count,
+                  count == 0 ? " (auto)" : ""));
+                return Command.SINGLE_SUCCESS;
+              });
+            })))));
     root.then(literal("enabled")
       .then(argument("enabled", BoolArgumentType.bool())
         .executes(help(
@@ -667,6 +690,22 @@ public final class AutomationCommand {
       for (var roleOverride : AutomationSettings.RoleOverride.values()) {
         builder.suggest(formatEnumId(roleOverride));
       }
+      return builder.buildFuture();
+    }
+  }
+
+  private static final class QuotaTargetSuggestionProvider implements SuggestionProvider<CommandSourceStack> {
+    private static final QuotaTargetSuggestionProvider INSTANCE = new QuotaTargetSuggestionProvider();
+
+    @Override
+    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
+      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+      builder.suggest("blaze_rod");
+      builder.suggest("ender_pearl");
+      builder.suggest("ender_eye");
+      builder.suggest("arrow");
+      builder.suggest("bed");
       return builder.buildFuture();
     }
   }

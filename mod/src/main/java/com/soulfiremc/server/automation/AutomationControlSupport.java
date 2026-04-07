@@ -18,14 +18,20 @@
 package com.soulfiremc.server.automation;
 
 import com.soulfiremc.server.InstanceManager;
+import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
+import com.soulfiremc.server.settings.property.IntProperty;
 import com.soulfiremc.server.util.structs.GsonInstance;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 public final class AutomationControlSupport {
+  private static final Map<String, TargetQuotaOverride> TARGET_QUOTA_OVERRIDES = createTargetQuotaOverrides();
+
   private AutomationControlSupport() {
   }
 
@@ -120,5 +126,68 @@ public final class AutomationControlSupport {
     }
 
     return Math.max(1, dynamicTarget);
+  }
+
+  public static TargetQuotaOverride targetQuotaOverride(String rawRequirementKey) {
+    var normalizedKey = normalizeTargetQuotaKey(rawRequirementKey);
+    var targetOverride = TARGET_QUOTA_OVERRIDES.get(normalizedKey);
+    if (targetOverride == null) {
+      throw new IllegalArgumentException("Unsupported automation quota target: " + rawRequirementKey);
+    }
+
+    return targetOverride;
+  }
+
+  public static String setTargetOverride(InstanceManager instance,
+                                         String rawRequirementKey,
+                                         int targetCount) {
+    var targetOverride = targetQuotaOverride(rawRequirementKey);
+    validateTargetOverride(targetOverride, targetCount);
+    instance.updateInstanceSetting(targetOverride.property(), GsonInstance.GSON.toJsonTree(targetCount));
+    return targetOverride.requirementKey();
+  }
+
+  public static Collection<TargetQuotaOverride> targetQuotaOverrides() {
+    return TARGET_QUOTA_OVERRIDES.values();
+  }
+
+  private static void validateTargetOverride(TargetQuotaOverride targetOverride, int targetCount) {
+    if (targetCount < targetOverride.property().minValue() || targetCount > targetOverride.property().maxValue()) {
+      throw new IllegalArgumentException("%s must be between %d and %d"
+        .formatted(targetOverride.property().uiName(), targetOverride.property().minValue(), targetOverride.property().maxValue()));
+    }
+  }
+
+  private static String normalizeTargetQuotaKey(String rawRequirementKey) {
+    return switch (rawRequirementKey.trim().toLowerCase(Locale.ROOT)) {
+      case "rod", "rods", "blaze_rod", "blaze_rods", "item:minecraft:blaze_rod" -> AutomationRequirements.BLAZE_ROD;
+      case "pearl", "pearls", "ender_pearl", "ender_pearls", "item:minecraft:ender_pearl" -> AutomationRequirements.ENDER_PEARL;
+      case "eye", "eyes", "ender_eye", "ender_eyes", "item:minecraft:ender_eye" -> AutomationRequirements.ENDER_EYE;
+      case "arrow", "arrows", "item:minecraft:arrow" -> AutomationRequirements.ARROW;
+      case "bed", "beds", "any_bed", "group:any_bed" -> AutomationRequirements.ANY_BED;
+      default -> rawRequirementKey.trim().toLowerCase(Locale.ROOT);
+    };
+  }
+
+  private static Map<String, TargetQuotaOverride> createTargetQuotaOverrides() {
+    var overrides = new LinkedHashMap<String, TargetQuotaOverride>();
+    addTargetQuotaOverride(overrides, AutomationRequirements.BLAZE_ROD, AutomationSettings.TARGET_BLAZE_RODS);
+    addTargetQuotaOverride(overrides, AutomationRequirements.ENDER_PEARL, AutomationSettings.TARGET_ENDER_PEARLS);
+    addTargetQuotaOverride(overrides, AutomationRequirements.ENDER_EYE, AutomationSettings.TARGET_ENDER_EYES);
+    addTargetQuotaOverride(overrides, AutomationRequirements.ARROW, AutomationSettings.TARGET_ARROWS);
+    addTargetQuotaOverride(overrides, AutomationRequirements.ANY_BED, AutomationSettings.TARGET_BEDS);
+    return Map.copyOf(overrides);
+  }
+
+  private static void addTargetQuotaOverride(Map<String, TargetQuotaOverride> overrides,
+                                             String requirementKey,
+                                             IntProperty<SettingsSource.Instance> property) {
+    overrides.put(requirementKey, new TargetQuotaOverride(requirementKey, property));
+  }
+
+  public record TargetQuotaOverride(
+    String requirementKey,
+    IntProperty<SettingsSource.Instance> property
+  ) {
   }
 }

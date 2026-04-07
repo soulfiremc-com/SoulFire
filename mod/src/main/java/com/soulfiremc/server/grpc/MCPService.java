@@ -526,6 +526,21 @@ public final class MCPService {
             .setMaxEndBots(num(args, "max_end_bots"))
             .build(), o)))));
 
+    tools.add(tool("set_automation_quota_override",
+      "Override or clear one shared automation quota such as blaze rods, ender pearls, ender eyes, arrows, or beds. Set target_count to 0 to restore automatic team-size-based behavior.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "requirement_key", prop("string", "Quota target to override, for example blaze_rod, ender_pearl, ender_eye, arrow, or bed"),
+        "target_count", prop("integer", "Override target count. Use 0 to restore automatic behavior.")),
+      List.of("instance_id", "requirement_key", "target_count"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationQuotaOverride(
+          SetAutomationQuotaOverrideRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setRequirementKey(str(args, "requirement_key"))
+            .setTargetCount(num(args, "target_count"))
+            .build(), o)))));
+
     tools.add(tool("set_automation_objective_override",
       "Force or clear the shared automation objective override for an instance. Use 'auto' to clear the override.",
       Map.of(

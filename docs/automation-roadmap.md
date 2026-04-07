@@ -201,7 +201,7 @@ The current team coordinator is useful, but still too fixed and too implicit.
 - Keep the simple on/off collaboration toggle, but continue adding more granular collaboration controls underneath it.
 - Shared structure-intel, shared target-claim, shared End-entry, and max-End-bot controls now exist; shared looting, shared handoffs, and shared stash policies still do not.
 - Objective override, per-bot role override, and manual claim release now exist; subteam-level overrides, phase overrides, and force-target workflows still do not.
-- Explicit team quota overrides now exist for blaze rods, pearls, eyes, arrows, and beds, but broader progression and economy controls still do not.
+- Explicit team quota overrides now exist for blaze rods, pearls, eyes, arrows, and beds, including first-class command, gRPC, MCP, and dashboard controls, but broader progression and economy controls still do not.
 - Add toggles for role specialization, shared looting, and shared End entry policy beyond the current boolean throttle.
 - Add caps for how many bots may enter the nether and stronghold at once.
 - Add settings for shared exploration spacing and structure claim lease time.
@@ -256,7 +256,7 @@ These key names are illustrative rather than final, but the product needs this l
 ### Commands
 
 - Expand the automation command set beyond `beat`, `get`, `status`, `teamstatus`, and `stop`.
-- `pause`, `resume`, queue inspection, per-bot memory reset, coordination inspection, claim release, coordination reset, granular collaboration toggles, and role/objective overrides now exist.
+- `pause`, `resume`, queue inspection, per-bot memory reset, coordination inspection, claim release, coordination reset, granular collaboration toggles, role/objective overrides, and first-class quota override commands now exist.
 - Add `restart-phase` and `abort-phase`.
 - Manual role/objective commands and manual claim-release commands now exist.
 - Add commands to claim targets manually, retarget existing claims, or release claims by richer selectors than exact key or selected-bot ownership.
@@ -305,6 +305,7 @@ Already implemented in the first API slice:
 - `SetAutomationSharedClaims`
 - `SetAutomationSharedEndEntry`
 - `SetAutomationMaxEndBots`
+- `SetAutomationQuotaOverride`
 - `SetAutomationObjectiveOverride`
 - `SetAutomationRoleOverride`
 - `ReleaseAutomationClaim`
@@ -353,7 +354,7 @@ The official GUI client is in a different repository, but the following features
 - Dedicated automation settings page already exists through the built-in settings model and is now discoverable in the official client, but it still needs richer inline docs and validation.
 - Coordination inspection now exists on the first automation dashboard, but it still needs map, timeline, and history views.
 - A first automation dashboard per instance now exists, but it is still a polling-based operator view rather than a full live control center.
-- Dedicated override-management controls now exist for presets, collaboration, role policy, objective override, and per-bot roles, but future force actions are still missing.
+- Dedicated override-management controls now exist for presets, collaboration, role policy, objective override, team quota overrides, and per-bot roles, but future force actions are still missing.
 - Per-bot automation panels showing phase, task tree, planner queue, deaths, and last recovery.
 - Team view showing roles, quotas, structure targets, and shared objective.
 - Map or world overlay for shared claims, portals, fortress hints, stronghold estimate, and portal-room estimate.

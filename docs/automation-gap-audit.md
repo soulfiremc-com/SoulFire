@@ -20,6 +20,7 @@ These gaps were closed in the current implementation slice:
 - dedicated client controls for preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, and max End bots
 - server-side proto, gRPC, and MCP support for `SetAutomationRolePolicy`, `SetAutomationSharedEndEntry`, and `SetAutomationMaxEndBots`
 - explicit automation quota overrides for blaze rods, pearls, eyes, arrows, and beds
+- first-class CLI, gRPC, MCP, and dashboard controls for team quota overrides instead of leaving them only in the generic settings model
 - refreshed operator docs for automation settings, commands, APIs, and current GUI behavior
 
 ## Remaining gaps by area

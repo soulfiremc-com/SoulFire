@@ -91,6 +91,11 @@ message AutomationInstanceSettings {
   bool shared_structure_intel = 6;
   bool shared_target_claims = 7;
   AutomationTeamObjective objective_override = 8;
+  int32 target_blaze_rods = 9;
+  int32 target_ender_pearls = 10;
+  int32 target_ender_eyes = 11;
+  int32 target_arrows = 12;
+  int32 target_beds = 13;
 }
 
 message AutomationResourceQuota {
@@ -401,6 +406,16 @@ message SetAutomationMaxEndBotsResponse {
   AutomationInstanceSettings settings = 1;
 }
 
+message SetAutomationQuotaOverrideRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string requirement_key = 2 [(google.api.field_behavior) = REQUIRED];
+  int32 target_count = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationQuotaOverrideResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
 message SetAutomationObjectiveOverrideRequest {
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   AutomationTeamObjective objective = 2 [(google.api.field_behavior) = REQUIRED];
@@ -610,6 +625,19 @@ service AutomationService {
       permissions: "UPDATE_INSTANCE_CONFIG"
       scope: "instance"
       side_effects: "Updates the maximum number of bots that may be active in the End at once."
+    };
+  }
+
+  rpc SetAutomationQuotaOverride (SetAutomationQuotaOverrideRequest) returns (SetAutomationQuotaOverrideResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setQuotaOverride"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation quota override"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Overrides or clears one shared team quota such as blaze rods, pearls, eyes, arrows, or beds. Set target_count to 0 to restore automatic team-size-based behavior."
     };
   }
 

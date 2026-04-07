@@ -92,6 +92,8 @@ Current `automation` command surface:
   Toggles shared End-entry throttling for the visible instances.
 - `automation maxendbots <count>`
   Sets how many bots may be active in the End at once for the visible instances.
+- `automation quota <target> <count>`
+  Overrides one shared automation quota such as blaze rods, pearls, eyes, arrows, or beds for the visible instances. Use `0` to restore automatic team-size-based behavior.
 - `automation enabled <true|false>`
   Enables or disables automation for the selected bots.
 - `automation deathrecovery <true|false>`
@@ -155,6 +157,8 @@ Current gRPC RPCs:
   Enables or disables shared End-entry throttling.
 - `SetAutomationMaxEndBots`
   Changes the maximum number of bots that may be active in the End at once.
+- `SetAutomationQuotaOverride`
+  Overrides or clears one shared team quota such as blaze rods, pearls, eyes, arrows, or beds.
 - `SetAutomationObjectiveOverride`
   Forces or clears the shared automation objective override for the instance.
 - `SetAutomationRoleOverride`
@@ -186,6 +190,7 @@ Matching MCP tools are also available:
 - `set_automation_shared_claims`
 - `set_automation_shared_end_entry`
 - `set_automation_max_end_bots`
+- `set_automation_quota_override`
 - `set_automation_objective_override`
 - `set_automation_role_override`
 - `reset_automation_memory`
@@ -200,7 +205,7 @@ The current `SoulFireClient` automation dashboard provides:
 - live polled team-state and coordination-state summaries per instance
 - quota progress cards for shared requirement targets
 - team-level quick actions for beat, acquire, pause, resume, stop, and coordination reset
-- instance-level coordination controls for preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, and max End bots
+- instance-level coordination controls for preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, max End bots, and team quota overrides
 - direct navigation to the built-in automation settings page when the page is available for the instance
 - per-bot runtime cards with role override, status summary, role, objective, phase, location, current action, queued targets, recovery counters, and recent progress timestamps
 - shared coordination inspection for claims, shared structure hints, and eye-of-ender samples
@@ -217,7 +222,7 @@ This is a first operator dashboard rather than a finished automation control cen
 - When shared structure intel is disabled, bots stop reusing other bots' shared portal, fortress, stronghold, and eye-of-ender observations, but still retain their own local automation memory.
 - When shared target claims are disabled, bots stop reserving shared targets across the instance and may duplicate teammate work more often.
 - Shared End entry can throttle how many bots enter the End simultaneously.
-- Team requirement quotas for blaze rods, pearls, eyes, arrows, and beds can now be overridden explicitly while keeping `0` as the automatic team-size-based mode.
+- Team requirement quotas for blaze rods, pearls, eyes, arrows, and beds can now be overridden explicitly from CLI, gRPC, MCP, the built-in settings page, and the automation dashboard while keeping `0` as the automatic team-size-based mode.
 - Exact item requirement keys are centralized and validated against `Items.*` during startup, so automation no longer relies on scattered string literals for targets like lava buckets or bows.
 - Requirement queues are exposed over both CLI and gRPC/MCP state snapshots.
 - Per-bot automation memory can be inspected and reset from both the CLI and the dedicated automation API.

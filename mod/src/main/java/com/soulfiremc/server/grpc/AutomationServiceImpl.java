@@ -392,6 +392,34 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   }
 
   @Override
+  public void setAutomationQuotaOverride(SetAutomationQuotaOverrideRequest request,
+                                         StreamObserver<SetAutomationQuotaOverrideResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      var normalizedRequirementKey = AutomationControlSupport.setTargetOverride(
+        instance,
+        request.getRequirementKey(),
+        request.getTargetCount());
+      instance.addAuditLog(
+        user,
+        AuditLogType.AUTOMATION_UPDATE_SETTINGS,
+        "quota-override=%s target-count=%d".formatted(normalizedRequirementKey, request.getTargetCount()));
+
+      responseObserver.onNext(SetAutomationQuotaOverrideResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation quota override", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
   public void setAutomationObjectiveOverride(SetAutomationObjectiveOverrideRequest request,
                                              StreamObserver<SetAutomationObjectiveOverrideResponse> responseObserver) {
     var instanceId = parseUuid(request.getInstanceId(), "instance_id");
@@ -877,6 +905,11 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       .setSharedStructureIntel(instance.settingsSource().get(AutomationSettings.SHARED_STRUCTURE_INTEL))
       .setSharedTargetClaims(instance.settingsSource().get(AutomationSettings.SHARED_TARGET_CLAIMS))
       .setObjectiveOverride(toProto(instance.settingsSource().get(AutomationSettings.OBJECTIVE_OVERRIDE, AutomationSettings.ObjectiveOverride.class)))
+      .setTargetBlazeRods(instance.settingsSource().get(AutomationSettings.TARGET_BLAZE_RODS))
+      .setTargetEnderPearls(instance.settingsSource().get(AutomationSettings.TARGET_ENDER_PEARLS))
+      .setTargetEnderEyes(instance.settingsSource().get(AutomationSettings.TARGET_ENDER_EYES))
+      .setTargetArrows(instance.settingsSource().get(AutomationSettings.TARGET_ARROWS))
+      .setTargetBeds(instance.settingsSource().get(AutomationSettings.TARGET_BEDS))
       .build();
   }
 
