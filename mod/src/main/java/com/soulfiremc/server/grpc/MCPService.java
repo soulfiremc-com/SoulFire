@@ -461,6 +461,19 @@ public final class MCPService {
             .setEnabled(bool(args, "enabled"))
             .build(), o)))));
 
+    tools.add(tool("set_automation_role_policy",
+      "Set how the automation coordinator assigns roles for an instance.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "role_policy", prop("string", "One of: static-team, independent")),
+      List.of("instance_id", "role_policy"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationRolePolicy(
+          SetAutomationRolePolicyRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setRolePolicy(parseAutomationRolePolicy(str(args, "role_policy")))
+            .build(), o)))));
+
     tools.add(tool("set_automation_shared_structures",
       "Toggle whether bots share portal hints, structure observations, and eye-of-ender samples across the instance.",
       Map.of(
@@ -485,6 +498,32 @@ public final class MCPService {
           SetAutomationSharedClaimsRequest.newBuilder()
             .setInstanceId(str(args, "instance_id"))
             .setEnabled(bool(args, "enabled"))
+            .build(), o)))));
+
+    tools.add(tool("set_automation_shared_end_entry",
+      "Toggle whether the team throttles how many bots enter the End at once.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "enabled", prop("boolean", "Whether shared End-entry throttling should be enabled")),
+      List.of("instance_id", "enabled"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationSharedEndEntry(
+          SetAutomationSharedEndEntryRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setEnabled(bool(args, "enabled"))
+            .build(), o)))));
+
+    tools.add(tool("set_automation_max_end_bots",
+      "Set the maximum number of bots that may be active in the End at the same time when shared End entry is enabled.",
+      Map.of(
+        "instance_id", prop("string", "UUID of the instance"),
+        "max_end_bots", prop("integer", "Maximum number of bots allowed in the End concurrently (1-32)")),
+      List.of("instance_id", "max_end_bots"),
+      authed((exchange, args) ->
+        grpc(o -> automationService.setAutomationMaxEndBots(
+          SetAutomationMaxEndBotsRequest.newBuilder()
+            .setInstanceId(str(args, "instance_id"))
+            .setMaxEndBots(num(args, "max_end_bots"))
             .build(), o)))));
 
     tools.add(tool("set_automation_objective_override",
@@ -1177,6 +1216,15 @@ public final class MCPService {
     return switch (normalized) {
       case "AUTO" -> AutomationTeamRole.AUTOMATION_TEAM_ROLE_UNSPECIFIED;
       default -> AutomationTeamRole.valueOf("AUTOMATION_TEAM_ROLE_" + normalized);
+    };
+  }
+
+  private static AutomationRolePolicy parseAutomationRolePolicy(String raw) {
+    var normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    return switch (normalized) {
+      case "STATIC_TEAM" -> AutomationRolePolicy.AUTOMATION_ROLE_POLICY_STATIC_TEAM;
+      case "INDEPENDENT" -> AutomationRolePolicy.AUTOMATION_ROLE_POLICY_INDEPENDENT;
+      default -> throw new IllegalArgumentException("Unsupported automation role policy: " + raw);
     };
   }
 }

@@ -129,6 +129,61 @@ public final class AutomationSettings implements SettingsObject {
       .minValue(1)
       .maxValue(32)
       .build();
+  public static final IntProperty<SettingsSource.Instance> TARGET_BLAZE_RODS =
+    ImmutableIntProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("target-blaze-rods")
+      .uiName("Target Blaze Rods")
+      .description("Override the team-wide blaze rod quota. Set to 0 to keep the automatic quota based on team size.")
+      .defaultValue(0)
+      .minValue(0)
+      .maxValue(64)
+      .build();
+  public static final IntProperty<SettingsSource.Instance> TARGET_ENDER_PEARLS =
+    ImmutableIntProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("target-ender-pearls")
+      .uiName("Target Ender Pearls")
+      .description("Override the team-wide ender pearl quota. Set to 0 to keep the automatic quota based on team size.")
+      .defaultValue(0)
+      .minValue(0)
+      .maxValue(64)
+      .build();
+  public static final IntProperty<SettingsSource.Instance> TARGET_ENDER_EYES =
+    ImmutableIntProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("target-ender-eyes")
+      .uiName("Target Ender Eyes")
+      .description("Override the team-wide eye of ender quota. Set to 0 to keep the automatic quota based on team size.")
+      .defaultValue(0)
+      .minValue(0)
+      .maxValue(64)
+      .build();
+  public static final IntProperty<SettingsSource.Instance> TARGET_ARROWS =
+    ImmutableIntProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("target-arrows")
+      .uiName("Target Arrows")
+      .description("Override the team-wide arrow quota for ranged support. Set to 0 to keep the automatic quota based on team size.")
+      .defaultValue(0)
+      .minValue(0)
+      .maxValue(512)
+      .build();
+  public static final IntProperty<SettingsSource.Instance> TARGET_BEDS =
+    ImmutableIntProperty.<SettingsSource.Instance>builder()
+      .sourceType(SettingsSource.Instance.INSTANCE)
+      .namespace(NAMESPACE)
+      .key("target-beds")
+      .uiName("Target Beds")
+      .description("Override the team-wide bed quota for dragon-fight prep. Set to 0 to keep the automatic quota based on team size.")
+      .defaultValue(0)
+      .minValue(0)
+      .maxValue(64)
+      .build();
   public static final BooleanProperty<SettingsSource.Bot> ALLOW_DEATH_RECOVERY =
     ImmutableBooleanProperty.<SettingsSource.Bot>builder()
       .sourceType(SettingsSource.Bot.INSTANCE)

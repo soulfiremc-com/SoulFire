@@ -814,7 +814,7 @@ final class OpenApiSpecGenerator {
 
     if (typeSignature.type() == TypeSignatureType.ENUM || typeSignature.type() == TypeSignatureType.STRUCT) {
       var schemaName = canonicalSchemaNameByTypeName.getOrDefault(typeSignature.signature(), typeSignature.name());
-      usedSchemaNames.add(schemaName);
+      markSchemaUsed(schemaName);
       return schemaRef(schemaName);
     }
 
@@ -835,9 +835,7 @@ final class OpenApiSpecGenerator {
   ) {
     if (typeSignature.type() == TypeSignatureType.STRUCT || typeSignature.type() == TypeSignatureType.ENUM) {
       var schemaName = canonicalSchemaNameByTypeName.getOrDefault(typeSignature.signature(), typeSignature.name());
-      if (usedSchemaNames.add(schemaName) && pending != null && generated != null && !generated.contains(schemaName)) {
-        pending.add(schemaName);
-      }
+      registerReferencedSchemaName(schemaName, pending, generated);
       return;
     }
 
@@ -864,9 +862,7 @@ final class OpenApiSpecGenerator {
         var prefix = "#/components/schemas/";
         if (ref.startsWith(prefix)) {
           var schemaName = unescapeJsonPointerSegment(ref.substring(prefix.length()));
-          if (usedSchemaNames.add(schemaName) && !generated.contains(schemaName)) {
-            pending.add(schemaName);
-          }
+          registerReferencedSchemaName(schemaName, pending, generated);
         }
       }
 
@@ -1062,6 +1058,17 @@ final class OpenApiSpecGenerator {
 
   private static String fieldKey(String typeName, String fieldName) {
     return typeName + '/' + fieldName;
+  }
+
+  private void markSchemaUsed(String schemaName) {
+    usedSchemaNames.add(schemaName);
+  }
+
+  private void registerReferencedSchemaName(String schemaName, Deque<String> pending, Set<String> generated) {
+    markSchemaUsed(schemaName);
+    if (pending != null && generated != null && !generated.contains(schemaName) && !pending.contains(schemaName)) {
+      pending.add(schemaName);
+    }
   }
 
   private static boolean isExportedService(String serviceName) {

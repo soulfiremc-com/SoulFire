@@ -356,6 +356,15 @@ message SetAutomationCollaborationResponse {
   AutomationInstanceSettings settings = 1;
 }
 
+message SetAutomationRolePolicyRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  AutomationRolePolicy role_policy = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationRolePolicyResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
 message SetAutomationSharedStructuresRequest {
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
   bool enabled = 2 [(google.api.field_behavior) = REQUIRED];
@@ -371,6 +380,24 @@ message SetAutomationSharedClaimsRequest {
 }
 
 message SetAutomationSharedClaimsResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
+message SetAutomationSharedEndEntryRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  bool enabled = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationSharedEndEntryResponse {
+  AutomationInstanceSettings settings = 1;
+}
+
+message SetAutomationMaxEndBotsRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  int32 max_end_bots = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetAutomationMaxEndBotsResponse {
   AutomationInstanceSettings settings = 1;
 }
 
@@ -521,6 +548,19 @@ service AutomationService {
     };
   }
 
+  rpc SetAutomationRolePolicy (SetAutomationRolePolicyRequest) returns (SetAutomationRolePolicyResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setRolePolicy"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation role policy"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Changes how the automation coordinator assigns roles for the instance."
+    };
+  }
+
   rpc SetAutomationSharedStructures (SetAutomationSharedStructuresRequest) returns (SetAutomationSharedStructuresResponse) {
     option (google.api.http) = {
       post: "/v1/instances/{instance_id}/automation:setSharedStructures"
@@ -544,6 +584,32 @@ service AutomationService {
       permissions: "UPDATE_INSTANCE_CONFIG"
       scope: "instance"
       side_effects: "Enables or disables cross-bot target reservation for shared automation work."
+    };
+  }
+
+  rpc SetAutomationSharedEndEntry (SetAutomationSharedEndEntryRequest) returns (SetAutomationSharedEndEntryResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setSharedEndEntry"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation shared End entry"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Enables or disables shared throttling for End entry across the team."
+    };
+  }
+
+  rpc SetAutomationMaxEndBots (SetAutomationMaxEndBotsRequest) returns (SetAutomationMaxEndBotsResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/automation:setMaxEndBots"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Set automation max End bots"
+      permissions: "UPDATE_INSTANCE_CONFIG"
+      scope: "instance"
+      side_effects: "Updates the maximum number of bots that may be active in the End at once."
     };
   }
 

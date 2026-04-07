@@ -478,7 +478,7 @@ public final class AutomationTeamCoordinator {
 
   public synchronized int teamTarget(String requirementKey) {
     var botCount = Math.max(1, botSnapshots.size());
-    return switch (requirementKey) {
+    var dynamicTarget = switch (requirementKey) {
       case AutomationRequirements.FOOD -> Math.max(12, botCount * 8);
       case AutomationRequirements.BLAZE_ROD -> Math.max(8, botCount * 2);
       case AutomationRequirements.ENDER_PEARL -> Math.max(14, botCount * 2);
@@ -492,6 +492,25 @@ public final class AutomationTeamCoordinator {
       case AutomationRequirements.OBSIDIAN -> 10;
       case AutomationRequirements.ANY_BED -> Math.max(2, botCount / 3);
       default -> botCount;
+    };
+
+    return switch (requirementKey) {
+      case AutomationRequirements.BLAZE_ROD -> AutomationControlSupport.resolveTargetOverride(
+        instanceManager.settingsSource().get(AutomationSettings.TARGET_BLAZE_RODS),
+        dynamicTarget);
+      case AutomationRequirements.ENDER_PEARL -> AutomationControlSupport.resolveTargetOverride(
+        instanceManager.settingsSource().get(AutomationSettings.TARGET_ENDER_PEARLS),
+        dynamicTarget);
+      case AutomationRequirements.ENDER_EYE -> AutomationControlSupport.resolveTargetOverride(
+        instanceManager.settingsSource().get(AutomationSettings.TARGET_ENDER_EYES),
+        dynamicTarget);
+      case AutomationRequirements.ARROW -> AutomationControlSupport.resolveTargetOverride(
+        instanceManager.settingsSource().get(AutomationSettings.TARGET_ARROWS),
+        dynamicTarget);
+      case AutomationRequirements.ANY_BED -> AutomationControlSupport.resolveTargetOverride(
+        instanceManager.settingsSource().get(AutomationSettings.TARGET_BEDS),
+        dynamicTarget);
+      default -> dynamicTarget;
     };
   }
 

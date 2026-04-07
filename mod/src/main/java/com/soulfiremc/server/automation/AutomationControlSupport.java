@@ -47,6 +47,11 @@ public final class AutomationControlSupport {
   public static void applyInstancePresetSettings(InstanceManager instance, AutomationSettings.Preset preset) {
     instance.updateInstanceSetting(AutomationSettings.PRESET, GsonInstance.GSON.toJsonTree(preset.name()));
     instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, GsonInstance.GSON.toJsonTree(AutomationSettings.ObjectiveOverride.AUTO.name()));
+    instance.updateInstanceSetting(AutomationSettings.TARGET_BLAZE_RODS, GsonInstance.GSON.toJsonTree(0));
+    instance.updateInstanceSetting(AutomationSettings.TARGET_ENDER_PEARLS, GsonInstance.GSON.toJsonTree(0));
+    instance.updateInstanceSetting(AutomationSettings.TARGET_ENDER_EYES, GsonInstance.GSON.toJsonTree(0));
+    instance.updateInstanceSetting(AutomationSettings.TARGET_ARROWS, GsonInstance.GSON.toJsonTree(0));
+    instance.updateInstanceSetting(AutomationSettings.TARGET_BEDS, GsonInstance.GSON.toJsonTree(0));
     switch (preset) {
       case BALANCED_TEAM -> {
         instance.updateInstanceSetting(AutomationSettings.TEAM_COLLABORATION, GsonInstance.GSON.toJsonTree(true));
@@ -107,5 +112,13 @@ public final class AutomationControlSupport {
 
   public static String formatEnumId(Enum<?> value) {
     return value.name().toLowerCase(Locale.ROOT).replace('_', '-');
+  }
+
+  public static int resolveTargetOverride(int configuredTarget, int dynamicTarget) {
+    if (configuredTarget > 0) {
+      return configuredTarget;
+    }
+
+    return Math.max(1, dynamicTarget);
   }
 }

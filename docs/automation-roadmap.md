@@ -10,6 +10,8 @@ Scope:
 
 This repository currently contains the CLI and server implementation. GUI client work mentioned here belongs in the separate `SoulFireClient` repository, but it is still part of the end-to-end automation feature surface.
 
+For a flatter cross-cutting gap inventory instead of a priority-ordered backlog, see [automation-gap-audit.md](automation-gap-audit.md).
+
 ## Current baseline
 
 SoulFire now has:
@@ -33,7 +35,7 @@ These are worth stating directly based on the current repository state:
 - A first automation proto, gRPC, and MCP surface now exists for state snapshots, coordination snapshots, and core control actions, but it is still far from complete.
 - Team collaboration is now configurable, including structure-intel and target-claim sharing, but it is still much narrower than the full coordination model described below.
 - Operator overrides now exist for forcing roles and objectives plus releasing claims, but not yet for claim creation, targets, phases, or subteams.
-- GUI automation controls and dashboards still live outside this repository and are not yet implemented end-to-end.
+- A first official automation dashboard now exists in `SoulFireClient`, but it is still a polling-based operator view rather than a complete live control center.
 
 ## P0: reliability for 10 parallel beat-game bots
 
@@ -195,12 +197,13 @@ The current team coordinator is useful, but still too fixed and too implicit.
 
 ### Collaboration settings
 
-- Expand the existing automation settings page beyond the current first execution and coordination slice.
+- Expand the existing automation settings page beyond the current first execution, coordination, and quota-override slice.
 - Keep the simple on/off collaboration toggle, but continue adding more granular collaboration controls underneath it.
-- Shared structure-intel and shared target-claim toggles now exist; shared looting, shared handoffs, and shared stash policies still do not.
-- Objective override, per-bot role override, and manual claim release now exist; subteam-level overrides and per-phase overrides still do not.
+- Shared structure-intel, shared target-claim, shared End-entry, and max-End-bot controls now exist; shared looting, shared handoffs, and shared stash policies still do not.
+- Objective override, per-bot role override, and manual claim release now exist; subteam-level overrides, phase overrides, and force-target workflows still do not.
+- Explicit team quota overrides now exist for blaze rods, pearls, eyes, arrows, and beds, but broader progression and economy controls still do not.
 - Add toggles for role specialization, shared looting, and shared End entry policy beyond the current boolean throttle.
-- Add caps for how many bots may enter the nether, stronghold, and End at once.
+- Add caps for how many bots may enter the nether and stronghold at once.
 - Add settings for shared exploration spacing and structure claim lease time.
 - Add settings for whether death recovery is attempted.
 - Add settings for whether beds are used in the End.
@@ -214,7 +217,7 @@ The current team coordinator is useful, but still too fixed and too implicit.
 
 ## P3: settings, protocol, commands, and client surface
 
-A first automation settings object is now registered alongside Bot, Account, Proxy, AI, and Pathfinding settings, but it still only covers a narrow operator slice.
+A first automation settings object is now registered alongside Bot, Account, Proxy, AI, and Pathfinding settings, and a first official client dashboard now exists, but the overall operator surface is still narrow.
 
 ### Server settings and config model
 
@@ -223,6 +226,7 @@ A first automation settings object is now registered alongside Bot, Account, Pro
 - Separate team-level settings from per-bot settings where appropriate.
 - Support presets for common modes: solo survival, team beat-game, resource farming, structure search.
 - Document defaults and safe ranges for each setting.
+- The current settings model already covers preset, collaboration, role policy, objective override, shared structures, shared claims, shared End entry, max End bots, and first shared quota overrides for blaze rods, pearls, eyes, arrows, and beds.
 
 ### Suggested AutomationSettings taxonomy
 
@@ -259,8 +263,7 @@ These key names are illustrative rather than final, but the product needs this l
 - Expand queue inspection beyond the current requirement list into richer planner-decision visibility.
 - Expand memory inspection beyond the current per-bot remembered-state dump and per-bot reset flow.
 - Add JSON or structured export modes for queue, memory, and coordination inspection instead of text-only CLI output.
-- Add commands to toggle collaboration on and off without restarting the instance.
-- Add commands to apply automation presets and diff automation settings against defaults.
+- Add commands to diff automation settings against defaults or a named preset.
 - Add commands to diff current automation settings against a named preset.
 - Add commands to quarantine, unquarantine, or reassign a bot during a team run.
 - Add commands to override a single bot's current phase or force a structure target.
@@ -297,10 +300,15 @@ Already implemented in the first API slice:
 - `StopAutomation`
 - `ApplyAutomationPreset`
 - `SetAutomationCollaboration`
-- `SetAutomationObjectiveOverride`
+- `SetAutomationRolePolicy`
 - `SetAutomationSharedStructures`
 - `SetAutomationSharedClaims`
+- `SetAutomationSharedEndEntry`
+- `SetAutomationMaxEndBots`
+- `SetAutomationObjectiveOverride`
 - `SetAutomationRoleOverride`
+- `ReleaseAutomationClaim`
+- `ReleaseAutomationBotClaims`
 - `ResetAutomationMemory`
 - `ResetAutomationCoordinationState`
 
@@ -342,23 +350,23 @@ The proto layer should clearly separate:
 
 The official GUI client is in a different repository, but the following features are still needed:
 
-- Dedicated automation settings page.
-- Dedicated coordination-inspection page or panel.
-- Dedicated automation dashboard per instance.
-- Dedicated override-management controls for roles, objectives, and future force actions.
+- Dedicated automation settings page already exists through the built-in settings model and is now discoverable in the official client, but it still needs richer inline docs and validation.
+- Coordination inspection now exists on the first automation dashboard, but it still needs map, timeline, and history views.
+- A first automation dashboard per instance now exists, but it is still a polling-based operator view rather than a full live control center.
+- Dedicated override-management controls now exist for presets, collaboration, role policy, objective override, and per-bot roles, but future force actions are still missing.
 - Per-bot automation panels showing phase, task tree, planner queue, deaths, and last recovery.
 - Team view showing roles, quotas, structure targets, and shared objective.
 - Map or world overlay for shared claims, portals, fortress hints, stronghold estimate, and portal-room estimate.
 - Controls to pause, resume, reprioritize, or remove bots from a collaborative run.
-- Controls to toggle collaboration on and off.
+- Collaboration toggle controls now exist, but there are still no controls for quarantine, subteams, or richer coordination modes.
 - Better surfacing of why a bot is stuck or what it is waiting on.
 - Run history and post-run summaries.
 - Live timeline views that correlate planner decisions, deaths, claims, and recoveries.
 - Rich settings forms with presets, validation, and inline documentation for every option.
 - Controls to force objectives, force roles, and manually hand bots into or out of subteams.
-- A dedicated view for shared memory and claims so operators can see why the coordinator chose a target.
+- A dedicated view for shared memory plus deeper claim tooling so operators can see why the coordinator chose a target and edit coordination state deliberately.
 - Notification surfaces for phase completion, repeated failures, death spikes, and low-confidence runs.
-- Quick controls for "pause this bot", "pause the team", "resume only healthy bots", and "quarantine bot".
+- Quick controls already exist for pausing or resuming bots and the team plus stopping and resetting coordination, but "resume only healthy bots" and "quarantine bot" still do not.
 
 ## P4: observability, metrics, and operator tooling
 
@@ -482,7 +490,7 @@ These are worth calling out explicitly because they are easy to overlook:
 - The current automation proto/gRPC/MCP surface does not yet include streams, planner traces, force actions, or run-report export.
 - Shared-memory and claim inspection plus manual claim release now exist, but historical timelines, subscriptions, and manual claim editing still do not.
 - Role/objective overrides and claim release now exist, but manual claim creation/retargeting, phase overrides, and force-target workflows still do not.
-- No dedicated GUI client automation dashboard exists in this repository.
+- A first GUI client automation dashboard now exists in `SoulFireClient`, but it still has no event streams, run history, map overlays, or deep force-action tooling.
 - No dedicated automation event stream or run-report export exists yet.
 - No automation-specific permission model exists yet.
 - No 10-bot soak-test suite exists yet.

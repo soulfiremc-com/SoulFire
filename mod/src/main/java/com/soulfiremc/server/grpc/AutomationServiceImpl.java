@@ -280,6 +280,29 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   }
 
   @Override
+  public void setAutomationRolePolicy(SetAutomationRolePolicyRequest request,
+                                      StreamObserver<SetAutomationRolePolicyResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      var rolePolicy = fromProtoRolePolicy(request.getRolePolicy());
+      instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(rolePolicy.name()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "role-policy=" + AutomationControlSupport.formatEnumId(rolePolicy));
+
+      responseObserver.onNext(SetAutomationRolePolicyResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation role policy", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
   public void setAutomationSharedStructures(SetAutomationSharedStructuresRequest request,
                                             StreamObserver<SetAutomationSharedStructuresResponse> responseObserver) {
     var instanceId = parseUuid(request.getInstanceId(), "instance_id");
@@ -319,6 +342,51 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       responseObserver.onCompleted();
     } catch (Throwable t) {
       log.error("Error setting automation shared claims", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
+  public void setAutomationSharedEndEntry(SetAutomationSharedEndEntryRequest request,
+                                          StreamObserver<SetAutomationSharedEndEntryResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+
+    try {
+      var instance = requireInstance(instanceId);
+      instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-end-entry=" + request.getEnabled());
+
+      responseObserver.onNext(SetAutomationSharedEndEntryResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation shared End entry", t);
+      throw statusFromThrowable(t);
+    }
+  }
+
+  @Override
+  public void setAutomationMaxEndBots(SetAutomationMaxEndBotsRequest request,
+                                      StreamObserver<SetAutomationMaxEndBotsResponse> responseObserver) {
+    var instanceId = parseUuid(request.getInstanceId(), "instance_id");
+    var user = ServerRPCConstants.USER_CONTEXT_KEY.get();
+    user.hasPermissionOrThrow(PermissionContext.instance(InstancePermission.UPDATE_INSTANCE_CONFIG, instanceId));
+    validateMaxEndBots(request.getMaxEndBots());
+
+    try {
+      var instance = requireInstance(instanceId);
+      instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getMaxEndBots()));
+      instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "max-end-bots=" + request.getMaxEndBots());
+
+      responseObserver.onNext(SetAutomationMaxEndBotsResponse.newBuilder()
+        .setSettings(buildInstanceSettings(instance))
+        .build());
+      responseObserver.onCompleted();
+    } catch (Throwable t) {
+      log.error("Error setting automation max End bots", t);
       throw statusFromThrowable(t);
     }
   }
@@ -938,6 +1006,12 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     }
   }
 
+  private static void validateMaxEndBots(int count) {
+    if (count < 1 || count > 32) {
+      throw Status.INVALID_ARGUMENT.withDescription("max_end_bots must be between 1 and 32").asRuntimeException();
+    }
+  }
+
   private static AutomationPreset toProto(AutomationSettings.Preset preset) {
     return switch (preset) {
       case BALANCED_TEAM -> AutomationPreset.AUTOMATION_PRESET_BALANCED_TEAM;
@@ -959,6 +1033,14 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     return switch (rolePolicy) {
       case STATIC_TEAM -> AutomationRolePolicy.AUTOMATION_ROLE_POLICY_STATIC_TEAM;
       case INDEPENDENT -> AutomationRolePolicy.AUTOMATION_ROLE_POLICY_INDEPENDENT;
+    };
+  }
+
+  private static AutomationSettings.RolePolicy fromProtoRolePolicy(AutomationRolePolicy rolePolicy) {
+    return switch (rolePolicy) {
+      case AUTOMATION_ROLE_POLICY_STATIC_TEAM -> AutomationSettings.RolePolicy.STATIC_TEAM;
+      case AUTOMATION_ROLE_POLICY_INDEPENDENT -> AutomationSettings.RolePolicy.INDEPENDENT;
+      default -> throw Status.INVALID_ARGUMENT.withDescription("Unsupported automation role policy: " + rolePolicy).asRuntimeException();
     };
   }
 
