@@ -29,6 +29,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,12 +44,30 @@ public final class AutomationTeamCoordinator {
   private static final long EYE_SAMPLE_EXPIRY_MILLIS = 10L * 60L * 1000L;
   private static final double MIN_STRONGHOLD_DISTANCE = 128.0;
   private static final double MAX_STRONGHOLD_DISTANCE = 30_000.0;
+  private static final List<String> TEAM_SHARED_REQUIREMENTS = List.of(
+    AutomationRequirements.FOOD,
+    "item:minecraft:blaze_rod",
+    "item:minecraft:ender_pearl",
+    "item:minecraft:ender_eye",
+    "item:minecraft:bow",
+    "item:minecraft:arrow",
+    "item:minecraft:shield",
+    "item:minecraft:water_bucket",
+    "item:minecraft:lava_bucket",
+    "item:minecraft:flint_and_steel",
+    "item:minecraft:obsidian",
+    "item:minecraft:bed"
+  );
 
   private final InstanceManager instanceManager;
   private final Map<ResourceKey<Level>, Map<Long, SharedBlock>> sharedBlocks = new HashMap<>();
   private final Map<UUID, BotSnapshot> botSnapshots = new HashMap<>();
   private final Map<String, Claim> claims = new HashMap<>();
   private final List<EyeSample> eyeSamples = new ArrayList<>();
+  private final Map<UUID, Map<String, Integer>> sharedInventory = new HashMap<>();
+  private final Map<UUID, TeamRole> roleAssignments = new HashMap<>();
+  private final Map<UUID, BotTelemetry> telemetry = new HashMap<>();
+  private TeamObjective objective = TeamObjective.BOOTSTRAP;
 
   public AutomationTeamCoordinator(InstanceManager instanceManager) {
     this.instanceManager = instanceManager;
@@ -65,7 +84,8 @@ public final class AutomationTeamCoordinator {
   public synchronized void observe(BotConnection bot,
                                    AutomationWorldMemory worldMemory,
                                    String status,
-                                   @Nullable String phase) {
+                                   @Nullable String phase,
+                                   Map<String, Integer> inventorySnapshot) {
     var player = bot.minecraft().player;
     var level = bot.minecraft().level;
     if (player == null || level == null) {
@@ -77,6 +97,8 @@ public final class AutomationTeamCoordinator {
 
     var snapshot = botSnapshots.computeIfAbsent(bot.accountProfileId(), _ -> new BotSnapshot(bot.accountProfileId(), bot.accountName()));
     snapshot.observe(player.position(), level.dimension(), player.isAlive(), status, phase, now);
+    sharedInventory.put(bot.accountProfileId(), Map.copyOf(inventorySnapshot));
+    telemetry.computeIfAbsent(bot.accountProfileId(), _ -> new BotTelemetry());
 
     var sharedDimensionBlocks = sharedBlocks.computeIfAbsent(level.dimension(), _ -> new HashMap<>());
     for (var block : worldMemory.rememberedBlocks()) {
@@ -86,6 +108,9 @@ public final class AutomationTeamCoordinator {
 
       sharedDimensionBlocks.put(block.pos().asLong(), new SharedBlock(block.pos(), block.state(), now));
     }
+
+    rebalanceRoles();
+    updateObjective();
   }
 
   public synchronized void noteProgress(BotConnection bot) {
@@ -103,6 +128,9 @@ public final class AutomationTeamCoordinator {
   public synchronized void releaseBot(BotConnection bot) {
     releaseClaims(bot);
     botSnapshots.remove(bot.accountProfileId());
+    sharedInventory.remove(bot.accountProfileId());
+    roleAssignments.remove(bot.accountProfileId());
+    telemetry.remove(bot.accountProfileId());
   }
 
   public synchronized Optional<SharedBlock> findNearestBlock(BotConnection bot,
@@ -128,8 +156,16 @@ public final class AutomationTeamCoordinator {
     return findNearestBlock(bot, dimension, state -> state.getBlock() == Blocks.NETHER_PORTAL);
   }
 
+  public synchronized Optional<SharedBlock> findNearestRuinedPortalHint(BotConnection bot, ResourceKey<Level> dimension) {
+    return findNearestBlock(bot, dimension, AutomationTeamCoordinator::isRuinedPortalMarker);
+  }
+
   public synchronized Optional<SharedBlock> findNearestFortressHint(BotConnection bot) {
     return findNearestBlock(bot, Level.NETHER, AutomationTeamCoordinator::isFortressMarker);
+  }
+
+  public synchronized Optional<Vec3> fortressEstimate() {
+    return centroid(Level.NETHER, AutomationTeamCoordinator::isFortressMarker, 70.0);
   }
 
   public synchronized boolean claimBlock(BotConnection bot,
@@ -168,6 +204,36 @@ public final class AutomationTeamCoordinator {
     }
 
     return focus;
+  }
+
+  public synchronized Vec3 assignLayeredExplorationTarget(BotConnection bot,
+                                                          ResourceKey<Level> dimension,
+                                                          String purpose,
+                                                          Vec3 focus,
+                                                          int spacing,
+                                                          int... yOffsets) {
+    var now = System.currentTimeMillis();
+    prune(now);
+
+    var anchorX = floorToGrid(focus.x, spacing);
+    var anchorZ = floorToGrid(focus.z, spacing);
+    for (var offset : spiralOffsets(6)) {
+      for (var yOffset : yOffsets) {
+        var dx = offset[0];
+        var dz = offset[1];
+        var target = new Vec3(
+          anchorX + dx * spacing + 0.5,
+          clampTargetY(dimension, focus.y + yOffset),
+          anchorZ + dz * spacing + 0.5);
+        var key = "explore3d:%s:%s:%d:%d:%d:%d:%d".formatted(
+          dimension.identifier(), purpose, anchorX, anchorZ, dx, dz, yOffset);
+        if (claim(bot.accountProfileId(), key, target, CLAIM_EXPIRY_MILLIS)) {
+          return target;
+        }
+      }
+    }
+
+    return new Vec3(focus.x, clampTargetY(dimension, focus.y), focus.z);
   }
 
   public synchronized void reportEyeSample(BotConnection bot, Vec3 origin, Vec3 direction) {
@@ -235,9 +301,99 @@ public final class AutomationTeamCoordinator {
     return Optional.of(new Vec3(sumX / intersections.size(), 32.0, sumZ / intersections.size()));
   }
 
+  public synchronized Optional<Vec3> portalRoomEstimate() {
+    var now = System.currentTimeMillis();
+    prune(now);
+
+    var estimate = centroid(Level.OVERWORLD,
+      state -> state.getBlock() == Blocks.END_PORTAL_FRAME || state.getBlock() == Blocks.END_PORTAL,
+      28.0);
+    if (estimate.isPresent()) {
+      return estimate;
+    }
+
+    return strongholdEstimate().map(pos -> new Vec3(pos.x, clampTargetY(Level.OVERWORLD, pos.y), pos.z));
+  }
+
+  public synchronized TeamRole roleFor(BotConnection bot) {
+    prune(System.currentTimeMillis());
+    rebalanceRoles();
+    return roleAssignments.getOrDefault(bot.accountProfileId(), TeamRole.END_SUPPORT);
+  }
+
+  public synchronized TeamObjective objective() {
+    prune(System.currentTimeMillis());
+    updateObjective();
+    return objective;
+  }
+
+  public synchronized int sharedCount(String requirementKey) {
+    prune(System.currentTimeMillis());
+    return sharedInventory.values().stream()
+      .mapToInt(snapshot -> snapshot.getOrDefault(requirementKey, 0))
+      .sum();
+  }
+
+  public synchronized int teamTarget(String requirementKey) {
+    var botCount = Math.max(1, botSnapshots.size());
+    return switch (requirementKey) {
+      case AutomationRequirements.FOOD -> Math.max(12, botCount * 8);
+      case "item:minecraft:blaze_rod" -> Math.max(8, botCount * 2);
+      case "item:minecraft:ender_pearl" -> Math.max(14, botCount * 2);
+      case "item:minecraft:ender_eye" -> Math.max(12, Math.min(24, botCount * 2));
+      case "item:minecraft:bow" -> Math.max(3, botCount / 2);
+      case "item:minecraft:arrow" -> Math.max(32, botCount * 16);
+      case "item:minecraft:shield" -> Math.max(2, botCount / 2);
+      case "item:minecraft:water_bucket" -> 1;
+      case "item:minecraft:lava_bucket" -> 1;
+      case "item:minecraft:flint_and_steel" -> 1;
+      case "item:minecraft:obsidian" -> 10;
+      case "item:minecraft:bed" -> Math.max(2, botCount / 3);
+      default -> botCount;
+    };
+  }
+
+  public synchronized boolean shouldTravelToNether(BotConnection bot) {
+    return switch (roleFor(bot)) {
+      case LEAD, PORTAL_ENGINEER, NETHER_RUNNER -> objective().ordinal() <= TeamObjective.NETHER_PROGRESS.ordinal();
+      case STRONGHOLD_SCOUT -> objective() == TeamObjective.NETHER_PROGRESS && sharedCount("item:minecraft:ender_eye") < teamTarget("item:minecraft:ender_eye");
+      case END_SUPPORT -> false;
+    };
+  }
+
+  public synchronized boolean shouldSearchStronghold(BotConnection bot) {
+    var role = roleFor(bot);
+    if (objective().ordinal() < TeamObjective.STRONGHOLD_HUNT.ordinal()) {
+      return false;
+    }
+
+    return role == TeamRole.LEAD || role == TeamRole.STRONGHOLD_SCOUT || role == TeamRole.END_SUPPORT;
+  }
+
+  public synchronized boolean shouldEnterEnd(BotConnection bot) {
+    var role = roleFor(bot);
+    return objective().ordinal() >= TeamObjective.END_ASSAULT.ordinal()
+      && role != TeamRole.PORTAL_ENGINEER;
+  }
+
+  public synchronized void noteTimeout(BotConnection bot, @Nullable String actionDescription) {
+    telemetry.computeIfAbsent(bot.accountProfileId(), _ -> new BotTelemetry())
+      .noteTimeout(actionDescription, System.currentTimeMillis());
+  }
+
+  public synchronized void noteRecovery(BotConnection bot, String reason) {
+    telemetry.computeIfAbsent(bot.accountProfileId(), _ -> new BotTelemetry())
+      .noteRecovery(reason, System.currentTimeMillis());
+  }
+
   public synchronized Optional<Vec3> lastKnownDeathPosition(BotConnection bot) {
     return Optional.ofNullable(botSnapshots.get(bot.accountProfileId()))
       .flatMap(BotSnapshot::lastDeathPosition);
+  }
+
+  public synchronized Optional<ResourceKey<Level>> lastKnownDeathDimension(BotConnection bot) {
+    return Optional.ofNullable(botSnapshots.get(bot.accountProfileId()))
+      .flatMap(BotSnapshot::lastDeathDimension);
   }
 
   public synchronized int deathCount(BotConnection bot) {
@@ -247,17 +403,50 @@ public final class AutomationTeamCoordinator {
   }
 
   public synchronized Collection<BotStatus> botStatuses() {
+    prune(System.currentTimeMillis());
+    rebalanceRoles();
+    updateObjective();
     return botSnapshots.values().stream()
+      .sorted(Comparator.comparing(BotSnapshot::accountName))
       .map(snapshot -> new BotStatus(
         snapshot.botId(),
         snapshot.accountName(),
         snapshot.dimension,
         snapshot.position,
+        roleAssignments.getOrDefault(snapshot.botId(), TeamRole.END_SUPPORT),
+        objective,
         snapshot.status,
         snapshot.phase,
         snapshot.deathCount,
-        snapshot.lastProgressMillis))
+        snapshot.lastProgressMillis,
+        telemetry.getOrDefault(snapshot.botId(), BotTelemetry.EMPTY).timeoutCount(),
+        telemetry.getOrDefault(snapshot.botId(), BotTelemetry.EMPTY).recoveryCount(),
+        telemetry.getOrDefault(snapshot.botId(), BotTelemetry.EMPTY).lastRecoveryReason()))
       .toList();
+  }
+
+  public synchronized TeamSummary teamSummary() {
+    prune(System.currentTimeMillis());
+    updateObjective();
+
+    var counts = new HashMap<String, Integer>();
+    for (var requirement : TEAM_SHARED_REQUIREMENTS) {
+      counts.put(requirement, sharedCount(requirement));
+    }
+
+    return new TeamSummary(
+      objective,
+      botSnapshots.size(),
+      counts.getOrDefault("item:minecraft:blaze_rod", 0),
+      teamTarget("item:minecraft:blaze_rod"),
+      counts.getOrDefault("item:minecraft:ender_pearl", 0),
+      teamTarget("item:minecraft:ender_pearl"),
+      counts.getOrDefault("item:minecraft:ender_eye", 0),
+      teamTarget("item:minecraft:ender_eye"),
+      counts.getOrDefault("item:minecraft:arrow", 0),
+      teamTarget("item:minecraft:arrow"),
+      counts.getOrDefault("item:minecraft:bed", 0),
+      teamTarget("item:minecraft:bed"));
   }
 
   private boolean claim(UUID owner, String key, @Nullable Vec3 target, long leaseMillis) {
@@ -288,6 +477,9 @@ public final class AutomationTeamCoordinator {
       dimensionBlocks.values().removeIf(block -> now - block.lastSeenMillis() > BLOCK_EXPIRY_MILLIS));
     sharedBlocks.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     botSnapshots.values().removeIf(snapshot -> now - snapshot.lastSeenMillis > BOT_EXPIRY_MILLIS);
+    sharedInventory.keySet().removeIf(botId -> !botSnapshots.containsKey(botId));
+    roleAssignments.keySet().removeIf(botId -> !botSnapshots.containsKey(botId));
+    telemetry.keySet().removeIf(botId -> !botSnapshots.containsKey(botId));
     claims.values().removeIf(claim -> claim.expiresAtMillis() <= now);
     eyeSamples.removeIf(sample -> now - sample.recordedAtMillis() > EYE_SAMPLE_EXPIRY_MILLIS);
   }
@@ -316,6 +508,96 @@ public final class AutomationTeamCoordinator {
       || block == Blocks.NETHER_BRICKS
       || block == Blocks.NETHER_BRICK_FENCE
       || block == Blocks.NETHER_BRICK_STAIRS;
+  }
+
+  private static boolean isRuinedPortalMarker(BlockState state) {
+    var block = state.getBlock();
+    return block == Blocks.CRYING_OBSIDIAN
+      || block == Blocks.GOLD_BLOCK
+      || block == Blocks.NETHERRACK
+      || block == Blocks.MAGMA_BLOCK
+      || block == Blocks.OBSIDIAN;
+  }
+
+  private Optional<Vec3> centroid(ResourceKey<Level> dimension, Predicate<BlockState> predicate, double y) {
+    var matches = sharedBlocks.getOrDefault(dimension, Map.of())
+      .values()
+      .stream()
+      .filter(block -> predicate.test(block.state()))
+      .map(SharedBlock::pos)
+      .toList();
+    if (matches.isEmpty()) {
+      return Optional.empty();
+    }
+
+    var sumX = 0.0;
+    var sumZ = 0.0;
+    for (var pos : matches) {
+      sumX += pos.getX() + 0.5;
+      sumZ += pos.getZ() + 0.5;
+    }
+    return Optional.of(new Vec3(sumX / matches.size(), y, sumZ / matches.size()));
+  }
+
+  private double clampTargetY(ResourceKey<Level> dimension, double y) {
+    if (dimension == Level.NETHER) {
+      return Math.max(50.0, Math.min(96.0, y));
+    }
+    if (dimension == Level.END) {
+      return Math.max(62.0, Math.min(90.0, y));
+    }
+    return Math.max(12.0, Math.min(48.0, y));
+  }
+
+  private void rebalanceRoles() {
+    var orderedBots = botSnapshots.values().stream()
+      .sorted(Comparator.comparing(BotSnapshot::accountName))
+      .toList();
+    for (int i = 0; i < orderedBots.size(); i++) {
+      var snapshot = orderedBots.get(i);
+      var role = switch (i) {
+        case 0 -> TeamRole.LEAD;
+        case 1 -> TeamRole.PORTAL_ENGINEER;
+        case 2, 3, 4 -> TeamRole.NETHER_RUNNER;
+        case 5, 6, 7 -> TeamRole.STRONGHOLD_SCOUT;
+        default -> TeamRole.END_SUPPORT;
+      };
+      roleAssignments.put(snapshot.botId(), role);
+    }
+  }
+
+  private void updateObjective() {
+    if (hasCompletedRun()) {
+      objective = TeamObjective.COMPLETE;
+      return;
+    }
+
+    if (sharedBlocks.getOrDefault(Level.END, Map.of()).values().stream()
+      .anyMatch(block -> block.state().getBlock() == Blocks.DRAGON_EGG || block.state().getBlock() == Blocks.END_PORTAL)) {
+      objective = TeamObjective.END_ASSAULT;
+      return;
+    }
+
+    if (sharedBlocks.getOrDefault(Level.OVERWORLD, Map.of()).values().stream()
+      .anyMatch(block -> block.state().getBlock() == Blocks.END_PORTAL_FRAME || block.state().getBlock() == Blocks.END_PORTAL)
+      || sharedCount("item:minecraft:ender_eye") >= teamTarget("item:minecraft:ender_eye")) {
+      objective = TeamObjective.STRONGHOLD_HUNT;
+      return;
+    }
+
+    if (sharedCount("item:minecraft:blaze_rod") >= teamTarget("item:minecraft:blaze_rod")
+      && sharedCount("item:minecraft:ender_pearl") >= teamTarget("item:minecraft:ender_pearl")) {
+      objective = TeamObjective.STRONGHOLD_HUNT;
+      return;
+    }
+
+    objective = TeamObjective.NETHER_PROGRESS;
+  }
+
+  private boolean hasCompletedRun() {
+    return botSnapshots.values().stream().anyMatch(snapshot -> "COMPLETE".equals(snapshot.phase))
+      || sharedBlocks.getOrDefault(Level.END, Map.of()).values().stream()
+      .anyMatch(block -> block.state().getBlock() == Blocks.DRAGON_EGG);
   }
 
   private static int floorToGrid(double value, int spacing) {
@@ -367,10 +649,29 @@ public final class AutomationTeamCoordinator {
                           String accountName,
                           @Nullable ResourceKey<Level> dimension,
                           @Nullable Vec3 position,
+                          TeamRole role,
+                          TeamObjective objective,
                           String status,
                           @Nullable String phase,
                           int deathCount,
-                          long lastProgressMillis) {
+                          long lastProgressMillis,
+                          int timeoutCount,
+                          int recoveryCount,
+                          @Nullable String lastRecoveryReason) {
+  }
+
+  public record TeamSummary(TeamObjective objective,
+                            int activeBots,
+                            int blazeRods,
+                            int targetBlazeRods,
+                            int enderPearls,
+                            int targetEnderPearls,
+                            int enderEyes,
+                            int targetEnderEyes,
+                            int arrows,
+                            int targetArrows,
+                            int beds,
+                            int targetBeds) {
   }
 
   private record Claim(String key, UUID owner, @Nullable Vec3 target, long expiresAtMillis) {
@@ -385,6 +686,7 @@ public final class AutomationTeamCoordinator {
     private @Nullable ResourceKey<Level> dimension;
     private @Nullable Vec3 position;
     private @Nullable Vec3 lastDeathPosition;
+    private @Nullable ResourceKey<Level> lastDeathDimension;
     private String status = "idle";
     private @Nullable String phase;
     private boolean alive = true;
@@ -406,6 +708,7 @@ public final class AutomationTeamCoordinator {
       if (this.alive && !alive) {
         deathCount++;
         lastDeathPosition = position;
+        lastDeathDimension = dimension;
       }
 
       this.position = position;
@@ -439,8 +742,75 @@ public final class AutomationTeamCoordinator {
       return Optional.ofNullable(lastDeathPosition);
     }
 
+    private Optional<ResourceKey<Level>> lastDeathDimension() {
+      return Optional.ofNullable(lastDeathDimension);
+    }
+
     private int deathCount() {
       return deathCount;
+    }
+  }
+
+  public enum TeamRole {
+    LEAD,
+    PORTAL_ENGINEER,
+    NETHER_RUNNER,
+    STRONGHOLD_SCOUT,
+    END_SUPPORT;
+
+    public boolean isNetherSpecialist() {
+      return this == LEAD || this == PORTAL_ENGINEER || this == NETHER_RUNNER;
+    }
+
+    public boolean isStrongholdSpecialist() {
+      return this == LEAD || this == STRONGHOLD_SCOUT;
+    }
+
+    public boolean isEndSpecialist() {
+      return this == LEAD || this == STRONGHOLD_SCOUT || this == END_SUPPORT;
+    }
+  }
+
+  public enum TeamObjective {
+    BOOTSTRAP,
+    NETHER_PROGRESS,
+    STRONGHOLD_HUNT,
+    END_ASSAULT,
+    COMPLETE
+  }
+
+  private static final class BotTelemetry {
+    private static final BotTelemetry EMPTY = new BotTelemetry();
+    private int timeoutCount;
+    private int recoveryCount;
+    private @Nullable String lastRecoveryReason;
+    private long lastTimeoutMillis;
+    private long lastRecoveryMillis;
+
+    private void noteTimeout(@Nullable String actionDescription, long now) {
+      timeoutCount++;
+      lastTimeoutMillis = now;
+      if (actionDescription != null && !actionDescription.isBlank()) {
+        lastRecoveryReason = "timeout: " + actionDescription;
+      }
+    }
+
+    private void noteRecovery(String reason, long now) {
+      recoveryCount++;
+      lastRecoveryMillis = now;
+      lastRecoveryReason = reason;
+    }
+
+    private int timeoutCount() {
+      return timeoutCount;
+    }
+
+    private int recoveryCount() {
+      return recoveryCount;
+    }
+
+    private @Nullable String lastRecoveryReason() {
+      return lastRecoveryReason;
     }
   }
 }

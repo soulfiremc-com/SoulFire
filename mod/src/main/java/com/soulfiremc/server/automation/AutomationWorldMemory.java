@@ -49,7 +49,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 public final class AutomationWorldMemory {
-  private static final int BLOCK_SCAN_RADIUS = 32;
+  private static final int BLOCK_SCAN_RADIUS = 48;
   private static final int BLOCK_SCAN_INTERVAL_TICKS = 20;
   private static final long MEMORY_EXPIRY_TICKS = 20L * 60L * 5L;
   private static final long UNREACHABLE_EXPIRY_TICKS = 20L * 30L;

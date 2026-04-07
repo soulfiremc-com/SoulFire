@@ -72,26 +72,45 @@ public final class AutomationCommand {
         "Shows shared automation coordinator status for the current instance",
         c -> {
           for (var instance : c.getSource().getVisibleInstances()) {
+            var summary = instance.automationCoordinator().teamSummary();
             var statuses = instance.automationCoordinator().botStatuses();
             if (statuses.isEmpty()) {
               c.getSource().source().sendInfo(instance.friendlyNameCache().get() + ": no shared automation state recorded yet");
               continue;
             }
 
-            c.getSource().source().sendInfo(instance.friendlyNameCache().get() + ":");
+            c.getSource().source().sendInfo(instance.friendlyNameCache().get()
+              + ": objective=%s bots=%d blaze=%d/%d pearls=%d/%d eyes=%d/%d arrows=%d/%d beds=%d/%d".formatted(
+              summary.objective().name().toLowerCase(),
+              summary.activeBots(),
+              summary.blazeRods(),
+              summary.targetBlazeRods(),
+              summary.enderPearls(),
+              summary.targetEnderPearls(),
+              summary.enderEyes(),
+              summary.targetEnderEyes(),
+              summary.arrows(),
+              summary.targetArrows(),
+              summary.beds(),
+              summary.targetBeds()));
             for (var status : statuses) {
               var dimension = status.dimension() == null ? "unknown" : status.dimension().identifier().toString();
               var position = status.position() == null
                 ? "unknown"
                 : "%d,%d,%d".formatted((int) Math.floor(status.position().x), (int) Math.floor(status.position().y), (int) Math.floor(status.position().z));
               var phase = status.phase() == null ? "-" : status.phase().toLowerCase();
-              c.getSource().source().sendInfo("  %s: %s, phase=%s, dim=%s, pos=%s, deaths=%d".formatted(
+              var recovery = status.lastRecoveryReason() == null ? "-" : status.lastRecoveryReason();
+              c.getSource().source().sendInfo("  %s: role=%s, status=%s, phase=%s, dim=%s, pos=%s, deaths=%d, timeouts=%d, recoveries=%d, last=%s".formatted(
                 status.accountName(),
+                status.role().name().toLowerCase(),
                 status.status(),
                 phase,
                 dimension,
                 position,
-                status.deathCount()));
+                status.deathCount(),
+                status.timeoutCount(),
+                status.recoveryCount(),
+                recovery));
             }
           }
           return Command.SINGLE_SUCCESS;
