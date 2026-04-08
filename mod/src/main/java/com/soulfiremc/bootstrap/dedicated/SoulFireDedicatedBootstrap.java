@@ -52,7 +52,7 @@ public final class SoulFireDedicatedBootstrap extends SoulFireAbstractBootstrap 
 
     if (Boolean.getBoolean("sf.dumpOpenApi")) {
       try {
-        Files.write(SFPathConstants.BASE_DIR.resolve("openapi.json"), soulFire.rpcServer().openApiService().openApiDocument());
+        Files.write(SFPathConstants.BASE_DIR.resolve("sf-openapi.json"), soulFire.rpcServer().openApiService().openApiDocument());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
