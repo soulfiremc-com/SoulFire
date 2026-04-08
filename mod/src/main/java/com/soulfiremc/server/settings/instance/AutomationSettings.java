@@ -19,12 +19,12 @@ package com.soulfiremc.server.settings.instance;
 
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
+import com.soulfiremc.server.settings.property.BooleanProperty;
 import com.soulfiremc.server.settings.property.ComboProperty;
+import com.soulfiremc.server.settings.property.ComboProperty.ComboOption;
 import com.soulfiremc.server.settings.property.ImmutableBooleanProperty;
 import com.soulfiremc.server.settings.property.ImmutableComboProperty;
 import com.soulfiremc.server.settings.property.ImmutableIntProperty;
-import com.soulfiremc.server.settings.property.BooleanProperty;
-import com.soulfiremc.server.settings.property.ComboProperty.ComboOption;
 import com.soulfiremc.server.settings.property.IntProperty;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;

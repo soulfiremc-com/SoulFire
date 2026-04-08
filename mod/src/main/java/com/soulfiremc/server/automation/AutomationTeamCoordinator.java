@@ -17,8 +17,8 @@
  */
 package com.soulfiremc.server.automation;
 
-import com.soulfiremc.server.account.MinecraftAccount;
 import com.soulfiremc.server.InstanceManager;
+import com.soulfiremc.server.account.MinecraftAccount;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
 import com.soulfiremc.server.util.structs.GsonInstance;

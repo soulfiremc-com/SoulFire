@@ -18,8 +18,8 @@
 package com.soulfiremc.server.automation;
 
 import com.soulfiremc.server.InstanceManager;
-import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
+import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.IntProperty;
 import com.soulfiremc.server.util.structs.GsonInstance;
 

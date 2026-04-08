@@ -17,12 +17,11 @@
  */
 package com.soulfiremc.server.automation;
 
+import com.soulfiremc.server.settings.instance.AutomationSettings;
 import org.junit.jupiter.api.Test;
 
-import com.soulfiremc.server.settings.instance.AutomationSettings;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class AutomationControlSupportTest {
