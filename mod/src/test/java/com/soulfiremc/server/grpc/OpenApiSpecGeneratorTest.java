@@ -92,12 +92,90 @@ class OpenApiSpecGeneratorTest {
 
     try {
       var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://example.com");
-      var usersSchema = (ObjectNode) openApi.at("/components/schemas/UserListResponse/properties/users");
+      var usersSchema = findPropertySchema(openApi, "users");
 
+      assertNotNull(usersSchema);
       assertEquals("array", usersSchema.path("type").asText());
       assertEquals("UNORDERED_LIST", usersSchema.path("x-google-field-behaviors").get(0).asText());
     } finally {
       server.close();
     }
+  }
+
+  @Test
+  void generatedSpecIncludesCustomizableServerTemplate() {
+    var grpcService = GrpcService.builder()
+      .addService(new UserServiceGrpc.UserServiceImplBase() {
+      })
+      .enableUnframedRequests(true)
+      .enableHttpJsonTranscoding(true)
+      .build();
+    var server = Server.builder()
+      .service(grpcService)
+      .build();
+
+    try {
+      var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://api.example.com:8443/api/v1");
+      var servers = openApi.withArray("servers");
+
+      assertEquals(2, servers.size());
+      assertEquals("https://api.example.com:8443/api/v1", servers.get(0).path("url").asText());
+      assertEquals("{scheme}://{host}:{port}/{basePath}", servers.get(1).path("url").asText());
+      assertEquals("User-selected server", servers.get(1).path("description").asText());
+
+      var variables = (ObjectNode) servers.get(1).path("variables");
+      assertEquals("https", variables.path("scheme").path("default").asText());
+      assertEquals("http", variables.path("scheme").path("enum").get(0).asText());
+      assertEquals("https", variables.path("scheme").path("enum").get(1).asText());
+      assertEquals("api.example.com", variables.path("host").path("default").asText());
+      assertEquals("8443", variables.path("port").path("default").asText());
+      assertEquals("api/v1", variables.path("basePath").path("default").asText());
+    } finally {
+      server.close();
+    }
+  }
+
+  @Test
+  void generatedSpecUsesOpenApi31Dialect() {
+    var grpcService = GrpcService.builder()
+      .addService(new UserServiceGrpc.UserServiceImplBase() {
+      })
+      .enableUnframedRequests(true)
+      .enableHttpJsonTranscoding(true)
+      .build();
+    var server = Server.builder()
+      .service(grpcService)
+      .build();
+
+    try {
+      var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://example.com");
+
+      assertEquals("3.1.0", openApi.path("openapi").asText());
+      assertEquals(
+        "https://spec.openapis.org/oas/3.1/dialect/base",
+        openApi.path("jsonSchemaDialect").asText()
+      );
+      assertFalse(openApi.toPrettyString().contains("\"nullable\""));
+    } finally {
+      server.close();
+    }
+  }
+
+  private static ObjectNode findPropertySchema(ObjectNode openApi, String propertyName) {
+    var schemas = openApi.path("components").path("schemas");
+    if (!(schemas instanceof ObjectNode objectNode)) {
+      return null;
+    }
+
+    var iterator = objectNode.properties().iterator();
+    while (iterator.hasNext()) {
+      var schema = iterator.next().getValue();
+      var property = schema.path("properties").path(propertyName);
+      if (property instanceof ObjectNode propertyNode) {
+        return propertyNode;
+      }
+    }
+
+    return null;
   }
 }

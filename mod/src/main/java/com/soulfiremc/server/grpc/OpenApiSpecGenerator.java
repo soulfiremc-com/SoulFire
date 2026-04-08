@@ -44,6 +44,7 @@ import com.soulfiremc.grpc.generated.LoginServiceGrpc;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.protobuf.ProtoFileDescriptorSupplier;
 
+import java.net.URI;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -54,7 +55,8 @@ final class OpenApiSpecGenerator {
   private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
   private static final String HEALTH_SERVICE_NAME = "grpc.health.v1.Health";
   private static final String HTTP_SERVICE_SUFFIX = "_HTTP";
-  private static final String OPEN_API_VERSION = "3.0.3";
+  private static final String OPEN_API_VERSION = "3.1.0";
+  private static final String JSON_SCHEMA_DIALECT = "https://spec.openapis.org/oas/3.1/dialect/base";
   private static final String ERROR_SCHEMA_NAME = "SoulFireGrpcError";
   private static final List<DocServicePlugin> DOC_SERVICE_PLUGINS = immutableServiceLoader(
     DocServicePlugin.class,
@@ -111,6 +113,7 @@ final class OpenApiSpecGenerator {
   private ObjectNode generate() {
     var document = JSON_MAPPER.createObjectNode();
     document.put("openapi", OPEN_API_VERSION);
+    document.put("jsonSchemaDialect", JSON_SCHEMA_DIALECT);
     document.set("info", buildInfo());
     document.set("servers", buildServers());
     document.set("tags", buildTags());
@@ -152,7 +155,31 @@ final class OpenApiSpecGenerator {
     servers.addObject()
       .put("url", publicAddress)
       .put("description", "Configured SoulFire public API address");
+    var templateDefaults = serverTemplateDefaults(publicAddress);
+    var templateServer = servers.addObject();
+    templateServer
+      .put("url", "{scheme}://{host}:{port}/{basePath}")
+      .put("description", "User-selected server");
+    var variables = templateServer.putObject("variables");
+    addServerVariable(variables, "scheme", templateDefaults.scheme(), List.of("http", "https"));
+    addServerVariable(variables, "host", templateDefaults.host(), List.of());
+    addServerVariable(variables, "port", templateDefaults.port(), List.of());
+    addServerVariable(variables, "basePath", templateDefaults.basePath(), List.of());
     return servers;
+  }
+
+  private static void addServerVariable(
+    ObjectNode variables,
+    String name,
+    String defaultValue,
+    List<String> allowedValues
+  ) {
+    var variable = variables.putObject(name);
+    variable.put("default", defaultValue);
+    if (!allowedValues.isEmpty()) {
+      var enumValues = variable.putArray("enum");
+      allowedValues.forEach(enumValues::add);
+    }
   }
 
   private ArrayNode buildTags() {
@@ -831,9 +858,7 @@ final class OpenApiSpecGenerator {
 
     if (typeSignature instanceof ContainerTypeSignature containerTypeSignature) {
       if (typeSignature.type() == TypeSignatureType.OPTIONAL && !containerTypeSignature.typeParameters().isEmpty()) {
-        var schema = schemaForType(containerTypeSignature.typeParameters().get(0));
-        schema.put("nullable", true);
-        return schema;
+        return nullableSchema(schemaForType(containerTypeSignature.typeParameters().get(0)));
       }
 
       var containerName = typeSignature.name().toLowerCase(Locale.ROOT);
@@ -951,6 +976,15 @@ final class OpenApiSpecGenerator {
   private static ObjectNode schemaRef(String schemaName) {
     return JSON_MAPPER.createObjectNode()
       .put("$ref", "#/components/schemas/" + escapeJsonPointerSegment(schemaName));
+  }
+
+  private static ObjectNode nullableSchema(ObjectNode schema) {
+    var wrapper = JSON_MAPPER.createObjectNode();
+    wrapper.putArray("anyOf")
+      .add(schema)
+      .addObject()
+      .put("type", "null");
+    return wrapper;
   }
 
   private static ObjectNode schemaWithDescription(ObjectNode schema, String description) {
@@ -1075,6 +1109,32 @@ final class OpenApiSpecGenerator {
     return url;
   }
 
+  private static ServerTemplateDefaults serverTemplateDefaults(String publicAddress) {
+    try {
+      var uri = URI.create(publicAddress);
+      var scheme = Optional.ofNullable(uri.getScheme())
+        .map(value -> value.toLowerCase(Locale.ROOT))
+        .filter(value -> value.equals("http") || value.equals("https"))
+        .orElse("https");
+      var host = Optional.ofNullable(uri.getHost())
+        .filter(value -> !value.isBlank())
+        .orElse("api.example.com");
+      var port = uri.getPort() >= 0
+        ? Integer.toString(uri.getPort())
+        : switch (scheme) {
+          case "http" -> "80";
+          case "https" -> "443";
+          default -> "443";
+        };
+      var basePath = Optional.ofNullable(uri.getPath())
+        .map(path -> path.startsWith("/") ? path.substring(1) : path)
+        .orElse("");
+      return new ServerTemplateDefaults(scheme, host, port, basePath);
+    } catch (IllegalArgumentException _) {
+      return new ServerTemplateDefaults("https", "api.example.com", "443", "v1");
+    }
+  }
+
   private static String normalizePath(String path) {
     if (path.startsWith("^")) {
       path = path.substring(1);
@@ -1094,6 +1154,9 @@ final class OpenApiSpecGenerator {
 
   private static String fieldKey(String typeName, String fieldName) {
     return typeName + '/' + fieldName;
+  }
+
+  private record ServerTemplateDefaults(String scheme, String host, String port, String basePath) {
   }
 
   private void markSchemaUsed(String schemaName) {
