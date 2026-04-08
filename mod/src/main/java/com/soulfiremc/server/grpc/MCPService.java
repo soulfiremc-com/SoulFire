@@ -33,13 +33,14 @@ import io.grpc.Context;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.modelcontextprotocol.common.McpTransportContext;
-import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpAsyncServerExchange;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,9 +65,8 @@ public final class MCPService {
     return transportProvider;
   }
 
-  @SuppressWarnings("deprecation")
   public MCPService(SoulFireServer soulFireServer) {
-    var jsonMapper = new JacksonMcpJsonMapper(new ObjectMapper());
+    var jsonMapper = new JacksonMcpJsonMapper(new JsonMapper());
 
     this.transportProvider = ArmeriaStreamableServerTransportProvider
       .builder()
@@ -1150,7 +1150,7 @@ public final class MCPService {
     String description,
     Map<String, Object> properties,
     List<String> required,
-    BiFunction<McpAsyncServerExchange, Map<String, Object>,
+    BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest,
       Mono<McpSchema.CallToolResult>> handler) {
     return new McpServerFeatures.AsyncToolSpecification(
       new McpSchema.Tool(name, null, description, new McpSchema.JsonSchema(
@@ -1163,7 +1163,7 @@ public final class MCPService {
     );
   }
 
-  private BiFunction<McpAsyncServerExchange, Map<String, Object>,
+  private BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest,
     Mono<McpSchema.CallToolResult>> authed(
     BiFunction<McpAsyncServerExchange, Map<String, Object>,
       Mono<McpSchema.CallToolResult>> action) {
@@ -1176,7 +1176,7 @@ public final class MCPService {
       var grpcContext = Context.current().withValue(ServerRPCConstants.USER_CONTEXT_KEY, user);
       var previousContext = grpcContext.attach();
       try {
-        return action.apply(exchange, args);
+        return action.apply(exchange, args.arguments());
       } catch (StatusRuntimeException e) {
         return Mono.just(errorResult(e.getStatus().getCode() + ": " + e.getStatus().getDescription()));
       } catch (Exception e) {
@@ -1195,7 +1195,7 @@ public final class MCPService {
         public void onNext(MessageOrBuilder value) {
           try {
             var json = JsonFormat.printer().includingDefaultValueFields().print(value);
-            sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(json)), false));
+            sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(json)), false, null, Map.of()));
           } catch (Exception e) {
             sink.error(e);
           }
@@ -1228,21 +1228,17 @@ public final class MCPService {
 
   @SuppressWarnings("deprecation")
   private static McpSchema.CallToolResult errorResult(String message) {
-    return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("Error: " + message)), true);
+    return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("Error: " + message)), true, null, Map.of());
   }
 
   private static Value toProtoValue(Object value) {
-    if (value == null) {
-      return Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
-    } else if (value instanceof String s) {
-      return Value.newBuilder().setStringValue(s).build();
-    } else if (value instanceof Number n) {
-      return Value.newBuilder().setNumberValue(n.doubleValue()).build();
-    } else if (value instanceof Boolean b) {
-      return Value.newBuilder().setBoolValue(b).build();
-    } else {
-      return Value.newBuilder().setStringValue(value.toString()).build();
-    }
+    return switch (value) {
+      case null -> Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
+      case String s -> Value.newBuilder().setStringValue(s).build();
+      case Number n -> Value.newBuilder().setNumberValue(n.doubleValue()).build();
+      case Boolean b -> Value.newBuilder().setBoolValue(b).build();
+      default -> Value.newBuilder().setStringValue(value.toString()).build();
+    };
   }
 
   private static AutomationTeamObjective parseAutomationObjective(String raw) {
