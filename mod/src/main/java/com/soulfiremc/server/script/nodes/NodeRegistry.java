@@ -21,6 +21,7 @@ import com.google.gson.JsonParser;
 import com.soulfiremc.server.script.*;
 import com.soulfiremc.server.script.nodes.action.*;
 import com.soulfiremc.server.script.nodes.ai.*;
+import com.soulfiremc.server.script.nodes.collection.*;
 import com.soulfiremc.server.script.nodes.constant.BooleanConstantNode;
 import com.soulfiremc.server.script.nodes.constant.NumberConstantNode;
 import com.soulfiremc.server.script.nodes.constant.StringConstantNode;
@@ -121,6 +122,24 @@ public final class NodeRegistry {
     register(IndexOfNode.METADATA, IndexOfNode::new);
     register(RegexMatchNode.METADATA, RegexMatchNode::new);
     register(RegexReplaceNode.METADATA, RegexReplaceNode::new);
+
+    // Collection Nodes
+    register(CollectionSizeNode.METADATA, CollectionSizeNode::new);
+    register(CollectionContainsNode.METADATA, CollectionContainsNode::new);
+    register(CollectionIsEmptyNode.METADATA, CollectionIsEmptyNode::new);
+    register(CollectionAddNode.METADATA, CollectionAddNode::new);
+    register(CollectionRemoveNode.METADATA, CollectionRemoveNode::new);
+    register(CollectionAddAllNode.METADATA, CollectionAddAllNode::new);
+    register(CollectionRemoveAllNode.METADATA, CollectionRemoveAllNode::new);
+    register(CollectionRetainAllNode.METADATA, CollectionRetainAllNode::new);
+    register(CollectionToListNode.METADATA, CollectionToListNode::new);
+    register(CollectionToSetNode.METADATA, CollectionToSetNode::new);
+    register(ListCreateNode.METADATA, ListCreateNode::new);
+    register(ListAddNode.METADATA, ListAddNode::new);
+    register(ListRemoveAtNode.METADATA, ListRemoveAtNode::new);
+    register(SetCreateNode.METADATA, SetCreateNode::new);
+    register(MapKeysNode.METADATA, MapKeysNode::new);
+    register(MapValuesNode.METADATA, MapValuesNode::new);
 
     // List Nodes
     register(ListLengthNode.METADATA, ListLengthNode::new);

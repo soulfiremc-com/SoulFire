@@ -27,6 +27,7 @@ import reactor.core.scheduler.Scheduler;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +64,9 @@ public final class ReactiveScriptEngine {
   /// A pending execution task: a node ID and the execution context to use.
   private record ExecTask(String nodeId, ExecutionContext execCtx) {}
 
+  /// A resolved value associated with the edge that produced it.
+  private record ResolvedEdgeValue(ScriptGraph.GraphEdge edge, NodeValue value) {}
+
   /// Formats a human-readable node descriptor for log/error messages.
   private static String describeNode(String nodeId, ScriptGraph graph) {
     var graphNode = graph.getNode(nodeId);
@@ -72,6 +76,47 @@ public final class ReactiveScriptEngine {
     var metadata = NodeRegistry.isRegistered(graphNode.type()) ? NodeRegistry.getMetadata(graphNode.type()) : null;
     var displayName = metadata != null ? metadata.displayName() : graphNode.type();
     return displayName + " (" + graphNode.type() + ") [" + nodeId + "]";
+  }
+
+  private static Comparator<ScriptGraph.GraphEdge> inputEdgeComparator() {
+    return Comparator
+      .comparing(ScriptGraph.GraphEdge::targetHandle)
+      .thenComparingInt(ScriptGraph.GraphEdge::order)
+      .thenComparing(ScriptGraph.GraphEdge::sourceNodeId)
+      .thenComparing(ScriptGraph.GraphEdge::sourceHandle);
+  }
+
+  private static Map<String, PortDefinition> inputDefinitions(NodeMetadata metadata) {
+    return metadata.inputs().stream()
+      .collect(Collectors.toMap(PortDefinition::id, port -> port));
+  }
+
+  private static void materializeEdgeValue(
+    Map<String, PortDefinition> inputDefs,
+    Map<String, NodeValue> singleInputs,
+    Map<String, List<NodeValue>> multiInputs,
+    ScriptGraph.GraphEdge edge,
+    NodeValue value
+  ) {
+    var port = inputDefs.get(edge.targetHandle());
+    if (port != null && port.multiInput()) {
+      multiInputs.computeIfAbsent(edge.targetHandle(), _ -> new ArrayList<>()).add(value);
+    } else {
+      singleInputs.put(edge.targetHandle(), value);
+    }
+  }
+
+  private static Map<String, NodeValue> mergeResolvedInputs(
+    Map<String, NodeValue> baseInputs,
+    Map<String, NodeValue> singleInputs,
+    Map<String, List<NodeValue>> multiInputs
+  ) {
+    var merged = new HashMap<>(baseInputs);
+    merged.putAll(singleInputs);
+    for (var entry : multiInputs.entrySet()) {
+      merged.put(entry.getKey(), NodeValue.ofList(entry.getValue()));
+    }
+    return merged;
   }
 
   public ReactiveScriptEngine() {
@@ -419,10 +464,12 @@ public final class ReactiveScriptEngine {
 
     return ensureDataNodes.then(Mono.defer(() -> {
       // Split DATA edges into on-path (source has incoming exec edges) and off-path (data-only)
+      var inputDefs = inputDefinitions(metadata);
       var onPathResolved = new HashMap<String, NodeValue>();
-      var offPathMonos = new ArrayList<Mono<Map.Entry<String, NodeValue>>>();
+      var onPathMultiResolved = new HashMap<String, List<NodeValue>>();
+      var offPathMonos = new ArrayList<Mono<ResolvedEdgeValue>>();
 
-      for (var edge : incomingDataEdges) {
+      for (var edge : incomingDataEdges.stream().sorted(inputEdgeComparator()).toList()) {
         var sourceKey = edge.sourceHandle();
         var targetKey = edge.targetHandle();
 
@@ -441,7 +488,7 @@ public final class ReactiveScriptEngine {
             if (log.isDebugEnabled()) {
               log.debug("DATA edge {}.{} -> {}.{} (on-path): {}", edge.sourceNodeId(), sourceKey, nodeId, targetKey, value.toDebugString());
             }
-            onPathResolved.put(targetKey, value);
+            materializeEdgeValue(inputDefs, onPathResolved, onPathMultiResolved, edge, value);
           } else {
             var msg = "DATA edge " + edge.sourceNodeId() + "." + sourceKey
               + " -> " + nodeId + "." + targetKey + ": on-path source value not available";
@@ -458,7 +505,7 @@ public final class ReactiveScriptEngine {
                 if (log.isDebugEnabled()) {
                   log.debug("DATA edge {}.{} -> {}.{} (off-path): {}", edge.sourceNodeId(), sourceKey, nodeId, targetKey, value.toDebugString());
                 }
-                sink.next(Map.entry(targetKey, value));
+                sink.next(new ResolvedEdgeValue(edge, value));
               } else {
                 log.warn("DATA edge {}.{} -> {}.{}: source key NOT FOUND in outputs (available: {})",
                   edge.sourceNodeId(), sourceKey, nodeId, targetKey, outputs.keySet());
@@ -469,18 +516,31 @@ public final class ReactiveScriptEngine {
 
       if (offPathMonos.isEmpty()) {
         // All DATA edges resolved synchronously
-        var merged = new HashMap<>(baseInputs);
-        merged.putAll(onPathResolved);
-        return executeNode(nodeImpl, metadata, nodeId, merged, graph, context, run, execContext);
+        return executeNode(nodeImpl, metadata, nodeId,
+          mergeResolvedInputs(baseInputs, onPathResolved, onPathMultiResolved),
+          graph, context, run, execContext);
       }
 
       return Flux.merge(offPathMonos)
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (_, b) -> b))
+        .sort(Comparator.comparing(ResolvedEdgeValue::edge, inputEdgeComparator()))
+        .collectList()
         .map(offPathInputs -> {
-          var merged = new HashMap<>(baseInputs);
-          merged.putAll(onPathResolved);
-          merged.putAll(offPathInputs);
-          return merged;
+          var offPathResolved = new HashMap<String, NodeValue>();
+          var offPathMultiResolved = new HashMap<String, List<NodeValue>>();
+          for (var resolved : offPathInputs) {
+            materializeEdgeValue(inputDefs, offPathResolved, offPathMultiResolved, resolved.edge(), resolved.value());
+          }
+          var singleResolved = new HashMap<>(onPathResolved);
+          singleResolved.putAll(offPathResolved);
+          var multiResolved = new HashMap<>(onPathMultiResolved);
+          offPathMultiResolved.forEach((key, values) ->
+            multiResolved.merge(key, values, (left, right) -> {
+              var mergedValues = new ArrayList<NodeValue>(left.size() + right.size());
+              mergedValues.addAll(left);
+              mergedValues.addAll(right);
+              return mergedValues;
+            }));
+          return mergeResolvedInputs(baseInputs, singleResolved, multiResolved);
         })
         .flatMap(inputs -> executeNode(nodeImpl, metadata, nodeId, inputs, graph, context, run, execContext));
     }));
@@ -650,23 +710,28 @@ public final class ReactiveScriptEngine {
       : Flux.merge(upstreamDataNodeExecutions).then();
 
     return ensureUpstream.then(Mono.defer(() -> {
+      var inputDefs = inputDefinitions(metadata);
       var upstreamMonos = incomingDataEdges.stream()
+        .sorted(inputEdgeComparator())
         .map(edge -> run.awaitNodeOutputs(edge.sourceNodeId(), describeNode(edge.sourceNodeId(), graph))
-          .<Map.Entry<String, NodeValue>>handle((outputs, sink) -> {
+          .<ResolvedEdgeValue>handle((outputs, sink) -> {
             var value = outputs.get(edge.sourceHandle());
             if (value != null) {
-              sink.next(Map.entry(edge.targetHandle(), value));
+              sink.next(new ResolvedEdgeValue(edge, value));
             }
           }))
         .toList();
 
       return Flux.merge(upstreamMonos)
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (_, b) -> b))
-        .defaultIfEmpty(Map.of())
+        .sort(Comparator.comparing(ResolvedEdgeValue::edge, inputEdgeComparator()))
+        .collectList()
         .map(resolvedInputs -> {
-          var merged = new HashMap<>(baseInputs);
-          merged.putAll(resolvedInputs);
-          return merged;
+          var singleInputs = new HashMap<String, NodeValue>();
+          var multiInputs = new HashMap<String, List<NodeValue>>();
+          for (var resolved : resolvedInputs) {
+            materializeEdgeValue(inputDefs, singleInputs, multiInputs, resolved.edge(), resolved.value());
+          }
+          return mergeResolvedInputs(baseInputs, singleInputs, multiInputs);
         })
         .flatMap(inputs -> {
           context.eventListener().onNodeStarted(nodeId);

@@ -49,6 +49,16 @@ public sealed interface TypeDescriptor {
     return new Parameterized(PortType.MAP, List.of(keyType, valueType));
   }
 
+  /// Creates a parameterized Set type: Set<elementType>.
+  static TypeDescriptor set(TypeDescriptor elementType) {
+    return new Parameterized(PortType.SET, List.of(elementType));
+  }
+
+  /// Creates a parameterized Collection type: Collection<elementType>.
+  static TypeDescriptor collection(TypeDescriptor elementType) {
+    return new Parameterized(PortType.COLLECTION, List.of(elementType));
+  }
+
   /// Convenience: List<Simple(elementType)>.
   static TypeDescriptor listOf(PortType elementType) {
     return list(simple(elementType));
@@ -57,6 +67,16 @@ public sealed interface TypeDescriptor {
   /// Convenience: Map<Simple(keyType), Simple(valueType)>.
   static TypeDescriptor mapOf(PortType keyType, PortType valueType) {
     return map(simple(keyType), simple(valueType));
+  }
+
+  /// Convenience: Set<Simple(elementType)>.
+  static TypeDescriptor setOf(PortType elementType) {
+    return set(simple(elementType));
+  }
+
+  /// Convenience: Collection<Simple(elementType)>.
+  static TypeDescriptor collectionOf(PortType elementType) {
+    return collection(simple(elementType));
   }
 
   // ==================== Instance Methods ====================
@@ -143,8 +163,32 @@ public sealed interface TypeDescriptor {
       && resolvedB instanceof Parameterized(PortType baseB, List<TypeDescriptor> _) && baseB == PortType.MAP) {
       return true;
     }
-    return resolvedB instanceof Simple(PortType typeB) && typeB == PortType.MAP
-      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && baseA == PortType.MAP;
+    if (resolvedB instanceof Simple(PortType typeB) && typeB == PortType.MAP
+      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && baseA == PortType.MAP) {
+      return true;
+    }
+
+    // Simple SET vs Parameterized SET (same backward compat)
+    if (resolvedA instanceof Simple(PortType typeA) && typeA == PortType.SET
+      && resolvedB instanceof Parameterized(PortType baseB, List<TypeDescriptor> _) && baseB == PortType.SET) {
+      return true;
+    }
+    if (resolvedB instanceof Simple(PortType typeB) && typeB == PortType.SET
+      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && baseA == PortType.SET) {
+      return true;
+    }
+
+    // COLLECTION unifies with concrete LIST/SET families as a parent type.
+    if (resolvedA instanceof Simple(PortType typeA) && typeA == PortType.COLLECTION
+      && resolvedB instanceof Parameterized(PortType baseB, List<TypeDescriptor> _) && (baseB == PortType.COLLECTION || baseB == PortType.LIST || baseB == PortType.SET)) {
+      return true;
+    }
+    if (resolvedB instanceof Simple(PortType typeB) && typeB == PortType.COLLECTION
+      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && (baseA == PortType.COLLECTION || baseA == PortType.LIST || baseA == PortType.SET)) {
+      return true;
+    }
+
+    return false;
   }
 
   /// Creates a fresh bindings map for unification.
@@ -177,8 +221,8 @@ public sealed interface TypeDescriptor {
     }
   }
 
-  /// A parameterized type like List<T> or Map<K, V>.
-  /// The base is the container type (LIST, MAP), params are the type arguments.
+  /// A parameterized type like List<T>, Set<T>, or Map<K, V>.
+  /// The base is the container type (LIST, SET, MAP), params are the type arguments.
   record Parameterized(PortType base, List<TypeDescriptor> params) implements TypeDescriptor {
     public Parameterized {
       params = List.copyOf(params);

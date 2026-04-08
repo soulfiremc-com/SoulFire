@@ -42,26 +42,28 @@ public final class CategoryRegistry {
     NodeCategory.of("math", "Math", "calculator", "Mathematical operations", 5));
   public static final NodeCategory STRING = register(
     NodeCategory.of("string", "String", "type", "Text manipulation operations", 6));
+  public static final NodeCategory COLLECTION = register(
+    NodeCategory.of("collection", "Collection", "list", "Collection operations shared by lists and sets", 7));
   public static final NodeCategory LIST = register(
-    NodeCategory.of("list", "List", "list", "List/array operations", 7));
+    NodeCategory.of("list", "List", "list", "List/array specific operations", 8));
   public static final NodeCategory CONSTANTS = register(
-    NodeCategory.of("constants", "Constants", "hash", "Constant value nodes", 8));
+    NodeCategory.of("constants", "Constants", "hash", "Constant value nodes", 9));
   public static final NodeCategory UTILITY = register(
-    NodeCategory.of("utility", "Utility", "tool", "Utility and conversion nodes", 9));
+    NodeCategory.of("utility", "Utility", "tool", "Utility and conversion nodes", 10));
   public static final NodeCategory NETWORK = register(
-    NodeCategory.of("network", "Network", "globe", "HTTP requests and web operations", 10));
+    NodeCategory.of("network", "Network", "globe", "HTTP requests and web operations", 11));
   public static final NodeCategory AI = register(
-    NodeCategory.of("ai", "AI", "brain", "AI/LLM operations", 11));
+    NodeCategory.of("ai", "AI", "brain", "AI/LLM operations", 12));
   public static final NodeCategory JSON = register(
-    NodeCategory.of("json", "JSON", "braces", "JSON parsing and manipulation", 12));
+    NodeCategory.of("json", "JSON", "braces", "JSON parsing and manipulation", 13));
   public static final NodeCategory ENCODING = register(
-    NodeCategory.of("encoding", "Encoding", "lock", "Hashing, encryption, compression", 13));
+    NodeCategory.of("encoding", "Encoding", "lock", "Hashing, encryption, compression", 14));
   public static final NodeCategory STATE = register(
-    NodeCategory.of("state", "State", "database", "Caching and state management", 14));
+    NodeCategory.of("state", "State", "database", "Caching and state management", 15));
   public static final NodeCategory INTEGRATION = register(
-    NodeCategory.of("integration", "Integration", "plug", "External service integrations", 15));
+    NodeCategory.of("integration", "Integration", "plug", "External service integrations", 16));
   public static final NodeCategory VARIABLE = register(
-    NodeCategory.of("variable", "Variables", "variable", "Bot variable storage", 16));
+    NodeCategory.of("variable", "Variables", "variable", "Bot variable storage", 17));
 
   private CategoryRegistry() {
     // Prevent instantiation

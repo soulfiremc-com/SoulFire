@@ -43,5 +43,9 @@ public enum PortType {
   /// Item stack reference.
   ITEM,
   /// Key-value map of entries.
-  MAP
+  MAP,
+  /// Set of unique values with stable insertion order.
+  SET,
+  /// Abstract collection supertype for list/set operations.
+  COLLECTION
 }

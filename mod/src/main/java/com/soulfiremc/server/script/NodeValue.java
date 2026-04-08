@@ -23,8 +23,11 @@ import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -71,6 +74,10 @@ public sealed interface NodeValue {
         }
       }
       return new Json(array);
+    }
+    if (value instanceof Set<?> set) {
+      var nodeValues = set.stream().map(NodeValue::of).toList();
+      return ofSet(nodeValues);
     }
     if (value instanceof Map<?, ?> map) {
       var obj = new JsonObject();
@@ -121,6 +128,13 @@ public sealed interface NodeValue {
       }
     }
     return new Json(array);
+  }
+
+  /// Creates a set NodeValue with stable insertion order.
+  static NodeValue ofSet(List<NodeValue> values) {
+    var orderedValues = values.stream()
+      .collect(Collectors.toCollection(LinkedHashSet::new));
+    return new ValueSet(Collections.unmodifiableSet(new LinkedHashSet<>(orderedValues)));
   }
 
   /// Creates a bot NodeValue.
@@ -179,6 +193,9 @@ public sealed interface NodeValue {
     if (this instanceof ValueList(List<NodeValue> items)) {
       return items;
     }
+    if (this instanceof ValueSet(Set<NodeValue> items)) {
+      return List.copyOf(items);
+    }
     if (this instanceof Json(JsonElement element) && element.isJsonArray()) {
       return StreamSupport.stream(element.getAsJsonArray().spliterator(), false)
         .map(Json::new)
@@ -201,6 +218,22 @@ public sealed interface NodeValue {
     return List.of();
   }
 
+  /// Gets this value as an ordered set of NodeValues.
+  default Set<NodeValue> asSet() {
+    if (this instanceof ValueSet(Set<NodeValue> items)) {
+      return items;
+    }
+    if (this instanceof ValueList(List<NodeValue> items)) {
+      return items.stream().collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+    if (this instanceof Json(JsonElement element) && element.isJsonArray()) {
+      return StreamSupport.stream(element.getAsJsonArray().spliterator(), false)
+        .map(Json::new)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+    return Set.of();
+  }
+
   @Nullable
   default Vec3 asVec3() {
     return NodeValueConversion.toVector3(this).optionalValue().orElse(null);
@@ -218,6 +251,17 @@ public sealed interface NodeValue {
     if (this instanceof Json(JsonElement element)) {
       return element;
     }
+    if (this instanceof ValueSet(Set<NodeValue> items)) {
+      var array = new JsonArray();
+      for (var value : items) {
+        var element = value.asJsonElement();
+        if (element == null) {
+          return null;
+        }
+        array.add(element);
+      }
+      return array;
+    }
     return null;
   }
 
@@ -230,6 +274,7 @@ public sealed interface NodeValue {
       }
       case Bot(BotConnection bot1) -> "Bot(" + bot1.accountName() + ")";
       case ValueList(List<NodeValue> items) -> "List[" + items.size() + "]";
+      case ValueSet(Set<NodeValue> items) -> "Set[" + items.size() + "]";
       case Vector3(Vec3 vec) -> "Vector3(" + vec + ")";
     };
   }
@@ -262,6 +307,18 @@ public sealed interface NodeValue {
     @Override
     public String toString() {
       return items.toString();
+    }
+  }
+
+  /// Set of NodeValues that may contain non-JSON values while preserving insertion order.
+  record ValueSet(Set<NodeValue> items) implements NodeValue {
+    public ValueSet {
+      items = Collections.unmodifiableSet(new LinkedHashSet<>(items));
+    }
+
+    @Override
+    public String toString() {
+      return "Set[" + items.size() + "]";
     }
   }
 }

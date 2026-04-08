@@ -108,6 +108,33 @@ final class ScriptEngineTest {
   }
 
   @Test
+  void multiInputEdgesRespectExplicitOrder() {
+    var graph = ScriptGraph.builder("test-multi-input-order", "Multi Input Order Test")
+      .addNode("trigger", "trigger.on_script_init", null)
+      .addNode("const_a", "constant.string", Map.of("value", "a"))
+      .addNode("const_b", "constant.string", Map.of("value", "b"))
+      .addNode("const_c", "constant.string", Map.of("value", "c"))
+      .addNode("list", "list.create", null)
+      .addNode("join", "list.join", Map.of("separator", "-"))
+      .addNode("print", "action.print", null)
+      .addExecutionEdge("trigger", "out", "print", "in")
+      .addDataEdge("const_c", "value", "list", "items", 2)
+      .addDataEdge("const_a", "value", "list", "items", 0)
+      .addDataEdge("const_b", "value", "list", "items", 1)
+      .addDataEdge("list", "list", "join", "list")
+      .addDataEdge("join", "result", "print", "message")
+      .build();
+
+    var listener = runGraph(graph, "trigger");
+
+    assertNoErrors(listener);
+    var listOutputs = listener.nodeOutputs.get("list");
+    assertNotNull(listOutputs);
+    assertEquals(List.of("a", "b", "c"),
+      listOutputs.get("list").asList().stream().map(v -> v.asString("")).toList());
+  }
+
+  @Test
   void chainedDataOnlyNodesExecutedRecursively() {
     var graph = ScriptGraph.builder("test-chained-data", "Chained Data Test")
       .addNode("trigger", "trigger.on_script_init", null)

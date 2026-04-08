@@ -36,6 +36,7 @@ public final class NodeValueTypeChecker {
     return switch (value) {
       case NodeValue.Bot _ -> "Bot";
       case NodeValue.ValueList _ -> "List";
+      case NodeValue.ValueSet _ -> "Set";
       case NodeValue.Json(JsonElement element) -> describeJsonType(element);
       case NodeValue.Vector3 _ -> "Vector3";
     };

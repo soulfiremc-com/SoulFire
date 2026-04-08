@@ -26,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /// Centralized runtime coercion between NodeValue instances and declared port types.
 /// This keeps validation, input materialization, and implicit conversions aligned.
@@ -74,6 +75,8 @@ public final class NodeValueConversion {
       case BOT -> toBot(value);
       case LIST -> toList(value);
       case MAP -> toMap(value);
+      case SET -> toSet(value);
+      case COLLECTION -> toCollection(value);
       case BLOCK, ENTITY, ITEM -> toIdentifier(value);
       case ANY, EXEC, STRING -> throw new IllegalStateException("Handled above");
     };
@@ -186,6 +189,36 @@ public final class NodeValueConversion {
       return Result.success(element.getAsJsonObject());
     }
     return Result.failure("expected map/object value");
+  }
+
+  public static Result<Set<NodeValue>> toSet(@Nullable NodeValue value) {
+    if (value == null || value.isNull()) {
+      return Result.failure("value is null");
+    }
+    if (value instanceof NodeValue.ValueSet(var items)) {
+      return Result.success(items);
+    }
+    if (value instanceof NodeValue.ValueList(var items)) {
+      return Result.success(items.stream()
+        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)));
+    }
+    if (value instanceof NodeValue.Json(var element) && element.isJsonArray()) {
+      return Result.success(value.asSet());
+    }
+    return Result.failure("expected set value");
+  }
+
+  public static Result<NodeValue> toCollection(@Nullable NodeValue value) {
+    if (value == null || value.isNull()) {
+      return Result.failure("value is null");
+    }
+    if (value instanceof NodeValue.ValueList || value instanceof NodeValue.ValueSet) {
+      return Result.success(value);
+    }
+    if (value instanceof NodeValue.Json(var element) && element.isJsonArray()) {
+      return Result.success(value);
+    }
+    return Result.failure("expected collection value");
   }
 
   public static Result<String> toIdentifier(@Nullable NodeValue value) {

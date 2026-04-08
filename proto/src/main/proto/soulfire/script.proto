@@ -49,6 +49,10 @@ enum PortType {
   PORT_TYPE_ITEM = 10;
   // Key-value map of entries.
   PORT_TYPE_MAP = 11;
+  // Set of unique values with stable insertion order.
+  PORT_TYPE_SET = 12;
+  // Any Java-like collection type. LIST and SET are compatible with COLLECTION.
+  PORT_TYPE_COLLECTION = 13;
 }
 
 // Log levels for script execution logging.
@@ -258,6 +262,9 @@ message ScriptEdge {
   string target_handle = 5 [(google.api.field_behavior) = REQUIRED];
   // The type of this edge, determining whether it carries execution flow or data.
   EdgeType edge_type = 6 [(google.api.field_behavior) = REQUIRED];
+  // Explicit order for edges targeting the same multi-input port.
+  // Lower values are materialized first. Ignored for non-multi-input ports.
+  optional int32 order = 7;
 }
 
 // Complete data structure representing a visual script.

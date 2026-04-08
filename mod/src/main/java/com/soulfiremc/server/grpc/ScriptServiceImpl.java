@@ -88,7 +88,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
     String sourceHandle,
     String target,
     String targetHandle,
-    String edgeType
+    String edgeType,
+    Integer order
   ) {}
 
   private record FlattenedGraph(List<ScriptNodeData> nodes, List<ScriptEdgeData> edges) {}
@@ -902,6 +903,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
     new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.ITEM, PortType.PORT_TYPE_ITEM, "#ec4899", "Item", HandleShape.HANDLE_SHAPE_CIRCLE, EdgeStyle.EDGE_STYLE_DEFAULT),
     new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.LIST, PortType.PORT_TYPE_LIST, "#8b5cf6", "List", HandleShape.HANDLE_SHAPE_CIRCLE, EdgeStyle.EDGE_STYLE_DEFAULT),
     new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.MAP, PortType.PORT_TYPE_MAP, "#14b8a6", "Map", HandleShape.HANDLE_SHAPE_DIAMOND, EdgeStyle.EDGE_STYLE_DEFAULT),
+    new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.SET, PortType.PORT_TYPE_SET, "#0ea5e9", "Set", HandleShape.HANDLE_SHAPE_DIAMOND, EdgeStyle.EDGE_STYLE_DEFAULT),
+    new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.COLLECTION, PortType.PORT_TYPE_COLLECTION, "#6366f1", "Collection", HandleShape.HANDLE_SHAPE_DIAMOND, EdgeStyle.EDGE_STYLE_DEFAULT),
     new PortTypeDisplayInfo(com.soulfiremc.server.script.PortType.ANY, PortType.PORT_TYPE_ANY, "#6b7280", "Any", HandleShape.HANDLE_SHAPE_CIRCLE, EdgeStyle.EDGE_STYLE_DEFAULT)
   );
 
@@ -1023,6 +1026,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
       case ENTITY -> PortType.PORT_TYPE_ENTITY;
       case ITEM -> PortType.PORT_TYPE_ITEM;
       case MAP -> PortType.PORT_TYPE_MAP;
+      case SET -> PortType.PORT_TYPE_SET;
+      case COLLECTION -> PortType.PORT_TYPE_COLLECTION;
     };
   }
 
@@ -1054,7 +1059,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
         edge.getSourceHandle(),
         edge.getTarget(),
         edge.getTargetHandle(),
-        edge.getEdgeType().name()
+        edge.getEdgeType().name(),
+        edge.hasOrder() ? edge.getOrder() : null
       ))
       .toList();
     return GsonInstance.GSON.toJson(edgeDataList);
@@ -1238,7 +1244,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
             in.id() + "_" + out.id(),
             in.source(), in.sourceHandle(),
             out.target(), out.targetHandle(),
-            out.edgeType()
+            out.edgeType(),
+            out.order()
           ));
         }
       }
@@ -1302,7 +1309,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
               extEdge.id() + "_rewired",
               extEdge.source(), extEdge.sourceHandle(),
               internalEdge.target(), internalEdge.targetHandle(),
-              extEdge.edgeType()
+              extEdge.edgeType(),
+              extEdge.order()
             ));
           } else {
             log.warn("Group {} flattening: could not find internal edge for handle '{}', dropping connection", groupId, portId);
@@ -1327,7 +1335,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
               extEdge.id() + "_rewired",
               internalEdge.source(), internalEdge.sourceHandle(),
               extEdge.target(), extEdge.targetHandle(),
-              extEdge.edgeType()
+              extEdge.edgeType(),
+              extEdge.order()
             ));
           } else {
             log.warn("Group {} flattening: could not find internal edge for handle '{}', dropping connection", groupId, portId);
@@ -1412,11 +1421,11 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
     // Add edges
     for (var edge : edges) {
       if ("EDGE_TYPE_EXECUTION".equals(edge.edgeType())) {
-        builder.addExecutionEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle());
+        builder.addExecutionEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle(), edge.order() != null ? edge.order() : 0);
       } else {
         log.debug("Graph {}: DATA edge {}.{} -> {}.{}", record.getName(),
           edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle());
-        builder.addDataEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle());
+        builder.addDataEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle(), edge.order() != null ? edge.order() : 0);
       }
     }
 
@@ -1716,7 +1725,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
           edge.getSourceHandle(),
           edge.getTarget(),
           edge.getTargetHandle(),
-          edge.getEdgeType().name()
+          edge.getEdgeType().name(),
+          edge.hasOrder() ? edge.getOrder() : null
         ))
         .toList();
 
@@ -1735,9 +1745,9 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
 
       for (var edge : flattened.edges()) {
         if ("EDGE_TYPE_EXECUTION".equals(edge.edgeType())) {
-          builder.addExecutionEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle());
+          builder.addExecutionEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle(), edge.order() != null ? edge.order() : 0);
         } else {
-          builder.addDataEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle());
+          builder.addDataEdge(edge.source(), edge.sourceHandle(), edge.target(), edge.targetHandle(), edge.order() != null ? edge.order() : 0);
         }
       }
 

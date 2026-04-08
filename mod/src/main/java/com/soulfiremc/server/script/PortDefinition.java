@@ -169,6 +169,77 @@ public interface PortDefinition {
       .build();
   }
 
+  /// Creates a set input port with element type.
+  static PortDefinition setInput(String id, String displayName, PortType elementType, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.SET)
+      .description(description)
+      .required(true)
+      .elementType(elementType)
+      .typeDescriptor(TypeDescriptor.setOf(elementType))
+      .build();
+  }
+
+  /// Creates a set output port with element type.
+  static PortDefinition setOutput(String id, String displayName, PortType elementType, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.SET)
+      .description(description)
+      .elementType(elementType)
+      .typeDescriptor(TypeDescriptor.setOf(elementType))
+      .build();
+  }
+
+  /// Creates a set input port with a generic element type (e.g., Set<T>).
+  static PortDefinition genericSetInput(String id, String displayName, TypeDescriptor elementTypeDescriptor, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.SET)
+      .description(description)
+      .required(true)
+      .typeDescriptor(TypeDescriptor.set(elementTypeDescriptor))
+      .build();
+  }
+
+  /// Creates a set output port with a generic element type (e.g., Set<T>).
+  static PortDefinition genericSetOutput(String id, String displayName, TypeDescriptor elementTypeDescriptor, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.SET)
+      .description(description)
+      .typeDescriptor(TypeDescriptor.set(elementTypeDescriptor))
+      .build();
+  }
+
+  /// Creates a collection input port with a generic element type (e.g., Collection<T>).
+  static PortDefinition genericCollectionInput(String id, String displayName, TypeDescriptor elementTypeDescriptor, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.COLLECTION)
+      .description(description)
+      .required(true)
+      .typeDescriptor(TypeDescriptor.collection(elementTypeDescriptor))
+      .build();
+  }
+
+  /// Creates a collection output port with a generic element type (e.g., Collection<T>).
+  static PortDefinition genericCollectionOutput(String id, String displayName, TypeDescriptor elementTypeDescriptor, String description) {
+    return ImmutablePortDefinition.builder()
+      .id(id)
+      .displayName(displayName)
+      .type(PortType.COLLECTION)
+      .description(description)
+      .typeDescriptor(TypeDescriptor.collection(elementTypeDescriptor))
+      .build();
+  }
+
   String id();
 
   String displayName();
@@ -206,6 +277,12 @@ public interface PortDefinition {
     // Derive from legacy fields
     if (type() == PortType.LIST && elementType() != null) {
       return TypeDescriptor.listOf(elementType());
+    }
+    if (type() == PortType.SET && elementType() != null) {
+      return TypeDescriptor.setOf(elementType());
+    }
+    if (type() == PortType.COLLECTION && elementType() != null) {
+      return TypeDescriptor.collectionOf(elementType());
     }
     return TypeDescriptor.simple(type());
   }

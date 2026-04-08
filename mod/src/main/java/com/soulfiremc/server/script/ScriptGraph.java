@@ -69,6 +69,12 @@ public final class ScriptGraph {
     this.warnings = List.copyOf(warnings);
 
     // Pre-compute edge lookups for efficient traversal
+    var edgeOrderComparator = Comparator
+      .comparingInt(GraphEdge::order)
+      .thenComparing(GraphEdge::targetNodeId)
+      .thenComparing(GraphEdge::targetHandle)
+      .thenComparing(GraphEdge::sourceNodeId)
+      .thenComparing(GraphEdge::sourceHandle);
     var outgoing = new HashMap<String, List<GraphEdge>>();
     var incomingByHandle = new HashMap<String, List<GraphEdge>>();
     var incomingDataByNode = new HashMap<String, List<GraphEdge>>();
@@ -85,9 +91,15 @@ public final class ScriptGraph {
       }
     }
 
-    // Sort each outgoing edge list by targetNodeId for deterministic traversal
+    // Sort edge lists for deterministic traversal and stable multi-input materialization.
     for (var edgeList : outgoing.values()) {
-      edgeList.sort(Comparator.comparing(GraphEdge::targetNodeId));
+      edgeList.sort(edgeOrderComparator);
+    }
+    for (var edgeList : incomingByHandle.values()) {
+      edgeList.sort(edgeOrderComparator);
+    }
+    for (var edgeList : incomingDataByNode.values()) {
+      edgeList.sort(edgeOrderComparator);
     }
 
     this.outgoingEdgesByHandle = Collections.unmodifiableMap(outgoing);
@@ -270,8 +282,13 @@ public final class ScriptGraph {
     String sourceHandle,
     String targetNodeId,
     String targetHandle,
-    EdgeType edgeType
-  ) {}
+    EdgeType edgeType,
+    int order
+  ) {
+    public GraphEdge(String sourceNodeId, String sourceHandle, String targetNodeId, String targetHandle, EdgeType edgeType) {
+      this(sourceNodeId, sourceHandle, targetNodeId, targetHandle, edgeType, 0);
+    }
+  }
 
   /// Builder for constructing ScriptGraph instances.
   public static final class Builder {
@@ -307,9 +324,19 @@ public final class ScriptGraph {
       return addEdge(new GraphEdge(sourceNodeId, sourceHandle, targetNodeId, targetHandle, EdgeType.EXECUTION));
     }
 
+    /// Adds an execution edge between nodes with an explicit order.
+    public Builder addExecutionEdge(String sourceNodeId, String sourceHandle, String targetNodeId, String targetHandle, int order) {
+      return addEdge(new GraphEdge(sourceNodeId, sourceHandle, targetNodeId, targetHandle, EdgeType.EXECUTION, order));
+    }
+
     /// Adds a data edge between nodes.
     public Builder addDataEdge(String sourceNodeId, String sourceHandle, String targetNodeId, String targetHandle) {
       return addEdge(new GraphEdge(sourceNodeId, sourceHandle, targetNodeId, targetHandle, EdgeType.DATA));
+    }
+
+    /// Adds a data edge between nodes with an explicit order.
+    public Builder addDataEdge(String sourceNodeId, String sourceHandle, String targetNodeId, String targetHandle, int order) {
+      return addEdge(new GraphEdge(sourceNodeId, sourceHandle, targetNodeId, targetHandle, EdgeType.DATA, order));
     }
 
     /// Validates the graph structure and returns a list of diagnostics.

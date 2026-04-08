@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /// Abstract base class for script nodes providing common utility methods.
 public abstract class AbstractScriptNode implements ScriptNode {
@@ -122,6 +123,21 @@ public abstract class AbstractScriptNode implements ScriptNode {
       return List.of();
     }
     return value.asList();
+  }
+
+  /// Helper method to get a set input value as NodeValues.
+  protected Set<NodeValue> getSetInput(Map<String, NodeValue> inputs, String name) {
+    var value = inputs.get(name);
+    if (value == null) {
+      return Set.of();
+    }
+    return value.asSet();
+  }
+
+  /// Helper method to get a collection input while preserving list/set identity.
+  protected NodeValue getCollectionInput(Map<String, NodeValue> inputs, String name) {
+    var value = inputs.get(name);
+    return value != null ? value : NodeValue.ofList(List.of());
   }
 
   /// Helper method to get a list of strings.

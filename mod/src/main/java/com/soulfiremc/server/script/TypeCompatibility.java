@@ -55,7 +55,14 @@ public final class TypeCompatibility {
     map.get(PortType.BOOLEAN).addAll(EnumSet.of(PortType.NUMBER, PortType.STRING));
 
     // VECTOR3 accepts structured list/object values as well as typed vectors.
-    map.get(PortType.VECTOR3).addAll(EnumSet.of(PortType.LIST, PortType.MAP));
+    map.get(PortType.VECTOR3).addAll(EnumSet.of(PortType.LIST, PortType.MAP, PortType.SET));
+
+    // LIST and SET can coerce into each other while preserving iteration order.
+    map.get(PortType.LIST).add(PortType.SET);
+    map.get(PortType.SET).add(PortType.LIST);
+    map.get(PortType.COLLECTION).addAll(EnumSet.of(PortType.LIST, PortType.SET, PortType.COLLECTION));
+    map.get(PortType.LIST).add(PortType.COLLECTION);
+    map.get(PortType.SET).add(PortType.COLLECTION);
 
     // ANY accepts everything
     for (var type : PortType.values()) {

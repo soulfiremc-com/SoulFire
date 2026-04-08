@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -479,6 +480,59 @@ final class NodeExecutionTest {
     assertEquals(2, list.get(1).asInt(0), "Second element should be 2");
     assertEquals(3, list.get(2).asInt(0), "Third element should be 3");
     assertEquals(4, list.get(3).asInt(0), "Fourth element should be 4");
+  }
+
+  @Test
+  void listCreateNodeExecutes() {
+    var result = executeNode("list.create", Map.of(
+      "items", NodeValue.ofList(List.of(
+        NodeValue.ofString("a"),
+        NodeValue.ofString("b"),
+        NodeValue.ofString("c")
+      ))
+    ));
+    assertEquals(List.of("a", "b", "c"),
+      result.get("list").asList().stream().map(v -> v.asString("")).toList());
+  }
+
+  @Test
+  void setCreateNodeExecutesWithDistinctItems() {
+    var result = executeNode("set.create", Map.of(
+      "items", NodeValue.ofList(List.of(
+        NodeValue.ofString("a"),
+        NodeValue.ofString("b"),
+        NodeValue.ofString("a")
+      ))
+    ));
+    assertEquals(2, result.get("set").asSet().size());
+    assertEquals(List.of("a", "b"),
+      result.get("set").asSet().stream().map(v -> v.asString("")).toList());
+  }
+
+  @Test
+  void collectionAddNodePreservesSetIdentity() {
+    var result = executeNode("collection.add", Map.of(
+      "collection", NodeValue.ofSet(List.of(NodeValue.ofString("a"), NodeValue.ofString("b"))),
+      "item", NodeValue.ofString("a")
+    ));
+    assertEquals(2, result.get("collection").asSet().size());
+    assertEquals(List.of("a", "b"),
+      result.get("collection").asSet().stream().map(v -> v.asString("")).toList());
+  }
+
+  @Test
+  void mapKeysAndValuesNodesExecute() {
+    var map = new LinkedHashMap<String, Object>();
+    map.put("name", "Alex");
+    map.put("age", 25);
+
+    var keysResult = executeNode("map.keys", Map.of("map", NodeValue.of(map)));
+    assertEquals(List.of("name", "age"),
+      keysResult.get("keys").asList().stream().map(v -> v.asString("")).toList());
+
+    var valuesResult = executeNode("map.values", Map.of("map", NodeValue.of(map)));
+    assertEquals(List.of("Alex", "25"),
+      valuesResult.get("values").asList().stream().map(v -> v.asString("")).toList());
   }
 
   // ==================== Constant Nodes ====================
