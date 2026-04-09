@@ -16,7 +16,7 @@ dependencies {
   api("net.fabricmc:fabric-loader:0.19.1")
   api("net.fabricmc:mapping-io:0.8.0")
 
-  api("at.yawk.lz4:lz4-java:1.10.4")
+  api("at.yawk.lz4:lz4-java:1.11.0")
   api("com.azure:azure-json:1.5.1")
   api("com.github.oshi:oshi-core:6.11.1")
   api("com.google.code.gson:gson:2.13.2")
