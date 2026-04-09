@@ -57,7 +57,7 @@ public final class CaptchaSolver extends InternalPlugin {
       "Solve captchas",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/ai-support"
     ));
   }
 

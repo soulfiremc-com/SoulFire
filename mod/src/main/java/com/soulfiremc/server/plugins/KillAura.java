@@ -63,7 +63,7 @@ public final class KillAura extends InternalPlugin {
       "Automatically attacks entities",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/kill-aura"
     ));
   }
 

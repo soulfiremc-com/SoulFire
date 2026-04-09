@@ -39,7 +39,7 @@ public final class FakeVirtualHost extends InternalPlugin {
       "Fakes the virtual host",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/fake-virtual-host"
     ));
   }
 

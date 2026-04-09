@@ -72,7 +72,7 @@ public final class ForwardingBypass extends InternalPlugin {
       "Allows bypassing proxy forwarding",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/forwarding-bypass"
     ));
   }
 

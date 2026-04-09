@@ -41,7 +41,7 @@ public final class ServerListBypass extends InternalPlugin {
       "Pings the server list before connecting. (Bypasses anti-bots like EpicGuard)",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/server-list-bypass"
     ));
   }
 

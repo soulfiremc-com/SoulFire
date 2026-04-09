@@ -40,7 +40,7 @@ public final class AutoRegister extends InternalPlugin {
       "Automatically registers bots AuthMe servers",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/auto-register"
     ));
   }
 

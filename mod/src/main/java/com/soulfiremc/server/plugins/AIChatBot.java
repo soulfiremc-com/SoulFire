@@ -49,7 +49,7 @@ public final class AIChatBot extends InternalPlugin {
       "Allow players to chat with an AI",
       "AlexProgrammerDE",
       "AGPL-3.0",
-      "https://soulfiremc.com"
+      "https://soulfiremc.com/docs/how-to/ai-support"
     ));
   }
 
