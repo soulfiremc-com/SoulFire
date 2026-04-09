@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class SFMinecraftDownloader {
-  private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "26.1.1");
+  private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "26.1.2");
   private static final String MINECRAFT_CLIENT_JAR_NAME = "minecraft-%s-client.jar".formatted(MINECRAFT_VERSION);
   private static final String MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
