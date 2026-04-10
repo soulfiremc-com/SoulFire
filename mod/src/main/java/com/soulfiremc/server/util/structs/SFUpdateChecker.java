@@ -32,7 +32,7 @@ import java.util.Optional;
 @Slf4j
 public final class SFUpdateChecker {
   private static final URI UPDATE_URL =
-    URI.create("https://api.github.com/repos/AlexProgrammerDE/SoulFire/releases/latest");
+    URI.create("https://api.github.com/repos/soulfiremc-com/SoulFire/releases/latest");
   private static SFUpdateChecker instance;
   private final String updateVersion;
 

@@ -14,7 +14,7 @@ on:
 # See this issue to learn more: https://github.com/zizmorcore/zizmor/issues/360
 jobs:
   set-release-version:
-    uses: AlexProgrammerDE/SoulFire/.github/workflows/set-version.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@main
     permissions:
       contents: write
     with:
@@ -153,19 +153,19 @@ jobs:
 
   deploy-javadoc:
     needs: build
-    uses: AlexProgrammerDE/SoulFire/.github/workflows/deploy-javadoc.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/deploy-javadoc.yml@main
     permissions:
       contents: write
     secrets: inherit
 
   deploy-docker:
     needs: build
-    uses: AlexProgrammerDE/SoulFire/.github/workflows/docker-deploy.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/docker-deploy.yml@main
     secrets: inherit
 
   set-after-version:
     needs: [ deploy-javadoc, deploy-docker ]
-    uses: AlexProgrammerDE/SoulFire/.github/workflows/set-version.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@main
     permissions:
       contents: write
     with:

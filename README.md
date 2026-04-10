@@ -78,7 +78,7 @@ https://github.com/user-attachments/assets/6244d54c-a1e5-4467-a705-c929b9de2b57
 ## ✨ Nightly builds
 
 You can download the latest development version of SoulFire
-through [nightly.link](https://nightly.link/AlexProgrammerDE/SoulFire/workflows/build/main).
+through [nightly.link](https://nightly.link/soulfiremc-com/SoulFire/workflows/build/main).
 
 ## 🔧 Build from source
 
@@ -118,10 +118,10 @@ PRs are welcome, too.
 
 ## 🌟 Star History
 
-<a href="https://star-history.com/#AlexProgrammerDE/SoulFire&Date">
+<a href="https://star-history.com/#soulfiremc-com/SoulFire&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=AlexProgrammerDE/SoulFire&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=AlexProgrammerDE/SoulFire&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=AlexProgrammerDE/SoulFire&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date" />
   </picture>
 </a>
