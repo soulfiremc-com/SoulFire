@@ -10,7 +10,7 @@ docker buildx build \
   -t alexprogrammerde/soulfire:$commitSha \
   -t alexprogrammerde/soulfire:$projectVersion \
   -t alexprogrammerde/soulfire:latest \
-  -t ghcr.io/alexprogrammerde/soulfire:$commitSha \
-  -t ghcr.io/alexprogrammerde/soulfire:$projectVersion \
-  -t ghcr.io/alexprogrammerde/soulfire:latest \
+  -t ghcr.io/soulfiremc-com/soulfire:$commitSha \
+  -t ghcr.io/soulfiremc-com/soulfire:$projectVersion \
+  -t ghcr.io/soulfiremc-com/soulfire:latest \
   .
