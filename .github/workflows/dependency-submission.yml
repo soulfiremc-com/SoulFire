@@ -8,7 +8,7 @@ permissions:
 jobs:
   dependency-submission:
     if: github.repository_owner == 'AlexProgrammerDE'
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
