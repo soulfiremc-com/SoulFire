@@ -23,7 +23,7 @@ dependencies {
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.5.0-jre")
   api("com.ibm.icu:icu4j:78.3")
-  api("com.microsoft.azure:msal4j:1.24.0")
+  api("com.microsoft.azure:msal4j:1.24.1")
   api("com.mojang:authlib:7.0.61")
   api("com.mojang:blocklist:1.0.10")
   api("com.mojang:brigadier:1.3.10")
