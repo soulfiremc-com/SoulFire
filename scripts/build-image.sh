@@ -7,9 +7,6 @@ echo "Building image for commit $commitSha and version $projectVersion"
 docker buildx build \
   --push \
   --platform=linux/amd64,linux/arm64 \
-  -t alexprogrammerde/soulfire:$commitSha \
-  -t alexprogrammerde/soulfire:$projectVersion \
-  -t alexprogrammerde/soulfire:latest \
   -t ghcr.io/soulfiremc-com/soulfire:$commitSha \
   -t ghcr.io/soulfiremc-com/soulfire:$projectVersion \
   -t ghcr.io/soulfiremc-com/soulfire:latest \
