@@ -86,11 +86,14 @@ public final class SoulFireAbstractLauncher {
       return;
     }
 
-    var reflectLibPath = Arrays.stream(extractedLibs)
-      .filter(path -> path.getFileName().toString().startsWith("Reflect-"))
-      .findFirst()
-      .orElseThrow(() -> new RuntimeException("Reflect library not found in extracted libs"));
-    try (var reflectLib = new URLClassLoader(new URL[]{reflectLibPath.toUri().toURL()})) {
+    try (var reflectLib = new URLClassLoader(
+      Arrays.stream(extractedLibs)
+        .filter(path -> path.getFileName().toString().startsWith("Reflect-")
+          || path.getFileName().toString().startsWith("unchecked-"))
+        .map(Path::toUri)
+        .map(URI::toURL)
+        .toArray(URL[]::new)
+    )) {
       var addToSystemClassPath = reflectLib.loadClass("net.lenni0451.reflect.ClassLoaders")
         .getDeclaredMethod("addToSystemClassPath", URL.class);
 
