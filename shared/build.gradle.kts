@@ -21,7 +21,7 @@ dependencies {
   api("com.github.oshi:oshi-core:6.11.1")
   api("com.google.code.gson:gson:2.13.2")
   api("com.google.guava:failureaccess:1.0.3")
-  api("com.google.guava:guava:33.5.0-jre")
+  api("com.google.guava:guava:33.6.0-jre")
   api("com.ibm.icu:icu4j:78.3")
   api("com.microsoft.azure:msal4j:1.24.1")
   api("com.mojang:authlib:7.0.61")
