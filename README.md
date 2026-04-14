@@ -8,12 +8,20 @@ Advanced Minecraft Bot Tool. Deploy automated bots for server testing, automatio
 
 This repository only contains the CLI and server implementation. The official GUI client is in [another repository](https://github.com/soulfiremc-com/SoulFireClient).
 
----
-
 > [!WARNING]
 > This tool should only be used on servers you own or have explicit permission to test. Ensure your hosting provider
 > allows automated bot testing. If you use this software without authorization, you make yourself (or your
 > legal guardians) liable; the developers of SoulFire are not responsible for your own actions.
+
+---
+
+<img align="right" src="https://enderdash.com/logo.png" height="150" width="150">
+
+### ✨ Are you looking for an advanced administration panel for your server?
+
+EnderDash allows you to manage your existing Minecraft servers using an advanced dashboard by installing a single plugin, batteries included. Run commands (with tab completion), read logs, manage files, invite your whole team, manage players, Ocelot (AI Assistant), works with your existing Infrastructure/Panels and much more.
+
+Check it out: [https://enderdash.com](https://enderdash.com/?utm_source=github&utm_medium=readme&utm_campaign=ddos-protection-guide)
 
 ---
 
