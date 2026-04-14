@@ -21,6 +21,7 @@ import lombok.SneakyThrows;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -91,7 +92,13 @@ public final class SoulFireAbstractLauncher {
         .filter(path -> path.getFileName().toString().startsWith("Reflect-")
           || path.getFileName().toString().startsWith("unchecked-"))
         .map(Path::toUri)
-        .map(URI::toURL)
+        .map(uri -> {
+          try {
+            return uri.toURL();
+          } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+          }
+        })
         .toArray(URL[]::new)
     )) {
       var addToSystemClassPath = reflectLib.loadClass("net.lenni0451.reflect.ClassLoaders")
