@@ -65,7 +65,7 @@ reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "react
 reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", version.ref = "reactor-netty" }
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
-openai = "com.openai:openai-java:4.31.0"
+openai = "com.openai:openai-java:4.32.0"
 immutables-value = "org.immutables:value:2.12.1"
 immutables-gson = "org.immutables:gson:2.12.1"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
