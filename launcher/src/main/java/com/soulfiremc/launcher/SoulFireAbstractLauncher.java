@@ -31,6 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -40,10 +41,10 @@ public final class SoulFireAbstractLauncher {
   private SoulFireAbstractLauncher() {
   }
 
-  private static Path[] extractLibraries(Path libDir) {
+  private static List<Path> extractLibraries(Path libDir) {
     try (var dependencyListInput = SoulFireAbstractLauncher.class.getResourceAsStream("/META-INF/dependency-list.txt")) {
       if (dependencyListInput == null) {
-        return new Path[0];
+        return List.of();
       }
 
       Files.createDirectories(libDir);
@@ -63,7 +64,7 @@ public final class SoulFireAbstractLauncher {
         }
       }
 
-      return urls.toArray(new Path[0]);
+      return urls;
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -81,7 +82,7 @@ public final class SoulFireAbstractLauncher {
   private static void loadLibs(Path basePath) {
     var librariesPath = basePath.resolve("libraries");
     var extractedLibs = extractLibraries(librariesPath);
-    if (extractedLibs.length == 0) {
+    if (extractedLibs.isEmpty()) {
       IO.println("No libraries found in /META-INF/dependency-list.txt, skipping library loading.");
       // In development mode, expand Gradle's classpath JAR manifest if present
       expandGradleClasspathJar();
@@ -89,7 +90,8 @@ public final class SoulFireAbstractLauncher {
     }
 
     try (var reflectLib = new URLClassLoader(
-      Arrays.stream(extractedLibs)
+      extractedLibs
+        .stream()
         .filter(path -> path.getFileName().toString().startsWith("Reflect-")
           || path.getFileName().toString().startsWith("unchecked-"))
         .map(Path::toUri)
