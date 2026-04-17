@@ -53,6 +53,7 @@ import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -117,7 +118,7 @@ public final class InstanceManager {
     try {
       Files.createDirectories(getInstanceObjectStoragePath());
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new UncheckedIOException(e);
     }
 
     this.instanceSettingsPageRegistry = scheduler.supplyAsync(() -> {

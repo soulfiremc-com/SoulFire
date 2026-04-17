@@ -59,6 +59,7 @@ import org.jspecify.annotations.Nullable;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.nio.file.Files;
@@ -132,7 +133,7 @@ public final class SoulFireServer {
     try {
       Files.createDirectories(getObjectStoragePath());
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new UncheckedIOException(e);
     }
 
     Authenticator.setDefault(new Authenticator() {

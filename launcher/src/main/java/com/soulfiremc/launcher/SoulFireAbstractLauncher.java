@@ -21,6 +21,7 @@ import lombok.SneakyThrows;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -39,7 +40,7 @@ public final class SoulFireAbstractLauncher {
   private SoulFireAbstractLauncher() {
   }
 
-  private static Path[] createLibClassLoader(Path libDir) {
+  private static Path[] extractLibraries(Path libDir) {
     try (var dependencyListInput = SoulFireAbstractLauncher.class.getResourceAsStream("/META-INF/dependency-list.txt")) {
       if (dependencyListInput == null) {
         return new Path[0];
@@ -64,7 +65,7 @@ public final class SoulFireAbstractLauncher {
 
       return urls.toArray(new Path[0]);
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new UncheckedIOException(e);
     }
   }
 
@@ -79,7 +80,7 @@ public final class SoulFireAbstractLauncher {
   @SneakyThrows
   private static void loadLibs(Path basePath) {
     var librariesPath = basePath.resolve("libraries");
-    var extractedLibs = createLibClassLoader(librariesPath);
+    var extractedLibs = extractLibraries(librariesPath);
     if (extractedLibs.length == 0) {
       IO.println("No libraries found in /META-INF/dependency-list.txt, skipping library loading.");
       // In development mode, expand Gradle's classpath JAR manifest if present

@@ -20,6 +20,7 @@ package com.soulfiremc.server.util;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 
 @Slf4j
@@ -36,7 +37,7 @@ public final class PortHelper {
       serverSocket.close();
       return port;
     } catch (IOException e) {
-      throw new RuntimeException("Could not find an available port", e);
+      throw new UncheckedIOException("Could not find an available port", e);
     }
   }
 

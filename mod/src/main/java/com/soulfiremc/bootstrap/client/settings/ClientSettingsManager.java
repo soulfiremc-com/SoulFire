@@ -33,6 +33,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Consumer;
@@ -67,7 +68,7 @@ public final class ClientSettingsManager {
         loadFromString(instanceId, Files.readString(commandDefinition.accountFile()), commandDefinition.authType());
       } catch (IOException e) {
         log.error("Failed to load accounts!", e);
-        throw new RuntimeException(e);
+        throw new UncheckedIOException(e);
       }
     }
 
@@ -79,7 +80,7 @@ public final class ClientSettingsManager {
           commandDefinition.proxyType() == null ? ProxyParser.uriParser() : ProxyParser.typeParser(commandDefinition.proxyType()));
       } catch (IOException e) {
         log.error("Failed to load proxies!", e);
-        throw new RuntimeException(e);
+        throw new UncheckedIOException(e);
       }
     }
 

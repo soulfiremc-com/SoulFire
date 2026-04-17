@@ -28,6 +28,7 @@ import com.soulfiremc.server.util.log4j.GenericTerminalConsole;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.List;
 
@@ -54,7 +55,7 @@ public final class SoulFireDedicatedBootstrap extends SoulFireAbstractBootstrap 
       try {
         Files.write(SFPathConstants.BASE_DIR.resolve("sf-openapi.json"), soulFire.rpcServer().openApiService().openApiDocument());
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new UncheckedIOException(e);
       }
       soulFire.shutdownManager().shutdownSoftware(true);
       return;

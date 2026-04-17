@@ -18,6 +18,7 @@
 package com.soulfiremc.builddata;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Properties;
 
 public final class BuildData {
@@ -37,7 +38,7 @@ public final class BuildData {
 
       properties.load(inputStream);
     } catch (IOException e) {
-      throw new RuntimeException("Failed to load build data properties", e);
+      throw new UncheckedIOException("Failed to load build data properties", e);
     }
 
     VERSION = properties.getProperty("version");
