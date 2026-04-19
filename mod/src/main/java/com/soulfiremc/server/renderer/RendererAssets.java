@@ -169,9 +169,11 @@ public final class RendererAssets {
         }
       }
     } catch (Throwable t) {
+      RenderDebugTrace.current().entityTextureFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), t);
       log.debug("Failed to resolve entity texture for {}", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()), t);
     }
 
+    RenderDebugTrace.current().entityTextureFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
     return MISSING_TEXTURE;
   }
 
@@ -282,6 +284,11 @@ public final class RendererAssets {
     var vanillaModel = tryBuildVanillaLivingModel(entity, texture, entity instanceof AbstractClientPlayer ? 0.9375F : 1.0F);
     if (!vanillaModel.isEmpty()) {
       return vanillaModel;
+    }
+    if (entity instanceof AbstractClientPlayer player) {
+      RenderDebugTrace.current().vanillaPlayerModelFallback(player.getUUID().toString());
+    } else if (entity instanceof LivingEntity) {
+      RenderDebugTrace.current().vanillaLivingModelFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
     }
 
     var yaw = (float) Math.toRadians(-entity.getYRot());
@@ -466,19 +473,39 @@ public final class RendererAssets {
       @SuppressWarnings({"rawtypes", "unchecked"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (!(rawRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer)) {
+        RenderDebugTrace.current().vanillaLivingModelFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), new IllegalStateException("renderer is not LivingEntityRenderer: " + rawRenderer));
         return List.of();
       }
 
       var renderState = (LivingEntityRenderState) rawRenderer.createRenderState(entity, 1.0F);
+      if (renderState == null) {
+        throw new NullPointerException("createRenderState returned null");
+      }
       @SuppressWarnings("rawtypes")
       var rawLivingRenderer = (LivingEntityRenderer) livingRenderer;
       var model = (EntityModel) rawLivingRenderer.getModel();
+      if (model == null) {
+        throw new NullPointerException("renderer model is null");
+      }
       model.setupAnim(renderState);
 
       var poseStack = new PoseStack();
       applyLivingModelPose(poseStack, livingEntity.getX(), livingEntity.getY(), livingEntity.getZ(), renderState, renderScale);
-      return extractModelGeometry(model, poseStack, texture, AlphaMode.CUTOUT);
+      var faces = extractModelGeometry(model, poseStack, texture, AlphaMode.CUTOUT);
+      if (!faces.isEmpty()) {
+        if (entity instanceof AbstractClientPlayer player) {
+          RenderDebugTrace.current().vanillaPlayerModelHit(player.getUUID().toString());
+        } else {
+          RenderDebugTrace.current().vanillaLivingModelHit(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        }
+      }
+      return faces;
     } catch (Throwable t) {
+      if (entity instanceof AbstractClientPlayer player) {
+        RenderDebugTrace.current().vanillaPlayerModelFallback(player.getUUID().toString(), t);
+      } else {
+        RenderDebugTrace.current().vanillaLivingModelFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), t);
+      }
       log.debug("Failed to build vanilla living model for {}", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()), t);
       return List.of();
     }
@@ -834,11 +861,21 @@ public final class RendererAssets {
 
   private BlockGeometry buildVanillaBlockGeometry(BlockState state) {
     try {
-      var blockModel = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+      var blockStateModelSet = Minecraft.getInstance().getModelManager().getBlockStateModelSet();
+      var blockModel = blockStateModelSet.get(state);
+      if (blockModel == null) {
+        throw new NullPointerException("blockStateModelSet.get(state) returned null");
+      }
       var parts = new ArrayList<BlockStateModelPart>();
       blockModel.collectParts(RandomSource.create(42L), parts);
+      if (parts.isEmpty()) {
+        throw new NullPointerException("blockModel.collectParts returned no parts");
+      }
       var faces = new ArrayList<GeometryFace>();
       for (var part : parts) {
+        if (part == null) {
+          throw new NullPointerException("block model part is null");
+        }
         for (var quad : part.getQuads(null)) {
           faces.add(vanillaQuadToFace(quad, null, state));
         }
@@ -848,25 +885,50 @@ public final class RendererAssets {
           }
         }
       }
+      if (!faces.isEmpty()) {
+        RenderDebugTrace.current().vanillaBlockGeometryHit();
+      }
       return faces.isEmpty() ? BlockGeometry.EMPTY : new BlockGeometry(faces);
     } catch (Throwable t) {
+      RenderDebugTrace.current().vanillaBlockGeometryFallback(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(), t);
       log.debug("Failed to build vanilla block geometry for {}", BuiltInRegistries.BLOCK.getKey(state.getBlock()), t);
       return BlockGeometry.EMPTY;
     }
   }
 
   private GeometryFace vanillaQuadToFace(BakedQuad quad, @Nullable Direction cullDirection, BlockState state) {
+    if (quad == null) {
+      throw new NullPointerException("vanilla quad is null");
+    }
     var vertices = new Vector3f[4];
     var uv = new float[8];
     for (var i = 0; i < 4; i++) {
       var position = quad.position(i);
       var packedUv = quad.packedUV(i);
+      if (position == null) {
+        throw new NullPointerException("quad position[" + i + "] is null");
+      }
       vertices[i] = new Vector3f(position);
       uv[i * 2] = Float.intBitsToFloat((int) packedUv);
       uv[i * 2 + 1] = Float.intBitsToFloat((int) (packedUv >>> 32));
     }
 
-    var spriteId = quad.materialInfo().sprite().contents().name();
+    var materialInfo = quad.materialInfo();
+    if (materialInfo == null) {
+      throw new NullPointerException("quad.materialInfo is null");
+    }
+    var sprite = materialInfo.sprite();
+    if (sprite == null) {
+      throw new NullPointerException("quad.materialInfo.sprite is null");
+    }
+    var contents = sprite.contents();
+    if (contents == null) {
+      throw new NullPointerException("quad.materialInfo.sprite.contents is null");
+    }
+    var spriteId = contents.name();
+    if (spriteId == null) {
+      throw new NullPointerException("quad.materialInfo.sprite.contents.name is null");
+    }
     var texture = texture(spriteId);
     var alphaMode = chooseAlphaMode(state, texture, spriteId.getPath(), false);
     return GeometryFace.of(
@@ -875,9 +937,9 @@ public final class RendererAssets {
       texture,
       alphaMode,
       cullDirection,
-      quad.materialInfo().isTinted() ? quad.materialInfo().tintIndex() : -1,
-      quad.materialInfo().lightEmission(),
-      quad.materialInfo().shade()
+      materialInfo.isTinted() ? materialInfo.tintIndex() : -1,
+      materialInfo.lightEmission(),
+      materialInfo.shade()
     );
   }
 
@@ -1429,6 +1491,7 @@ public final class RendererAssets {
       }
       return TextureImage.from(image, metadata);
     } catch (Throwable t) {
+      RenderDebugTrace.current().missingTexture(normalized.toString(), t);
       log.debug("Missing renderer texture {}", normalized, t);
       return MISSING_TEXTURE;
     }

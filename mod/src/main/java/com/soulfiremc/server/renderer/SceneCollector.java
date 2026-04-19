@@ -46,11 +46,13 @@ public class SceneCollector {
     var assets = RendererAssets.instance();
     var builder = SceneData.builder();
     var billboardBuckets = new HashMap<Long, Integer>();
+    var trace = RenderDebugTrace.current();
 
     for (var entity : level.entitiesForRendering()) {
       if (entity == localPlayer) {
         continue;
       }
+      trace.entityConsidered();
 
       var dx = entity.getX() - ctx.camera().eyeX();
       var dy = entity.getY() - ctx.camera().eyeY();
@@ -64,6 +66,7 @@ public class SceneCollector {
       if (!ctx.camera().isVisibleAabb(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ)) {
         continue;
       }
+      trace.entityVisible();
 
       var lod = entityLod(distanceSq);
       if (entity instanceof Display.BlockDisplay blockDisplay) {
@@ -129,7 +132,7 @@ public class SceneCollector {
       builder.add(WorldMeshCollector.toRenderQuad(face.transformed(transform), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
     }
 
-    if (itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
+    if (itemModel.geometry().faces().isEmpty() && itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
       addBillboard(
         ctx,
         builder,
@@ -248,7 +251,7 @@ public class SceneCollector {
     for (var face : itemModel.geometry().faces()) {
       builder.add(WorldMeshCollector.toRenderQuad(face.transformed(transform), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
     }
-    if (itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
+    if (itemModel.geometry().faces().isEmpty() && itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
       addBillboard(
         ctx,
         builder,
@@ -341,29 +344,7 @@ public class SceneCollector {
       );
     } else {
       for (var face : assets.entityModel(entity, texture, lod)) {
-        builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
-      }
-      if (lod == RendererAssets.EntityLod.MEDIUM) {
-        addBillboard(
-          ctx,
-          builder,
-          billboardBuckets,
-          buildBillboard(
-            ctx.camera(),
-            entity.getX(),
-            entity.getY() + entity.getBbHeight() * 0.55,
-            entity.getZ(),
-            (float) Math.max(0.3, entity.getBbWidth() * 0.45),
-            (float) Math.max(0.6, entity.getBbHeight() * 0.45),
-            texture,
-            RendererAssets.AlphaMode.CUTOUT,
-            0x88FFFFFF,
-            0,
-            BillboardMode.VERTICAL
-          ),
-          4,
-          distanceSq > 18 * 18
-        );
+        builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, 0xFFFFFFFF, true, 0.0F));
       }
     }
 
@@ -408,6 +389,7 @@ public class SceneCollector {
         1,
         true
       );
+      RenderDebugTrace.current().weatherBillboard();
     }
   }
 
@@ -448,6 +430,7 @@ public class SceneCollector {
       true,
       0.003F
     ));
+    RenderDebugTrace.current().shadow();
   }
 
   private static RendererAssets.EntityLod entityLod(double distanceSq) {
@@ -484,6 +467,7 @@ public class SceneCollector {
     }
 
     builder.add(billboard);
+    RenderDebugTrace.current().billboard();
   }
 
   private static RenderQuad buildBillboard(

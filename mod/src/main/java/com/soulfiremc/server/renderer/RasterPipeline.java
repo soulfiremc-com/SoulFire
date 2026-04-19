@@ -73,6 +73,13 @@ public final class RasterPipeline {
     }
 
     var triangles = projectQuads(camera, quads);
+    if (sortBackToFront) {
+      RenderDebugTrace.current().translucentTriangles(triangles.size());
+    } else if (alphaTest) {
+      RenderDebugTrace.current().cutoutTriangles(triangles.size());
+    } else {
+      RenderDebugTrace.current().opaqueTriangles(triangles.size());
+    }
     if (triangles.isEmpty()) {
       return;
     }

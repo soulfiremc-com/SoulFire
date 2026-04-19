@@ -46,6 +46,7 @@ public class WorldMeshCollector {
     var builder = SceneData.builder();
     var level = ctx.level();
     var camera = ctx.camera();
+    var trace = RenderDebugTrace.current();
     var chunkRadius = Mth.ceil(ctx.maxDistance() / 16.0) + 1;
     var centerChunkX = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeX()));
     var centerChunkZ = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeZ()));
@@ -54,6 +55,7 @@ public class WorldMeshCollector {
 
     for (var chunkX = centerChunkX - chunkRadius; chunkX <= centerChunkX + chunkRadius; chunkX++) {
       for (var chunkZ = centerChunkZ - chunkRadius; chunkZ <= centerChunkZ + chunkRadius; chunkZ++) {
+        trace.chunkConsidered();
         var chunkCenterX = chunkX * 16.0 + 8.0;
         var chunkCenterZ = chunkZ * 16.0 + 8.0;
         var dx = chunkCenterX - camera.eyeX();
@@ -66,6 +68,7 @@ public class WorldMeshCollector {
           continue;
         }
 
+        trace.chunkLoaded();
         LevelChunk chunk = level.getChunk(chunkX, chunkZ);
         for (var sectionY = chunk.getMinSectionY(); sectionY <= chunk.getMaxSectionY(); sectionY++) {
           var sectionIndex = chunk.getSectionIndexFromSectionY(sectionY);
@@ -84,6 +87,7 @@ public class WorldMeshCollector {
             continue;
           }
 
+          trace.sectionVisible();
           var currentSectionY = sectionY;
           var currentSection = section;
           builder.addAll(ctx.sectionMeshCache().getOrBuild(chunk, currentSectionY, ctx.animationTick(), () -> buildSectionMesh(ctx, chunk, currentSectionY, currentSection)));
@@ -95,6 +99,8 @@ public class WorldMeshCollector {
   }
 
   private static SceneData buildSectionMesh(RenderContext ctx, LevelChunk chunk, int sectionY, LevelChunkSection section) {
+    var trace = RenderDebugTrace.current();
+    trace.sectionMeshed();
     var builder = SceneData.builder();
     var level = ctx.level();
     var assets = RendererAssets.instance();
@@ -126,6 +132,7 @@ public class WorldMeshCollector {
                   0.0F
                 )
               );
+              trace.blockQuads(1L);
             }
           }
 
@@ -230,6 +237,7 @@ public class WorldMeshCollector {
         fluidState.shouldRenderBackwardUpFace(level, blockPos.above()),
         0.0F
       ));
+      RenderDebugTrace.current().fluidTopQuad();
     }
 
     if (renderBottom) {
@@ -245,6 +253,7 @@ public class WorldMeshCollector {
         false,
         0.0F
       ));
+      RenderDebugTrace.current().fluidBottomQuad();
     }
 
     emitFluidSide(ctx, builder, fluidState, blockState, blockPos, Direction.NORTH, renderNorth, northWestHeight, northEastHeight, 0.0F, 0.0F, 1.0F, 0.0F, 0.8F, isLava, northState);
@@ -300,6 +309,7 @@ public class WorldMeshCollector {
       texture == RendererAssets.instance().waterOverlayTexture(),
       0.0F
     ));
+    RenderDebugTrace.current().fluidSideQuad();
   }
 
   private static int fluidFaceColor(RenderContext ctx, FluidState fluidState, BlockState blockState, BlockPos blockPos, float shade) {

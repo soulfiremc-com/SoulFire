@@ -41,13 +41,16 @@ public final class SectionMeshCache {
   }
 
   public SceneData getOrBuild(LevelChunk chunk, int sectionY, long tick, Supplier<SceneData> builder) {
+    var trace = RenderDebugTrace.current();
     var chunkPos = chunk.getPos();
     var key = new SectionKey((((long) chunkPos.getMinBlockX()) << 32) ^ (chunkPos.getMinBlockZ() & 0xFFFFFFFFL), sectionY);
     var cached = meshes.get(key);
     if (cached != null && cached.builtTick() == tick) {
+      trace.sectionCacheHit();
       return cached.sceneData();
     }
 
+    trace.sectionCacheMiss();
     var built = builder.get();
     meshes.put(key, new SectionMesh(built, tick));
     return built;
