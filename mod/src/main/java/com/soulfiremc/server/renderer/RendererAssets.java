@@ -43,6 +43,8 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HalfTransparentBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -146,8 +148,7 @@ public final class RendererAssets {
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (rawRenderer != null) {
         EntityRenderState renderState = (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F);
-        var method = rawRenderer.getClass().getMethod("getTextureLocation", renderState.getClass());
-        var textureLocation = method.invoke(rawRenderer, renderState);
+        var textureLocation = invokeTextureLocation(rawRenderer, renderState);
         if (textureLocation instanceof Identifier identifier) {
           return texture(identifier);
         }
@@ -198,7 +199,7 @@ public final class RendererAssets {
       pixels[i] = net.minecraft.world.level.material.MapColor.getColorFromPackedId(colors[i]);
     }
 
-    return new TextureImage(128, 128, 128, 1, 1, false, new int[]{0}, pixels, true);
+    return new TextureImage(128, 128, 128, 1, 1, false, new int[]{0}, pixels, true, false);
   }
 
   public TextureImage textTexture(Component component, int width, int textColor, int backgroundColor) {
@@ -957,14 +958,54 @@ public final class RendererAssets {
       return AlphaMode.TRANSLUCENT;
     }
 
+    var block = state.getBlock();
+    if (block instanceof HalfTransparentBlock
+      || block == Blocks.ICE
+      || block == Blocks.FROSTED_ICE
+      || block == Blocks.HONEY_BLOCK
+      || block == Blocks.SLIME_BLOCK
+      || block == Blocks.NETHER_PORTAL
+      || block == Blocks.END_GATEWAY
+      || block == Blocks.END_PORTAL
+      || block == Blocks.BUBBLE_COLUMN
+      || block == Blocks.TINTED_GLASS) {
+      return AlphaMode.TRANSLUCENT;
+    }
+    if (block instanceof LeavesBlock) {
+      return texture.hasTranslucentPixels() ? AlphaMode.TRANSLUCENT : AlphaMode.CUTOUT;
+    }
+
     var hint = textureHint.toLowerCase(Locale.ROOT);
     if (hint.contains("glass") || hint.contains("ice") || hint.contains("portal") || hint.contains("honey") || hint.contains("slime")) {
+      return AlphaMode.TRANSLUCENT;
+    }
+    if (texture.hasTranslucentPixels()) {
       return AlphaMode.TRANSLUCENT;
     }
     if (hint.contains("leaves") || hint.contains("vine") || hint.contains("plant") || texture.hasAlpha()) {
       return AlphaMode.CUTOUT;
     }
     return AlphaMode.OPAQUE;
+  }
+
+  @Nullable
+  private Object invokeTextureLocation(EntityRenderer<?, ?> renderer, EntityRenderState renderState) throws ReflectiveOperationException {
+    Class<?> type = renderer.getClass();
+    while (type != null) {
+      for (var method : type.getDeclaredMethods()) {
+        if (!method.getName().equals("getTextureLocation") || method.getParameterCount() != 1) {
+          continue;
+        }
+        var parameterType = method.getParameterTypes()[0];
+        if (!parameterType.isAssignableFrom(renderState.getClass())) {
+          continue;
+        }
+        method.setAccessible(true);
+        return method.invoke(renderer, renderState);
+      }
+      type = type.getSuperclass();
+    }
+    return null;
   }
 
   @Nullable
@@ -1375,6 +1416,7 @@ public final class RendererAssets {
     private final int[] frameOrder;
     private final int[] pixels;
     private final boolean hasAlpha;
+    private final boolean hasTranslucentPixels;
     @Nullable
     private BufferedImage bufferedImage;
 
@@ -1387,7 +1429,8 @@ public final class RendererAssets {
       boolean interpolate,
       int[] frameOrder,
       int[] pixels,
-      boolean hasAlpha) {
+      boolean hasAlpha,
+      boolean hasTranslucentPixels) {
       this.width = width;
       this.height = height;
       this.frameHeight = frameHeight;
@@ -1397,6 +1440,7 @@ public final class RendererAssets {
       this.frameOrder = frameOrder;
       this.pixels = pixels;
       this.hasAlpha = hasAlpha;
+      this.hasTranslucentPixels = hasTranslucentPixels;
     }
 
     public static TextureImage from(@Nullable BufferedImage image, @Nullable JsonObject metadata) {
@@ -1427,8 +1471,19 @@ public final class RendererAssets {
         }
       }
 
-      var hasAlpha = Arrays.stream(pixels).anyMatch(pixel -> ((pixel >>> 24) & 0xFF) < 255);
-      var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, interpolate, frameOrder, pixels, hasAlpha);
+      var hasAlpha = false;
+      var hasTranslucentPixels = false;
+      for (var pixel : pixels) {
+        var alpha = (pixel >>> 24) & 0xFF;
+        if (alpha < 255) {
+          hasAlpha = true;
+          if (alpha > 0) {
+            hasTranslucentPixels = true;
+            break;
+          }
+        }
+      }
+      var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, interpolate, frameOrder, pixels, hasAlpha, hasTranslucentPixels);
       textureImage.bufferedImage = image;
       return textureImage;
     }
@@ -1464,6 +1519,10 @@ public final class RendererAssets {
 
     public boolean hasAlpha() {
       return hasAlpha;
+    }
+
+    public boolean hasTranslucentPixels() {
+      return hasTranslucentPixels;
     }
 
     public BufferedImage toBufferedImage() {
