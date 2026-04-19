@@ -30,7 +30,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinAccountsSave {
   @Inject(method = "getBedrockAccount", at = @At("HEAD"), remap = false, cancellable = true)
   private void getBedrockAccount(CallbackInfoReturnable<BedrockAuthManager> cir) {
-    var connection = BotConnection.current();
+    var connection = BotConnection.currentOptional().orElse(null);
+    if (connection == null) {
+      return;
+    }
+
     var accountData = connection.settingsSource().stem().accountData();
     if (accountData instanceof BedrockData bedrockData) {
       cir.setReturnValue(bedrockData.getBedrockAuthManager(connection.proxy()));

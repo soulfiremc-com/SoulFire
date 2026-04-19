@@ -30,7 +30,12 @@ import org.spongepowered.asm.mixin.Mixin;
 public class MixinOptions {
   @WrapMethod(method = "buildPlayerInformation")
   private ClientInformation buildPlayerInformation(Operation<ClientInformation> original) {
-    var event = new BotClientSettingsEvent(BotConnection.current(), original.call());
+    var connection = BotConnection.currentOptional().orElse(null);
+    if (connection == null) {
+      return original.call();
+    }
+
+    var event = new BotClientSettingsEvent(connection, original.call());
     SoulFireAPI.postEvent(event);
     return event.clientInformation();
   }

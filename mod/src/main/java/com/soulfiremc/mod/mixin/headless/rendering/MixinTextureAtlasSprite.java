@@ -15,32 +15,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.mod.mixin.soulfire.resourcepack;
+package com.soulfiremc.mod.mixin.headless.rendering;
 
-import net.minecraft.server.packs.resources.ReloadInstance;
-import net.minecraft.server.packs.resources.ReloadableResourceManager;
-import org.jetbrains.annotations.NotNull;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.concurrent.CompletableFuture;
-
-@Mixin(ReloadableResourceManager.class)
-public class MixinReloadableResourceManager {
-  @Inject(method = "createReload", at = @At("HEAD"), cancellable = true)
-  private void onCreateReload(CallbackInfoReturnable<ReloadInstance> cir) {
-    cir.setReturnValue(new ReloadInstance() {
-      @Override
-      public @NotNull CompletableFuture<?> done() {
-        return CompletableFuture.completedFuture(null);
-      }
-
-      @Override
-      public float getActualProgress() {
-        return 1.0f;
-      }
-    });
+@Mixin(TextureAtlasSprite.class)
+public class MixinTextureAtlasSprite {
+  @Inject(method = "uploadSpriteUbo", at = @At("HEAD"), cancellable = true)
+  private void uploadSpriteUboHook(CallbackInfo ci) {
+    ci.cancel();
   }
 }

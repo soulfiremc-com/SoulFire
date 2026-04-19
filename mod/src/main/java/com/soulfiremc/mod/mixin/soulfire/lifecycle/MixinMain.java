@@ -28,13 +28,19 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.Main;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.concurrent.TimeUnit;
+
 @Mixin(Main.class)
 public final class MixinMain {
+  @Unique
+  private static final long soulfire$INITIAL_CLIENT_LOAD_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(30);
+
   @SneakyThrows
   @Inject(method = "main([Ljava/lang/String;)V", at = @At("HEAD"))
   private static void init(CallbackInfo cir) {
@@ -53,6 +59,7 @@ public final class MixinMain {
     SFConstants.NOT_REGISTRY_INIT_PHASE = true;
 
     SFConstants.BASE_MC_INSTANCE = instance;
+    soulfire$finishInitialClientLoad(instance);
 
     try {
       var args = Base64Helpers.splitBase64(System.getProperty("sf.initial.arguments"));
@@ -73,5 +80,27 @@ public final class MixinMain {
   private static void addShutdownHook(Runtime instance, Thread thread) {
     // Prevent registering an integrated server shutdown hook
     // Because it uses getInstance() during shutdown
+  }
+
+  @Unique
+  private static void soulfire$finishInitialClientLoad(Minecraft instance) {
+    var deadline = System.nanoTime() + soulfire$INITIAL_CLIENT_LOAD_TIMEOUT_NANOS;
+    while (!soulfire$hasInitializedBlockModels(instance) && System.nanoTime() < deadline) {
+      instance.runTick(true);
+    }
+
+    if (!soulfire$hasInitializedBlockModels(instance)) {
+      throw new IllegalStateException("Timed out while waiting for the base Minecraft instance to initialize block models");
+    }
+  }
+
+  @Unique
+  private static boolean soulfire$hasInitializedBlockModels(Minecraft instance) {
+    try {
+      instance.getModelManager().getBlockStateModelSet();
+      return true;
+    } catch (RuntimeException ignored) {
+      return false;
+    }
   }
 }

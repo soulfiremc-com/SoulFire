@@ -35,7 +35,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinMinecraft {
   @Inject(method = "tick", at = @At("HEAD"))
   private void onTickPre(CallbackInfo ci) {
-    var connection = BotConnection.current();
+    var connection = BotConnection.currentOptional().orElse(null);
+    if (connection == null) {
+      return;
+    }
     connection.automation().tick();
     connection.botControl().tick();
     SoulFireAPI.postEvent(new BotPreTickEvent(connection));
@@ -43,12 +46,18 @@ public class MixinMinecraft {
 
   @Inject(method = "tick", at = @At("RETURN"))
   private void onTickPost(CallbackInfo ci) {
-    SoulFireAPI.postEvent(new BotPostTickEvent(BotConnection.current()));
+    BotConnection.currentOptional()
+      .ifPresent(connection -> SoulFireAPI.postEvent(new BotPostTickEvent(connection)));
   }
 
   @WrapOperation(method = "setScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;shouldShowDeathScreen()Z"))
   private boolean shouldRespawnEvent(LocalPlayer instance, Operation<Boolean> original) {
-    var event = new BotShouldRespawnEvent(BotConnection.current(), !original.call(instance));
+    var connection = BotConnection.currentOptional().orElse(null);
+    if (connection == null) {
+      return original.call(instance);
+    }
+
+    var event = new BotShouldRespawnEvent(connection, !original.call(instance));
     SoulFireAPI.postEvent(event);
     return !event.shouldRespawn();
   }

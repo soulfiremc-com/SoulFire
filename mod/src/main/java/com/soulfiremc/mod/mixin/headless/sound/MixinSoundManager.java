@@ -36,4 +36,17 @@ public class MixinSoundManager {
     ci.cancel();
   }
 
+  @Inject(
+    method = "apply(Lnet/minecraft/client/sounds/SoundManager$Preparations;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V",
+    at = @At("HEAD"),
+    cancellable = true
+  )
+  private void applyHook(CallbackInfo ci) {
+    ci.cancel();
+  }
+
+  @Inject(method = "reload", at = @At("HEAD"), cancellable = true)
+  private void reloadHook(CallbackInfo ci) {
+    ci.cancel();
+  }
 }

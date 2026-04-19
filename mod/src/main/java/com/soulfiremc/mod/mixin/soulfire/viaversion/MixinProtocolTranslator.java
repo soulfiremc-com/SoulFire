@@ -31,7 +31,7 @@ public class MixinProtocolTranslator {
   @Inject(method = "getTargetVersion()Lcom/viaversion/viaversion/api/protocol/version/ProtocolVersion;", at = @At("HEAD"), cancellable = true)
   private static void getTargetVersion(CallbackInfoReturnable<ProtocolVersion> cir) {
     // We need to ensure the integrity of the bot at all times during game to avoid issues.
-    var botConnection = BotConnection.current();
+    var botConnection = BotConnection.currentOptional().orElse(null);
     if (botConnection != null) {
       cir.setReturnValue(botConnection.currentProtocolVersion());
     }
@@ -40,7 +40,7 @@ public class MixinProtocolTranslator {
   @Inject(method = "setTargetVersion(Lcom/viaversion/viaversion/api/protocol/version/ProtocolVersion;Z)V", at = @At("HEAD"), cancellable = true)
   private static void setTargetVersion(ProtocolVersion newVersion, boolean revertOnDisconnect, CallbackInfo ci) {
     // We need to ensure the integrity of the bot at all times during game to avoid issues.
-    var botConnection = BotConnection.current();
+    var botConnection = BotConnection.currentOptional().orElse(null);
     if (botConnection != null) {
       botConnection.currentProtocolVersion(newVersion);
       ci.cancel();
