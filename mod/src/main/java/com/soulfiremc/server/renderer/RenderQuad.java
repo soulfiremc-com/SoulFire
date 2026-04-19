@@ -17,33 +17,15 @@
  */
 package com.soulfiremc.server.renderer;
 
-import net.minecraft.client.multiplayer.ClientLevel;
-
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-public record RenderContext(
-  ClientLevel level,
-  Camera camera,
-  int maxDistance,
-  double maxDistanceSq,
-  int minY,
-  int maxY,
-  long animationTick,
-  ConcurrentMap<Long, Float> localLightCache,
-  SectionMeshCache sectionMeshCache
-) {
-  public static RenderContext create(ClientLevel level, Camera camera, int maxDistance) {
-    return new RenderContext(
-      level,
-      camera,
-      maxDistance,
-      (double) maxDistance * maxDistance,
-      level.getMinY(),
-      level.getMaxY(),
-      level.getOverworldClockTime(),
-      new ConcurrentHashMap<>(),
-      SectionMeshCache.forLevel(level)
-    );
-  }
-}
+/// A textured quad ready to be projected and rasterized.
+public record RenderQuad(
+  RenderVertex v0,
+  RenderVertex v1,
+  RenderVertex v2,
+  RenderVertex v3,
+  RendererAssets.TextureImage texture,
+  RendererAssets.AlphaMode alphaMode,
+  int color,
+  boolean doubleSided,
+  float depthBias
+) {}

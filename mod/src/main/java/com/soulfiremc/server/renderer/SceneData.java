@@ -17,41 +17,71 @@
  */
 package com.soulfiremc.server.renderer;
 
-import net.minecraft.core.Direction;
-import net.minecraft.world.phys.AABB;
+import java.util.ArrayList;
+import java.util.Arrays;
 
-/// Pre-collected scene data for software rendering.
-public record SceneData(RendererAssets.GeometryFace[] surfaces, BillboardData[] billboards, ShadowData[] shadows) {
-  public static final SceneData EMPTY = new SceneData(new RendererAssets.GeometryFace[0], new BillboardData[0], new ShadowData[0]);
+/// A full frame's worth of raster primitives split by render pass.
+public record SceneData(RenderQuad[] opaque, RenderQuad[] cutout, RenderQuad[] translucent) {
+  public static final SceneData EMPTY = new SceneData(new RenderQuad[0], new RenderQuad[0], new RenderQuad[0]);
 
-  public enum BillboardMode {
-    FULL,
-    VERTICAL
+  public static Builder builder() {
+    return new Builder();
   }
 
-  public record BillboardData(
-    double centerX,
-    double centerY,
-    double centerZ,
-    double width,
-    double height,
-    RendererAssets.TextureImage texture,
-    RendererAssets.AlphaMode alphaMode,
-    int tintColor,
-    int emission,
-    BillboardMode mode,
-    int priority
-  ) {}
+  public SceneData merge(SceneData other) {
+    if (this == EMPTY) {
+      return other;
+    }
+    if (other == EMPTY) {
+      return this;
+    }
 
-  public record ShadowData(
-    AABB bounds,
-    double centerX,
-    double centerY,
-    double centerZ,
-    double width,
-    double height,
-    float strength,
-    Direction upDirection,
-    int priority
-  ) {}
+    return new SceneData(
+      concat(opaque, other.opaque),
+      concat(cutout, other.cutout),
+      concat(translucent, other.translucent)
+    );
+  }
+
+  public int totalQuadCount() {
+    return opaque.length + cutout.length + translucent.length;
+  }
+
+  private static RenderQuad[] concat(RenderQuad[] left, RenderQuad[] right) {
+    var merged = Arrays.copyOf(left, left.length + right.length);
+    System.arraycopy(right, 0, merged, left.length, right.length);
+    return merged;
+  }
+
+  public static final class Builder {
+    private final ArrayList<RenderQuad> opaque = new ArrayList<>();
+    private final ArrayList<RenderQuad> cutout = new ArrayList<>();
+    private final ArrayList<RenderQuad> translucent = new ArrayList<>();
+
+    public void add(RenderQuad quad) {
+      switch (quad.alphaMode()) {
+        case OPAQUE -> opaque.add(quad);
+        case CUTOUT -> cutout.add(quad);
+        case TRANSLUCENT -> translucent.add(quad);
+      }
+    }
+
+    public void addAll(SceneData sceneData) {
+      opaque.addAll(Arrays.asList(sceneData.opaque()));
+      cutout.addAll(Arrays.asList(sceneData.cutout()));
+      translucent.addAll(Arrays.asList(sceneData.translucent()));
+    }
+
+    public SceneData build() {
+      if (opaque.isEmpty() && cutout.isEmpty() && translucent.isEmpty()) {
+        return EMPTY;
+      }
+
+      return new SceneData(
+        opaque.toArray(RenderQuad[]::new),
+        cutout.toArray(RenderQuad[]::new),
+        translucent.toArray(RenderQuad[]::new)
+      );
+    }
+  }
 }

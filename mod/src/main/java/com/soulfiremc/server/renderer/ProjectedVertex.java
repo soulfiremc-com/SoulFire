@@ -17,33 +17,12 @@
  */
 package com.soulfiremc.server.renderer;
 
-import net.minecraft.client.multiplayer.ClientLevel;
-
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-public record RenderContext(
-  ClientLevel level,
-  Camera camera,
-  int maxDistance,
-  double maxDistanceSq,
-  int minY,
-  int maxY,
-  long animationTick,
-  ConcurrentMap<Long, Float> localLightCache,
-  SectionMeshCache sectionMeshCache
-) {
-  public static RenderContext create(ClientLevel level, Camera camera, int maxDistance) {
-    return new RenderContext(
-      level,
-      camera,
-      maxDistance,
-      (double) maxDistance * maxDistance,
-      level.getMinY(),
-      level.getMaxY(),
-      level.getOverworldClockTime(),
-      new ConcurrentHashMap<>(),
-      SectionMeshCache.forLevel(level)
-    );
-  }
-}
+/// A projected vertex with perspective-correct interpolation data precomputed.
+public record ProjectedVertex(
+  float x,
+  float y,
+  float depth,
+  float inverseDepth,
+  float uOverDepth,
+  float vOverDepth
+) {}

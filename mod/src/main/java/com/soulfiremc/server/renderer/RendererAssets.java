@@ -691,7 +691,7 @@ public final class RendererAssets {
       uv[i * 2 + 1] = getV(uvRect, faceRotation, i);
     }
 
-    return GeometryFace.of(vertices, uv, texture, alphaMode, face.tintIndex, element.lightEmission, element.shade);
+    return GeometryFace.of(vertices, uv, texture, alphaMode, direction, face.tintIndex, element.lightEmission, element.shade);
   }
 
   private void applyElementRotation(Vector3f vertex, @Nullable ElementRotation rotation) {
@@ -1171,6 +1171,7 @@ public final class RendererAssets {
     float[] uv,
     TextureImage texture,
     AlphaMode alphaMode,
+    @Nullable Direction cullDirection,
     int tintIndex,
     int emission,
     boolean shade
@@ -1180,6 +1181,7 @@ public final class RendererAssets {
       float[] uv,
       TextureImage texture,
       AlphaMode alphaMode,
+      @Nullable Direction cullDirection,
       int tintIndex,
       int emission,
       boolean shade) {
@@ -1191,6 +1193,7 @@ public final class RendererAssets {
         uv,
         texture,
         alphaMode,
+        cullDirection,
         tintIndex,
         emission,
         shade
@@ -1205,6 +1208,7 @@ public final class RendererAssets {
         uv,
         texture,
         alphaMode,
+        cullDirection,
         tintIndex,
         emission,
         shade
@@ -1217,7 +1221,7 @@ public final class RendererAssets {
         vertices[i] = matrix.transformPosition(new Vector3f((float) x[i], (float) y[i], (float) z[i]));
       }
 
-      return of(vertices, uv, texture, alphaMode, tintIndex, emission, shade);
+      return of(vertices, uv, texture, alphaMode, cullDirection, tintIndex, emission, shade);
     }
   }
 

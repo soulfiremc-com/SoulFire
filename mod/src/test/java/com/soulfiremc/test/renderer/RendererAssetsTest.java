@@ -43,7 +43,9 @@ class RendererAssetsTest {
   @Test
   void bakesStoneAndSlabGeometry() {
     var assets = RendererAssets.instance();
-    assertFalse(assets.blockGeometry(Blocks.STONE.defaultBlockState()).faces().isEmpty());
+    var stoneGeometry = assets.blockGeometry(Blocks.STONE.defaultBlockState());
+    assertFalse(stoneGeometry.faces().isEmpty());
+    assertTrue(stoneGeometry.faces().stream().allMatch(face -> face.cullDirection() != null));
     assertFalse(assets.blockGeometry(Blocks.STONE_SLAB.defaultBlockState()).faces().isEmpty());
     var glassGeometry = assets.blockGeometry(Blocks.GLASS.defaultBlockState());
     assertFalse(glassGeometry.faces().isEmpty());

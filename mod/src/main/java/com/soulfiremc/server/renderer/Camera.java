@@ -18,45 +18,47 @@
 package com.soulfiremc.server.renderer;
 
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
-/// Represents a camera in 3D space with position, rotation, and projection settings.
-/// Pre-computes direction vectors for efficient ray generation.
+/// Camera state shared between scene building, culling, and rasterization.
 public final class Camera {
-  // Position
+  private static final float DEFAULT_NEAR_PLANE = 0.05F;
+
+  private final int width;
+  private final int height;
   private final double eyeX;
   private final double eyeY;
   private final double eyeZ;
-
-  // Pre-computed direction vectors
   private final double forwardX;
   private final double forwardY;
   private final double forwardZ;
   private final double rightX;
+  private final double rightY;
   private final double rightZ;
   private final double upX;
   private final double upY;
   private final double upZ;
-
-  // Screen projection parameters
+  private final double tanHalfFovY;
+  private final double tanHalfFovX;
   private final double screenXMult;
   private final double screenYMult;
   private final double screenXOffset;
   private final double screenYOffset;
+  private final float nearPlane;
+  private final float farPlane;
+  private final Matrix4f viewMatrix;
+  private final Matrix4f projectionMatrix;
+  private final Matrix4f viewProjectionMatrix;
 
-  /// Creates a camera from position, rotation, and viewport settings.
-  ///
-  /// @param eyePos The eye position in world coordinates
-  /// @param yRot   Yaw rotation in degrees (0 = south, 90 = west)
-  /// @param xRot   Pitch rotation in degrees (-90 = up, 90 = down)
-  /// @param width  Viewport width in pixels
-  /// @param height Viewport height in pixels
-  /// @param fov    Field of view in degrees
-  public Camera(Vec3 eyePos, float yRot, float xRot, int width, int height, double fov) {
+  public Camera(Vec3 eyePos, float yRot, float xRot, int width, int height, double fov, float farPlane) {
+    this.width = width;
+    this.height = height;
     this.eyeX = eyePos.x;
     this.eyeY = eyePos.y;
     this.eyeZ = eyePos.z;
+    this.nearPlane = DEFAULT_NEAR_PLANE;
+    this.farPlane = farPlane;
 
-    // Pre-compute trigonometric values
     var yRotRad = Math.toRadians(yRot);
     var xRotRad = Math.toRadians(xRot);
     var cosYRot = Math.cos(yRotRad);
@@ -64,30 +66,133 @@ public final class Camera {
     var cosXRot = Math.cos(xRotRad);
     var sinXRot = Math.sin(xRotRad);
 
-    // Forward direction (where camera is looking)
     this.forwardX = -sinYRot * cosXRot;
     this.forwardY = -sinXRot;
     this.forwardZ = cosYRot * cosXRot;
 
-    // Right vector (perpendicular to forward, in horizontal plane)
     this.rightX = cosYRot;
+    this.rightY = 0.0;
     this.rightZ = sinYRot;
 
-    // Up vector
     this.upX = sinYRot * sinXRot;
     this.upY = cosXRot;
     this.upZ = -cosYRot * sinXRot;
 
-    // Screen projection parameters
     var fovRad = Math.toRadians(fov);
     var aspectRatio = (double) width / height;
-    var halfHeight = Math.tan(fovRad / 2);
-    var halfWidth = halfHeight * aspectRatio;
+    this.tanHalfFovY = Math.tan(fovRad / 2.0);
+    this.tanHalfFovX = tanHalfFovY * aspectRatio;
+    this.screenXMult = 2.0 * tanHalfFovX / width;
+    this.screenYMult = 2.0 * tanHalfFovY / height;
+    this.screenXOffset = tanHalfFovX;
+    this.screenYOffset = tanHalfFovY;
 
-    this.screenXMult = 2.0 * halfWidth / width;
-    this.screenYMult = 2.0 * halfHeight / height;
-    this.screenXOffset = halfWidth;
-    this.screenYOffset = halfHeight;
+    this.viewMatrix = new Matrix4f().lookAt(
+      (float) eyeX,
+      (float) eyeY,
+      (float) eyeZ,
+      (float) (eyeX + forwardX),
+      (float) (eyeY + forwardY),
+      (float) (eyeZ + forwardZ),
+      (float) upX,
+      (float) upY,
+      (float) upZ
+    );
+    this.projectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, nearPlane, farPlane);
+    this.viewProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewMatrix);
+  }
+
+  public float viewX(double worldX, double worldY, double worldZ) {
+    var dx = worldX - eyeX;
+    var dy = worldY - eyeY;
+    var dz = worldZ - eyeZ;
+    return (float) (dx * rightX + dy * rightY + dz * rightZ);
+  }
+
+  public float viewY(double worldX, double worldY, double worldZ) {
+    var dx = worldX - eyeX;
+    var dy = worldY - eyeY;
+    var dz = worldZ - eyeZ;
+    return (float) (dx * upX + dy * upY + dz * upZ);
+  }
+
+  public float viewZ(double worldX, double worldY, double worldZ) {
+    var dx = worldX - eyeX;
+    var dy = worldY - eyeY;
+    var dz = worldZ - eyeZ;
+    return (float) (dx * forwardX + dy * forwardY + dz * forwardZ);
+  }
+
+  public boolean isVisibleAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+    var centerX = (minX + maxX) * 0.5;
+    var centerY = (minY + maxY) * 0.5;
+    var centerZ = (minZ + maxZ) * 0.5;
+    var halfX = (maxX - minX) * 0.5;
+    var halfY = (maxY - minY) * 0.5;
+    var halfZ = (maxZ - minZ) * 0.5;
+
+    var camX = viewX(centerX, centerY, centerZ);
+    var camY = viewY(centerX, centerY, centerZ);
+    var camZ = viewZ(centerX, centerY, centerZ);
+    var extentX = Math.abs(rightX) * halfX + Math.abs(rightY) * halfY + Math.abs(rightZ) * halfZ;
+    var extentY = Math.abs(upX) * halfX + Math.abs(upY) * halfY + Math.abs(upZ) * halfZ;
+    var extentZ = Math.abs(forwardX) * halfX + Math.abs(forwardY) * halfY + Math.abs(forwardZ) * halfZ;
+    var furthestZ = camZ + extentZ;
+
+    if (furthestZ < nearPlane || camZ - extentZ > farPlane) {
+      return false;
+    }
+    if (camX - extentX > furthestZ * tanHalfFovX) {
+      return false;
+    }
+    if (camX + extentX < -furthestZ * tanHalfFovX) {
+      return false;
+    }
+    if (camY - extentY > furthestZ * tanHalfFovY) {
+      return false;
+    }
+    if (camY + extentY < -furthestZ * tanHalfFovY) {
+      return false;
+    }
+    return true;
+  }
+
+  public double sampleDirX(int x, int y) {
+    var screenX = screenXOffset - x * screenXMult;
+    var screenY = screenYOffset - y * screenYMult;
+    var rayX = forwardX + screenX * rightX + screenY * upX;
+    var rayY = forwardY + screenY * upY;
+    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
+    return rayX * invLen;
+  }
+
+  public double sampleDirY(int x, int y) {
+    var screenX = screenXOffset - x * screenXMult;
+    var screenY = screenYOffset - y * screenYMult;
+    var rayX = forwardX + screenX * rightX + screenY * upX;
+    var rayY = forwardY + screenY * upY;
+    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
+    return rayY * invLen;
+  }
+
+  public double sampleDirZ(int x, int y) {
+    var screenX = screenXOffset - x * screenXMult;
+    var screenY = screenYOffset - y * screenYMult;
+    var rayX = forwardX + screenX * rightX + screenY * upX;
+    var rayY = forwardY + screenY * upY;
+    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
+    return rayZ * invLen;
+  }
+
+  public int width() {
+    return width;
+  }
+
+  public int height() {
+    return height;
   }
 
   public double eyeX() {
@@ -118,6 +223,10 @@ public final class Camera {
     return rightX;
   }
 
+  public double rightY() {
+    return rightY;
+  }
+
   public double rightZ() {
     return rightZ;
   }
@@ -134,19 +243,31 @@ public final class Camera {
     return upZ;
   }
 
-  public double screenXMult() {
-    return screenXMult;
+  public double tanHalfFovX() {
+    return tanHalfFovX;
   }
 
-  public double screenYMult() {
-    return screenYMult;
+  public double tanHalfFovY() {
+    return tanHalfFovY;
   }
 
-  public double screenXOffset() {
-    return screenXOffset;
+  public float nearPlane() {
+    return nearPlane;
   }
 
-  public double screenYOffset() {
-    return screenYOffset;
+  public float farPlane() {
+    return farPlane;
+  }
+
+  public Matrix4f viewMatrix() {
+    return new Matrix4f(viewMatrix);
+  }
+
+  public Matrix4f projectionMatrix() {
+    return new Matrix4f(projectionMatrix);
+  }
+
+  public Matrix4f viewProjectionMatrix() {
+    return new Matrix4f(viewProjectionMatrix);
   }
 }
