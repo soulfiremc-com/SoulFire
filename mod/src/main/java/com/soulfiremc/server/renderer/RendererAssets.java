@@ -21,16 +21,21 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.mojang.math.Quadrant;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.FaceInfo;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.ClientAsset;
 import net.minecraft.core.Direction;
@@ -39,8 +44,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -271,8 +279,9 @@ public final class RendererAssets {
       return List.of();
     }
 
-    if (entity instanceof AbstractClientPlayer player) {
-      return buildPlayerModel(player, lod);
+    var vanillaModel = tryBuildVanillaLivingModel(entity, texture, entity instanceof AbstractClientPlayer ? 0.9375F : 1.0F);
+    if (!vanillaModel.isEmpty()) {
+      return vanillaModel;
     }
 
     var yaw = (float) Math.toRadians(-entity.getYRot());
@@ -290,7 +299,7 @@ public final class RendererAssets {
 
   private TextureImage playerTexture(AbstractClientPlayer player) {
     try {
-      return composePlayerSprite(this.texture((ClientAsset.Texture) player.getSkin().body()), player.getSkin().model().name().equalsIgnoreCase("SLIM"));
+      return this.texture((ClientAsset.Texture) player.getSkin().body());
     } catch (Throwable t) {
       log.debug("Failed to compose player sprite for {}", player.getUUID(), t);
       return MISSING_TEXTURE;
@@ -298,6 +307,11 @@ public final class RendererAssets {
   }
 
   private List<GeometryFace> buildPlayerModel(AbstractClientPlayer player, EntityLod lod) {
+    var vanillaFaces = tryBuildVanillaLivingModel(player, texture((ClientAsset.Texture) player.getSkin().body()), 0.9375F);
+    if (!vanillaFaces.isEmpty()) {
+      return vanillaFaces;
+    }
+
     var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
     var slim = player.getSkin().model().name().equalsIgnoreCase("SLIM");
     var armWidth = slim ? 0.1875F : 0.25F;
@@ -439,6 +453,108 @@ public final class RendererAssets {
       );
     }
 
+    return faces;
+  }
+
+  private List<GeometryFace> tryBuildVanillaLivingModel(Entity entity, TextureImage texture, float renderScale) {
+    if (!(entity instanceof LivingEntity livingEntity)) {
+      return List.of();
+    }
+
+    try {
+      var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
+      if (!(rawRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer)) {
+        return List.of();
+      }
+
+      var renderState = (LivingEntityRenderState) rawRenderer.createRenderState(entity, 1.0F);
+      @SuppressWarnings("rawtypes")
+      var rawLivingRenderer = (LivingEntityRenderer) livingRenderer;
+      var model = (EntityModel) rawLivingRenderer.getModel();
+      model.setupAnim(renderState);
+
+      var poseStack = new PoseStack();
+      applyLivingModelPose(poseStack, livingEntity.getX(), livingEntity.getY(), livingEntity.getZ(), renderState, renderScale);
+      return extractModelGeometry(model, poseStack, texture, AlphaMode.CUTOUT);
+    } catch (Throwable t) {
+      log.debug("Failed to build vanilla living model for {}", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()), t);
+      return List.of();
+    }
+  }
+
+  private void applyLivingModelPose(
+    PoseStack poseStack,
+    double worldX,
+    double worldY,
+    double worldZ,
+    LivingEntityRenderState renderState,
+    float renderScale
+  ) {
+    poseStack.translate(worldX, worldY, worldZ);
+    poseStack.scale(renderState.scale, renderState.scale, renderState.scale);
+    applyLivingEntityRotations(renderState, poseStack, renderState.bodyRot, renderState.scale);
+    poseStack.scale(-1.0F, -1.0F, 1.0F);
+    poseStack.scale(renderScale, renderScale, renderScale);
+    poseStack.translate(0.0F, -1.501F, 0.0F);
+  }
+
+  private void applyLivingEntityRotations(LivingEntityRenderState renderState, PoseStack poseStack, float bodyRot, float scale) {
+    if (renderState.isFullyFrozen) {
+      bodyRot += (float) (Math.cos(Mth.floor(renderState.ageInTicks) * 3.25F) * Math.PI * 0.4F);
+    }
+
+    if (!renderState.hasPose(Pose.SLEEPING)) {
+      poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - bodyRot));
+    }
+
+    if (renderState.deathTime > 0.0F) {
+      var progress = (renderState.deathTime - 1.0F) / 20.0F * 1.6F;
+      progress = Mth.sqrt(progress);
+      if (progress > 1.0F) {
+        progress = 1.0F;
+      }
+      poseStack.mulPose(Axis.ZP.rotationDegrees(progress * 90.0F));
+    } else if (renderState.isAutoSpinAttack) {
+      poseStack.mulPose(Axis.XP.rotationDegrees(-90.0F - renderState.xRot));
+      poseStack.mulPose(Axis.YP.rotationDegrees(renderState.ageInTicks * -75.0F));
+    } else if (renderState.hasPose(Pose.SLEEPING)) {
+      var sleepRotation = renderState.bedOrientation != null ? sleepDirectionToRotation(renderState.bedOrientation) : bodyRot;
+      poseStack.mulPose(Axis.YP.rotationDegrees(sleepRotation));
+      poseStack.mulPose(Axis.ZP.rotationDegrees(90.0F));
+      poseStack.mulPose(Axis.YP.rotationDegrees(270.0F));
+    } else if (renderState.isUpsideDown) {
+      poseStack.translate(0.0F, (renderState.boundingBoxHeight + 0.1F) / scale, 0.0F);
+      poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
+    }
+  }
+
+  private float sleepDirectionToRotation(Direction facing) {
+    return switch (facing) {
+      case SOUTH -> 90.0F;
+      case WEST -> 0.0F;
+      case NORTH -> 270.0F;
+      case EAST -> 180.0F;
+      default -> 0.0F;
+    };
+  }
+
+  private List<GeometryFace> extractModelGeometry(EntityModel<?> model, PoseStack poseStack, TextureImage texture, AlphaMode alphaMode) {
+    var faces = new ArrayList<GeometryFace>();
+    model.root().visit(poseStack, (pose, path, index, cube) -> {
+      for (var polygon : cube.polygons) {
+        var vertices = new Vector3f[4];
+        var uv = new float[8];
+        for (var i = 0; i < polygon.vertices().length; i++) {
+          var vertex = polygon.vertices()[i];
+          vertices[i] = pose.pose().transformPosition(vertex.x() / 16.0F, vertex.y() / 16.0F, vertex.z() / 16.0F, new Vector3f());
+          uv[i * 2] = vertex.u();
+          uv[i * 2 + 1] = vertex.v();
+        }
+        faces.add(GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, 0, true));
+      }
+    });
     return faces;
   }
 
@@ -686,6 +802,11 @@ public final class RendererAssets {
   }
 
   private BlockGeometry buildBlockGeometry(BlockState state) {
+    var vanillaGeometry = buildVanillaBlockGeometry(state);
+    if (!vanillaGeometry.faces().isEmpty()) {
+      return vanillaGeometry;
+    }
+
     var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
     var stateDefinition = blockStateCache.computeIfAbsent(blockId, this::loadBlockStateDefinition);
     var modelReferences = stateDefinition.select(state);
@@ -709,6 +830,55 @@ public final class RendererAssets {
     }
 
     return new BlockGeometry(bakedFaces);
+  }
+
+  private BlockGeometry buildVanillaBlockGeometry(BlockState state) {
+    try {
+      var blockModel = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+      var parts = new ArrayList<BlockStateModelPart>();
+      blockModel.collectParts(RandomSource.create(42L), parts);
+      var faces = new ArrayList<GeometryFace>();
+      for (var part : parts) {
+        for (var quad : part.getQuads(null)) {
+          faces.add(vanillaQuadToFace(quad, null, state));
+        }
+        for (var direction : Direction.values()) {
+          for (var quad : part.getQuads(direction)) {
+            faces.add(vanillaQuadToFace(quad, direction, state));
+          }
+        }
+      }
+      return faces.isEmpty() ? BlockGeometry.EMPTY : new BlockGeometry(faces);
+    } catch (Throwable t) {
+      log.debug("Failed to build vanilla block geometry for {}", BuiltInRegistries.BLOCK.getKey(state.getBlock()), t);
+      return BlockGeometry.EMPTY;
+    }
+  }
+
+  private GeometryFace vanillaQuadToFace(BakedQuad quad, @Nullable Direction cullDirection, BlockState state) {
+    var vertices = new Vector3f[4];
+    var uv = new float[8];
+    for (var i = 0; i < 4; i++) {
+      var position = quad.position(i);
+      var packedUv = quad.packedUV(i);
+      vertices[i] = new Vector3f(position);
+      uv[i * 2] = Float.intBitsToFloat((int) packedUv);
+      uv[i * 2 + 1] = Float.intBitsToFloat((int) (packedUv >>> 32));
+    }
+
+    var spriteId = quad.materialInfo().sprite().contents().name();
+    var texture = texture(spriteId);
+    var alphaMode = chooseAlphaMode(state, texture, spriteId.getPath(), false);
+    return GeometryFace.of(
+      vertices,
+      uv,
+      texture,
+      alphaMode,
+      cullDirection,
+      quad.materialInfo().isTinted() ? quad.materialInfo().tintIndex() : -1,
+      quad.materialInfo().lightEmission(),
+      quad.materialInfo().shade()
+    );
   }
 
   private BlockGeometry fallbackCube(BlockState state) {
