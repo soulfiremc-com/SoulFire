@@ -24,13 +24,15 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 /// Collects renderable scene primitives outside the block grid.
 @UtilityClass
@@ -50,6 +52,7 @@ public class SceneCollector {
     var surfaces = new ArrayList<RendererAssets.GeometryFace>();
     var billboards = new ArrayList<SceneData.BillboardData>();
     var shadows = new ArrayList<SceneData.ShadowData>();
+    var billboardBuckets = new HashMap<Long, Integer>();
 
     for (var entity : level.entitiesForRendering()) {
       if (entity == localPlayer) {
@@ -59,35 +62,37 @@ public class SceneCollector {
       var dx = entity.getX() - eyeX;
       var dy = entity.getY() - eyeY;
       var dz = entity.getZ() - eyeZ;
-      if (dx * dx + dy * dy + dz * dz > maxDistSq) {
+      var distanceSq = dx * dx + dy * dy + dz * dz;
+      if (distanceSq > maxDistSq) {
         continue;
       }
+      var lod = entityLod(distanceSq);
 
       if (entity instanceof Display.BlockDisplay blockDisplay) {
         collectBlockDisplay(blockDisplay, assets, surfaces, shadows);
         continue;
       }
       if (entity instanceof Display.ItemDisplay itemDisplay) {
-        collectItemDisplay(itemDisplay, assets, surfaces, billboards, shadows);
+        collectItemDisplay(itemDisplay, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod);
         continue;
       }
       if (entity instanceof Display.TextDisplay textDisplay) {
-        collectTextDisplay(textDisplay, assets, billboards, shadows);
+        collectTextDisplay(textDisplay, assets, billboards, shadows, billboardBuckets, distanceSq);
         continue;
       }
       if (entity instanceof ItemFrame frame) {
-        collectItemFrame(level, frame, assets, surfaces, billboards);
+        collectItemFrame(level, frame, assets, surfaces, billboards, billboardBuckets, distanceSq, lod);
         continue;
       }
       if (entity instanceof ItemEntity itemEntity) {
-        collectItemEntity(itemEntity, assets, billboards, shadows);
+        collectItemEntity(itemEntity, assets, billboards, shadows, billboardBuckets, distanceSq, lod);
         continue;
       }
 
-      collectGenericEntity(entity, assets, surfaces, billboards, shadows);
+      collectGenericEntity(entity, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod);
     }
 
-    collectWeather(level, eyeX, eyeY, eyeZ, billboards);
+    collectWeather(level, eyeX, eyeY, eyeZ, billboards, billboardBuckets);
 
     return new SceneData(
       surfaces.toArray(RendererAssets.GeometryFace[]::new),
@@ -101,7 +106,8 @@ public class SceneCollector {
     double eyeX,
     double eyeY,
     double eyeZ,
-    ArrayList<SceneData.BillboardData> billboards) {
+    ArrayList<SceneData.BillboardData> billboards,
+    Map<Long, Integer> billboardBuckets) {
 
     var rain = level.getRainLevel(1.0F);
     if (rain <= 0.05F) {
@@ -115,7 +121,10 @@ public class SceneCollector {
       var px = eyeX + ((seed & 0xFF) / 255.0 - 0.5) * 12.0;
       var py = eyeY + (((seed >> 8) & 0xFF) / 255.0 - 0.35) * 6.0;
       var pz = eyeZ + (((seed >> 16) & 0xFF) / 255.0 - 0.5) * 12.0;
-      billboards.add(new SceneData.BillboardData(
+      addBillboard(
+        billboards,
+        billboardBuckets,
+        new SceneData.BillboardData(
         px,
         py,
         pz,
@@ -125,8 +134,11 @@ public class SceneCollector {
         RendererAssets.AlphaMode.TRANSLUCENT,
         0x99D8F6FF,
         0,
-        SceneData.BillboardMode.FULL
-      ));
+        SceneData.BillboardMode.FULL,
+        1
+      ),
+        true
+      );
     }
   }
 
@@ -156,7 +168,10 @@ public class SceneCollector {
     RendererAssets assets,
     ArrayList<RendererAssets.GeometryFace> surfaces,
     ArrayList<SceneData.BillboardData> billboards,
-    ArrayList<SceneData.ShadowData> shadows) {
+    ArrayList<SceneData.ShadowData> shadows,
+    Map<Long, Integer> billboardBuckets,
+    double distanceSq,
+    RendererAssets.EntityLod lod) {
 
     var renderState = itemDisplay.renderState();
     var itemRenderState = itemDisplay.itemRenderState();
@@ -172,19 +187,25 @@ public class SceneCollector {
       surfaces.add(face.transformed(transform));
     }
 
-    if (itemModel.billboard() != null) {
-      billboards.add(new SceneData.BillboardData(
+    if (itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
+      addBillboard(
+        billboards,
+        billboardBuckets,
+        new SceneData.BillboardData(
         itemDisplay.getX(),
         itemDisplay.getY() + 0.5,
         itemDisplay.getZ(),
-        0.75,
-        0.75,
+        lod == RendererAssets.EntityLod.MEDIUM ? 0.65 : 0.5,
+        lod == RendererAssets.EntityLod.MEDIUM ? 0.65 : 0.5,
         itemModel.billboard().texture(),
         itemModel.billboard().alphaMode(),
         0xFFFFFFFF,
         0,
-        SceneData.BillboardMode.FULL
-      ));
+        SceneData.BillboardMode.FULL,
+        lod == RendererAssets.EntityLod.MEDIUM ? 6 : 3
+      ),
+        distanceSq > 24 * 24
+      );
     }
 
     addShadow(itemDisplay, shadows);
@@ -194,7 +215,9 @@ public class SceneCollector {
     Display.TextDisplay textDisplay,
     RendererAssets assets,
     ArrayList<SceneData.BillboardData> billboards,
-    ArrayList<SceneData.ShadowData> shadows) {
+    ArrayList<SceneData.ShadowData> shadows,
+    Map<Long, Integer> billboardBuckets,
+    double distanceSq) {
 
     var renderState = textDisplay.renderState();
     var textRenderState = textDisplay.textRenderState();
@@ -212,7 +235,10 @@ public class SceneCollector {
       default -> SceneData.BillboardMode.FULL;
     };
 
-    billboards.add(new SceneData.BillboardData(
+    addBillboard(
+      billboards,
+      billboardBuckets,
+      new SceneData.BillboardData(
       textDisplay.getX(),
       textDisplay.getY() + height * 0.5,
       textDisplay.getZ(),
@@ -222,8 +248,11 @@ public class SceneCollector {
       RendererAssets.AlphaMode.TRANSLUCENT,
       0xFFFFFFFF,
       0,
-      mode
-    ));
+      mode,
+      10
+    ),
+      distanceSq > 48 * 48
+    );
 
     addShadow(textDisplay, shadows);
   }
@@ -233,14 +262,20 @@ public class SceneCollector {
     ItemFrame frame,
     RendererAssets assets,
     ArrayList<RendererAssets.GeometryFace> surfaces,
-    ArrayList<SceneData.BillboardData> billboards) {
+    ArrayList<SceneData.BillboardData> billboards,
+    Map<Long, Integer> billboardBuckets,
+    double distanceSq,
+    RendererAssets.EntityLod lod) {
 
     var item = frame.getItem();
     var mapId = item.get(DataComponents.MAP_ID);
     if (mapId != null) {
       var mapData = level.getMapData(mapId);
       if (mapData != null) {
-        billboards.add(new SceneData.BillboardData(
+        addBillboard(
+          billboards,
+          billboardBuckets,
+          new SceneData.BillboardData(
           frame.getX(),
           frame.getY(),
           frame.getZ(),
@@ -250,8 +285,11 @@ public class SceneCollector {
           RendererAssets.AlphaMode.OPAQUE,
           0xFFFFFFFF,
           0,
-          SceneData.BillboardMode.VERTICAL
-        ));
+          SceneData.BillboardMode.VERTICAL,
+          9
+        ),
+          distanceSq > 56 * 56
+        );
         return;
       }
     }
@@ -263,8 +301,11 @@ public class SceneCollector {
     for (var face : itemModel.geometry().faces()) {
       surfaces.add(face.transformed(transform));
     }
-    if (itemModel.billboard() != null) {
-      billboards.add(new SceneData.BillboardData(
+    if (itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
+      addBillboard(
+        billboards,
+        billboardBuckets,
+        new SceneData.BillboardData(
         frame.getX(),
         frame.getY(),
         frame.getZ(),
@@ -274,8 +315,11 @@ public class SceneCollector {
         itemModel.billboard().alphaMode(),
         0xFFFFFFFF,
         0,
-        SceneData.BillboardMode.VERTICAL
-      ));
+        SceneData.BillboardMode.VERTICAL,
+        8
+      ),
+        distanceSq > 40 * 40
+      );
     }
   }
 
@@ -283,23 +327,32 @@ public class SceneCollector {
     ItemEntity itemEntity,
     RendererAssets assets,
     ArrayList<SceneData.BillboardData> billboards,
-    ArrayList<SceneData.ShadowData> shadows) {
+    ArrayList<SceneData.ShadowData> shadows,
+    Map<Long, Integer> billboardBuckets,
+    double distanceSq,
+    RendererAssets.EntityLod lod) {
 
     var itemModel = assets.itemRenderModel(itemEntity.getItem());
     var billboard = itemModel.billboard();
     var texture = billboard != null ? billboard.texture() : assets.entityTexture(itemEntity);
-    billboards.add(new SceneData.BillboardData(
+    addBillboard(
+      billboards,
+      billboardBuckets,
+      new SceneData.BillboardData(
       itemEntity.getX(),
       itemEntity.getY() + 0.15,
       itemEntity.getZ(),
-      0.4,
-      0.4,
+      lod == RendererAssets.EntityLod.NEAR ? 0.4 : lod == RendererAssets.EntityLod.MEDIUM ? 0.28 : 0.2,
+      lod == RendererAssets.EntityLod.NEAR ? 0.4 : lod == RendererAssets.EntityLod.MEDIUM ? 0.28 : 0.2,
       texture,
       billboard != null ? billboard.alphaMode() : RendererAssets.AlphaMode.CUTOUT,
       0xFFFFFFFF,
       0,
-      SceneData.BillboardMode.FULL
-    ));
+      SceneData.BillboardMode.FULL,
+      lod == RendererAssets.EntityLod.NEAR ? 7 : 2
+    ),
+      distanceSq > 20 * 20
+    );
 
     addShadow(itemEntity, shadows);
   }
@@ -309,142 +362,132 @@ public class SceneCollector {
     RendererAssets assets,
     ArrayList<RendererAssets.GeometryFace> surfaces,
     ArrayList<SceneData.BillboardData> billboards,
-    ArrayList<SceneData.ShadowData> shadows) {
+    ArrayList<SceneData.ShadowData> shadows,
+    Map<Long, Integer> billboardBuckets,
+    double distanceSq,
+    RendererAssets.EntityLod lod) {
 
     var texture = assets.entityTexture(entity);
-    if (entity instanceof net.minecraft.client.player.AbstractClientPlayer) {
-      billboards.add(new SceneData.BillboardData(
+    if (lod == RendererAssets.EntityLod.FAR) {
+      addBillboard(
+        billboards,
+        billboardBuckets,
+        new SceneData.BillboardData(
         entity.getX(),
         entity.getY() + entity.getBbHeight() * 0.5,
         entity.getZ(),
-        Math.max(0.5, entity.getBbWidth()),
-        Math.max(1.0, entity.getBbHeight()),
+        Math.max(0.35, entity.getBbWidth() * 0.7),
+        Math.max(0.7, entity.getBbHeight() * 0.7),
         texture,
         RendererAssets.AlphaMode.CUTOUT,
         0xFFFFFFFF,
         0,
-        SceneData.BillboardMode.VERTICAL
-      ));
+        SceneData.BillboardMode.VERTICAL,
+        entity instanceof LivingEntity ? 5 : 2
+      ),
+        true
+      );
     } else {
-      var bounds = entity.getBoundingBox();
-      for (var direction : Direction.values()) {
-        surfaces.add(createEntityFace(bounds, direction, texture));
+      surfaces.addAll(assets.entityModel(entity, texture, lod));
+      if (lod == RendererAssets.EntityLod.MEDIUM) {
+        addBillboard(
+          billboards,
+          billboardBuckets,
+          new SceneData.BillboardData(
+            entity.getX(),
+            entity.getY() + entity.getBbHeight() * 0.55,
+            entity.getZ(),
+            Math.max(0.3, entity.getBbWidth() * 0.45),
+            Math.max(0.6, entity.getBbHeight() * 0.45),
+            texture,
+            RendererAssets.AlphaMode.CUTOUT,
+            0x88FFFFFF,
+            0,
+            SceneData.BillboardMode.VERTICAL,
+            4
+          ),
+          distanceSq > 18 * 18
+        );
       }
     }
 
     addShadow(entity, shadows);
   }
 
-  private static RendererAssets.GeometryFace createEntityFace(AABB bounds, Direction direction, RendererAssets.TextureImage texture) {
-    return switch (direction) {
-      case DOWN -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.maxZ)
-        },
-        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-      case UP -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.minZ)
-        },
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-      case NORTH -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.minZ)
-        },
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-      case SOUTH -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.maxZ)
-        },
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-      case WEST -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.minX, (float) bounds.maxY, (float) bounds.maxZ)
-        },
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-      case EAST -> RendererAssets.GeometryFace.of(
-        new org.joml.Vector3f[]{
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.maxZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.minY, (float) bounds.minZ),
-          new org.joml.Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.minZ)
-        },
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        texture,
-        RendererAssets.AlphaMode.CUTOUT,
-        -1,
-        0,
-        true
-      );
-    };
-  }
-
   private static void addShadow(Entity entity, ArrayList<SceneData.ShadowData> shadows) {
+    var level = entity.level();
+    var feet = entity.blockPosition();
+    var groundY = entity.getY() - 0.02;
+    var foundGround = false;
+    for (var depth = 0; depth <= 8; depth++) {
+      var checkPos = feet.below(depth);
+      var state = level.getBlockState(checkPos);
+      if (!state.isAir() && (state.isSolidRender() || !state.getCollisionShape(level, checkPos).isEmpty())) {
+        groundY = checkPos.getY() + state.getCollisionShape(level, checkPos).bounds().maxY + 0.02;
+        foundGround = true;
+        break;
+      }
+    }
+
+    if (!foundGround) {
+      return;
+    }
+
     var bounds = entity.getBoundingBox();
-    var width = Math.max(0.25, entity.getBbWidth());
-    var shadowBounds = new AABB(
-      entity.getX() - width,
-      entity.getY() - 2.0,
-      entity.getZ() - width,
-      entity.getX() + width,
-      entity.getY() + 0.25,
-      entity.getZ() + width
+    var width = Math.max(0.22, entity.getBbWidth());
+    var heightGap = Math.max(0.0, bounds.minY - groundY);
+    var fade = (float) Math.max(0.1, 1.0 - Math.min(heightGap / 5.0, 0.85));
+    var spread = 1.15 + Math.min(heightGap * 0.2, 0.8);
+    var shadowBounds = new net.minecraft.world.phys.AABB(
+      entity.getX() - width * spread,
+      groundY - 0.1,
+      entity.getZ() - width * spread,
+      entity.getX() + width * spread,
+      groundY + 0.15,
+      entity.getZ() + width * spread
     );
     shadows.add(new SceneData.ShadowData(
       shadowBounds,
       entity.getX(),
-      bounds.minY + 0.02,
+      groundY,
       entity.getZ(),
-      width * 1.5,
-      width * 1.5,
-      0.35F,
-      Direction.UP
+      width * 1.8 * spread,
+      width * 1.5 * spread,
+      0.45F * fade,
+      Direction.UP,
+      0
     ));
+  }
+
+  private static RendererAssets.EntityLod entityLod(double distanceSq) {
+    if (distanceSq < 12.0 * 12.0) {
+      return RendererAssets.EntityLod.NEAR;
+    }
+    if (distanceSq < 30.0 * 30.0) {
+      return RendererAssets.EntityLod.MEDIUM;
+    }
+    return RendererAssets.EntityLod.FAR;
+  }
+
+  private static void addBillboard(
+    ArrayList<SceneData.BillboardData> billboards,
+    Map<Long, Integer> billboardBuckets,
+    SceneData.BillboardData billboard,
+    boolean limitDensity) {
+
+    if (limitDensity) {
+      var bucketKey = (((long) Math.floor(billboard.centerX() / 3.0)) & 0xFFFFFFL) << 40
+        | ((((long) Math.floor(billboard.centerY() / 3.0)) & 0xFFFFL) << 24)
+        | (((long) Math.floor(billboard.centerZ() / 3.0)) & 0xFFFFFFL);
+      var count = billboardBuckets.getOrDefault(bucketKey, 0);
+      var limit = billboard.priority() >= 8 ? 4 : billboard.priority() >= 5 ? 3 : 2;
+      if (count >= limit) {
+        return;
+      }
+      billboardBuckets.put(bucketKey, count + 1);
+    }
+
+    billboards.add(billboard);
   }
 
   private static RendererAssets.TextureImage createRainTexture() {

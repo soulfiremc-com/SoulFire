@@ -127,7 +127,7 @@ public final class RendererAssets {
     }
 
     var layer0 = resolvedModel != null ? resolveTextureReference("#layer0", resolvedModel.textures) : null;
-    var texture = layer0 != null ? texture(layer0) : texture(itemId.withPrefix("item/"));
+    var texture = layer0 != null ? texture(layer0.sprite()) : texture(itemId.withPrefix("item/"));
     return new ItemRenderModel(BlockGeometry.EMPTY, new BillboardTexture(texture, AlphaMode.CUTOUT));
   }
 
@@ -245,6 +245,34 @@ public final class RendererAssets {
     return matrix;
   }
 
+  public enum EntityLod {
+    NEAR,
+    MEDIUM,
+    FAR
+  }
+
+  public List<GeometryFace> entityModel(Entity entity, TextureImage texture, EntityLod lod) {
+    if (lod == EntityLod.FAR) {
+      return List.of();
+    }
+
+    if (entity instanceof AbstractClientPlayer player) {
+      return buildPlayerModel(player, lod);
+    }
+
+    var yaw = (float) Math.toRadians(-entity.getYRot());
+    var transform = new Matrix4f()
+      .translate((float) entity.getX(), (float) entity.getY(), (float) entity.getZ())
+      .rotateY(yaw);
+    if (entity.getBbHeight() > entity.getBbWidth() * 1.25F) {
+      return buildHumanoidApproximation(entity, texture, lod, transform);
+    }
+    if (entity.getBbWidth() > entity.getBbHeight() * 0.9F) {
+      return buildQuadrupedApproximation(entity, texture, lod, transform);
+    }
+    return buildPrismApproximation(entity, texture, lod, transform);
+  }
+
   private TextureImage playerTexture(AbstractClientPlayer player) {
     try {
       return composePlayerSprite(this.texture((ClientAsset.Texture) player.getSkin().body()), player.getSkin().model().name().equalsIgnoreCase("SLIM"));
@@ -252,6 +280,194 @@ public final class RendererAssets {
       log.debug("Failed to compose player sprite for {}", player.getUUID(), t);
       return MISSING_TEXTURE;
     }
+  }
+
+  private List<GeometryFace> buildPlayerModel(AbstractClientPlayer player, EntityLod lod) {
+    var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
+    var slim = player.getSkin().model().name().equalsIgnoreCase("SLIM");
+    var armWidth = slim ? 0.1875F : 0.25F;
+    var faces = new ArrayList<GeometryFace>();
+    var yaw = (float) Math.toRadians(-player.getYRot());
+    var transform = new Matrix4f()
+      .translate((float) player.getX(), (float) player.getY(), (float) player.getZ())
+      .rotateY(yaw);
+
+    addCuboid(
+      faces,
+      -0.25F, 1.25F, -0.25F,
+      0.25F, 1.75F, 0.25F,
+      skin,
+      AlphaMode.CUTOUT,
+      cuboidUvSet(
+        new UVRect(0.25F, 0.0F, 0.375F, 0.125F),
+        new UVRect(0.125F, 0.0F, 0.25F, 0.125F),
+        new UVRect(0.375F, 0.125F, 0.5F, 0.25F),
+        new UVRect(0.125F, 0.125F, 0.25F, 0.25F),
+        new UVRect(0.0F, 0.125F, 0.125F, 0.25F),
+        new UVRect(0.25F, 0.125F, 0.375F, 0.25F)
+      ),
+      transform,
+      true
+    );
+
+    addCuboid(
+      faces,
+      -0.25F, 0.5F, -0.125F,
+      0.25F, 1.25F, 0.125F,
+      skin,
+      AlphaMode.CUTOUT,
+      cuboidUvSet(
+        new UVRect(0.25F, 0.25F, 0.3125F, 0.3125F),
+        new UVRect(0.125F, 0.25F, 0.1875F, 0.3125F),
+        new UVRect(0.5F, 0.25F, 0.625F, 0.4375F),
+        new UVRect(0.3125F, 0.25F, 0.4375F, 0.4375F),
+        new UVRect(0.25F, 0.3125F, 0.3125F, 0.5F),
+        new UVRect(0.4375F, 0.3125F, 0.5F, 0.5F)
+      ),
+      transform,
+      true
+    );
+
+    addCuboid(
+      faces,
+      -0.25F, 0.0F, -0.125F,
+      -0.0625F, 0.75F, 0.125F,
+      skin,
+      AlphaMode.CUTOUT,
+      cuboidUvSet(
+        new UVRect(0.0625F, 0.25F, 0.125F, 0.3125F),
+        new UVRect(0.0F, 0.25F, 0.0625F, 0.3125F),
+        new UVRect(0.1875F, 0.3125F, 0.25F, 0.5F),
+        new UVRect(0.0625F, 0.3125F, 0.125F, 0.5F),
+        new UVRect(0.0F, 0.3125F, 0.0625F, 0.5F),
+        new UVRect(0.125F, 0.3125F, 0.1875F, 0.5F)
+      ),
+      transform,
+      true
+    );
+
+    addCuboid(
+      faces,
+      0.0625F, 0.0F, -0.125F,
+      0.25F, 0.75F, 0.125F,
+      skin,
+      AlphaMode.CUTOUT,
+      cuboidUvSet(
+        new UVRect(0.0625F, 0.8125F, 0.125F, 0.875F),
+        new UVRect(0.0F, 0.8125F, 0.0625F, 0.875F),
+        new UVRect(0.1875F, 0.875F, 0.25F, 1.0F),
+        new UVRect(0.0625F, 0.875F, 0.125F, 1.0F),
+        new UVRect(0.0F, 0.875F, 0.0625F, 1.0F),
+        new UVRect(0.125F, 0.875F, 0.1875F, 1.0F)
+      ),
+      transform,
+      true
+    );
+
+    if (lod == EntityLod.NEAR) {
+      addCuboid(
+        faces,
+        -0.25F - armWidth, 0.5F, -0.125F,
+        -0.25F, 1.25F, 0.125F,
+        skin,
+        AlphaMode.CUTOUT,
+        cuboidUvSet(
+          new UVRect(0.6875F, 0.25F, 0.75F, 0.3125F),
+          new UVRect(0.625F, 0.25F, 0.6875F, 0.3125F),
+          new UVRect(0.8125F, 0.3125F, 0.875F, 0.5F),
+          new UVRect(0.6875F, 0.3125F, 0.75F, 0.5F),
+          new UVRect(0.625F, 0.3125F, 0.6875F, 0.5F),
+          new UVRect(0.75F, 0.3125F, 0.8125F, 0.5F)
+        ),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        0.25F, 0.5F, -0.125F,
+        0.25F + armWidth, 1.25F, 0.125F,
+        skin,
+        AlphaMode.CUTOUT,
+        cuboidUvSet(
+          new UVRect(0.3125F, 0.75F, 0.375F, 0.8125F),
+          new UVRect(0.25F, 0.75F, 0.3125F, 0.8125F),
+          new UVRect(0.4375F, 0.8125F, 0.5F, 1.0F),
+          new UVRect(0.3125F, 0.8125F, 0.375F, 1.0F),
+          new UVRect(0.25F, 0.8125F, 0.3125F, 1.0F),
+          new UVRect(0.375F, 0.8125F, 0.4375F, 1.0F)
+        ),
+        transform,
+        true
+      );
+    }
+
+    return faces;
+  }
+
+  private List<GeometryFace> buildHumanoidApproximation(Entity entity, TextureImage texture, EntityLod lod, Matrix4f transform) {
+    var faces = new ArrayList<GeometryFace>();
+    var width = Math.max(0.35F, entity.getBbWidth());
+    var height = Math.max(1.0F, entity.getBbHeight());
+    var headHeight = Math.min(0.38F, height * 0.24F);
+    var bodyHeight = height * 0.45F;
+    var legHeight = height - bodyHeight - headHeight;
+    var torsoWidth = width * 0.7F;
+    var legWidth = torsoWidth * 0.38F;
+    var armWidth = torsoWidth * 0.28F;
+
+    addCuboid(faces, -torsoWidth * 0.5F, legHeight, -width * 0.22F, torsoWidth * 0.5F, legHeight + bodyHeight, width * 0.22F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    addCuboid(faces, -width * 0.32F, legHeight + bodyHeight, -width * 0.32F, width * 0.32F, height, width * 0.32F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    addCuboid(faces, -torsoWidth * 0.5F - armWidth, legHeight + bodyHeight * 0.1F, -width * 0.18F, -torsoWidth * 0.5F, legHeight + bodyHeight * 0.95F, width * 0.18F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    if (lod == EntityLod.NEAR) {
+      addCuboid(faces, torsoWidth * 0.5F, legHeight + bodyHeight * 0.1F, -width * 0.18F, torsoWidth * 0.5F + armWidth, legHeight + bodyHeight * 0.95F, width * 0.18F,
+        texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    }
+    addCuboid(faces, -legWidth - 0.02F, 0.0F, -width * 0.16F, -0.02F, legHeight, width * 0.16F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    addCuboid(faces, 0.02F, 0.0F, -width * 0.16F, legWidth + 0.02F, legHeight, width * 0.16F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    return faces;
+  }
+
+  private List<GeometryFace> buildQuadrupedApproximation(Entity entity, TextureImage texture, EntityLod lod, Matrix4f transform) {
+    var faces = new ArrayList<GeometryFace>();
+    var width = Math.max(0.5F, entity.getBbWidth());
+    var height = Math.max(0.45F, entity.getBbHeight());
+    var legHeight = height * 0.4F;
+    var bodyMinY = legHeight;
+    var bodyMaxY = height * 0.88F;
+    var bodyHalfLength = width * 0.48F;
+    var bodyHalfWidth = width * 0.26F;
+    addCuboid(faces, -bodyHalfWidth, bodyMinY, -bodyHalfLength, bodyHalfWidth, bodyMaxY, bodyHalfLength,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    addCuboid(faces, -bodyHalfWidth * 0.75F, bodyMaxY - height * 0.18F, bodyHalfLength - width * 0.05F, bodyHalfWidth * 0.75F, height, bodyHalfLength + width * 0.18F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    var legHalf = width * 0.08F;
+    var legZ = bodyHalfLength * 0.65F;
+    var legX = bodyHalfWidth * 0.72F;
+    addCuboid(faces, -legX - legHalf, 0.0F, -legZ - legHalf, -legX + legHalf, legHeight, -legZ + legHalf, texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    addCuboid(faces, legX - legHalf, 0.0F, -legZ - legHalf, legX + legHalf, legHeight, -legZ + legHalf, texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    if (lod == EntityLod.NEAR) {
+      addCuboid(faces, -legX - legHalf, 0.0F, legZ - legHalf, -legX + legHalf, legHeight, legZ + legHalf, texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+      addCuboid(faces, legX - legHalf, 0.0F, legZ - legHalf, legX + legHalf, legHeight, legZ + legHalf, texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    }
+    return faces;
+  }
+
+  private List<GeometryFace> buildPrismApproximation(Entity entity, TextureImage texture, EntityLod lod, Matrix4f transform) {
+    var faces = new ArrayList<GeometryFace>();
+    var width = Math.max(0.35F, entity.getBbWidth() * 0.92F);
+    var height = Math.max(0.4F, entity.getBbHeight());
+    addCuboid(faces, -width * 0.5F, 0.0F, -width * 0.5F, width * 0.5F, height, width * 0.5F,
+      texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    if (lod == EntityLod.NEAR && height > width * 1.2F) {
+      addCuboid(faces, -width * 0.35F, height * 0.65F, -width * 0.35F, width * 0.35F, height, width * 0.35F,
+        texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
+    }
+    return faces;
   }
 
   private TextureImage composePlayerSprite(TextureImage skin, boolean slim) {
@@ -381,7 +597,7 @@ public final class RendererAssets {
     }
 
     var faces = new ArrayList<GeometryFace>();
-    var alphaMode = chooseAlphaMode(state, texture, blockId.getPath());
+    var alphaMode = chooseAlphaMode(state, texture, blockId.getPath(), false);
     for (var direction : Direction.values()) {
       faces.add(createAxisAlignedFace(direction, 0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, new UVRect(0.0F, 0.0F, 1.0F, 1.0F), texture, alphaMode, -1, 0, true));
     }
@@ -396,7 +612,7 @@ public final class RendererAssets {
     }
 
     var particle = resolveTextureReference("#particle", resolvedModel.textures);
-    return particle != null ? texture(particle) : MISSING_TEXTURE;
+    return particle != null ? texture(particle.sprite()) : MISSING_TEXTURE;
   }
 
   @Nullable
@@ -420,9 +636,23 @@ public final class RendererAssets {
         var facing = entry.getKey();
         var face = entry.getValue();
         var textureLocation = resolveTextureReference(face.textureRef, resolvedModel.textures);
-        var texture = textureLocation != null ? texture(textureLocation) : MISSING_TEXTURE;
+        var texture = textureLocation != null ? texture(textureLocation.sprite()) : MISSING_TEXTURE;
         var uv = face.uv != null ? face.uv : defaultFaceUv(element.from, element.to, facing);
-        var geometryFace = bakeFace(element, face, facing, uv, texture, chooseAlphaMode(context.state, texture, textureLocation != null ? textureLocation.getPath() : ""), xRotation, yRotation);
+        var geometryFace = bakeFace(
+          element,
+          face,
+          facing,
+          uv,
+          texture,
+          chooseAlphaMode(
+            context.state,
+            texture,
+            textureLocation != null ? textureLocation.sprite().getPath() : "",
+            textureLocation != null && textureLocation.forceTranslucent()
+          ),
+          xRotation,
+          yRotation
+        );
         faces.add(geometryFace);
       }
     }
@@ -516,6 +746,62 @@ public final class RendererAssets {
     return rotatedIndex == 0 || rotatedIndex == 3 ? rect.minV : rect.maxV;
   }
 
+  private void addCuboid(
+    List<GeometryFace> faces,
+    float minX,
+    float minY,
+    float minZ,
+    float maxX,
+    float maxY,
+    float maxZ,
+    TextureImage texture,
+    AlphaMode alphaMode,
+    Map<Direction, UVRect> uvByFace,
+    Matrix4fc transform,
+    boolean shade) {
+
+    for (var direction : Direction.values()) {
+      var face = createAxisAlignedFace(
+        direction,
+        minX + 0.5F,
+        minY,
+        minZ + 0.5F,
+        maxX + 0.5F,
+        maxY,
+        maxZ + 0.5F,
+        uvByFace.getOrDefault(direction, new UVRect(0.0F, 0.0F, 1.0F, 1.0F)),
+        texture,
+        alphaMode,
+        -1,
+        0,
+        shade
+      );
+      faces.add(face.transformed(transform));
+    }
+  }
+
+  private Map<Direction, UVRect> simpleUvSet() {
+    return cuboidUvSet(
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F),
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F),
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F),
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F),
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F),
+      new UVRect(0.0F, 0.0F, 1.0F, 1.0F)
+    );
+  }
+
+  private Map<Direction, UVRect> cuboidUvSet(UVRect down, UVRect up, UVRect north, UVRect south, UVRect west, UVRect east) {
+    var faces = new HashMap<Direction, UVRect>();
+    faces.put(Direction.DOWN, down);
+    faces.put(Direction.UP, up);
+    faces.put(Direction.NORTH, north);
+    faces.put(Direction.SOUTH, south);
+    faces.put(Direction.WEST, west);
+    faces.put(Direction.EAST, east);
+    return faces;
+  }
+
   private GeometryFace createAxisAlignedFace(
     Direction facing,
     float minX,
@@ -545,7 +831,10 @@ public final class RendererAssets {
     );
   }
 
-  private AlphaMode chooseAlphaMode(BlockState state, TextureImage texture, String textureHint) {
+  private AlphaMode chooseAlphaMode(BlockState state, TextureImage texture, String textureHint, boolean forceTranslucent) {
+    if (forceTranslucent) {
+      return AlphaMode.TRANSLUCENT;
+    }
     if (state.getFluidState().is(FluidTags.WATER)) {
       return AlphaMode.TRANSLUCENT;
     }
@@ -561,16 +850,22 @@ public final class RendererAssets {
   }
 
   @Nullable
-  private Identifier resolveTextureReference(String textureRef, Map<String, String> textures) {
+  private ResolvedTexture resolveTextureReference(String textureRef, Map<String, TextureBinding> textures) {
     var current = textureRef;
+    var forceTranslucent = false;
     for (var i = 0; i < 8; i++) {
       if (current == null || current.isBlank()) {
         return null;
       }
       if (!current.startsWith("#")) {
-        return Identifier.parse(current);
+        return new ResolvedTexture(Identifier.parse(current), forceTranslucent);
       }
-      current = textures.get(current.substring(1));
+      var binding = textures.get(current.substring(1));
+      if (binding == null) {
+        return null;
+      }
+      current = binding.target();
+      forceTranslucent |= binding.forceTranslucent();
     }
 
     return null;
@@ -688,7 +983,7 @@ public final class RendererAssets {
       parent = resolveModel(Identifier.parse(json.get("parent").getAsString()));
     }
 
-    var textures = parent != null ? new HashMap<>(parent.textures) : new HashMap<String, String>();
+    var textures = parent != null ? new HashMap<>(parent.textures) : new HashMap<String, TextureBinding>();
     if (json.has("textures")) {
       for (var entry : json.getAsJsonObject("textures").entrySet()) {
         var textureReference = parseTextureReferenceValue(entry.getValue());
@@ -707,22 +1002,28 @@ public final class RendererAssets {
   }
 
   @Nullable
-  private String parseTextureReferenceValue(JsonElement textureElement) {
+  private TextureBinding parseTextureReferenceValue(JsonElement textureElement) {
     if (textureElement == null || textureElement.isJsonNull()) {
       return null;
     }
 
     if (textureElement.isJsonPrimitive()) {
-      return textureElement.getAsString();
+      return new TextureBinding(textureElement.getAsString(), false);
     }
 
     if (textureElement.isJsonObject()) {
       var textureObject = textureElement.getAsJsonObject();
       if (textureObject.has("sprite") && textureObject.get("sprite").isJsonPrimitive()) {
-        return textureObject.get("sprite").getAsString();
+        return new TextureBinding(
+          textureObject.get("sprite").getAsString(),
+          textureObject.has("force_translucent") && textureObject.get("force_translucent").getAsBoolean()
+        );
       }
       if (textureObject.has("texture") && textureObject.get("texture").isJsonPrimitive()) {
-        return textureObject.get("texture").getAsString();
+        return new TextureBinding(
+          textureObject.get("texture").getAsString(),
+          textureObject.has("force_translucent") && textureObject.get("force_translucent").getAsBoolean()
+        );
       }
     }
 
@@ -1104,7 +1405,11 @@ public final class RendererAssets {
 
   private record ModelReference(Identifier model, int xRotation, int yRotation, boolean uvLock, int weight) {}
 
-  private record ResolvedModel(Map<String, String> textures, List<ModelElement> elements, boolean ambientOcclusion) {}
+  private record TextureBinding(String target, boolean forceTranslucent) {}
+
+  private record ResolvedTexture(Identifier sprite, boolean forceTranslucent) {}
+
+  private record ResolvedModel(Map<String, TextureBinding> textures, List<ModelElement> elements, boolean ambientOcclusion) {}
 
   private record ModelElement(
     Vector3f from,

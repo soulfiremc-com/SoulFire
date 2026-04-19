@@ -39,7 +39,8 @@ public record SceneData(RendererAssets.GeometryFace[] surfaces, BillboardData[] 
     RendererAssets.AlphaMode alphaMode,
     int tintColor,
     int emission,
-    BillboardMode mode
+    BillboardMode mode,
+    int priority
   ) {}
 
   public record ShadowData(
@@ -50,6 +51,7 @@ public record SceneData(RendererAssets.GeometryFace[] surfaces, BillboardData[] 
     double width,
     double height,
     float strength,
-    Direction upDirection
+    Direction upDirection,
+    int priority
   ) {}
 }

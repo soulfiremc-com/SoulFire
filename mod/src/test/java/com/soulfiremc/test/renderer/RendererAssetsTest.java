@@ -45,7 +45,9 @@ class RendererAssetsTest {
     var assets = RendererAssets.instance();
     assertFalse(assets.blockGeometry(Blocks.STONE.defaultBlockState()).faces().isEmpty());
     assertFalse(assets.blockGeometry(Blocks.STONE_SLAB.defaultBlockState()).faces().isEmpty());
-    assertFalse(assets.blockGeometry(Blocks.GLASS.defaultBlockState()).faces().isEmpty());
+    var glassGeometry = assets.blockGeometry(Blocks.GLASS.defaultBlockState());
+    assertFalse(glassGeometry.faces().isEmpty());
+    assertTrue(glassGeometry.faces().stream().anyMatch(face -> face.alphaMode() == RendererAssets.AlphaMode.TRANSLUCENT));
   }
 
   @Test

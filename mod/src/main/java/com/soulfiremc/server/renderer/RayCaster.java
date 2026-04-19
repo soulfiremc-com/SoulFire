@@ -147,7 +147,7 @@ public class RayCaster {
 
     while (segmentStart <= maxDistance) {
       if (currentY < ctx.minY() || currentY > ctx.maxY()) {
-        return new TraceHit(segmentStart, dirY < 0 ? RenderConstants.VOID_COLOR : SkyRenderer.sampleSky(ctx, dirX, dirY, dirZ), RendererAssets.AlphaMode.OPAQUE);
+        return new TraceHit(segmentStart, dirY < 0 ? RenderConstants.VOID_COLOR : SkyRenderer.sampleSky(ctx, dirX, dirY, dirZ), RendererAssets.AlphaMode.OPAQUE, 20);
       }
 
       blockPos.set(currentX, currentY, currentZ);
@@ -267,7 +267,7 @@ public class RayCaster {
         var dv = hit.v - 0.5F;
         var falloff = Math.max(0.0F, 1.0F - (float) Math.sqrt(du * du + dv * dv) * 1.7F) * shadow.strength();
         if (falloff > 0.01F) {
-          best = min(best, new TraceHit(hit.distance, ((int) (falloff * 110) << 24), RendererAssets.AlphaMode.TRANSLUCENT));
+          best = min(best, new TraceHit(hit.distance, ((int) (falloff * 110) << 24), RendererAssets.AlphaMode.TRANSLUCENT, shadow.priority()));
         }
       }
     }
@@ -296,7 +296,7 @@ public class RayCaster {
     if (billboard.emission() > 0) {
       sampled = brighten(sampled, 0.35F + billboard.emission() / 15.0F * 0.65F);
     }
-    return new TraceHit(hit.distance, sampled, billboard.alphaMode());
+    return new TraceHit(hit.distance, sampled, billboard.alphaMode(), billboard.priority());
   }
 
   @Nullable
@@ -457,7 +457,7 @@ public class RayCaster {
     if (best == null) {
       return null;
     }
-    return new TraceHit(best.distance, brighten(best.argb, fluidState.is(net.minecraft.tags.FluidTags.LAVA) ? 1.1F : 0.85F), fluid.alphaMode());
+    return new TraceHit(best.distance, brighten(best.argb, fluidState.is(net.minecraft.tags.FluidTags.LAVA) ? 1.1F : 0.85F), fluid.alphaMode(), 9);
   }
 
   @Nullable
@@ -488,9 +488,9 @@ public class RayCaster {
       sampled = tint(sampled, RendererAssets.instance().resolveTint(ctx.level(), blockPos, blockState, face.tintIndex()));
     }
 
-    var light = lighting(ctx, blockPos, hit.normalY, face.emission(), face.shade(), blockState);
+    var light = lighting(ctx, blockPos, hit.normalX, hit.normalY, hit.normalZ, face.emission(), face.shade(), blockState);
     sampled = brighten(sampled, light);
-    return new TraceHit(hit.distance, sampled, face.alphaMode());
+    return new TraceHit(hit.distance, sampled, face.alphaMode(), face.alphaMode() == RendererAssets.AlphaMode.OPAQUE ? 12 : face.alphaMode() == RendererAssets.AlphaMode.CUTOUT ? 10 : 7);
   }
 
   @Nullable
@@ -538,7 +538,7 @@ public class RayCaster {
     var edgeA = new Vector3d(v1).sub(v0);
     var edgeB = new Vector3d(v3).sub(v0);
     var normal = edgeA.cross(edgeB).normalize();
-    return new FaceIntersection(chosen.distance, chosen.u, chosen.v, normal.y);
+    return new FaceIntersection(chosen.distance, chosen.u, chosen.v, normal.x, normal.y, normal.z);
   }
 
   @Nullable
@@ -594,7 +594,9 @@ public class RayCaster {
   private static float lighting(
     RenderContext ctx,
     @Nullable BlockPos blockPos,
+    double normalX,
     double normalY,
+    double normalZ,
     int emission,
     boolean shade,
     @Nullable BlockState blockState) {
@@ -620,29 +622,50 @@ public class RayCaster {
       return 0.32F + skyFactor * 0.48F + localEmission / 15.0F * 0.45F - occlusion;
     });
 
-    var directional = shade ? (float) (normalY > 0.5 ? 1.0 : normalY < -0.5 ? 0.62 : 0.8) : 1.0F;
-    var ao = ambientOcclusion(ctx, blockPos, normalY);
+    var dominant = Math.max(Math.abs(normalX), Math.max(Math.abs(normalY), Math.abs(normalZ)));
+    var directional = shade
+      ? (float) (
+      Math.abs(normalY) == dominant
+        ? normalY > 0.5 ? 1.0 : 0.62
+        : Math.abs(normalZ) == dominant ? 0.88 : 0.78
+    )
+      : 1.0F;
+    var ao = ambientOcclusion(ctx, blockPos, normalX, normalY, normalZ);
     return Mth.clamp(base * directional * ao, 0.18F, 1.35F);
   }
 
-  private static float ambientOcclusion(RenderContext ctx, BlockPos pos, double normalY) {
+  private static float ambientOcclusion(RenderContext ctx, BlockPos pos, double normalX, double normalY, double normalZ) {
     var blocked = 0;
-    if (Math.abs(normalY) > 0.5) {
+    if (Math.abs(normalY) >= Math.abs(normalX) && Math.abs(normalY) >= Math.abs(normalZ)) {
       for (var direction : List.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST)) {
         if (!ctx.level().getBlockState(pos.relative(direction)).isAir()) {
           blocked++;
         }
       }
-    } else {
-      if (!ctx.level().getBlockState(pos.above()).isAir()) {
-        blocked++;
+      if (!ctx.level().getBlockState(pos.relative(normalY > 0 ? Direction.UP : Direction.DOWN)).isAir()) {
+        blocked += 2;
       }
-      if (!ctx.level().getBlockState(pos.below()).isAir()) {
-        blocked++;
+    } else if (Math.abs(normalX) >= Math.abs(normalZ)) {
+      for (var direction : List.of(Direction.UP, Direction.DOWN, Direction.NORTH, Direction.SOUTH)) {
+        if (!ctx.level().getBlockState(pos.relative(direction)).isAir()) {
+          blocked++;
+        }
+      }
+      if (!ctx.level().getBlockState(pos.relative(normalX > 0 ? Direction.EAST : Direction.WEST)).isAir()) {
+        blocked += 2;
+      }
+    } else {
+      for (var direction : List.of(Direction.UP, Direction.DOWN, Direction.EAST, Direction.WEST)) {
+        if (!ctx.level().getBlockState(pos.relative(direction)).isAir()) {
+          blocked++;
+        }
+      }
+      if (!ctx.level().getBlockState(pos.relative(normalZ > 0 ? Direction.SOUTH : Direction.NORTH)).isAir()) {
+        blocked += 2;
       }
     }
 
-    return 1.0F - blocked * 0.08F;
+    return Math.max(0.52F, 1.0F - blocked * 0.06F);
   }
 
   private static boolean rayBoxIntersects(double originX, double originY, double originZ, double dirX, double dirY, double dirZ, net.minecraft.world.phys.AABB box, double maxDistance) {
@@ -699,12 +722,29 @@ public class RayCaster {
     if (right == null) {
       return left;
     }
+    var diff = Math.abs(left.distance - right.distance);
+    if (diff <= 0.015) {
+      if (left.priority != right.priority) {
+        return left.priority > right.priority ? left : right;
+      }
+      if (left.alphaMode != right.alphaMode) {
+        return alphaRank(left.alphaMode) >= alphaRank(right.alphaMode) ? left : right;
+      }
+    }
     return left.distance <= right.distance ? left : right;
   }
 
-  private record TraceHit(double distance, int argb, RendererAssets.AlphaMode alphaMode) {}
+  private static int alphaRank(RendererAssets.AlphaMode alphaMode) {
+    return switch (alphaMode) {
+      case OPAQUE -> 3;
+      case CUTOUT -> 2;
+      case TRANSLUCENT -> 1;
+    };
+  }
+
+  private record TraceHit(double distance, int argb, RendererAssets.AlphaMode alphaMode, int priority) {}
 
   private record TriangleIntersection(double distance, float u, float v) {}
 
-  private record FaceIntersection(double distance, float u, float v, double normalY) {}
+  private record FaceIntersection(double distance, float u, float v, double normalX, double normalY, double normalZ) {}
 }
