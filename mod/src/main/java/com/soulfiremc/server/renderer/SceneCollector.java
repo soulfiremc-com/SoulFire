@@ -20,13 +20,16 @@ package com.soulfiremc.server.renderer;
 import lombok.experimental.UtilityClass;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -320,6 +323,15 @@ public class SceneCollector {
     double distanceSq,
     RendererAssets.EntityLod lod
   ) {
+    var renderState = assets.entityRenderState(entity);
+    if (renderState != null && renderState.isInvisible && !renderState.appearsGlowing()) {
+      return;
+    }
+
+    var renderOffset = renderState != null && renderState.passengerOffset != null ? renderState.passengerOffset : Vec3.ZERO;
+    var renderX = entity.getX() + renderOffset.x;
+    var renderY = entity.getY() + renderOffset.y;
+    var renderZ = entity.getZ() + renderOffset.z;
     var texture = assets.entityTexture(entity);
     if (lod == RendererAssets.EntityLod.FAR) {
       addBillboard(
@@ -328,9 +340,9 @@ public class SceneCollector {
         billboardBuckets,
         buildBillboard(
           ctx.camera(),
-          entity.getX(),
-          entity.getY() + entity.getBbHeight() * 0.5,
-          entity.getZ(),
+          renderX,
+          renderY + entity.getBbHeight() * 0.5,
+          renderZ,
           (float) Math.max(0.35, entity.getBbWidth() * 0.7),
           (float) Math.max(0.7, entity.getBbHeight() * 0.7),
           texture,
@@ -348,6 +360,7 @@ public class SceneCollector {
       }
     }
 
+    addEntityLabels(ctx, assets, builder, billboardBuckets, renderState, renderX, renderY, renderZ);
     addShadow(entity, builder);
   }
 
@@ -426,11 +439,75 @@ public class SceneCollector {
       new RenderVertex((float) entity.getX() + halfW, (float) groundY, (float) entity.getZ() - halfH, 1.0F, 0.0F),
       SHADOW_TEXTURE,
       RendererAssets.AlphaMode.TRANSLUCENT,
-      (Math.min(255, Math.max(0, (int) (0.45F * fade * 255.0F))) << 24) | 0xFFFFFF,
+      Math.min(255, Math.max(0, (int) (0.45F * fade * 255.0F))) << 24,
       true,
       0.003F
     ));
     RenderDebugTrace.current().shadow();
+  }
+
+  private static void addEntityLabels(
+    RenderContext ctx,
+    RendererAssets assets,
+    SceneData.Builder builder,
+    Map<Long, Integer> billboardBuckets,
+    @org.jetbrains.annotations.Nullable EntityRenderState renderState,
+    double renderX,
+    double renderY,
+    double renderZ
+  ) {
+    if (renderState == null) {
+      return;
+    }
+
+    var attachment = renderState.nameTagAttachment != null
+      ? renderState.nameTagAttachment
+      : new Vec3(0.0, Math.max(0.5, renderState.boundingBoxHeight + 0.5), 0.0);
+
+    if (renderState.scoreText != null) {
+      addEntityLabel(ctx, assets, builder, billboardBuckets, renderState.scoreText, renderX, renderY, renderZ, attachment, 0.26F);
+    }
+    if (renderState.nameTag != null) {
+      addEntityLabel(ctx, assets, builder, billboardBuckets, renderState.nameTag, renderX, renderY, renderZ, attachment, 0.0F);
+    }
+  }
+
+  private static void addEntityLabel(
+    RenderContext ctx,
+    RendererAssets assets,
+    SceneData.Builder builder,
+    Map<Long, Integer> billboardBuckets,
+    Component text,
+    double renderX,
+    double renderY,
+    double renderZ,
+    Vec3 attachment,
+    float verticalOffset
+  ) {
+    var maxWidth = Math.max(32, Math.min(256, text.getString().length() * 7 + 12));
+    var texture = assets.textTexture(text, maxWidth, 0xFFFFFFFF, 0x44000000);
+    var width = Math.max(0.5F, texture.width() * 0.025F);
+    var height = Math.max(0.18F, texture.height() * 0.025F);
+    addBillboard(
+      ctx,
+      builder,
+      billboardBuckets,
+      buildBillboard(
+        ctx.camera(),
+        renderX + attachment.x,
+        renderY + attachment.y + verticalOffset,
+        renderZ + attachment.z,
+        width,
+        height,
+        texture,
+        RendererAssets.AlphaMode.TRANSLUCENT,
+        0xFFFFFFFF,
+        0,
+        BillboardMode.FULL
+      ),
+      10,
+      false
+    );
   }
 
   private static RendererAssets.EntityLod entityLod(double distanceSq) {

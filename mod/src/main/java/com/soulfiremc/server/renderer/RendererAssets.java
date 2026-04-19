@@ -177,6 +177,19 @@ public final class RendererAssets {
     return MISSING_TEXTURE;
   }
 
+  @Nullable
+  public EntityRenderState entityRenderState(Entity entity) {
+    try {
+      var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
+      return rawRenderer != null ? (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F) : null;
+    } catch (Throwable t) {
+      log.debug("Failed to extract entity render state for {}", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()), t);
+      return null;
+    }
+  }
+
   public TextureImage texture(ClientAsset.Texture textureAsset) {
     if (textureAsset instanceof ClientAsset.DownloadedTexture downloadedTexture) {
       return remoteTexture(downloadedTexture.url());
@@ -487,11 +500,26 @@ public final class RendererAssets {
       if (model == null) {
         throw new NullPointerException("renderer model is null");
       }
+
+      var bodyVisible = !renderState.isInvisible;
+      var translucentBody = !bodyVisible && !renderState.isInvisibleToPlayer;
+      if (!bodyVisible && !translucentBody && !renderState.appearsGlowing()) {
+        return List.of();
+      }
+
       model.setupAnim(renderState);
 
+      var renderOffset = renderState.passengerOffset != null ? renderState.passengerOffset : net.minecraft.world.phys.Vec3.ZERO;
       var poseStack = new PoseStack();
-      applyLivingModelPose(poseStack, livingEntity.getX(), livingEntity.getY(), livingEntity.getZ(), renderState, renderScale);
-      var faces = extractModelGeometry(model, poseStack, texture, AlphaMode.CUTOUT);
+      applyLivingModelPose(
+        poseStack,
+        livingEntity.getX() + renderOffset.x,
+        livingEntity.getY() + renderOffset.y,
+        livingEntity.getZ() + renderOffset.z,
+        renderState,
+        renderScale
+      );
+      var faces = extractModelGeometry(model, poseStack, texture, translucentBody ? AlphaMode.TRANSLUCENT : AlphaMode.CUTOUT);
       if (!faces.isEmpty()) {
         if (entity instanceof AbstractClientPlayer player) {
           RenderDebugTrace.current().vanillaPlayerModelHit(player.getUUID().toString());
@@ -945,9 +973,9 @@ public final class RendererAssets {
 
   private BlockGeometry fallbackCube(BlockState state) {
     var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-    var texture = texture(blockId.withPrefix("block/"));
+    var texture = textureFromParticle(state);
     if (texture == MISSING_TEXTURE) {
-      texture = textureFromParticle(state);
+      texture = texture(blockId.withPrefix("block/"));
     }
 
     var faces = new ArrayList<GeometryFace>();
@@ -959,6 +987,18 @@ public final class RendererAssets {
   }
 
   private TextureImage textureFromParticle(BlockState state) {
+    try {
+      var particleMaterial = Minecraft.getInstance().getModelManager().getBlockStateModelSet().getParticleMaterial(state);
+      if (particleMaterial != null) {
+        var sprite = particleMaterial.sprite();
+        if (sprite != null && sprite.contents() != null && sprite.contents().name() != null) {
+          return texture(sprite.contents().name());
+        }
+      }
+    } catch (Throwable t) {
+      log.debug("Failed to resolve vanilla particle material for {}", BuiltInRegistries.BLOCK.getKey(state.getBlock()), t);
+    }
+
     var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
     var resolvedModel = resolveModel(blockId.withPrefix("block/"));
     if (resolvedModel == null) {
