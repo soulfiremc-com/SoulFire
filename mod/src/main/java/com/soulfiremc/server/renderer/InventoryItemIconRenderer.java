@@ -36,13 +36,13 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.special.SpecialModelRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
-import net.minecraft.client.resources.model.sprite.SpriteGetter;
-import net.minecraft.client.resources.model.sprite.SpriteId;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -54,6 +54,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.w3c.dom.Node;
@@ -62,7 +63,6 @@ import javax.imageio.*;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
-import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -169,43 +169,16 @@ public final class InventoryItemIconRenderer {
 
   private static @Nullable IconScene buildVanillaResolvedScene(TrackingItemStackRenderState renderState) {
     try {
-      var activeLayerCount = renderState.activeLayerCount;
-      var layers = renderState.layers;
-      if (layers == null || activeLayerCount <= 0) {
+      if (renderState.isEmpty()) {
         return null;
       }
 
-      var quads = new ArrayList<RenderQuad>();
-      var textures = new LinkedHashSet<RendererAssets.TextureImage>();
-      var hasFoil = false;
-
-      for (var i = 0; i < activeLayerCount; i++) {
-        var layer = layers[i];
-        if (layer == null) {
-          continue;
-        }
-
-        hasFoil |= layer.foilType != ItemStackRenderState.FoilType.NONE;
-        if (layer.specialRenderer != null) {
-          var collector = collectSpecialLayer(layer);
-          if (collector == null || collector.unsupported()) {
-            return null;
-          }
-
-          quads.addAll(collector.quads());
-          textures.addAll(collector.textures());
-          continue;
-        }
-
-        var transform = layerTransform(layer);
-        var tintLayers = layer.tintLayers();
-
-        for (var bakedQuad : layer.prepareQuadList()) {
-          addVanillaQuad(quads, textures, bakedQuad, transform, tintLayers);
-        }
+      var collector = new ItemSubmitCollector();
+      renderState.submit(new PoseStack(), collector, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0);
+      if (collector.unsupported() || collector.quads().isEmpty()) {
+        return null;
       }
-
-      return quads.isEmpty() ? null : new IconScene(quads, List.copyOf(textures), hasFoil);
+      return new IconScene(collector.quads(), collector.textures(), collector.hasFoil());
     } catch (Throwable t) {
       log.debug("Failed to build vanilla inventory icon scene", t);
       return null;
@@ -263,31 +236,6 @@ public final class InventoryItemIconRenderer {
     textures.add(texture);
   }
 
-  @SuppressWarnings("unchecked")
-  private static @Nullable SpecialGeometryCollector collectSpecialLayer(ItemStackRenderState.LayerRenderState layer) {
-    try {
-      var collector = new SpecialGeometryCollector();
-      var pose = new PoseStack();
-      var poseState = pose.last();
-      layer.itemTransform.apply(false, poseState);
-      poseState.mulPose(layer.localTransform);
-
-      layer.specialRenderer.submit(
-        layer.argumentForSpecialRendering,
-        pose,
-        collector,
-        0x00F000F0,
-        0,
-        layer.foilType != ItemStackRenderState.FoilType.NONE,
-        -1
-      );
-      return collector;
-    } catch (Throwable t) {
-      log.debug("Failed to collect special model layer", t);
-      return null;
-    }
-  }
-
   private static @Nullable IconScene buildRendererAssetsScene(ItemStack itemStack) {
     try {
       var assets = RendererAssets.instance();
@@ -327,14 +275,6 @@ public final class InventoryItemIconRenderer {
       log.debug("Failed to build fallback inventory icon scene for {}", BuiltInRegistries.ITEM.getKey(itemStack.getItem()), t);
       return null;
     }
-  }
-
-  private static Matrix4f layerTransform(ItemStackRenderState.LayerRenderState layer) {
-    var pose = new PoseStack();
-    var poseState = pose.last();
-    layer.itemTransform.apply(false, poseState);
-    poseState.mulPose(layer.localTransform);
-    return new Matrix4f(poseState.pose());
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -732,7 +672,7 @@ public final class InventoryItemIconRenderer {
         frameCount = Math.max(frameCount, texture.animationFrameCount());
       }
     }
-    return Math.max(1, Math.min(MAX_GIF_FRAMES, frameCount));
+    return Math.clamp(frameCount, 1, MAX_GIF_FRAMES);
   }
 
   private static long animationCycleTicks(IconScene scene, int frameCount) {
@@ -873,7 +813,7 @@ public final class InventoryItemIconRenderer {
     if (Math.abs(span) < 1.0E-6F) {
       return 0.0F;
     }
-    return Math.max(0.0F, Math.min(1.0F, (atlasU - sprite.getU0()) / span));
+    return Math.clamp((atlasU - sprite.getU0()) / span, 0.0F, 1.0F);
   }
 
   private static float normalizeSpriteV(TextureAtlasSprite sprite, float atlasV) {
@@ -881,7 +821,7 @@ public final class InventoryItemIconRenderer {
     if (Math.abs(span) < 1.0E-6F) {
       return 0.0F;
     }
-    return Math.max(0.0F, Math.min(1.0F, (atlasV - sprite.getV0()) / span));
+    return Math.clamp((atlasV - sprite.getV0()) / span, 0.0F, 1.0F);
   }
 
   private static int applyGuiLighting(int color, Vector3f[] vertices, boolean shade, int emission) {
@@ -1021,10 +961,11 @@ public final class InventoryItemIconRenderer {
     float sortDepth
   ) {}
 
-  private static final class SpecialGeometryCollector implements SubmitNodeCollector {
+  private static final class ItemSubmitCollector implements SubmitNodeCollector {
     private final ArrayList<RenderQuad> quads = new ArrayList<>();
     private final LinkedHashSet<RendererAssets.TextureImage> textures = new LinkedHashSet<>();
     private boolean unsupported;
+    private boolean hasFoil;
 
     public List<RenderQuad> quads() {
       return quads;
@@ -1036,6 +977,10 @@ public final class InventoryItemIconRenderer {
 
     public boolean unsupported() {
       return unsupported;
+    }
+
+    public boolean hasFoil() {
+      return hasFoil;
     }
 
     @Override
@@ -1057,6 +1002,9 @@ public final class InventoryItemIconRenderer {
       ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
     ) {
       var texture = textureImage(sprite);
+      if (texture == null) {
+        texture = textureImageFromRenderType(renderType);
+      }
       if (texture == null) {
         unsupported = true;
         return;
@@ -1080,6 +1028,9 @@ public final class InventoryItemIconRenderer {
       int emission
     ) {
       var texture = textureImage(sprite);
+      if (texture == null) {
+        texture = textureImageFromRenderType(renderType);
+      }
       if (texture == null) {
         unsupported = true;
         return;
@@ -1134,7 +1085,11 @@ public final class InventoryItemIconRenderer {
 
     @Override
     public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
-      unsupported = true;
+      for (var face : RendererAssets.instance().blockGeometry(movingBlockRenderState.blockState).faces()) {
+        var transformed = face.transformed(poseStack.last().pose());
+        quads.add(WorldMeshCollector.toRenderQuad(transformed, 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
+        textures.add(transformed.texture());
+      }
     }
 
     @Override
@@ -1147,7 +1102,17 @@ public final class InventoryItemIconRenderer {
       int overlay,
       int color
     ) {
-      unsupported = true;
+      var tintList = new it.unimi.dsi.fastutil.ints.IntArrayList(tints);
+      for (var part : parts) {
+        for (var quad : part.getQuads(null)) {
+          addVanillaQuad(quads, textures, quad, new Matrix4f(poseStack.last().pose()), tintList);
+        }
+        for (var direction : net.minecraft.core.Direction.values()) {
+          for (var quad : part.getQuads(direction)) {
+            addVanillaQuad(quads, textures, quad, new Matrix4f(poseStack.last().pose()), tintList);
+          }
+        }
+      }
     }
 
     @Override
@@ -1157,7 +1122,9 @@ public final class InventoryItemIconRenderer {
       long seed,
       int color
     ) {
-      unsupported = true;
+      var parts = new ArrayList<BlockStateModelPart>();
+      blockStateModel.collectParts(net.minecraft.util.RandomSource.create(seed), parts);
+      submitBlockModel(poseStack, null, parts, new int[0], 0, 0, color);
     }
 
     @Override
@@ -1171,17 +1138,159 @@ public final class InventoryItemIconRenderer {
       List<BakedQuad> quads,
       ItemStackRenderState.FoilType foilType
     ) {
-      unsupported = true;
+      hasFoil |= foilType != ItemStackRenderState.FoilType.NONE;
+      var transform = new Matrix4f(poseStack.last().pose());
+      var tintLayers = new it.unimi.dsi.fastutil.ints.IntArrayList(tints);
+      for (var quad : quads) {
+        addVanillaQuad(this.quads, textures, quad, transform, tintLayers);
+      }
     }
 
     @Override
     public void submitCustomGeometry(PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer renderer) {
-      unsupported = true;
+      var texture = textureImageFromRenderType(renderType);
+      if (texture == null) {
+        unsupported = true;
+        return;
+      }
+
+      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(poseStack.last().pose()), renderType.mode(), texture, alphaModeForTexture(texture));
+      renderer.render(poseStack.last(), consumer);
+      consumer.flush(quads, textures);
     }
 
     @Override
     public void submitParticleGroup(SubmitNodeCollector.ParticleGroupRenderer particleGroupRenderer) {
       unsupported = true;
+    }
+  }
+
+  private static final class ItemCapturingVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
+    private final Matrix4fc pose;
+    private final com.mojang.blaze3d.vertex.VertexFormat.Mode mode;
+    private final RendererAssets.TextureImage texture;
+    private final RendererAssets.AlphaMode alphaMode;
+    private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
+    private CapturedVertex current;
+
+    private ItemCapturingVertexConsumer(
+      Matrix4fc pose,
+      com.mojang.blaze3d.vertex.VertexFormat.Mode mode,
+      RendererAssets.TextureImage texture,
+      RendererAssets.AlphaMode alphaMode
+    ) {
+      this.pose = pose;
+      this.mode = mode;
+      this.texture = texture;
+      this.alphaMode = alphaMode;
+    }
+
+    private void flush(List<RenderQuad> quads, Set<RendererAssets.TextureImage> textures) {
+      switch (mode) {
+        case QUADS -> {
+          for (var i = 0; i + 3 < vertices.size(); i += 4) {
+            emitQuad(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2), vertices.get(i + 3));
+          }
+        }
+        case TRIANGLES -> {
+          for (var i = 0; i + 2 < vertices.size(); i += 3) {
+            emitTriangle(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+          }
+        }
+        case TRIANGLE_STRIP, TRIANGLE_FAN -> {
+          for (var i = 0; i + 2 < vertices.size(); i++) {
+            emitTriangle(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+          }
+        }
+        default -> {
+        }
+      }
+    }
+
+    private void emitQuad(List<RenderQuad> quads, Set<RendererAssets.TextureImage> textures, CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
+      var face = RendererAssets.GeometryFace.of(
+        new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
+        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()},
+        texture,
+        alphaMode,
+        null,
+        -1,
+        0,
+        true
+      );
+      quads.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, a.color(), true, 0.0F));
+      textures.add(texture);
+    }
+
+    private void emitTriangle(List<RenderQuad> quads, Set<RendererAssets.TextureImage> textures, CapturedVertex a, CapturedVertex b, CapturedVertex c) {
+      emitQuad(quads, textures, a, b, c, c);
+    }
+
+    @Override
+    public com.mojang.blaze3d.vertex.VertexConsumer addVertex(float x, float y, float z) {
+      current = new CapturedVertex(pose.transformPosition(new Vector3f(x, y, z)), 0xFFFFFFFF, 0.0F, 0.0F);
+      vertices.add(current);
+      return this;
+    }
+
+    @Override
+    public com.mojang.blaze3d.vertex.VertexConsumer setColor(int red, int green, int blue, int alpha) {
+      return setColor((alpha << 24) | (red << 16) | (green << 8) | blue);
+    }
+
+    @Override
+    public com.mojang.blaze3d.vertex.VertexConsumer setColor(int color) {
+      if (current != null) {
+        current = current.withColor(color);
+        vertices.set(vertices.size() - 1, current);
+      }
+      return this;
+    }
+
+    @Override
+    public com.mojang.blaze3d.vertex.VertexConsumer setUv(float u, float v) {
+      if (current != null) {
+        current = current.withUv(u, v);
+        vertices.set(vertices.size() - 1, current);
+      }
+      return this;
+    }
+
+    @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv1(int u, int v) { return this; }
+    @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv2(int u, int v) { return this; }
+    @Override public com.mojang.blaze3d.vertex.VertexConsumer setNormal(float x, float y, float z) { return this; }
+    @Override public com.mojang.blaze3d.vertex.VertexConsumer setLineWidth(float width) { return this; }
+  }
+
+  private static RendererAssets.TextureImage textureImageFromRenderType(RenderType renderType) {
+    RenderSetup state = renderType.state;
+    if (state == null || state.textures == null || state.textures.isEmpty()) {
+      return null;
+    }
+
+    for (var binding : state.textures.values()) {
+      var location = ((RenderSetup.TextureBinding) binding).location;
+      if (location == null) {
+        continue;
+      }
+      if (TextureAtlas.LOCATION_BLOCKS.equals(location)
+        || TextureAtlas.LOCATION_ITEMS.equals(location)
+        || TextureAtlas.LOCATION_PARTICLES.equals(location)) {
+        return RendererAssets.instance().textureAtlas(location);
+      }
+      return RendererAssets.instance().texture(location);
+    }
+
+    return null;
+  }
+
+  private record CapturedVertex(Vector3f position, int color, float u, float v) {
+    private CapturedVertex withColor(int color) {
+      return new CapturedVertex(position, color, u, v);
+    }
+
+    private CapturedVertex withUv(float u, float v) {
+      return new CapturedVertex(position, color, u, v);
     }
   }
 }

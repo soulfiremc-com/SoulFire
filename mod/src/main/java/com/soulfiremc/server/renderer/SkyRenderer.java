@@ -83,9 +83,9 @@ public class SkyRenderer {
   }
 
   private static int multiplyColor(int color, float factor) {
-    var r = Math.min(255, Math.max(0, (int) (((color >> 16) & 0xFF) * factor)));
-    var g = Math.min(255, Math.max(0, (int) (((color >> 8) & 0xFF) * factor)));
-    var b = Math.min(255, Math.max(0, (int) ((color & 0xFF) * factor)));
+    var r = Math.clamp((int) (((color >> 16) & 0xFF) * factor), 0, 255);
+    var g = Math.clamp((int) (((color >> 8) & 0xFF) * factor), 0, 255);
+    var b = Math.clamp((int) ((color & 0xFF) * factor), 0, 255);
     return 0xFF000000 | (r << 16) | (g << 8) | b;
   }
 }
