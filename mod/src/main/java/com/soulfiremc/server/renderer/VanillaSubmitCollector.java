@@ -118,7 +118,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
       @SuppressWarnings({"rawtypes"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
-      return rawRenderer != null ? (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F) : null;
+      return rawRenderer != null ? rawRenderer.createRenderState(entity, 1.0F) : null;
     } catch (Throwable t) {
       return null;
     }
@@ -210,7 +210,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   static SceneData collectFluid(RenderContext ctx, FluidRenderer fluidRenderer, BlockPos blockPos, BlockState blockState, FluidState fluidState) {
     var collector = new VanillaSubmitCollector(ctx);
     var output = collector.new FluidOutput();
-    fluidRenderer.tesselate((BlockAndTintGetter) ctx.level(), blockPos, output, blockState, fluidState);
+    fluidRenderer.tesselate(ctx.level(), blockPos, output, blockState, fluidState);
     output.flush();
     return collector.builder.build();
   }
@@ -362,7 +362,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   @Override
-  @SuppressWarnings({"rawtypes", "unchecked"})
   public <S> void submitModel(
     Model<? super S> model,
     S state,
@@ -650,7 +649,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     for (var binding : state.textures.values()) {
-      var location = ((RenderSetup.TextureBinding) binding).location;
+      var location = binding.location;
       if (location == null) {
         continue;
       }

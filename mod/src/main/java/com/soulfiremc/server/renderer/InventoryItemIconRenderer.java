@@ -277,7 +277,6 @@ public final class InventoryItemIconRenderer {
     }
   }
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
   private static <S> void appendModelGeometry(
     List<RenderQuad> quads,
     Set<RendererAssets.TextureImage> textures,
@@ -911,7 +910,6 @@ public final class InventoryItemIconRenderer {
     return dy < 0.0F || (dy == 0.0F && dx > 0.0F);
   }
 
-  @SuppressWarnings("unchecked")
   private static List<Object> freezeModelIdentity(@Nullable TrackingItemStackRenderState renderState) {
     if (renderState == null) {
       return List.of();
@@ -1269,7 +1267,7 @@ public final class InventoryItemIconRenderer {
     }
 
     for (var binding : state.textures.values()) {
-      var location = ((RenderSetup.TextureBinding) binding).location;
+      var location = binding.location;
       if (location == null) {
         continue;
       }
