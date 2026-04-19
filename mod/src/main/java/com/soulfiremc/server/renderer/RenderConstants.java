@@ -31,6 +31,22 @@ public class RenderConstants {
   /// Default field of view in degrees.
   public static final double DEFAULT_FOV = 70.0;
 
+  /// Near clip used for non-world scene primitives such as entities and billboards.
+  public static final double SCENE_NEAR_CLIP = 0.28;
+
+  /// Enable close-entity suppression to keep POV renders readable in crowded hubs.
+  public static final boolean POV_READABILITY_MODE =
+    Boolean.parseBoolean(System.getProperty("sf.renderer.readability-mode", "true"));
+
+  /// Entities intersecting this camera radius are candidates for suppression.
+  public static final double POV_ENTITY_HIDE_RADIUS = 0.85;
+
+  /// Entities inside this radius may be faded or downweighted instead of rendered fully.
+  public static final double POV_ENTITY_FADE_RADIUS = 1.45;
+
+  /// Minimum alignment with the camera forward vector before very close entities are kept.
+  public static final double POV_ENTITY_KEEP_ALIGNMENT = 0.78;
+
   /// Sky color (light blue).
   public static final int SKY_COLOR = 0xFF87CEEB;
 
