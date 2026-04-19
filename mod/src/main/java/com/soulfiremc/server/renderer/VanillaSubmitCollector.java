@@ -262,33 +262,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     double distance,
     CameraRenderState cameraRenderState
   ) {
-    var bufferSource = new CapturingBufferSource();
     if (outline) {
-      font.drawInBatch8xOutline(
-        text.getVisualOrderText(),
-        xOffset(text),
-        0.0F,
-        color,
-        backgroundColor,
-        poseStack.last().pose(),
-        bufferSource,
-        0x00F000F0
-      );
+      addComponentQuad(poseStack, text, xOffset(text), 0.0F, color, backgroundColor);
     } else {
-      font.drawInBatch(
-        text,
-        xOffset(text),
-        0.0F,
-        color,
-        false,
-        poseStack.last().pose(),
-        bufferSource,
-        Font.DisplayMode.NORMAL,
-        backgroundColor,
-        0x00F000F0
-      );
+      addComponentQuad(poseStack, text, xOffset(text), 0.0F, color, backgroundColor);
     }
-    bufferSource.flush();
   }
 
   @Override
@@ -304,20 +282,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int light,
     int offset
   ) {
-    var bufferSource = new CapturingBufferSource();
-    font.drawInBatch(
-      text,
-      x,
-      y,
-      color,
-      shadow,
-      poseStack.last().pose(),
-      bufferSource,
-      displayMode,
-      backgroundColor,
-      light
-    );
-    bufferSource.flush();
+    addSequenceQuad(poseStack, text, x, y, color, backgroundColor);
   }
 
   @Override
@@ -578,6 +543,33 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return assets.texture(sprite.contents().name());
   }
 
+  private void addComponentQuad(PoseStack poseStack, Component text, float x, float y, int color, int backgroundColor) {
+    var width = Math.max(16, font.width(text) + 4);
+    var texture = assets.textTexture(text, width, forceOpaque(color), backgroundColor);
+    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
+  }
+
+  private void addSequenceQuad(PoseStack poseStack, FormattedCharSequence text, float x, float y, int color, int backgroundColor) {
+    var plain = plainText(text);
+    if (plain.isEmpty()) {
+      return;
+    }
+
+    var width = Math.max(16, font.width(text) + 4);
+    var texture = assets.textTexture(Component.literal(plain), width, forceOpaque(color), backgroundColor);
+    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
+  }
+
+  private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
+    var vertices = new Vector3f[]{
+      poseStack.last().pose().transformPosition(new Vector3f(x, y - height, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x, y, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x + width, y, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x + width, y - height, 0.0F))
+    };
+    addFace(vertices, texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, 0, true, new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F});
+  }
+
   private void addFace(
     Vector3f[] vertices,
     RendererAssets.TextureImage texture,
@@ -636,6 +628,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var g = ((left >>> 8) & 0xFF) * ((right >>> 8) & 0xFF) / 255;
     var b = (left & 0xFF) * (right & 0xFF) / 255;
     return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private int forceOpaque(int color) {
+    return (color & 0x00FFFFFF) | 0xFF000000;
+  }
+
+  private String plainText(FormattedCharSequence sequence) {
+    var builder = new StringBuilder();
+    sequence.accept((_, _, codePoint) -> {
+      builder.appendCodePoint(codePoint);
+      return true;
+    });
+    return builder.toString();
   }
 
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {

@@ -40,6 +40,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
@@ -192,10 +193,6 @@ public final class RendererAssets {
   }
 
   public TextureImage texture(ClientAsset.Texture textureAsset) {
-    if (textureAsset instanceof ClientAsset.DownloadedTexture downloadedTexture) {
-      return remoteTexture(downloadedTexture.url());
-    }
-
     return texture(textureAsset.texturePath());
   }
 
@@ -1213,6 +1210,14 @@ public final class RendererAssets {
   private TextureImage loadTexture(Identifier texturePath) {
     var normalized = normalizeTexturePath(texturePath);
     var metadataLocation = normalized.withPath(normalized.getPath() + ".mcmeta");
+    try {
+      var texture = Minecraft.getInstance().getTextureManager().getTexture(normalized);
+      if (texture instanceof DynamicTexture dynamicTexture) {
+        return TextureImage.from(nativeImageToBufferedImage(dynamicTexture.getPixels()), null);
+      }
+    } catch (Throwable ignored) {
+    }
+
     try (var imageStream = openResourceStream(normalized)) {
       if (imageStream == null) {
         throw new IllegalStateException("Missing resource " + normalized);
@@ -1230,6 +1235,16 @@ public final class RendererAssets {
       log.debug("Missing renderer texture {}", normalized, t);
       return MISSING_TEXTURE;
     }
+  }
+
+  private BufferedImage nativeImageToBufferedImage(com.mojang.blaze3d.platform.NativeImage image) {
+    var buffered = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+    for (var y = 0; y < image.getHeight(); y++) {
+      for (var x = 0; x < image.getWidth(); x++) {
+        buffered.setRGB(x, y, image.getPixel(x, y));
+      }
+    }
+    return buffered;
   }
 
   private TextureImage loadAtlasTexture(Identifier atlasLocation) {

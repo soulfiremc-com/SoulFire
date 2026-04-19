@@ -89,6 +89,18 @@ class InventoryItemIconRendererTest {
   }
 
   @Test
+  void rendersCompassFromVanillaResolvedScene() throws Exception {
+    var result = InventoryItemIconRenderer.render(null, null, null, itemStack(Items.COMPASS));
+
+    assertEquals(InventoryItemIconRenderer.PNG_MIME_TYPE, result.mimeType());
+    assertFalse(result.base64().isEmpty());
+
+    var image = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(result.base64())));
+    assertNotNull(image);
+    assertNotNull(visibleBounds(image));
+  }
+
+  @Test
   void rendersSpecialModelChestWithTransparentCorners() throws Exception {
     var minecraft = Minecraft.getInstance();
     Assumptions.assumeTrue(

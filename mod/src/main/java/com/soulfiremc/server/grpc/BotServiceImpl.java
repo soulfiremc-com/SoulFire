@@ -166,7 +166,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
     var slotBuilder = buildInventorySlot(slotIndex, item).toBuilder();
 
     try {
-      var renderedIcon = InventoryItemIconRenderer.render(minecraft, level, itemOwner, item);
+      var renderedIcon = InventoryItemIconRenderer.render(minecraft, level, itemOwner, item, slotIndex);
       if (!renderedIcon.base64().isEmpty()) {
         slotBuilder
           .setIconBase64(renderedIcon.base64())

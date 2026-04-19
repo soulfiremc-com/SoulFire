@@ -39,6 +39,7 @@ import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -55,6 +56,7 @@ import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
+import org.joml.Matrix3x2f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.w3c.dom.Node;
@@ -103,11 +105,21 @@ public final class InventoryItemIconRenderer {
     @Nullable ItemOwner itemOwner,
     ItemStack itemStack
   ) {
+    return render(minecraft, level, itemOwner, itemStack, 0);
+  }
+
+  public static RenderedInventoryItemImage render(
+    @Nullable Minecraft minecraft,
+    @Nullable ClientLevel level,
+    @Nullable ItemOwner itemOwner,
+    ItemStack itemStack,
+    int seed
+  ) {
     if (itemStack.isEmpty()) {
       return missingImage();
     }
 
-    var resolvedState = resolveVanillaState(minecraft, level, itemOwner, itemStack);
+    var resolvedState = resolveVanillaState(minecraft, level, itemOwner, itemStack, seed);
     var cacheKey = new RenderKey(
       BuiltInRegistries.ITEM.getKey(itemStack.getItem()).toString(),
       itemStack.getCount(),
@@ -134,7 +146,8 @@ public final class InventoryItemIconRenderer {
     @Nullable Minecraft minecraft,
     @Nullable ClientLevel level,
     @Nullable ItemOwner itemOwner,
-    ItemStack itemStack
+    ItemStack itemStack,
+    int seed
   ) {
     var activeMinecraft = minecraft != null ? minecraft : Minecraft.getInstance();
     if (activeMinecraft == null) {
@@ -151,7 +164,7 @@ public final class InventoryItemIconRenderer {
         ItemDisplayContext.GUI,
         resolvedLevel,
         resolvedOwner,
-        0
+        seed
       );
       return renderState;
     } catch (Throwable t) {
@@ -173,8 +186,20 @@ public final class InventoryItemIconRenderer {
         return null;
       }
 
+      var poseStack = new PoseStack();
+      poseStack.scale(1.0F, -1.0F, -1.0F);
+      var guiItemRenderState = new GuiItemRenderState(new Matrix3x2f(), renderState, 0, 0, null);
+      var oversizedBounds = guiItemRenderState.oversizedItemBounds();
+      if (oversizedBounds != null) {
+        var itemBoundsCenterX = (oversizedBounds.left() + oversizedBounds.right()) / 2.0F;
+        var itemBoundsCenterY = (oversizedBounds.top() + oversizedBounds.bottom()) / 2.0F;
+        var slotCenterX = guiItemRenderState.x() + 8.0F;
+        var slotCenterY = guiItemRenderState.y() + 8.0F;
+        poseStack.translate((slotCenterX - itemBoundsCenterX) / 16.0F, (itemBoundsCenterY - slotCenterY) / 16.0F, 0.0F);
+      }
+
       var collector = new ItemSubmitCollector();
-      renderState.submit(new PoseStack(), collector, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0);
+      renderState.submit(poseStack, collector, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0);
       if (collector.unsupported() || collector.quads().isEmpty()) {
         return null;
       }
