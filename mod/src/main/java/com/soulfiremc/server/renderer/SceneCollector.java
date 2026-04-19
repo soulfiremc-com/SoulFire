@@ -32,7 +32,6 @@ import org.joml.Matrix4f;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /// Collects renderable scene primitives outside the block grid.
@@ -54,27 +53,8 @@ public class SceneCollector {
     var billboards = new ArrayList<SceneData.BillboardData>();
     var shadows = new ArrayList<SceneData.ShadowData>();
     var billboardBuckets = new HashMap<Long, Integer>();
-    var eyePos = localPlayer.getEyePosition();
-    var viewVector = localPlayer.getViewVector(1.0F);
-    var entities = new ArrayList<Entity>();
-    level.entitiesForRendering().forEach(entities::add);
-    entities.sort((left, right) -> {
-      var leftDistance = left.distanceToSqr(eyePos);
-      var rightDistance = right.distanceToSqr(eyePos);
-      var leftRelevance = relevanceScore(left, leftDistance, eyePos, viewVector);
-      var rightRelevance = relevanceScore(right, rightDistance, eyePos, viewVector);
-      var relevanceCompare = Double.compare(rightRelevance, leftRelevance);
-      if (relevanceCompare != 0) {
-        return relevanceCompare;
-      }
-      var distanceCompare = Double.compare(leftDistance, rightDistance);
-      if (distanceCompare != 0) {
-        return distanceCompare;
-      }
-      return Integer.compare(left.getId(), right.getId());
-    });
 
-    for (var entity : entities) {
+    for (var entity : level.entitiesForRendering()) {
       if (entity == localPlayer) {
         continue;
       }
@@ -86,9 +66,6 @@ public class SceneCollector {
       if (distanceSq > maxDistSq) {
         continue;
       }
-      if (RenderConstants.POV_READABILITY_MODE && shouldSuppressEntity(entity, eyePos, viewVector, distanceSq)) {
-        continue;
-      }
       var lod = entityLod(distanceSq);
 
       if (entity instanceof Display.BlockDisplay blockDisplay) {
@@ -96,23 +73,23 @@ public class SceneCollector {
         continue;
       }
       if (entity instanceof Display.ItemDisplay itemDisplay) {
-        collectItemDisplay(itemDisplay, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod, viewVector, eyePos);
+        collectItemDisplay(itemDisplay, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod);
         continue;
       }
       if (entity instanceof Display.TextDisplay textDisplay) {
-        collectTextDisplay(textDisplay, assets, billboards, shadows, billboardBuckets, distanceSq, viewVector, eyePos);
+        collectTextDisplay(textDisplay, assets, billboards, shadows, billboardBuckets, distanceSq);
         continue;
       }
       if (entity instanceof ItemFrame frame) {
-        collectItemFrame(level, frame, assets, surfaces, billboards, billboardBuckets, distanceSq, lod, viewVector, eyePos);
+        collectItemFrame(level, frame, assets, surfaces, billboards, billboardBuckets, distanceSq, lod);
         continue;
       }
       if (entity instanceof ItemEntity itemEntity) {
-        collectItemEntity(itemEntity, assets, billboards, shadows, billboardBuckets, distanceSq, lod, viewVector, eyePos);
+        collectItemEntity(itemEntity, assets, billboards, shadows, billboardBuckets, distanceSq, lod);
         continue;
       }
 
-      collectGenericEntity(entity, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod, viewVector, eyePos);
+      collectGenericEntity(entity, assets, surfaces, billboards, shadows, billboardBuckets, distanceSq, lod);
     }
 
     collectWeather(level, eyeX, eyeY, eyeZ, billboards, billboardBuckets);
@@ -160,8 +137,7 @@ public class SceneCollector {
         SceneData.BillboardMode.FULL,
         1
       ),
-        true,
-        0.2
+        true
       );
     }
   }
@@ -195,9 +171,7 @@ public class SceneCollector {
     ArrayList<SceneData.ShadowData> shadows,
     Map<Long, Integer> billboardBuckets,
     double distanceSq,
-    RendererAssets.EntityLod lod,
-    net.minecraft.world.phys.Vec3 viewVector,
-    net.minecraft.world.phys.Vec3 eyePos) {
+    RendererAssets.EntityLod lod) {
 
     var renderState = itemDisplay.renderState();
     var itemRenderState = itemDisplay.itemRenderState();
@@ -230,8 +204,7 @@ public class SceneCollector {
         SceneData.BillboardMode.FULL,
         lod == RendererAssets.EntityLod.MEDIUM ? 6 : 3
       ),
-        distanceSq > 24 * 24,
-        billboardImportance(itemDisplay.getX(), itemDisplay.getY(), itemDisplay.getZ(), eyePos, viewVector, lod == RendererAssets.EntityLod.MEDIUM ? 6 : 3)
+        distanceSq > 24 * 24
       );
     }
 
@@ -244,9 +217,7 @@ public class SceneCollector {
     ArrayList<SceneData.BillboardData> billboards,
     ArrayList<SceneData.ShadowData> shadows,
     Map<Long, Integer> billboardBuckets,
-    double distanceSq,
-    net.minecraft.world.phys.Vec3 viewVector,
-    net.minecraft.world.phys.Vec3 eyePos) {
+    double distanceSq) {
 
     var renderState = textDisplay.renderState();
     var textRenderState = textDisplay.textRenderState();
@@ -280,8 +251,7 @@ public class SceneCollector {
       mode,
       10
     ),
-      distanceSq > 48 * 48,
-      billboardImportance(textDisplay.getX(), textDisplay.getY(), textDisplay.getZ(), eyePos, viewVector, 10)
+      distanceSq > 48 * 48
     );
 
     addShadow(textDisplay, shadows);
@@ -295,9 +265,7 @@ public class SceneCollector {
     ArrayList<SceneData.BillboardData> billboards,
     Map<Long, Integer> billboardBuckets,
     double distanceSq,
-    RendererAssets.EntityLod lod,
-    net.minecraft.world.phys.Vec3 viewVector,
-    net.minecraft.world.phys.Vec3 eyePos) {
+    RendererAssets.EntityLod lod) {
 
     var item = frame.getItem();
     var mapId = item.get(DataComponents.MAP_ID);
@@ -320,8 +288,7 @@ public class SceneCollector {
           SceneData.BillboardMode.VERTICAL,
           9
         ),
-          distanceSq > 56 * 56,
-          billboardImportance(frame.getX(), frame.getY(), frame.getZ(), eyePos, viewVector, 9)
+          distanceSq > 56 * 56
         );
         return;
       }
@@ -351,8 +318,7 @@ public class SceneCollector {
         SceneData.BillboardMode.VERTICAL,
         8
       ),
-        distanceSq > 40 * 40,
-        billboardImportance(frame.getX(), frame.getY(), frame.getZ(), eyePos, viewVector, 8)
+        distanceSq > 40 * 40
       );
     }
   }
@@ -364,9 +330,7 @@ public class SceneCollector {
     ArrayList<SceneData.ShadowData> shadows,
     Map<Long, Integer> billboardBuckets,
     double distanceSq,
-    RendererAssets.EntityLod lod,
-    net.minecraft.world.phys.Vec3 viewVector,
-    net.minecraft.world.phys.Vec3 eyePos) {
+    RendererAssets.EntityLod lod) {
 
     var itemModel = assets.itemRenderModel(itemEntity.getItem());
     var billboard = itemModel.billboard();
@@ -387,8 +351,7 @@ public class SceneCollector {
       SceneData.BillboardMode.FULL,
       lod == RendererAssets.EntityLod.NEAR ? 7 : 2
     ),
-      distanceSq > 20 * 20,
-      billboardImportance(itemEntity.getX(), itemEntity.getY(), itemEntity.getZ(), eyePos, viewVector, lod == RendererAssets.EntityLod.NEAR ? 7 : 2)
+      distanceSq > 20 * 20
     );
 
     addShadow(itemEntity, shadows);
@@ -402,9 +365,7 @@ public class SceneCollector {
     ArrayList<SceneData.ShadowData> shadows,
     Map<Long, Integer> billboardBuckets,
     double distanceSq,
-    RendererAssets.EntityLod lod,
-    net.minecraft.world.phys.Vec3 viewVector,
-    net.minecraft.world.phys.Vec3 eyePos) {
+    RendererAssets.EntityLod lod) {
 
     var texture = assets.entityTexture(entity);
     if (lod == RendererAssets.EntityLod.FAR) {
@@ -424,8 +385,7 @@ public class SceneCollector {
         SceneData.BillboardMode.VERTICAL,
         entity instanceof LivingEntity ? 5 : 2
       ),
-        true,
-        billboardImportance(entity.getX(), entity.getY(), entity.getZ(), eyePos, viewVector, entity instanceof LivingEntity ? 5 : 2)
+        true
       );
     } else {
       surfaces.addAll(assets.entityModel(entity, texture, lod));
@@ -446,8 +406,7 @@ public class SceneCollector {
             SceneData.BillboardMode.VERTICAL,
             4
           ),
-          distanceSq > 18 * 18,
-          billboardImportance(entity.getX(), entity.getY(), entity.getZ(), eyePos, viewVector, 4)
+          distanceSq > 18 * 18
         );
       }
     }
@@ -514,8 +473,7 @@ public class SceneCollector {
     ArrayList<SceneData.BillboardData> billboards,
     Map<Long, Integer> billboardBuckets,
     SceneData.BillboardData billboard,
-    boolean limitDensity,
-    double importance) {
+    boolean limitDensity) {
 
     if (limitDensity) {
       var bucketKey = (((long) Math.floor(billboard.centerX() / 3.0)) & 0xFFFFFFL) << 40
@@ -530,37 +488,6 @@ public class SceneCollector {
     }
 
     billboards.add(billboard);
-  }
-
-  private static boolean shouldSuppressEntity(Entity entity, net.minecraft.world.phys.Vec3 eyePos, net.minecraft.world.phys.Vec3 viewVector, double distanceSq) {
-    var alignment = alignment(entity.getX(), entity.getY() + entity.getBbHeight() * 0.5, entity.getZ(), eyePos, viewVector);
-    if (distanceSq <= RenderConstants.POV_ENTITY_HIDE_RADIUS * RenderConstants.POV_ENTITY_HIDE_RADIUS) {
-      return alignment < 0.985;
-    }
-    return distanceSq <= RenderConstants.POV_ENTITY_FADE_RADIUS * RenderConstants.POV_ENTITY_FADE_RADIUS
-      && alignment < RenderConstants.POV_ENTITY_KEEP_ALIGNMENT;
-  }
-
-  private static double relevanceScore(Entity entity, double distanceSq, net.minecraft.world.phys.Vec3 eyePos, net.minecraft.world.phys.Vec3 viewVector) {
-    var alignment = alignment(entity.getX(), entity.getY() + entity.getBbHeight() * 0.5, entity.getZ(), eyePos, viewVector);
-    var distance = Math.sqrt(distanceSq);
-    var typeBias = entity instanceof LivingEntity ? 0.35 : entity instanceof ItemFrame ? 0.25 : 0.0;
-    return alignment * 2.1 + typeBias - distance * 0.035;
-  }
-
-  private static double billboardImportance(double x, double y, double z, net.minecraft.world.phys.Vec3 eyePos, net.minecraft.world.phys.Vec3 viewVector, int priority) {
-    return alignment(x, y, z, eyePos, viewVector) * 2.0 + priority * 0.1;
-  }
-
-  private static double alignment(double x, double y, double z, net.minecraft.world.phys.Vec3 eyePos, net.minecraft.world.phys.Vec3 viewVector) {
-    var dx = x - eyePos.x;
-    var dy = y - eyePos.y;
-    var dz = z - eyePos.z;
-    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (len < 1.0E-4) {
-      return 1.0;
-    }
-    return (dx / len) * viewVector.x + (dy / len) * viewVector.y + (dz / len) * viewVector.z;
   }
 
   private static RendererAssets.TextureImage createRainTexture() {

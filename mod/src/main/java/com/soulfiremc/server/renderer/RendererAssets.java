@@ -39,8 +39,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -290,23 +288,9 @@ public final class RendererAssets {
     var armWidth = slim ? 0.1875F : 0.25F;
     var faces = new ArrayList<GeometryFace>();
     var yaw = (float) Math.toRadians(-player.getYRot());
-    var crouch = player.isCrouching();
-    var bodyTransform = new Matrix4f()
+    var transform = new Matrix4f()
       .translate((float) player.getX(), (float) player.getY(), (float) player.getZ())
       .rotateY(yaw);
-    if (crouch) {
-      bodyTransform.translate(0.0F, -0.12F, 0.0F).rotateX((float) Math.toRadians(12.0F));
-    }
-
-    var speed = (float) player.getDeltaMovement().horizontalDistance();
-    var swingAmount = Math.min(1.0F, speed * 8.0F + (player.isSprinting() ? 0.25F : 0.0F));
-    var swingPhase = player.tickCount * 0.55F;
-    var armSwing = (float) Math.sin(swingPhase) * 0.75F * swingAmount;
-    var legSwing = (float) Math.sin(swingPhase) * 0.9F * swingAmount;
-    var attackAnim = player.getAttackAnim(1.0F);
-    var mainArm = player.getMainArm();
-    var headYawOffset = Mth.clamp(player.getYHeadRot() - player.getYRot(), -55.0F, 55.0F);
-    var headPitch = Mth.clamp(player.getXRot(), -45.0F, 65.0F);
 
     addCuboid(
       faces,
@@ -322,11 +306,7 @@ public final class RendererAssets {
         new UVRect(0.0F, 0.125F, 0.125F, 0.25F),
         new UVRect(0.25F, 0.125F, 0.375F, 0.25F)
       ),
-      new Matrix4f(bodyTransform)
-        .translate(0.0F, 1.5F, 0.0F)
-        .rotateY((float) Math.toRadians(-headYawOffset))
-        .rotateX((float) Math.toRadians(headPitch))
-        .translate(0.0F, -1.5F, 0.0F),
+      transform,
       true
     );
 
@@ -344,7 +324,7 @@ public final class RendererAssets {
         new UVRect(0.25F, 0.3125F, 0.3125F, 0.5F),
         new UVRect(0.4375F, 0.3125F, 0.5F, 0.5F)
       ),
-      bodyTransform,
+      transform,
       true
     );
 
@@ -362,7 +342,7 @@ public final class RendererAssets {
         new UVRect(0.0F, 0.3125F, 0.0625F, 0.5F),
         new UVRect(0.125F, 0.3125F, 0.1875F, 0.5F)
       ),
-      pivotTransform(bodyTransform, -0.15625F, 0.75F, 0.0F, -legSwing, 0.0F, 0.0F),
+      transform,
       true
     );
 
@@ -380,58 +360,45 @@ public final class RendererAssets {
         new UVRect(0.0F, 0.875F, 0.0625F, 1.0F),
         new UVRect(0.125F, 0.875F, 0.1875F, 1.0F)
       ),
-      pivotTransform(bodyTransform, 0.15625F, 0.75F, 0.0F, legSwing, 0.0F, 0.0F),
-      true
-    );
-
-    var leftArmPitch = -armSwing;
-    var rightArmPitch = armSwing;
-    if (mainArm == HumanoidArm.RIGHT) {
-      rightArmPitch -= attackAnim * 1.25F + (player.isUsingItem() ? 0.45F : 0.0F);
-    } else {
-      leftArmPitch -= attackAnim * 1.25F + (player.isUsingItem() ? 0.45F : 0.0F);
-    }
-
-    addCuboid(
-      faces,
-      -0.25F - armWidth, 0.5F, -0.125F,
-      -0.25F, 1.25F, 0.125F,
-      skin,
-      AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.6875F, 0.25F, 0.75F, 0.3125F),
-        new UVRect(0.625F, 0.25F, 0.6875F, 0.3125F),
-        new UVRect(0.8125F, 0.3125F, 0.875F, 0.5F),
-        new UVRect(0.6875F, 0.3125F, 0.75F, 0.5F),
-        new UVRect(0.625F, 0.3125F, 0.6875F, 0.5F),
-        new UVRect(0.75F, 0.3125F, 0.8125F, 0.5F)
-      ),
-      pivotTransform(bodyTransform, -0.25F, 1.18F, 0.0F, leftArmPitch, 0.0F, 0.0F),
-      true
-    );
-
-    addCuboid(
-      faces,
-      0.25F, 0.5F, -0.125F,
-      0.25F + armWidth, 1.25F, 0.125F,
-      skin,
-      AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.3125F, 0.75F, 0.375F, 0.8125F),
-        new UVRect(0.25F, 0.75F, 0.3125F, 0.8125F),
-        new UVRect(0.4375F, 0.8125F, 0.5F, 1.0F),
-        new UVRect(0.3125F, 0.8125F, 0.375F, 1.0F),
-        new UVRect(0.25F, 0.8125F, 0.3125F, 1.0F),
-        new UVRect(0.375F, 0.8125F, 0.4375F, 1.0F)
-      ),
-      pivotTransform(bodyTransform, 0.25F, 1.18F, 0.0F, rightArmPitch, 0.0F, 0.0F),
+      transform,
       true
     );
 
     if (lod == EntityLod.NEAR) {
-      appendPlayerOuterLayers(faces, player, bodyTransform, slim, headYawOffset, headPitch, leftArmPitch, rightArmPitch, legSwing);
-      appendPlayerEquipment(faces, player, bodyTransform, slim, leftArmPitch, rightArmPitch);
-      appendCape(faces, player, bodyTransform);
+      addCuboid(
+        faces,
+        -0.25F - armWidth, 0.5F, -0.125F,
+        -0.25F, 1.25F, 0.125F,
+        skin,
+        AlphaMode.CUTOUT,
+        cuboidUvSet(
+          new UVRect(0.6875F, 0.25F, 0.75F, 0.3125F),
+          new UVRect(0.625F, 0.25F, 0.6875F, 0.3125F),
+          new UVRect(0.8125F, 0.3125F, 0.875F, 0.5F),
+          new UVRect(0.6875F, 0.3125F, 0.75F, 0.5F),
+          new UVRect(0.625F, 0.3125F, 0.6875F, 0.5F),
+          new UVRect(0.75F, 0.3125F, 0.8125F, 0.5F)
+        ),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        0.25F, 0.5F, -0.125F,
+        0.25F + armWidth, 1.25F, 0.125F,
+        skin,
+        AlphaMode.CUTOUT,
+        cuboidUvSet(
+          new UVRect(0.3125F, 0.75F, 0.375F, 0.8125F),
+          new UVRect(0.25F, 0.75F, 0.3125F, 0.8125F),
+          new UVRect(0.4375F, 0.8125F, 0.5F, 1.0F),
+          new UVRect(0.3125F, 0.8125F, 0.375F, 1.0F),
+          new UVRect(0.25F, 0.8125F, 0.3125F, 1.0F),
+          new UVRect(0.375F, 0.8125F, 0.4375F, 1.0F)
+        ),
+        transform,
+        true
+      );
     }
 
     return faces;
@@ -501,224 +468,6 @@ public final class RendererAssets {
         texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
     }
     return faces;
-  }
-
-  private void appendPlayerOuterLayers(
-    List<GeometryFace> faces,
-    AbstractClientPlayer player,
-    Matrix4f bodyTransform,
-    boolean slim,
-    float headYawOffset,
-    float headPitch,
-    float leftArmPitch,
-    float rightArmPitch,
-    float legSwing) {
-
-    var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
-    var armWidth = slim ? 0.1875F : 0.25F;
-    var layerOffset = 0.018F;
-
-    addCuboid(
-      faces,
-      -0.25F - layerOffset, 1.25F - layerOffset, -0.25F - layerOffset,
-      0.25F + layerOffset, 1.75F + layerOffset, 0.25F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.75F, 0.0F, 0.875F, 0.125F),
-        new UVRect(0.625F, 0.0F, 0.75F, 0.125F),
-        new UVRect(0.875F, 0.125F, 1.0F, 0.25F),
-        new UVRect(0.625F, 0.125F, 0.75F, 0.25F),
-        new UVRect(0.5F, 0.125F, 0.625F, 0.25F),
-        new UVRect(0.75F, 0.125F, 0.875F, 0.25F)
-      ),
-      new Matrix4f(bodyTransform)
-        .translate(0.0F, 1.5F, 0.0F)
-        .rotateY((float) Math.toRadians(-headYawOffset))
-        .rotateX((float) Math.toRadians(headPitch))
-        .translate(0.0F, -1.5F, 0.0F),
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.25F - layerOffset, 0.5F - layerOffset, -0.125F - layerOffset,
-      0.25F + layerOffset, 1.25F + layerOffset, 0.125F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.25F, 0.5F, 0.3125F, 0.5625F),
-        new UVRect(0.125F, 0.5F, 0.1875F, 0.5625F),
-        new UVRect(0.5F, 0.5F, 0.625F, 0.6875F),
-        new UVRect(0.3125F, 0.5F, 0.4375F, 0.6875F),
-        new UVRect(0.25F, 0.5625F, 0.3125F, 0.75F),
-        new UVRect(0.4375F, 0.5625F, 0.5F, 0.75F)
-      ),
-      bodyTransform,
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.25F - armWidth - layerOffset, 0.5F - layerOffset, -0.125F - layerOffset,
-      -0.25F + layerOffset, 1.25F + layerOffset, 0.125F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      simpleUvSet(),
-      pivotTransform(bodyTransform, -0.25F, 1.18F, 0.0F, leftArmPitch, 0.0F, 0.0F),
-      true
-    );
-
-    addCuboid(
-      faces,
-      0.25F - layerOffset, 0.5F - layerOffset, -0.125F - layerOffset,
-      0.25F + armWidth + layerOffset, 1.25F + layerOffset, 0.125F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      simpleUvSet(),
-      pivotTransform(bodyTransform, 0.25F, 1.18F, 0.0F, rightArmPitch, 0.0F, 0.0F),
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.25F - layerOffset, 0.0F - layerOffset, -0.125F - layerOffset,
-      -0.0625F + layerOffset, 0.75F + layerOffset, 0.125F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      simpleUvSet(),
-      pivotTransform(bodyTransform, -0.15625F, 0.75F, 0.0F, -legSwing, 0.0F, 0.0F),
-      true
-    );
-
-    addCuboid(
-      faces,
-      0.0625F - layerOffset, 0.0F - layerOffset, -0.125F - layerOffset,
-      0.25F + layerOffset, 0.75F + layerOffset, 0.125F + layerOffset,
-      skin,
-      AlphaMode.CUTOUT,
-      simpleUvSet(),
-      pivotTransform(bodyTransform, 0.15625F, 0.75F, 0.0F, legSwing, 0.0F, 0.0F),
-      true
-    );
-  }
-
-  private void appendPlayerEquipment(
-    List<GeometryFace> faces,
-    AbstractClientPlayer player,
-    Matrix4f bodyTransform,
-    boolean slim,
-    float leftArmPitch,
-    float rightArmPitch) {
-
-    appendArmorOverlay(faces, player.getItemBySlot(EquipmentSlot.HEAD), bodyTransform, -0.28F, 1.22F, -0.28F, 0.28F, 1.78F, 0.28F);
-    appendArmorOverlay(faces, player.getItemBySlot(EquipmentSlot.CHEST), bodyTransform, -0.29F, 0.48F, -0.15F, 0.29F, 1.27F, 0.15F);
-    appendArmorOverlay(faces, player.getItemBySlot(EquipmentSlot.LEGS), bodyTransform, -0.27F, -0.02F, -0.14F, 0.27F, 0.78F, 0.14F);
-    appendArmorOverlay(faces, player.getItemBySlot(EquipmentSlot.FEET), bodyTransform, -0.27F, -0.02F, -0.14F, 0.27F, 0.2F, 0.14F);
-
-    var leftHandX = slim ? -0.36F : -0.38F;
-    var rightHandX = slim ? 0.36F : 0.38F;
-    appendHeldItem(faces, player.getMainHandItem(), pivotTransform(bodyTransform, mainArmTransformX(player, rightHandX, leftHandX), 1.18F, 0.0F, mainArmPitch(player, rightArmPitch, leftArmPitch), 0.0F, 0.0F), player.getMainArm() == HumanoidArm.RIGHT ? 1.0F : -1.0F);
-    appendHeldItem(faces, player.getOffhandItem(), pivotTransform(bodyTransform, offArmTransformX(player, rightHandX, leftHandX), 1.18F, 0.0F, offArmPitch(player, rightArmPitch, leftArmPitch), 0.0F, 0.0F), player.getMainArm() == HumanoidArm.RIGHT ? -1.0F : 1.0F);
-  }
-
-  private void appendArmorOverlay(List<GeometryFace> faces, ItemStack stack, Matrix4f transform, float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
-    if (stack.isEmpty()) {
-      return;
-    }
-
-    var texture = representativeTexture(itemRenderModel(stack));
-    addCuboid(faces, minX, minY, minZ, maxX, maxY, maxZ, texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
-  }
-
-  private void appendHeldItem(List<GeometryFace> faces, ItemStack stack, Matrix4f handTransform, float sideSign) {
-    if (stack.isEmpty()) {
-      return;
-    }
-
-    var model = itemRenderModel(stack);
-    if (!model.geometry().faces().isEmpty()) {
-      var itemTransform = new Matrix4f(handTransform)
-        .translate(sideSign * 0.03F, 0.06F, 0.0F)
-        .rotateZ((float) Math.toRadians(-18.0F * sideSign))
-        .rotateX((float) Math.toRadians(-28.0F))
-        .scale(0.22F)
-        .translate(-0.5F, 0.0F, -0.5F);
-      for (var face : model.geometry().faces()) {
-        faces.add(face.transformed(itemTransform));
-      }
-      return;
-    }
-
-    var texture = representativeTexture(model);
-    addCuboid(
-      faces,
-      -0.06F,
-      0.0F,
-      -0.01F,
-      0.06F,
-      0.16F,
-      0.01F,
-      texture,
-      AlphaMode.CUTOUT,
-      simpleUvSet(),
-      new Matrix4f(handTransform)
-        .translate(sideSign * 0.03F, 0.06F, 0.0F)
-        .rotateZ((float) Math.toRadians(-20.0F * sideSign))
-        .rotateX((float) Math.toRadians(-35.0F)),
-      false
-    );
-  }
-
-  private void appendCape(List<GeometryFace> faces, AbstractClientPlayer player, Matrix4f bodyTransform) {
-    if (player.getSkin().cape() == null) {
-      return;
-    }
-
-    var capeTexture = texture((ClientAsset.Texture) player.getSkin().cape());
-    var capeTransform = new Matrix4f(bodyTransform)
-      .translate(0.0F, 1.22F, 0.14F)
-      .rotateX((float) Math.toRadians(12.0F + Math.min(18.0F, player.getDeltaMovement().horizontalDistance() * 200.0F)));
-    var p0 = capeTransform.transformPosition(new Vector3f(-0.28F, 0.0F, 0.0F));
-    var p1 = capeTransform.transformPosition(new Vector3f(-0.28F, -0.78F, 0.0F));
-    var p2 = capeTransform.transformPosition(new Vector3f(0.28F, -0.78F, 0.0F));
-    var p3 = capeTransform.transformPosition(new Vector3f(0.28F, 0.0F, 0.0F));
-    faces.add(GeometryFace.of(new Vector3f[]{p0, p1, p2, p3}, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F}, capeTexture, AlphaMode.CUTOUT, -1, 0, false));
-  }
-
-  private TextureImage representativeTexture(ItemRenderModel model) {
-    if (model.billboard() != null) {
-      return model.billboard().texture();
-    }
-    if (!model.geometry().faces().isEmpty()) {
-      return model.geometry().faces().getFirst().texture();
-    }
-    return MISSING_TEXTURE;
-  }
-
-  private float mainArmTransformX(AbstractClientPlayer player, float rightX, float leftX) {
-    return player.getMainArm() == HumanoidArm.RIGHT ? rightX : leftX;
-  }
-
-  private float offArmTransformX(AbstractClientPlayer player, float rightX, float leftX) {
-    return player.getMainArm() == HumanoidArm.RIGHT ? leftX : rightX;
-  }
-
-  private float mainArmPitch(AbstractClientPlayer player, float rightArmPitch, float leftArmPitch) {
-    return player.getMainArm() == HumanoidArm.RIGHT ? rightArmPitch : leftArmPitch;
-  }
-
-  private float offArmPitch(AbstractClientPlayer player, float rightArmPitch, float leftArmPitch) {
-    return player.getMainArm() == HumanoidArm.RIGHT ? leftArmPitch : rightArmPitch;
-  }
-
-  private Matrix4f pivotTransform(Matrix4fc base, float pivotX, float pivotY, float pivotZ, float rotX, float rotY, float rotZ) {
-    return new Matrix4f(base)
-      .translate(pivotX, pivotY, pivotZ)
-      .rotateZ(rotZ)
-      .rotateY(rotY)
-      .rotateX(rotX)
-      .translate(-pivotX, -pivotY, -pivotZ);
   }
 
   private TextureImage composePlayerSprite(TextureImage skin, boolean slim) {

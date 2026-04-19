@@ -202,7 +202,7 @@ public class RayCaster {
 
     TraceHit best = null;
     for (var face : ctx.sceneData().surfaces()) {
-      best = min(best, intersectFace(face, originX, originY, originZ, dirX, dirY, dirZ, 0, 0, 0, RenderConstants.SCENE_NEAR_CLIP, maxDistance, null, null, ctx));
+      best = min(best, intersectFace(face, originX, originY, originZ, dirX, dirY, dirZ, 0, 0, 0, 0.0, maxDistance, null, null, ctx));
     }
     return best;
   }
@@ -261,7 +261,7 @@ public class RayCaster {
         0,
         false
       );
-      var hit = intersectFaceRaw(quad, originX, originY, originZ, dirX, dirY, dirZ, RenderConstants.SCENE_NEAR_CLIP, maxDistance);
+      var hit = intersectFaceRaw(quad, originX, originY, originZ, dirX, dirY, dirZ, 0.0, maxDistance);
       if (hit != null) {
         var du = hit.u - 0.5F;
         var dv = hit.v - 0.5F;
@@ -286,7 +286,7 @@ public class RayCaster {
     double dirZ,
     double maxDistance) {
 
-    var hit = intersectFaceRaw(face, originX, originY, originZ, dirX, dirY, dirZ, RenderConstants.SCENE_NEAR_CLIP, maxDistance);
+    var hit = intersectFaceRaw(face, originX, originY, originZ, dirX, dirY, dirZ, 0.0, maxDistance);
     if (hit == null) {
       return null;
     }
