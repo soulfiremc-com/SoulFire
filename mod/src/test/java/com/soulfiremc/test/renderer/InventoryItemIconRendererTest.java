@@ -69,6 +69,10 @@ class InventoryItemIconRendererTest {
     }
 
     assertTrue(hasVisiblePixel);
+
+    var bounds = visibleBounds(image);
+    assertNotNull(bounds);
+    assertTrue(bounds.width >= 24 || bounds.height >= 24);
   }
 
   @Test
@@ -125,5 +129,29 @@ class InventoryItemIconRendererTest {
     assertEquals(0, topLeftAlpha);
     assertEquals(0, bottomLeftAlpha);
     assertTrue(centerAlpha > 0);
+  }
+
+  private static java.awt.Rectangle visibleBounds(java.awt.image.BufferedImage image) {
+    int minX = Integer.MAX_VALUE;
+    int minY = Integer.MAX_VALUE;
+    int maxX = Integer.MIN_VALUE;
+    int maxY = Integer.MIN_VALUE;
+
+    for (var y = 0; y < image.getHeight(); y++) {
+      for (var x = 0; x < image.getWidth(); x++) {
+        if (((image.getRGB(x, y) >>> 24) & 0xFF) == 0) {
+          continue;
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (minX == Integer.MAX_VALUE) {
+      return null;
+    }
+    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
   }
 }

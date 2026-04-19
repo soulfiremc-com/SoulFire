@@ -61,6 +61,8 @@ import javax.imageio.ImageWriter;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.ByteArrayOutputStream;
@@ -82,9 +84,11 @@ public final class InventoryItemIconRenderer {
     .expireAfterAccess(Duration.ofMinutes(10))
     .build();
 
-  private static final int ICON_SIZE = 16;
-  private static final float GUI_PIXELS_PER_UNIT = 16.0F;
-  private static final float GUI_CENTER = 8.0F;
+  private static final int ICON_RENDER_SIZE = 32;
+  private static final int ICON_OUTPUT_SIZE = 32;
+  private static final int ICON_PADDING = 2;
+  private static final float GUI_PIXELS_PER_UNIT = 32.0F;
+  private static final float GUI_CENTER = 16.0F;
   private static final int MAX_GIF_FRAMES = 16;
   private static final Identifier ENCHANTED_GLINT_ITEM = Identifier.withDefaultNamespace("misc/enchanted_glint_item");
 
@@ -402,7 +406,9 @@ public final class InventoryItemIconRenderer {
         renderedFrames.add(renderFrame(scene, tick));
       }
 
-      var distinctFrames = deduplicateFrames(renderedFrames);
+      var normalizedFrames = fitFramesToSlot(renderedFrames);
+
+      var distinctFrames = deduplicateFrames(normalizedFrames);
       if (distinctFrames.size() <= 1) {
         return new RenderedInventoryItemImage(PNG_MIME_TYPE, toBase64PNG(distinctFrames.getFirst()));
       }
@@ -416,7 +422,7 @@ public final class InventoryItemIconRenderer {
   }
 
   private static BufferedImage renderFrame(IconScene scene, long animationTick) {
-    var buffers = new RasterBuffers(ICON_SIZE, ICON_SIZE);
+    var buffers = new RasterBuffers(ICON_RENDER_SIZE, ICON_RENDER_SIZE);
     buffers.clearColor(0x00000000);
     buffers.clearDepth();
 
@@ -429,6 +435,106 @@ public final class InventoryItemIconRenderer {
     }
 
     return buffers.image();
+  }
+
+  private static List<BufferedImage> fitFramesToSlot(List<BufferedImage> frames) {
+    if (frames.isEmpty()) {
+      return List.of();
+    }
+
+    var union = visibleBounds(frames);
+    if (union == null) {
+      return frames;
+    }
+
+    var croppedWidth = Math.max(1, union.width);
+    var croppedHeight = Math.max(1, union.height);
+    var available = Math.max(1, ICON_OUTPUT_SIZE - ICON_PADDING * 2);
+    var scale = Math.max(1.0, available / (double) Math.max(croppedWidth, croppedHeight));
+    var scaledWidth = Math.max(1, (int) Math.round(croppedWidth * scale));
+    var scaledHeight = Math.max(1, (int) Math.round(croppedHeight * scale));
+    var targetX = (ICON_OUTPUT_SIZE - scaledWidth) / 2;
+    var targetY = (ICON_OUTPUT_SIZE - scaledHeight) / 2;
+
+    var normalized = new ArrayList<BufferedImage>(frames.size());
+    for (var frame : frames) {
+      var output = new BufferedImage(
+        ICON_OUTPUT_SIZE,
+        ICON_OUTPUT_SIZE,
+        BufferedImage.TYPE_INT_ARGB
+      );
+      var graphics = output.createGraphics();
+      graphics.setRenderingHint(
+        RenderingHints.KEY_INTERPOLATION,
+        RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR
+      );
+      graphics.setRenderingHint(
+        RenderingHints.KEY_RENDERING,
+        RenderingHints.VALUE_RENDER_SPEED
+      );
+      graphics.drawImage(
+        frame,
+        targetX,
+        targetY,
+        targetX + scaledWidth,
+        targetY + scaledHeight,
+        union.x,
+        union.y,
+        union.x + croppedWidth,
+        union.y + croppedHeight,
+        null
+      );
+      graphics.dispose();
+      normalized.add(output);
+    }
+    return normalized;
+  }
+
+  private static java.awt.Rectangle visibleBounds(List<BufferedImage> frames) {
+    int minX = Integer.MAX_VALUE;
+    int minY = Integer.MAX_VALUE;
+    int maxX = Integer.MIN_VALUE;
+    int maxY = Integer.MIN_VALUE;
+
+    for (var frame : frames) {
+      var bounds = visibleBounds(frame);
+      if (bounds == null) {
+        continue;
+      }
+      minX = Math.min(minX, bounds.x);
+      minY = Math.min(minY, bounds.y);
+      maxX = Math.max(maxX, bounds.x + bounds.width - 1);
+      maxY = Math.max(maxY, bounds.y + bounds.height - 1);
+    }
+
+    if (minX == Integer.MAX_VALUE) {
+      return null;
+    }
+    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+  }
+
+  private static java.awt.Rectangle visibleBounds(BufferedImage image) {
+    int minX = Integer.MAX_VALUE;
+    int minY = Integer.MAX_VALUE;
+    int maxX = Integer.MIN_VALUE;
+    int maxY = Integer.MIN_VALUE;
+
+    for (var y = 0; y < image.getHeight(); y++) {
+      for (var x = 0; x < image.getWidth(); x++) {
+        if (((image.getRGB(x, y) >>> 24) & 0xFF) == 0) {
+          continue;
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (minX == Integer.MAX_VALUE) {
+      return null;
+    }
+    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
   }
 
   private static void rasterPass(
