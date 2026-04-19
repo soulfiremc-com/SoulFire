@@ -286,6 +286,10 @@ public final class RendererAssets {
     var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
     var slim = player.getSkin().model().name().equalsIgnoreCase("SLIM");
     var armWidth = slim ? 0.1875F : 0.25F;
+    var armOverlayInflate = 0.015625F;
+    var limbOverlayInflate = 0.015625F;
+    var bodyOverlayInflate = 0.015625F;
+    var headOverlayInflate = 0.03125F;
     var faces = new ArrayList<GeometryFace>();
     var yaw = (float) Math.toRadians(-player.getYRot());
     var transform = new Matrix4f()
@@ -298,14 +302,7 @@ public final class RendererAssets {
       0.25F, 1.75F, 0.25F,
       skin,
       AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.25F, 0.0F, 0.375F, 0.125F),
-        new UVRect(0.125F, 0.0F, 0.25F, 0.125F),
-        new UVRect(0.375F, 0.125F, 0.5F, 0.25F),
-        new UVRect(0.125F, 0.125F, 0.25F, 0.25F),
-        new UVRect(0.0F, 0.125F, 0.125F, 0.25F),
-        new UVRect(0.25F, 0.125F, 0.375F, 0.25F)
-      ),
+      playerHeadUvSet(false),
       transform,
       true
     );
@@ -316,14 +313,7 @@ public final class RendererAssets {
       0.25F, 1.25F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.25F, 0.25F, 0.3125F, 0.3125F),
-        new UVRect(0.125F, 0.25F, 0.1875F, 0.3125F),
-        new UVRect(0.5F, 0.25F, 0.625F, 0.4375F),
-        new UVRect(0.3125F, 0.25F, 0.4375F, 0.4375F),
-        new UVRect(0.25F, 0.3125F, 0.3125F, 0.5F),
-        new UVRect(0.4375F, 0.3125F, 0.5F, 0.5F)
-      ),
+      playerBodyUvSet(false),
       transform,
       true
     );
@@ -334,14 +324,7 @@ public final class RendererAssets {
       -0.0625F, 0.75F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.0625F, 0.25F, 0.125F, 0.3125F),
-        new UVRect(0.0F, 0.25F, 0.0625F, 0.3125F),
-        new UVRect(0.1875F, 0.3125F, 0.25F, 0.5F),
-        new UVRect(0.0625F, 0.3125F, 0.125F, 0.5F),
-        new UVRect(0.0F, 0.3125F, 0.0625F, 0.5F),
-        new UVRect(0.125F, 0.3125F, 0.1875F, 0.5F)
-      ),
+      playerRightLegUvSet(false),
       transform,
       true
     );
@@ -352,14 +335,7 @@ public final class RendererAssets {
       0.25F, 0.75F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
-      cuboidUvSet(
-        new UVRect(0.0625F, 0.8125F, 0.125F, 0.875F),
-        new UVRect(0.0F, 0.8125F, 0.0625F, 0.875F),
-        new UVRect(0.1875F, 0.875F, 0.25F, 1.0F),
-        new UVRect(0.0625F, 0.875F, 0.125F, 1.0F),
-        new UVRect(0.0F, 0.875F, 0.0625F, 1.0F),
-        new UVRect(0.125F, 0.875F, 0.1875F, 1.0F)
-      ),
+      playerLeftLegUvSet(false),
       transform,
       true
     );
@@ -371,14 +347,7 @@ public final class RendererAssets {
         -0.25F, 1.25F, 0.125F,
         skin,
         AlphaMode.CUTOUT,
-        cuboidUvSet(
-          new UVRect(0.6875F, 0.25F, 0.75F, 0.3125F),
-          new UVRect(0.625F, 0.25F, 0.6875F, 0.3125F),
-          new UVRect(0.8125F, 0.3125F, 0.875F, 0.5F),
-          new UVRect(0.6875F, 0.3125F, 0.75F, 0.5F),
-          new UVRect(0.625F, 0.3125F, 0.6875F, 0.5F),
-          new UVRect(0.75F, 0.3125F, 0.8125F, 0.5F)
-        ),
+        playerRightArmUvSet(slim, false),
         transform,
         true
       );
@@ -388,20 +357,158 @@ public final class RendererAssets {
         0.25F + armWidth, 1.25F, 0.125F,
         skin,
         AlphaMode.CUTOUT,
-        cuboidUvSet(
-          new UVRect(0.3125F, 0.75F, 0.375F, 0.8125F),
-          new UVRect(0.25F, 0.75F, 0.3125F, 0.8125F),
-          new UVRect(0.4375F, 0.8125F, 0.5F, 1.0F),
-          new UVRect(0.3125F, 0.8125F, 0.375F, 1.0F),
-          new UVRect(0.25F, 0.8125F, 0.3125F, 1.0F),
-          new UVRect(0.375F, 0.8125F, 0.4375F, 1.0F)
-        ),
+        playerLeftArmUvSet(slim, false),
+        transform,
+        true
+      );
+
+      addCuboid(
+        faces,
+        -0.25F - headOverlayInflate, 1.25F - headOverlayInflate, -0.25F - headOverlayInflate,
+        0.25F + headOverlayInflate, 1.75F + headOverlayInflate, 0.25F + headOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerHeadUvSet(true),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        -0.25F - bodyOverlayInflate, 0.5F - bodyOverlayInflate, -0.125F - bodyOverlayInflate,
+        0.25F + bodyOverlayInflate, 1.25F + bodyOverlayInflate, 0.125F + bodyOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerBodyUvSet(true),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        -0.25F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
+        -0.0625F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerRightLegUvSet(true),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        0.0625F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
+        0.25F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerLeftLegUvSet(true),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        -0.25F - armWidth - armOverlayInflate, 0.5F - armOverlayInflate, -0.125F - armOverlayInflate,
+        -0.25F + armOverlayInflate, 1.25F + armOverlayInflate, 0.125F + armOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerRightArmUvSet(slim, true),
+        transform,
+        true
+      );
+      addCuboid(
+        faces,
+        0.25F - armOverlayInflate, 0.5F - armOverlayInflate, -0.125F - armOverlayInflate,
+        0.25F + armWidth + armOverlayInflate, 1.25F + armOverlayInflate, 0.125F + armOverlayInflate,
+        skin,
+        AlphaMode.CUTOUT,
+        playerLeftArmUvSet(slim, true),
         transform,
         true
       );
     }
 
     return faces;
+  }
+
+  private Map<Direction, UVRect> playerHeadUvSet(boolean overlay) {
+    return cuboidUvSet(
+      uvRectPx(overlay ? 48 : 16, 0, overlay ? 56 : 24, 8),
+      uvRectPx(overlay ? 40 : 8, 0, overlay ? 48 : 16, 8),
+      uvRectPx(overlay ? 56 : 24, 8, overlay ? 64 : 32, 16),
+      uvRectPx(overlay ? 40 : 8, 8, overlay ? 48 : 16, 16),
+      uvRectPx(overlay ? 48 : 16, 8, overlay ? 56 : 24, 16),
+      uvRectPx(overlay ? 32 : 0, 8, overlay ? 40 : 8, 16)
+    );
+  }
+
+  private Map<Direction, UVRect> playerBodyUvSet(boolean overlay) {
+    var y = overlay ? 32 : 16;
+    return cuboidUvSet(
+      uvRectPx(28, y, 36, y + 4),
+      uvRectPx(20, y, 28, y + 4),
+      uvRectPx(32, y + 4, 40, y + 16),
+      uvRectPx(20, y + 4, 28, y + 16),
+      uvRectPx(16, y + 4, 20, y + 16),
+      uvRectPx(28, y + 4, 32, y + 16)
+    );
+  }
+
+  private Map<Direction, UVRect> playerRightLegUvSet(boolean overlay) {
+    var y = overlay ? 32 : 16;
+    return cuboidUvSet(
+      uvRectPx(8, y, 12, y + 4),
+      uvRectPx(4, y, 8, y + 4),
+      uvRectPx(12, y + 4, 16, y + 16),
+      uvRectPx(4, y + 4, 8, y + 16),
+      uvRectPx(8, y + 4, 12, y + 16),
+      uvRectPx(0, y + 4, 4, y + 16)
+    );
+  }
+
+  private Map<Direction, UVRect> playerLeftLegUvSet(boolean overlay) {
+    var x = overlay ? 0 : 16;
+    return cuboidUvSet(
+      uvRectPx(x + 8, 48, x + 12, 52),
+      uvRectPx(x + 4, 48, x + 8, 52),
+      uvRectPx(x + 12, 52, x + 16, 64),
+      uvRectPx(x + 4, 52, x + 8, 64),
+      uvRectPx(x + 8, 52, x + 12, 64),
+      uvRectPx(x, 52, x + 4, 64)
+    );
+  }
+
+  private Map<Direction, UVRect> playerRightArmUvSet(boolean slim, boolean overlay) {
+    var x = 40;
+    var y = overlay ? 32 : 16;
+    var armWidthPixels = slim ? 3 : 4;
+    var bottomMinX = x + 4 + armWidthPixels;
+    var topMinX = x + 4;
+    var backMinX = x + 4 + armWidthPixels * 2;
+    var leftMinX = x + 4 + armWidthPixels;
+    var rightMinX = x;
+    return cuboidUvSet(
+      uvRectPx(bottomMinX, y, bottomMinX + armWidthPixels, y + 4),
+      uvRectPx(topMinX, y, topMinX + armWidthPixels, y + 4),
+      uvRectPx(backMinX, y + 4, backMinX + armWidthPixels, y + 16),
+      uvRectPx(topMinX, y + 4, topMinX + armWidthPixels, y + 16),
+      uvRectPx(leftMinX, y + 4, leftMinX + armWidthPixels, y + 16),
+      uvRectPx(rightMinX, y + 4, rightMinX + armWidthPixels, y + 16)
+    );
+  }
+
+  private Map<Direction, UVRect> playerLeftArmUvSet(boolean slim, boolean overlay) {
+    var x = overlay ? 48 : 32;
+    var armWidthPixels = slim ? 3 : 4;
+    var bottomMinX = x + 4 + armWidthPixels;
+    var topMinX = x + 4;
+    var backMinX = x + 4 + armWidthPixels * 2;
+    var leftMinX = x + 4 + armWidthPixels;
+    var rightMinX = x;
+    return cuboidUvSet(
+      uvRectPx(bottomMinX, 48, bottomMinX + armWidthPixels, 52),
+      uvRectPx(topMinX, 48, topMinX + armWidthPixels, 52),
+      uvRectPx(backMinX, 52, backMinX + armWidthPixels, 64),
+      uvRectPx(topMinX, 52, topMinX + armWidthPixels, 64),
+      uvRectPx(leftMinX, 52, leftMinX + armWidthPixels, 64),
+      uvRectPx(rightMinX, 52, rightMinX + armWidthPixels, 64)
+    );
   }
 
   private List<GeometryFace> buildHumanoidApproximation(Entity entity, TextureImage texture, EntityLod lod, Matrix4f transform) {
@@ -800,6 +907,10 @@ public final class RendererAssets {
     faces.put(Direction.WEST, west);
     faces.put(Direction.EAST, east);
     return faces;
+  }
+
+  private UVRect uvRectPx(int minX, int minY, int maxX, int maxY) {
+    return new UVRect(minX / 64.0F, minY / 64.0F, maxX / 64.0F, maxY / 64.0F);
   }
 
   private GeometryFace createAxisAlignedFace(
