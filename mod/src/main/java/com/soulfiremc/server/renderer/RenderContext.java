@@ -19,16 +19,9 @@ package com.soulfiremc.server.renderer;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 
-/// Pre-computed render context containing all data needed for ray casting.
-/// Groups related parameters together to avoid passing many individual arguments.
-///
-/// @param level          The client level to render
-/// @param camera         Pre-computed camera with position and direction vectors
-/// @param sceneData      Pre-collected scene data (entities and map frames)
-/// @param maxDistance    Maximum render distance in blocks
-/// @param minY           World minimum Y coordinate
-/// @param maxY           World maximum Y coordinate
-/// @param invMaxDistance Pre-computed 1.0 / maxDistance for fog calculations
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 public record RenderContext(
   ClientLevel level,
   Camera camera,
@@ -36,10 +29,10 @@ public record RenderContext(
   int maxDistance,
   int minY,
   int maxY,
-  double invMaxDistance
+  double invMaxDistance,
+  long animationTick,
+  ConcurrentMap<Long, Float> localLightCache
 ) {
-
-  /// Creates a render context with computed inverse max distance.
   public static RenderContext create(
     ClientLevel level,
     Camera camera,
@@ -53,7 +46,9 @@ public record RenderContext(
       maxDistance,
       level.getMinY(),
       level.getMaxY(),
-      1.0 / maxDistance
+      1.0 / maxDistance,
+      level.getOverworldClockTime(),
+      new ConcurrentHashMap<>()
     );
   }
 }

@@ -20,21 +20,36 @@ package com.soulfiremc.server.renderer;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 
-/// Pre-collected scene data for rendering.
-/// Contains cached information about entities and map frames to avoid
-/// repeated method calls during ray casting.
-public record SceneData(MapFrameData[] mapFrames, EntityData[] entities) {
-  /// Pre-computed data for an item frame containing a map.
-  public record MapFrameData(
-    AABB bbox,
-    Direction direction,
-    double posX,
-    double posY,
-    double posZ,
-    int rotation,
-    byte[] colors
+/// Pre-collected scene data for software rendering.
+public record SceneData(RendererAssets.GeometryFace[] surfaces, BillboardData[] billboards, ShadowData[] shadows) {
+  public static final SceneData EMPTY = new SceneData(new RendererAssets.GeometryFace[0], new BillboardData[0], new ShadowData[0]);
+
+  public enum BillboardMode {
+    FULL,
+    VERTICAL
+  }
+
+  public record BillboardData(
+    double centerX,
+    double centerY,
+    double centerZ,
+    double width,
+    double height,
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int tintColor,
+    int emission,
+    BillboardMode mode
   ) {}
 
-  /// Pre-computed data for a renderable entity.
-  public record EntityData(AABB bbox) {}
+  public record ShadowData(
+    AABB bounds,
+    double centerX,
+    double centerY,
+    double centerZ,
+    double width,
+    double height,
+    float strength,
+    Direction upDirection
+  ) {}
 }
