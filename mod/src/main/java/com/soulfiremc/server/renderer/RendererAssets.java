@@ -38,7 +38,6 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
@@ -51,7 +50,6 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
@@ -64,11 +62,9 @@ import net.minecraft.world.level.block.HalfTransparentBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -89,7 +85,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -164,7 +159,7 @@ public final class RendererAssets {
     try {
       var minecraft = Minecraft.getInstance();
       EntityRenderDispatcher dispatcher = minecraft.getEntityRenderDispatcher();
-      @SuppressWarnings({"rawtypes", "unchecked"})
+      @SuppressWarnings({"rawtypes"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (rawRenderer != null) {
         EntityRenderState renderState = rawRenderer.createRenderState(entity, 1.0F);
@@ -191,7 +186,7 @@ public final class RendererAssets {
   public EntityRenderState entityRenderState(Entity entity) {
     try {
       var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
-      @SuppressWarnings({"rawtypes", "unchecked"})
+      @SuppressWarnings({"rawtypes"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       return rawRenderer != null ? rawRenderer.createRenderState(entity, 1.0F) : null;
     } catch (Throwable t) {
@@ -237,26 +232,9 @@ public final class RendererAssets {
     });
   }
 
-  public TextureImage mapTexture(byte[] colors) {
-    var pixels = new int[colors.length];
-    for (var i = 0; i < colors.length; i++) {
-      pixels[i] = MapColor.getColorFromPackedId(colors[i]);
-    }
-
-    return new TextureImage(128, 128, 128, 1, 1, false, new int[]{0}, pixels, true, false);
-  }
-
   public TextureImage textTexture(Component component, int width, int textColor, int backgroundColor) {
     var key = new TextKey(component.getString(), width, textColor, backgroundColor);
     return textTextureCache.computeIfAbsent(key, this::renderTextTexture);
-  }
-
-  public int resolveTint(BlockState state, BlockPos pos) {
-    if (!state.hasProperty(BlockStateProperties.WATERLOGGED)) {
-      return 0xFFFFFFFF;
-    }
-
-    return 0xFFFFFFFF;
   }
 
   public int resolveTint(ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
@@ -277,11 +255,6 @@ public final class RendererAssets {
     }
 
     return 0xFFFFFFFF;
-  }
-
-  public Matrix4f displayMatrix(Display.RenderState renderState, float partialTick) {
-    var transformation = renderState.transformation().get(partialTick);
-    return new Matrix4f(transformation.getMatrix());
   }
 
   public Matrix4f itemDisplayTransform(ItemDisplayContext itemDisplayContext) {
@@ -340,156 +313,6 @@ public final class RendererAssets {
     }
   }
 
-  private List<GeometryFace> buildPlayerModel(AbstractClientPlayer player, EntityLod lod) {
-    var vanillaFaces = tryBuildVanillaLivingModel(player, texture(player.getSkin().body()), 0.9375F);
-    if (!vanillaFaces.isEmpty()) {
-      return vanillaFaces;
-    }
-
-    var skin = this.texture(player.getSkin().body());
-    var slim = "SLIM".equalsIgnoreCase(player.getSkin().model().name());
-    var armWidth = slim ? 0.1875F : 0.25F;
-    var armOverlayInflate = 0.015625F;
-    var limbOverlayInflate = 0.015625F;
-    var bodyOverlayInflate = 0.015625F;
-    var headOverlayInflate = 0.03125F;
-    var faces = new ArrayList<GeometryFace>();
-    var yaw = (float) Math.toRadians(-player.getYRot());
-    var transform = new Matrix4f()
-      .translate((float) player.getX(), (float) player.getY(), (float) player.getZ())
-      .rotateY(yaw);
-
-    addCuboid(
-      faces,
-      -0.25F, 1.5F, -0.25F,
-      0.25F, 2.0F, 0.25F,
-      skin,
-      AlphaMode.CUTOUT,
-      playerHeadUvSet(false),
-      transform,
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.25F, 0.75F, -0.125F,
-      0.25F, 1.5F, 0.125F,
-      skin,
-      AlphaMode.CUTOUT,
-      playerBodyUvSet(false),
-      transform,
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.24375F, 0.0F, -0.125F,
-      0.00625F, 0.75F, 0.125F,
-      skin,
-      AlphaMode.CUTOUT,
-      playerRightLegUvSet(false),
-      transform,
-      true
-    );
-
-    addCuboid(
-      faces,
-      -0.00625F, 0.0F, -0.125F,
-      0.24375F, 0.75F, 0.125F,
-      skin,
-      AlphaMode.CUTOUT,
-      playerLeftLegUvSet(false),
-      transform,
-      true
-    );
-
-    if (lod == EntityLod.NEAR) {
-      addCuboid(
-        faces,
-        slim ? -0.4375F : -0.5F, 0.75F, -0.125F,
-        -0.25F, 1.5F, 0.125F,
-        skin,
-        AlphaMode.CUTOUT,
-        playerRightArmUvSet(slim, false),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        0.25F, 0.75F, -0.125F,
-        slim ? 0.4375F : 0.5F, 1.5F, 0.125F,
-        skin,
-        AlphaMode.CUTOUT,
-        playerLeftArmUvSet(slim, false),
-        transform,
-        true
-      );
-
-      addCuboid(
-        faces,
-        -0.25F - headOverlayInflate, 1.5F - headOverlayInflate, -0.25F - headOverlayInflate,
-        0.25F + headOverlayInflate, 2.0F + headOverlayInflate, 0.25F + headOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerHeadUvSet(true),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        -0.25F - bodyOverlayInflate, 0.75F - bodyOverlayInflate, -0.125F - bodyOverlayInflate,
-        0.25F + bodyOverlayInflate, 1.5F + bodyOverlayInflate, 0.125F + bodyOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerBodyUvSet(true),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        -0.24375F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
-        0.00625F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerRightLegUvSet(true),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        -0.00625F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
-        0.24375F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerLeftLegUvSet(true),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        (slim ? -0.4375F : -0.5F) - armOverlayInflate, 0.75F - armOverlayInflate, -0.125F - armOverlayInflate,
-        -0.25F + armOverlayInflate, 1.5F + armOverlayInflate, 0.125F + armOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerRightArmUvSet(slim, true),
-        transform,
-        true
-      );
-      addCuboid(
-        faces,
-        0.25F - armOverlayInflate, 0.75F - armOverlayInflate, -0.125F - armOverlayInflate,
-        (slim ? 0.4375F : 0.5F) + armOverlayInflate, 1.5F + armOverlayInflate, 0.125F + armOverlayInflate,
-        skin,
-        AlphaMode.CUTOUT,
-        playerLeftArmUvSet(slim, true),
-        transform,
-        true
-      );
-    }
-
-    return faces;
-  }
-
   private List<GeometryFace> tryBuildVanillaLivingModel(Entity entity, TextureImage texture, float renderScale) {
     if (!(entity instanceof LivingEntity livingEntity)) {
       return List.of();
@@ -497,7 +320,7 @@ public final class RendererAssets {
 
     try {
       var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
-      @SuppressWarnings({"rawtypes", "unchecked"})
+      @SuppressWarnings({"rawtypes"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (!(rawRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer)) {
         RenderDebugTrace.current().vanillaLivingModelFallback(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), new IllegalStateException("renderer is not LivingEntityRenderer: " + rawRenderer));
@@ -627,90 +450,6 @@ public final class RendererAssets {
     return faces;
   }
 
-  private Map<Direction, UVRect> playerHeadUvSet(boolean overlay) {
-    return cuboidUvSet(
-      uvRectPx(overlay ? 48 : 16, 0, overlay ? 56 : 24, 8),
-      uvRectPx(overlay ? 40 : 8, 0, overlay ? 48 : 16, 8),
-      uvRectPx(overlay ? 56 : 24, 8, overlay ? 64 : 32, 16),
-      uvRectPx(overlay ? 40 : 8, 8, overlay ? 48 : 16, 16),
-      uvRectPx(overlay ? 48 : 16, 8, overlay ? 56 : 24, 16),
-      uvRectPx(overlay ? 32 : 0, 8, overlay ? 40 : 8, 16)
-    );
-  }
-
-  private Map<Direction, UVRect> playerBodyUvSet(boolean overlay) {
-    var y = overlay ? 32 : 16;
-    return cuboidUvSet(
-      uvRectPx(28, y, 36, y + 4),
-      uvRectPx(20, y, 28, y + 4),
-      uvRectPx(32, y + 4, 40, y + 16),
-      uvRectPx(20, y + 4, 28, y + 16),
-      uvRectPx(16, y + 4, 20, y + 16),
-      uvRectPx(28, y + 4, 32, y + 16)
-    );
-  }
-
-  private Map<Direction, UVRect> playerRightLegUvSet(boolean overlay) {
-    var y = overlay ? 32 : 16;
-    return cuboidUvSet(
-      uvRectPx(8, y, 12, y + 4),
-      uvRectPx(4, y, 8, y + 4),
-      uvRectPx(12, y + 4, 16, y + 16),
-      uvRectPx(4, y + 4, 8, y + 16),
-      uvRectPx(8, y + 4, 12, y + 16),
-      uvRectPx(0, y + 4, 4, y + 16)
-    );
-  }
-
-  private Map<Direction, UVRect> playerLeftLegUvSet(boolean overlay) {
-    var x = overlay ? 0 : 16;
-    return cuboidUvSet(
-      uvRectPx(x + 8, 48, x + 12, 52),
-      uvRectPx(x + 4, 48, x + 8, 52),
-      uvRectPx(x + 12, 52, x + 16, 64),
-      uvRectPx(x + 4, 52, x + 8, 64),
-      uvRectPx(x + 8, 52, x + 12, 64),
-      uvRectPx(x, 52, x + 4, 64)
-    );
-  }
-
-  private Map<Direction, UVRect> playerRightArmUvSet(boolean slim, boolean overlay) {
-    var x = 40;
-    var y = overlay ? 32 : 16;
-    var armWidthPixels = slim ? 3 : 4;
-    var bottomMinX = x + 4 + armWidthPixels;
-    var topMinX = x + 4;
-    var backMinX = x + 4 + armWidthPixels * 2;
-    var leftMinX = x + 4 + armWidthPixels;
-    var rightMinX = x;
-    return cuboidUvSet(
-      uvRectPx(bottomMinX, y, bottomMinX + armWidthPixels, y + 4),
-      uvRectPx(topMinX, y, topMinX + armWidthPixels, y + 4),
-      uvRectPx(backMinX, y + 4, backMinX + armWidthPixels, y + 16),
-      uvRectPx(topMinX, y + 4, topMinX + armWidthPixels, y + 16),
-      uvRectPx(leftMinX, y + 4, leftMinX + armWidthPixels, y + 16),
-      uvRectPx(rightMinX, y + 4, rightMinX + armWidthPixels, y + 16)
-    );
-  }
-
-  private Map<Direction, UVRect> playerLeftArmUvSet(boolean slim, boolean overlay) {
-    var x = overlay ? 48 : 32;
-    var armWidthPixels = slim ? 3 : 4;
-    var bottomMinX = x + 4 + armWidthPixels;
-    var topMinX = x + 4;
-    var backMinX = x + 4 + armWidthPixels * 2;
-    var leftMinX = x + 4 + armWidthPixels;
-    var rightMinX = x;
-    return cuboidUvSet(
-      uvRectPx(bottomMinX, 48, bottomMinX + armWidthPixels, 52),
-      uvRectPx(topMinX, 48, topMinX + armWidthPixels, 52),
-      uvRectPx(backMinX, 52, backMinX + armWidthPixels, 64),
-      uvRectPx(topMinX, 52, topMinX + armWidthPixels, 64),
-      uvRectPx(leftMinX, 52, leftMinX + armWidthPixels, 64),
-      uvRectPx(rightMinX, 52, rightMinX + armWidthPixels, 64)
-    );
-  }
-
   private List<GeometryFace> buildHumanoidApproximation(Entity entity, TextureImage texture, EntityLod lod, Matrix4f transform) {
     var faces = new ArrayList<GeometryFace>();
     var width = Math.max(0.35F, entity.getBbWidth());
@@ -775,46 +514,6 @@ public final class RendererAssets {
         texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
     }
     return faces;
-  }
-
-  private TextureImage composePlayerSprite(TextureImage skin, boolean slim) {
-    if (skin.width() < 64 || skin.height() < 64) {
-      return skin;
-    }
-
-    var sprite = new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB);
-    var graphics = sprite.createGraphics();
-    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-    var armWidth = slim ? 3 : 4;
-    drawSkinRegion(graphics, skin, 8, 8, 8, 8, 4, 0, 8, 8);
-    drawSkinRegion(graphics, skin, 40, 8, 8, 8, 4, 0, 8, 8);
-    drawSkinRegion(graphics, skin, 20, 20, 8, 12, 4, 8, 8, 12);
-    drawSkinRegion(graphics, skin, 20, 36, 8, 12, 4, 8, 8, 12);
-    drawSkinRegion(graphics, skin, 44, 20, armWidth, 12, 0, 8, armWidth, 12);
-    drawSkinRegion(graphics, skin, slim ? 47 : 44, 36, armWidth, 12, 0, 8, armWidth, 12);
-    drawSkinRegion(graphics, skin, 36, 52, armWidth, 12, 16 - armWidth, 8, armWidth, 12);
-    drawSkinRegion(graphics, skin, slim ? 39 : 52, 52, armWidth, 12, 16 - armWidth, 8, armWidth, 12);
-    drawSkinRegion(graphics, skin, 4, 20, 4, 12, 4, 20, 4, 12);
-    drawSkinRegion(graphics, skin, 4, 36, 4, 12, 4, 20, 4, 12);
-    drawSkinRegion(graphics, skin, 20, 52, 4, 12, 8, 20, 4, 12);
-    drawSkinRegion(graphics, skin, 4, 52, 4, 12, 8, 20, 4, 12);
-    graphics.dispose();
-    return TextureImage.from(sprite, null);
-  }
-
-  private void drawSkinRegion(Graphics2D graphics, TextureImage skin, int srcX, int srcY, int srcWidth, int srcHeight, int dstX, int dstY, int dstWidth, int dstHeight) {
-    graphics.drawImage(
-      skin.toBufferedImage(),
-      dstX,
-      dstY,
-      dstX + dstWidth,
-      dstY + dstHeight,
-      srcX,
-      srcY,
-      srcX + srcWidth,
-      srcY + srcHeight,
-      null
-    );
   }
 
   private TextureImage renderTextTexture(TextKey key) {
@@ -1208,10 +907,6 @@ public final class RendererAssets {
     faces.put(Direction.WEST, west);
     faces.put(Direction.EAST, east);
     return faces;
-  }
-
-  private UVRect uvRectPx(int minX, int minY, int maxX, int maxY) {
-    return new UVRect(minX / 64.0F, minY / 64.0F, maxX / 64.0F, maxY / 64.0F);
   }
 
   private GeometryFace createAxisAlignedFace(
@@ -1683,21 +1378,6 @@ public final class RendererAssets {
       );
     }
 
-    public GeometryFace translated(double tx, double ty, double tz) {
-      return new GeometryFace(
-        new double[]{x[0] + tx, x[1] + tx, x[2] + tx, x[3] + tx},
-        new double[]{y[0] + ty, y[1] + ty, y[2] + ty, y[3] + ty},
-        new double[]{z[0] + tz, z[1] + tz, z[2] + tz, z[3] + tz},
-        uv,
-        texture,
-        alphaMode,
-        cullDirection,
-        tintIndex,
-        emission,
-        shade
-      );
-    }
-
     public GeometryFace transformed(Matrix4fc matrix) {
       var vertices = new Vector3f[4];
       for (var i = 0; i < 4; i++) {
@@ -1714,7 +1394,6 @@ public final class RendererAssets {
     private final int frameHeight;
     private final int frameCount;
     private final int frameTime;
-    private final boolean interpolate;
     private final int[] frameOrder;
     private final int[] pixels;
     private final boolean hasAlpha;
@@ -1728,7 +1407,6 @@ public final class RendererAssets {
       int frameHeight,
       int frameCount,
       int frameTime,
-      boolean interpolate,
       int[] frameOrder,
       int[] pixels,
       boolean hasAlpha,
@@ -1738,7 +1416,6 @@ public final class RendererAssets {
       this.frameHeight = frameHeight;
       this.frameCount = frameCount;
       this.frameTime = frameTime;
-      this.interpolate = interpolate;
       this.frameOrder = frameOrder;
       this.pixels = pixels;
       this.hasAlpha = hasAlpha;
@@ -1785,7 +1462,7 @@ public final class RendererAssets {
           }
         }
       }
-      var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, interpolate, frameOrder, pixels, hasAlpha, hasTranslucentPixels);
+      var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels, hasAlpha, hasTranslucentPixels);
       textureImage.bufferedImage = image;
       return textureImage;
     }
@@ -1809,13 +1486,13 @@ public final class RendererAssets {
       var wrappedU = u - (float) Math.floor(u);
       var wrappedV = v - (float) Math.floor(v);
       var availableHeight = Math.max(1, pixels.length / width);
-      var clampedFrameHeight = Math.max(1, Math.min(frameHeight, availableHeight));
+      var clampedFrameHeight = Math.clamp(frameHeight, 1, availableHeight);
       var availableFrameCount = Math.max(1, availableHeight / clampedFrameHeight);
       var frameOrderIndex = (int) ((tick / frameTime) % frameOrder.length);
       var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
       var yOffset = frameIndex * clampedFrameHeight;
-      var x = Math.min(width - 1, Math.max(0, (int) (wrappedU * width)));
-      var y = Math.min(clampedFrameHeight - 1, Math.max(0, (int) (wrappedV * clampedFrameHeight))) + yOffset;
+      var x = Math.clamp((int) (wrappedU * width), 0, width - 1);
+      var y = Math.clamp((int) (wrappedV * clampedFrameHeight), 0, clampedFrameHeight - 1) + yOffset;
       return pixels[x + y * width];
     }
 
@@ -1833,10 +1510,6 @@ public final class RendererAssets {
 
     public int animationFrameCount() {
       return Math.max(1, frameOrder.length);
-    }
-
-    public int animationFrameTime() {
-      return frameTime;
     }
 
     public long animationCycleTicks() {
