@@ -164,11 +164,7 @@ public final class InventoryItemIconRenderer {
     ItemStack itemStack,
     @Nullable TrackingItemStackRenderState resolvedState
   ) {
-    var scene = resolvedState != null ? buildVanillaResolvedScene(resolvedState) : null;
-    if (scene != null && !scene.quads().isEmpty()) {
-      return scene;
-    }
-    return buildRendererAssetsScene(itemStack);
+    return resolvedState != null ? buildVanillaResolvedScene(resolvedState) : null;
   }
 
   private static @Nullable IconScene buildVanillaResolvedScene(TrackingItemStackRenderState renderState) {

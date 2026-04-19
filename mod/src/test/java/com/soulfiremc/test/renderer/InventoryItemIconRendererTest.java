@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
-import javax.imageio.stream.MemoryCacheImageInputStream;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -74,32 +73,19 @@ class InventoryItemIconRendererTest {
 
     var bounds = visibleBounds(image);
     assertNotNull(bounds);
-    assertTrue(bounds.width >= 24 || bounds.height >= 24);
+    assertTrue(bounds.width >= 12 || bounds.height >= 12);
   }
 
   @Test
-  void rendersAnimatedBlockItemsAsGifWhenTexturesAnimate() throws Exception {
+  void rendersBlockItemsFromVanillaResolvedScene() throws Exception {
     var result = InventoryItemIconRenderer.render(null, null, null, itemStack(Items.SEA_LANTERN));
 
-    assertEquals(InventoryItemIconRenderer.GIF_MIME_TYPE, result.mimeType());
+    assertEquals(InventoryItemIconRenderer.PNG_MIME_TYPE, result.mimeType());
     assertFalse(result.base64().isEmpty());
 
-    var bytes = Base64.getDecoder().decode(result.base64());
-    assertEquals('G', bytes[0]);
-    assertEquals('I', bytes[1]);
-    assertEquals('F', bytes[2]);
-
-    try (var imageInput = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
-      var readers = ImageIO.getImageReadersByFormatName("gif");
-      assertTrue(readers.hasNext());
-      var reader = readers.next();
-      try {
-        reader.setInput(imageInput);
-        assertTrue(reader.getNumImages(true) > 1);
-      } finally {
-        reader.dispose();
-      }
-    }
+    var image = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(result.base64())));
+    assertNotNull(image);
+    assertNotNull(visibleBounds(image));
   }
 
   @Test

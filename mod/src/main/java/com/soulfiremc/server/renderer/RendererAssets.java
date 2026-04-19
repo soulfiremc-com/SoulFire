@@ -32,7 +32,10 @@ import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.FaceInfo;
+import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.block.model.BlockDisplayContext;
+import net.minecraft.client.renderer.block.model.BlockStateModelWrapper;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
@@ -570,47 +573,22 @@ public final class RendererAssets {
   }
 
   private BlockGeometry buildBlockGeometry(BlockState state) {
-    var vanillaGeometry = buildVanillaBlockGeometry(state);
-    if (!vanillaGeometry.faces().isEmpty()) {
-      return vanillaGeometry;
-    }
-
-    var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-    var stateDefinition = blockStateCache.computeIfAbsent(blockId, this::loadBlockStateDefinition);
-    var modelReferences = stateDefinition.select(state);
-    if (modelReferences.isEmpty()) {
-      return fallbackCube(state);
-    }
-
-    var context = BlockRenderContext.forBlock(state);
-    var bakedFaces = new ArrayList<GeometryFace>();
-    for (var modelReference : modelReferences) {
-      var resolvedModel = resolveModel(modelReference.model());
-      if (resolvedModel == null) {
-        continue;
-      }
-
-      bakedFaces.addAll(bakeResolvedModel(resolvedModel, context, modelReference.xRotation(), modelReference.yRotation()).faces());
-    }
-
-    if (bakedFaces.isEmpty()) {
-      return fallbackCube(state);
-    }
-
-    return new BlockGeometry(bakedFaces);
+    return buildVanillaBlockGeometry(state);
   }
 
   private BlockGeometry buildVanillaBlockGeometry(BlockState state) {
     try {
       var blockStateModelSet = Minecraft.getInstance().getModelManager().getBlockStateModelSet();
-      var blockModel = blockStateModelSet.get(state);
-      if (blockModel == null) {
+      var blockStateModel = blockStateModelSet.get(state);
+      if (blockStateModel == null) {
         throw new NullPointerException("blockStateModelSet.get(state) returned null");
       }
-      var parts = new ArrayList<BlockStateModelPart>();
-      blockModel.collectParts(RandomSource.create(42L), parts);
-      if (parts.isEmpty()) {
-        throw new NullPointerException("blockModel.collectParts returned no parts");
+      var blockModel = new BlockStateModelWrapper(blockStateModel, List.of(), new Matrix4f());
+      var renderState = new BlockModelRenderState();
+      blockModel.update(renderState, state, BlockDisplayContext.create(), 42L);
+      var parts = renderState.modelParts;
+      if (parts == null || parts.isEmpty()) {
+        throw new NullPointerException("blockModel.update returned no parts");
       }
       var faces = new ArrayList<GeometryFace>();
       for (var part : parts) {

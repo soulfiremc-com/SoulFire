@@ -18,6 +18,8 @@
 package com.soulfiremc.server.renderer;
 
 import lombok.experimental.UtilityClass;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -108,6 +110,7 @@ public class WorldMeshCollector {
     var builder = SceneData.builder();
     var level = ctx.level();
     var assets = RendererAssets.instance();
+    var fluidRenderer = new FluidRenderer(Minecraft.getInstance().getModelManager().getFluidStateModelSet());
     var originX = chunk.getPos().getMinBlockX();
     var originY = SectionPos.sectionToBlockCoord(sectionY);
     var originZ = chunk.getPos().getMinBlockZ();
@@ -141,7 +144,7 @@ public class WorldMeshCollector {
           }
 
           if (!fluidState.isEmpty()) {
-            emitFluidFaces(ctx, builder, blockState, fluidState, blockPos);
+            builder.addAll(VanillaSubmitCollector.collectFluid(ctx, fluidRenderer, blockPos.immutable(), blockState, fluidState));
           }
         }
       }

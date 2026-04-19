@@ -27,23 +27,29 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.particle.SingleQuadParticle;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.CameraEntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
@@ -54,7 +60,9 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -66,6 +74,7 @@ import org.joml.Vector3fc;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -149,6 +158,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return collector.builder.build();
   }
 
+  static SceneData collectFluid(RenderContext ctx, FluidRenderer fluidRenderer, BlockPos blockPos, BlockState blockState, FluidState fluidState) {
+    var collector = new VanillaSubmitCollector(ctx);
+    var output = collector.new FluidOutput();
+    fluidRenderer.tesselate((BlockAndTintGetter) ctx.level(), blockPos, output, blockState, fluidState);
+    output.flush();
+    return collector.builder.build();
+  }
+
   private CameraRenderState cameraRenderState() {
     var cameraState = new CameraRenderState();
     cameraState.blockPos = BlockPos.containing(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
@@ -196,7 +213,33 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     double distance,
     CameraRenderState cameraRenderState
   ) {
-    addComponentQuad(poseStack, text, xOffset(text), 0.0F, color, backgroundColor);
+    var bufferSource = new CapturingBufferSource();
+    if (outline) {
+      font.drawInBatch8xOutline(
+        text.getVisualOrderText(),
+        xOffset(text),
+        0.0F,
+        color,
+        backgroundColor,
+        poseStack.last().pose(),
+        bufferSource,
+        0x00F000F0
+      );
+    } else {
+      font.drawInBatch(
+        text,
+        xOffset(text),
+        0.0F,
+        color,
+        false,
+        poseStack.last().pose(),
+        bufferSource,
+        Font.DisplayMode.NORMAL,
+        backgroundColor,
+        0x00F000F0
+      );
+    }
+    bufferSource.flush();
   }
 
   @Override
@@ -212,7 +255,20 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int light,
     int offset
   ) {
-    addSequenceQuad(poseStack, text, x, y, color, backgroundColor);
+    var bufferSource = new CapturingBufferSource();
+    font.drawInBatch(
+      text,
+      x,
+      y,
+      color,
+      shadow,
+      poseStack.last().pose(),
+      bufferSource,
+      displayMode,
+      backgroundColor,
+      light
+    );
+    bufferSource.flush();
   }
 
   @Override
@@ -355,7 +411,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public void submitCustomGeometry(PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer renderer) {
-    var consumer = new CapturingVertexConsumer(poseStack.last().pose(), renderType, alphaMode(renderType, WHITE_TEXTURE));
+    var texture = textureFromRenderType(renderType);
+    var consumer = new CapturingVertexConsumer(poseStack.last().pose(), renderType.mode(), texture, alphaMode(renderType, texture));
     renderer.render(poseStack.last(), consumer);
     consumer.flush();
   }
@@ -449,43 +506,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F));
   }
 
-  private void addTextQuad(PoseStack poseStack, FormattedCharSequence text, int color, int backgroundColor) {
-    addSequenceQuad(poseStack, text, 0.0F, 0.0F, color, backgroundColor);
-  }
-
-  private void addComponentQuad(PoseStack poseStack, Component text, float x, float y, int color, int backgroundColor) {
-    var width = Math.max(16, font.width(text) + 4);
-    var texture = assets.textTexture(text, width, forceOpaque(color), backgroundColor);
-    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
-  }
-
-  private void addSequenceQuad(PoseStack poseStack, FormattedCharSequence text, float x, float y, int color, int backgroundColor) {
-    var plain = plainText(text);
-    if (plain.isEmpty()) {
-      return;
-    }
-
-    var width = Math.max(16, font.width(text) + 4);
-    var texture = assets.textTexture(Component.literal(plain), width, forceOpaque(color), backgroundColor);
-    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
-  }
-
   @Nullable
   private RendererAssets.TextureImage textureImage(@Nullable TextureAtlasSprite sprite) {
     if (sprite == null || sprite.contents() == null || sprite.contents().name() == null) {
       return null;
     }
     return assets.texture(sprite.contents().name());
-  }
-
-  private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
-    var vertices = new Vector3f[]{
-      poseStack.last().pose().transformPosition(new Vector3f(x, y - height, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x, y, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y - height, 0.0F))
-    };
-    addFace(vertices, texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, 0, true, new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F});
   }
 
   private void addFace(
@@ -528,17 +554,30 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
-  private int forceOpaque(int color) {
-    return (color & 0x00FFFFFF) | 0xFF000000;
-  }
+  private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {
+    if (renderType == null) {
+      return WHITE_TEXTURE;
+    }
 
-  private String plainText(FormattedCharSequence sequence) {
-    var builder = new StringBuilder();
-    sequence.accept((_, _, codePoint) -> {
-      builder.appendCodePoint(codePoint);
-      return true;
-    });
-    return builder.toString();
+    RenderSetup state = renderType.state;
+    if (state == null || state.textures == null || state.textures.isEmpty()) {
+      return WHITE_TEXTURE;
+    }
+
+    for (var binding : state.textures.values()) {
+      var location = ((RenderSetup.TextureBinding) binding).location;
+      if (location == null) {
+        continue;
+      }
+      if (TextureAtlas.LOCATION_BLOCKS.equals(location)
+        || TextureAtlas.LOCATION_ITEMS.equals(location)
+        || TextureAtlas.LOCATION_PARTICLES.equals(location)) {
+        return assets.textureAtlas(location);
+      }
+      return assets.texture(location);
+    }
+
+    return WHITE_TEXTURE;
   }
 
   private static RendererAssets.TextureImage createSolidTexture(int argb) {
@@ -549,19 +588,25 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private final class CapturingVertexConsumer implements VertexConsumer {
     private final Matrix4fc pose;
-    private final RenderType renderType;
+    private final VertexFormat.Mode mode;
+    private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
     private CapturedVertex current;
 
-    private CapturingVertexConsumer(Matrix4fc pose, RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+    private CapturingVertexConsumer(
+      Matrix4fc pose,
+      VertexFormat.Mode mode,
+      RendererAssets.TextureImage texture,
+      RendererAssets.AlphaMode alphaMode
+    ) {
       this.pose = pose;
-      this.renderType = renderType;
+      this.mode = mode;
+      this.texture = texture;
       this.alphaMode = alphaMode;
     }
 
     void flush() {
-      var mode = renderType.mode();
       switch (mode) {
         case QUADS -> {
           for (var i = 0; i + 3 < vertices.size(); i += 4) {
@@ -592,11 +637,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void emitQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), d.position()}, WHITE_TEXTURE, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()});
+      addFace(new Vector3f[]{a.position(), b.position(), c.position(), d.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()});
     }
 
     private void emitTriangle(CapturedVertex a, CapturedVertex b, CapturedVertex c) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), c.position()}, WHITE_TEXTURE, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()});
+      addFace(new Vector3f[]{a.position(), b.position(), c.position(), c.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()});
     }
 
     private void emitLine(CapturedVertex a, CapturedVertex b) {
@@ -617,7 +662,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           new Vector3f(b.position()).add(side),
           new Vector3f(b.position()).sub(side)
         },
-        WHITE_TEXTURE,
+        texture,
         alphaMode,
         a.color(),
         0,
@@ -635,7 +680,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           new Vector3f(vertex.position()).add(size, size, 0.0F),
           new Vector3f(vertex.position()).add(size, -size, 0.0F)
         },
-        WHITE_TEXTURE,
+        texture,
         alphaMode,
         vertex.color(),
         0,
@@ -678,6 +723,46 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     @Override public VertexConsumer setUv2(int u, int v) { return this; }
     @Override public VertexConsumer setNormal(float x, float y, float z) { return this; }
     @Override public VertexConsumer setLineWidth(float width) { return this; }
+  }
+
+  private final class CapturingBufferSource implements MultiBufferSource {
+    private final LinkedHashMap<RenderType, CapturingVertexConsumer> consumers = new LinkedHashMap<>();
+
+    @Override
+    public VertexConsumer getBuffer(RenderType renderType) {
+      return consumers.computeIfAbsent(renderType, type -> {
+        var texture = textureFromRenderType(type);
+        return new CapturingVertexConsumer(new Matrix4f(), type.mode(), texture, alphaMode(type, texture));
+      });
+    }
+
+    private void flush() {
+      consumers.values().forEach(CapturingVertexConsumer::flush);
+      consumers.clear();
+    }
+  }
+
+  private final class FluidOutput implements FluidRenderer.Output {
+    private final LinkedHashMap<ChunkSectionLayer, CapturingVertexConsumer> consumers = new LinkedHashMap<>();
+    private final RendererAssets.TextureImage texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
+
+    @Override
+    public VertexConsumer getBuilder(ChunkSectionLayer layer) {
+      return consumers.computeIfAbsent(
+        layer,
+        currentLayer -> new CapturingVertexConsumer(
+          new Matrix4f(),
+          VertexFormat.Mode.QUADS,
+          texture,
+          currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE
+        )
+      );
+    }
+
+    private void flush() {
+      consumers.values().forEach(CapturingVertexConsumer::flush);
+      consumers.clear();
+    }
   }
 
   private record CapturedVertex(Vector3f position, int color, float u, float v) {

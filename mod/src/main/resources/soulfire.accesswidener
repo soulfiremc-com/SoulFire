@@ -62,6 +62,12 @@ accessible field net/minecraft/client/renderer/item/ItemStackRenderState$LayerRe
 accessible class net/minecraft/client/renderer/state/level/QuadParticleRenderState$Storage
 accessible field net/minecraft/client/renderer/state/level/QuadParticleRenderState particles Ljava/util/Map;
 
+accessible field net/minecraft/client/renderer/block/BlockModelRenderState modelParts Ljava/util/List;
+accessible class net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding
+accessible field net/minecraft/client/renderer/rendertype/RenderType state Lnet/minecraft/client/renderer/rendertype/RenderSetup;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup textures Ljava/util/Map;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location Lnet/minecraft/resources/Identifier;
+
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()I
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getHeight ()I
