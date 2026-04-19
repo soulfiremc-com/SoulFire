@@ -32,6 +32,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.Tool;
@@ -55,11 +56,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 final class PathfindingTest {
-  private static ItemStack itemStack(net.minecraft.world.item.Item item) {
+  private static ItemStack itemStack(Item item) {
     return itemStack(item, 1);
   }
 
-  private static ItemStack itemStack(net.minecraft.world.item.Item item, int count) {
+  private static ItemStack itemStack(Item item, int count) {
     var itemStack = new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     if (item == Items.DIAMOND_PICKAXE) {
       itemStack.set(

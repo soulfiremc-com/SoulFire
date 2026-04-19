@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.automation;
 
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -234,7 +236,7 @@ public final class AutomationRecipes {
   public static Optional<MineableSource> mineableSource(String targetKey) {
     return switch (targetKey) {
       case AutomationRequirements.ANY_LOG -> Optional.of(new MineableSource(
-        state -> state.is(net.minecraft.tags.BlockTags.LOGS),
+        state -> state.is(BlockTags.LOGS),
         ToolRequirement.NONE
       ));
       case AutomationRequirements.COBBLESTONE -> Optional.of(new MineableSource(
@@ -268,28 +270,28 @@ public final class AutomationRecipes {
   public static Optional<EntitySource> entitySource(String targetKey) {
     return switch (targetKey) {
       case AutomationRequirements.FOOD -> Optional.of(new EntitySource(
-        entity -> entity.isAnimal(),
+        AutomationWorldMemory.RememberedEntity::isAnimal,
         1
       ));
       case AutomationRequirements.BLAZE_ROD -> Optional.of(new EntitySource(
-        entity -> entity.isBlaze(),
+        AutomationWorldMemory.RememberedEntity::isBlaze,
         1
       ));
       case AutomationRequirements.ENDER_PEARL -> Optional.of(new EntitySource(
-        entity -> entity.type() == net.minecraft.world.entity.EntityType.ENDERMAN,
+        entity -> entity.type() == EntityType.ENDERMAN,
         1
       ));
       case AutomationRequirements.STRING -> Optional.of(new EntitySource(
-        entity -> entity.type() == net.minecraft.world.entity.EntityType.SPIDER
-          || entity.type() == net.minecraft.world.entity.EntityType.CAVE_SPIDER,
+        entity -> entity.type() == EntityType.SPIDER
+          || entity.type() == EntityType.CAVE_SPIDER,
         1
       ));
       case AutomationRequirements.FEATHER -> Optional.of(new EntitySource(
-        entity -> entity.type() == net.minecraft.world.entity.EntityType.CHICKEN,
+        entity -> entity.type() == EntityType.CHICKEN,
         1
       ));
       case AutomationRequirements.WHITE_WOOL -> Optional.of(new EntitySource(
-        entity -> entity.type() == net.minecraft.world.entity.EntityType.SHEEP,
+        entity -> entity.type() == EntityType.SHEEP,
         1
       ));
       default -> Optional.empty();

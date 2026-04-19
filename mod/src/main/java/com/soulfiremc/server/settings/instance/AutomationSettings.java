@@ -19,13 +19,8 @@ package com.soulfiremc.server.settings.instance;
 
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
-import com.soulfiremc.server.settings.property.BooleanProperty;
-import com.soulfiremc.server.settings.property.ComboProperty;
+import com.soulfiremc.server.settings.property.*;
 import com.soulfiremc.server.settings.property.ComboProperty.ComboOption;
-import com.soulfiremc.server.settings.property.ImmutableBooleanProperty;
-import com.soulfiremc.server.settings.property.ImmutableComboProperty;
-import com.soulfiremc.server.settings.property.ImmutableIntProperty;
-import com.soulfiremc.server.settings.property.IntProperty;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -242,28 +237,28 @@ public final class AutomationSettings implements SettingsObject {
     return ComboProperty.optionsFromEnum(
       RolePolicy.values(),
       ComboProperty::capitalizeEnum,
-      ignored -> null);
+      _ -> null);
   }
 
   private static ComboOption[] roleOverrideOptions() {
     return ComboProperty.optionsFromEnum(
       RoleOverride.values(),
       ComboProperty::capitalizeEnum,
-      ignored -> null);
+      _ -> null);
   }
 
   private static ComboOption[] objectiveOverrideOptions() {
     return ComboProperty.optionsFromEnum(
       ObjectiveOverride.values(),
       ComboProperty::capitalizeEnum,
-      ignored -> null);
+      _ -> null);
   }
 
   private static ComboOption[] presetOptions() {
     return ComboProperty.optionsFromEnum(
       Preset.values(),
       ComboProperty::capitalizeEnum,
-      ignored -> null);
+      _ -> null);
   }
 
   public enum RolePolicy {

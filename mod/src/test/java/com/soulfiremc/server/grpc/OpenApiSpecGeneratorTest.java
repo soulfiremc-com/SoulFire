@@ -86,19 +86,15 @@ class OpenApiSpecGeneratorTest {
       .enableUnframedRequests(true)
       .enableHttpJsonTranscoding(true)
       .build();
-    var server = Server.builder()
+    try (var server = Server.builder()
       .service(grpcService)
-      .build();
-
-    try {
+      .build()) {
       var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://example.com");
       var usersSchema = findPropertySchema(openApi, "users");
 
       assertNotNull(usersSchema);
       assertEquals("array", usersSchema.path("type").asText());
       assertEquals("UNORDERED_LIST", usersSchema.path("x-google-field-behaviors").get(0).asText());
-    } finally {
-      server.close();
     }
   }
 
@@ -110,11 +106,9 @@ class OpenApiSpecGeneratorTest {
       .enableUnframedRequests(true)
       .enableHttpJsonTranscoding(true)
       .build();
-    var server = Server.builder()
+    try (var server = Server.builder()
       .service(grpcService)
-      .build();
-
-    try {
+      .build()) {
       var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://api.example.com:8443/api/v1");
       var servers = openApi.withArray("servers");
 
@@ -130,8 +124,6 @@ class OpenApiSpecGeneratorTest {
       assertEquals("api.example.com", variables.path("host").path("default").asText());
       assertEquals("8443", variables.path("port").path("default").asText());
       assertEquals("api/v1", variables.path("basePath").path("default").asText());
-    } finally {
-      server.close();
     }
   }
 
@@ -143,11 +135,9 @@ class OpenApiSpecGeneratorTest {
       .enableUnframedRequests(true)
       .enableHttpJsonTranscoding(true)
       .build();
-    var server = Server.builder()
+    try (var server = Server.builder()
       .service(grpcService)
-      .build();
-
-    try {
+      .build()) {
       var openApi = OpenApiSpecGenerator.generate(server.config().serviceConfigs(), "https://example.com");
 
       assertEquals("3.1.0", openApi.path("openapi").asText());
@@ -156,8 +146,6 @@ class OpenApiSpecGeneratorTest {
         openApi.path("jsonSchemaDialect").asText()
       );
       assertFalse(openApi.toPrettyString().contains("\"nullable\""));
-    } finally {
-      server.close();
     }
   }
 

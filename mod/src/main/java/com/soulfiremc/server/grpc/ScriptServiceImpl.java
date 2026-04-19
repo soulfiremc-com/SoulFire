@@ -992,8 +992,8 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
     return builder.build();
   }
 
-  private com.soulfiremc.grpc.generated.TypeDescriptor typeDescriptorToProto(com.soulfiremc.server.script.TypeDescriptor td) {
-    var builder = com.soulfiremc.grpc.generated.TypeDescriptor.newBuilder();
+  private TypeDescriptor typeDescriptorToProto(com.soulfiremc.server.script.TypeDescriptor td) {
+    var builder = TypeDescriptor.newBuilder();
     switch (td) {
       case com.soulfiremc.server.script.TypeDescriptor.Simple(com.soulfiremc.server.script.PortType type) ->
         builder.setSimple(portTypeToProto(type));

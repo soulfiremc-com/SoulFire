@@ -93,8 +93,8 @@ public final class MovementAction implements WorldAction {
     var previousYRot = clientEntity.getYRot();
     clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, targetMiddleBlock);
 
-    var xRot = 0f;
-    var yRot = 0f;
+    var xRot = 0F;
+    var yRot = 0F;
 
     if (pathConstraint.yRotJitter().min() < pathConstraint.yRotJitter().max()) {
       yRot =

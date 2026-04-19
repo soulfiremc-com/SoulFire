@@ -151,10 +151,7 @@ public final class Camera {
     if (camY - extentY > furthestZ * tanHalfFovY) {
       return false;
     }
-    if (camY + extentY < -furthestZ * tanHalfFovY) {
-      return false;
-    }
-    return true;
+    return !(camY + extentY < -furthestZ * tanHalfFovY);
   }
 
   public double sampleDirX(int x, int y) {

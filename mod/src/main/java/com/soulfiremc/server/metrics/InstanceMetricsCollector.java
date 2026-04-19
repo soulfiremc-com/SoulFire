@@ -22,11 +22,7 @@ import com.soulfiremc.grpc.generated.BotPosition;
 import com.soulfiremc.grpc.generated.MetricsDistributions;
 import com.soulfiremc.grpc.generated.MetricsSnapshot;
 import com.soulfiremc.server.InstanceManager;
-import com.soulfiremc.server.api.event.bot.BotConnectionInitEvent;
-import com.soulfiremc.server.api.event.bot.BotPacketPreReceiveEvent;
-import com.soulfiremc.server.api.event.bot.BotPacketPreSendEvent;
-import com.soulfiremc.server.api.event.bot.BotPostTickEvent;
-import com.soulfiremc.server.api.event.bot.BotPreTickEvent;
+import com.soulfiremc.server.api.event.bot.*;
 import com.soulfiremc.server.api.event.session.SessionBotRemoveEvent;
 import com.soulfiremc.server.api.event.session.SessionStartEvent;
 import com.soulfiremc.server.api.event.session.SessionTickEvent;
@@ -41,8 +37,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
 /// Collects and stores per-instance metrics in a ring buffer.
-/// Metrics are sampled every 3 seconds (every 6th session tick at 500ms intervals).
-/// Thread-safe: counters use atomic operations, snapshot buffer is synchronized.
+ /// Metrics are sampled every 3 seconds (every 6th session tick at 500ms intervals).
+ /// Thread-safe: counters use atomic operations, snapshot buffer is synchronized.
 @Slf4j
 public final class InstanceMetricsCollector {
   private static final int MAX_SNAPSHOTS = 600; // 30 min at 3s intervals
@@ -234,12 +230,12 @@ public final class InstanceMetricsCollector {
     // Aggregate bot state
     var botConnections = instanceManager.botConnections();
     var ref = new Object() {
-      int botsWithPlayerData = 0;
-      int onlineCount = 0;
+      int botsWithPlayerData;
+      int onlineCount;
       double totalHealth = 0.0;
       double totalFood = 0.0;
-      int totalChunks = 0;
-      int totalEntities = 0;
+      int totalChunks;
+      int totalEntities;
     };
 
     for (var bot : botConnections.values()) {

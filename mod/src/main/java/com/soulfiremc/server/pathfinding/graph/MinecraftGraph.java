@@ -146,17 +146,16 @@ public record MinecraftGraph(BlockGetter blockAccessor,
       }
 
       var result = subscriber.subscription.processBlockUnsafe(this, key, action, blockState, absolutePositionBlock);
-      switch (result) {
-        case CONTINUE -> {
-          if (!action.decrementAndIsDone()) {
-            continue;
-          }
-
-          for (var instruction : action.getInstructions(this, node)) {
-            callback.accept(pathConstraint.modifyAsNeeded(instruction));
-          }
+      if (result == MinecraftGraph.SubscriptionSingleResult.CONTINUE) {
+        if (!action.decrementAndIsDone()) {
+          continue;
         }
-        case IMPOSSIBLE -> actions[subscriber.actionIndex] = null;
+
+        for (var instruction : action.getInstructions(this, node)) {
+          callback.accept(pathConstraint.modifyAsNeeded(instruction));
+        }
+      } else if (result == MinecraftGraph.SubscriptionSingleResult.IMPOSSIBLE) {
+        actions[subscriber.actionIndex] = null;
       }
     }
   }

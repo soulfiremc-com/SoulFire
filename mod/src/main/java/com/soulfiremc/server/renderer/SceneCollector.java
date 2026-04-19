@@ -31,6 +31,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
@@ -288,7 +289,7 @@ public class SceneCollector {
     RendererAssets assets,
     SceneData.Builder builder,
     Map<Long, Integer> billboardBuckets,
-    @org.jetbrains.annotations.Nullable EntityRenderState renderState,
+    @Nullable EntityRenderState renderState,
     double renderX,
     double renderY,
     double renderZ

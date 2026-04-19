@@ -23,11 +23,7 @@ import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.IntProperty;
 import com.soulfiremc.server.util.structs.GsonInstance;
 
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public final class AutomationControlSupport {
   private static final Map<String, TargetQuotaOverride> TARGET_QUOTA_OVERRIDES = createTargetQuotaOverrides();

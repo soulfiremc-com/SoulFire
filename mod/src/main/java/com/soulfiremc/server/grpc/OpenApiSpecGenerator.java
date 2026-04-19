@@ -24,11 +24,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.api.AnnotationsProto;
 import com.google.api.FieldBehavior;
 import com.google.api.FieldBehaviorProto;
-import com.google.protobuf.Descriptors.Descriptor;
-import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.Descriptors.MethodDescriptor;
-import com.google.protobuf.Descriptors.ServiceDescriptor;
+import com.google.protobuf.Descriptors.*;
 import com.google.protobuf.MessageOrBuilder;
 import com.linecorp.armeria.common.HttpHeaderNames;
 import com.linecorp.armeria.common.HttpHeaders;
@@ -345,7 +341,7 @@ final class OpenApiSpecGenerator {
 
     if (!transcoded) {
       if (method.useParameterAsRoot() && method.parameters().size() == 1) {
-        schema = schemaForType(method.parameters().get(0).typeSignature());
+        schema = schemaForType(method.parameters().getFirst().typeSignature());
       } else if (!method.parameters().isEmpty()) {
         schema = objectSchemaForParameters(serviceName, method.name(), method.parameters(), inputStruct);
       }
@@ -643,7 +639,7 @@ final class OpenApiSpecGenerator {
     var sanitized = new ArrayList<String>();
     for (var line : normalizeDocBlock(value).lines().toList()) {
       if (line.isBlank()) {
-        if (!sanitized.isEmpty() && !sanitized.get(sanitized.size() - 1).isBlank()) {
+        if (!sanitized.isEmpty() && !sanitized.getLast().isBlank()) {
           sanitized.add("");
         }
         continue;
@@ -670,8 +666,8 @@ final class OpenApiSpecGenerator {
       sanitized.add(line);
     }
 
-    while (!sanitized.isEmpty() && sanitized.get(sanitized.size() - 1).isBlank()) {
-      sanitized.remove(sanitized.size() - 1);
+    while (!sanitized.isEmpty() && sanitized.getLast().isBlank()) {
+      sanitized.removeLast();
     }
 
     return String.join("\n", sanitized);
@@ -827,7 +823,7 @@ final class OpenApiSpecGenerator {
         .findFirst()
         .orElse(null);
       if (rawMethod != null && rawMethod.useParameterAsRoot() && rawMethod.parameters().size() == 1) {
-        return structByTypeName.get(rawMethod.parameters().get(0).typeSignature().signature());
+        return structByTypeName.get(rawMethod.parameters().getFirst().typeSignature().signature());
       }
     }
 
@@ -858,7 +854,7 @@ final class OpenApiSpecGenerator {
 
     if (typeSignature instanceof ContainerTypeSignature containerTypeSignature) {
       if (typeSignature.type() == TypeSignatureType.OPTIONAL && !containerTypeSignature.typeParameters().isEmpty()) {
-        return nullableSchema(schemaForType(containerTypeSignature.typeParameters().get(0)));
+        return nullableSchema(schemaForType(containerTypeSignature.typeParameters().getFirst()));
       }
 
       var containerName = typeSignature.name().toLowerCase(Locale.ROOT);
@@ -866,7 +862,7 @@ final class OpenApiSpecGenerator {
         || List.of("repeated", "list", "array", "set").contains(containerName)) {
         var schema = JSON_MAPPER.createObjectNode();
         schema.put("type", "array");
-        var itemType = containerTypeSignature.typeParameters().get(0);
+        var itemType = containerTypeSignature.typeParameters().getFirst();
         schema.set("items", schemaForType(itemType));
         collectReferencedSchemaNames(itemType, null, null);
         return schema;
@@ -1114,7 +1110,7 @@ final class OpenApiSpecGenerator {
       var uri = URI.create(publicAddress);
       var scheme = Optional.ofNullable(uri.getScheme())
         .map(value -> value.toLowerCase(Locale.ROOT))
-        .filter(value -> value.equals("http") || value.equals("https"))
+        .filter(value -> "http".equals(value) || "https".equals(value))
         .orElse("https");
       var host = Optional.ofNullable(uri.getHost())
         .filter(value -> !value.isBlank())
@@ -1187,10 +1183,10 @@ final class OpenApiSpecGenerator {
     return value.replace("~1", "/").replace("~0", "~");
   }
 
-  private static com.fasterxml.jackson.databind.JsonNode tryReadJson(String value) {
+  private static JsonNode tryReadJson(String value) {
     try {
       return JSON_MAPPER.readTree(value);
-    } catch (Exception ignored) {
+    } catch (Exception _) {
       return JSON_MAPPER.getNodeFactory().textNode(value);
     }
   }

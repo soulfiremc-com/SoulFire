@@ -17,13 +17,7 @@
  */
 package com.soulfiremc.test.renderer;
 
-import com.soulfiremc.server.renderer.Camera;
-import com.soulfiremc.server.renderer.RasterBuffers;
-import com.soulfiremc.server.renderer.RasterPipeline;
-import com.soulfiremc.server.renderer.RenderQuad;
-import com.soulfiremc.server.renderer.RenderVertex;
-import com.soulfiremc.server.renderer.RendererAssets;
-import com.soulfiremc.server.renderer.SceneData;
+import com.soulfiremc.server.renderer.*;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 

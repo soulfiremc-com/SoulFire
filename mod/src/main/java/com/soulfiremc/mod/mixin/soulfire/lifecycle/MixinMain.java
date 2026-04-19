@@ -59,7 +59,7 @@ public final class MixinMain {
     SFConstants.NOT_REGISTRY_INIT_PHASE = true;
 
     SFConstants.BASE_MC_INSTANCE = instance;
-    soulfire$finishInitialClientLoad(instance);
+    soulfireFinishInitialClientLoad(instance);
 
     try {
       var args = Base64Helpers.splitBase64(System.getProperty("sf.initial.arguments"));
@@ -83,23 +83,23 @@ public final class MixinMain {
   }
 
   @Unique
-  private static void soulfire$finishInitialClientLoad(Minecraft instance) {
+  private static void soulfireFinishInitialClientLoad(Minecraft instance) {
     var deadline = System.nanoTime() + soulfire$INITIAL_CLIENT_LOAD_TIMEOUT_NANOS;
-    while (!soulfire$hasInitializedBlockModels(instance) && System.nanoTime() < deadline) {
+    while (!soulfireHasInitializedBlockModels(instance) && System.nanoTime() < deadline) {
       instance.runTick(true);
     }
 
-    if (!soulfire$hasInitializedBlockModels(instance)) {
+    if (!soulfireHasInitializedBlockModels(instance)) {
       throw new IllegalStateException("Timed out while waiting for the base Minecraft instance to initialize block models");
     }
   }
 
   @Unique
-  private static boolean soulfire$hasInitializedBlockModels(Minecraft instance) {
+  private static boolean soulfireHasInitializedBlockModels(Minecraft instance) {
     try {
       instance.getModelManager().getBlockStateModelSet();
       return true;
-    } catch (RuntimeException ignored) {
+    } catch (RuntimeException _) {
       return false;
     }
   }

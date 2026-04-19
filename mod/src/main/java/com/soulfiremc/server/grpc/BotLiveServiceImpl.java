@@ -42,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -49,6 +50,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -57,11 +59,12 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -83,7 +86,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
   private final ConcurrentHashMap<UUID, AtomicReference<CompletableFuture<Void>>> activePaths =
     new ConcurrentHashMap<>();
 
-  private static <T> T callInBotContext(BotConnection botConnection, java.util.concurrent.Callable<T> callable) throws Exception {
+  private static <T> T callInBotContext(BotConnection botConnection, Callable<T> callable) throws Exception {
     return botConnection.runnableWrapper().wrap(callable).call();
   }
 
@@ -121,8 +124,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     };
   }
 
-  private static com.soulfiremc.grpc.generated.BlockPosition toProtoBlockPosition(BlockPos pos, String dimension) {
-    return com.soulfiremc.grpc.generated.BlockPosition.newBuilder()
+  private static BlockPosition toProtoBlockPosition(BlockPos pos, String dimension) {
+    return BlockPosition.newBuilder()
       .setX(pos.getX())
       .setY(pos.getY())
       .setZ(pos.getZ())
@@ -130,7 +133,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       .build();
   }
 
-  private static BlockPos toMcBlockPos(com.soulfiremc.grpc.generated.BlockPosition pos) {
+  private static BlockPos toMcBlockPos(BlockPosition pos) {
     return new BlockPos(pos.getX(), pos.getY(), pos.getZ());
   }
 
@@ -151,8 +154,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     return property.getName(state.getValue(property));
   }
 
-  private static com.soulfiremc.grpc.generated.WorldPosition buildWorldPosition(Vec3 pos, String dimension) {
-    return com.soulfiremc.grpc.generated.WorldPosition.newBuilder()
+  private static WorldPosition buildWorldPosition(Vec3 pos, String dimension) {
+    return WorldPosition.newBuilder()
       .setX(pos.x)
       .setY(pos.y)
       .setZ(pos.z)
@@ -173,7 +176,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     } else if (entity instanceof Player player) {
       builder.setDisplayName(player.getGameProfile().name());
     }
-    if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
+    if (entity instanceof LivingEntity living) {
       builder.setHealth(living.getHealth());
     }
     return builder.build();
@@ -225,15 +228,21 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
 
     if (filter.getIncludeStateDeltas()) {
       stateListener = event -> {
-        if (closed.get()) return;
-        if (event.connection() != bot) return;
+        if (closed.get()) {
+          return;
+        }
+        if (event.connection() != bot) {
+          return;
+        }
         try {
           var next = callInBotContext(bot, () -> {
             var mc = bot.minecraft();
             var player = mc.player;
             return player != null ? BotServiceImpl.buildLiveStatePublic(mc, player, false) : null;
           });
-          if (next == null) return;
+          if (next == null) {
+            return;
+          }
           var prev = lastState.getAndSet(next);
           var delta = computeDelta(prev, next);
           if (delta != null) {
@@ -252,8 +261,12 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
 
     if (filter.getIncludeChat()) {
       chatListener = event -> {
-        if (closed.get()) return;
-        if (event.connection() != bot) return;
+        if (closed.get()) {
+          return;
+        }
+        if (event.connection() != bot) {
+          return;
+        }
         var plain = event.parseToPlainText();
         var json = GsonComponentSerializer.gson().serialize(event.message());
         var nowSec = Instant.ofEpochMilli(event.timestamp()).getEpochSecond();
@@ -273,8 +286,12 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
 
     if (filter.getIncludeLifecycle()) {
       disconnectListener = event -> {
-        if (closed.get()) return;
-        if (event.connection() != bot) return;
+        if (closed.get()) {
+          return;
+        }
+        if (event.connection() != bot) {
+          return;
+        }
         var reason = event.message() == null
           ? ""
           : SoulFireAdventure.PLAIN_MESSAGE_SERIALIZER.serialize(event.message());
@@ -296,7 +313,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     var finalDisconnectListener = disconnectListener;
 
     serverObserver.setOnCancelHandler(() -> {
-      if (!closed.compareAndSet(false, true)) return;
+      if (!closed.compareAndSet(false, true)) {
+        return;
+      }
       if (finalStateListener != null) {
         SoulFireAPI.unregisterListener(BotPostTickEvent.class, finalStateListener);
       }
@@ -424,29 +443,35 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           return FindBlocksResponse.getDefaultInstance();
         }
 
-        var matchSet = new java.util.HashSet<>(blockIds);
+        var matchSet = new HashSet<>(blockIds);
         var origin = player.blockPosition();
         var dimension = level.dimension().identifier().toString();
 
         // Collect matches with their squared distance, then sort ascending.
-        var matches = new java.util.ArrayList<ScoredMatch>();
+        var matches = new ArrayList<ScoredMatch>();
         var radius = maxDistance;
         for (var dx = -radius; dx <= radius; dx++) {
           for (var dy = -radius; dy <= radius; dy++) {
             for (var dz = -radius; dz <= radius; dz++) {
               var pos = origin.offset(dx, dy, dz);
-              if (!level.hasChunkAt(pos)) continue;
+              if (!level.hasChunkAt(pos)) {
+                continue;
+              }
               var state = level.getBlockState(pos);
               var id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-              if (!matchSet.contains(id)) continue;
+              if (!matchSet.contains(id)) {
+                continue;
+              }
               var sqDistance = origin.distSqr(pos);
-              if (sqDistance > (double) radius * radius) continue;
+              if (sqDistance > (double) radius * radius) {
+                continue;
+              }
               matches.add(new ScoredMatch(pos.immutable(), state, sqDistance));
             }
           }
         }
 
-        matches.sort(java.util.Comparator.comparingDouble(ScoredMatch::sqDistance));
+        matches.sort(Comparator.comparingDouble(ScoredMatch::sqDistance));
         var responseBuilder = FindBlocksResponse.newBuilder();
         var limit = Math.min(matches.size(), maxCount);
         for (var i = 0; i < limit; i++) {
@@ -490,18 +515,20 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         }
         var origin = player.position();
         var dimension = level.dimension().identifier().toString();
-        var typeSet = typeFilter.isEmpty() ? null : new java.util.HashSet<>(typeFilter);
+        var typeSet = typeFilter.isEmpty() ? null : new HashSet<>(typeFilter);
 
         var results = StreamSupport.stream(level.entitiesForRendering().spliterator(), false)
           .filter(entity -> entity != player)
           .filter(entity -> includePlayers || !(entity instanceof Player))
           .filter(entity -> {
-            if (typeSet == null) return true;
+            if (typeSet == null) {
+              return true;
+            }
             var id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
             return typeSet.contains(id);
           })
           .filter(entity -> entity.position().distanceToSqr(origin) <= (double) radius * radius)
-          .sorted(java.util.Comparator.comparingDouble(e -> e.position().distanceToSqr(origin)))
+          .sorted(Comparator.comparingDouble(e -> e.position().distanceToSqr(origin)))
           .map(entity -> buildNearbyEntity(entity, origin, dimension))
           .toList();
 
@@ -542,7 +569,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         bot.botControl().replace(ControlTask.once(() -> {
           var gameMode = bot.minecraft().gameMode;
           var player = bot.minecraft().player;
-          if (gameMode == null || player == null) return;
+          if (gameMode == null || player == null) {
+            return;
+          }
           if (cancel) {
             gameMode.stopDestroyBlock();
             return;
@@ -602,7 +631,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         bot.botControl().replace(ControlTask.once(() -> {
           var gameMode = bot.minecraft().gameMode;
           var player = bot.minecraft().player;
-          if (gameMode == null || player == null) return;
+          if (gameMode == null || player == null) {
+            return;
+          }
           // Construct a synthetic BlockHitResult pointing at the face center.
           var hitPos = Vec3.atCenterOf(against)
             .add(direction.getStepX() * 0.5, direction.getStepY() * 0.5, direction.getStepZ() * 0.5);
@@ -642,7 +673,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         bot.botControl().replace(ControlTask.once(() -> {
           var gameMode = bot.minecraft().gameMode;
           var player = bot.minecraft().player;
-          if (gameMode == null || player == null) return;
+          if (gameMode == null || player == null) {
+            return;
+          }
           if (gameMode.useItem(player, hand) instanceof InteractionResult.Success success
             && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
             player.swing(hand);
@@ -679,7 +712,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           var gameMode = bot.minecraft().gameMode;
           var player = bot.minecraft().player;
           var level = bot.minecraft().level;
-          if (gameMode == null || player == null || level == null) return;
+          if (gameMode == null || player == null || level == null) {
+            return;
+          }
           var target = findEntityById(level, entityId);
           if (target == null) {
             log.debug("AttackEntity: entity id {} not found", entityId);
@@ -699,7 +734,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     }
   }
 
-  private static Entity findEntityById(net.minecraft.client.multiplayer.ClientLevel level, int id) {
+  private static Entity findEntityById(ClientLevel level, int id) {
     return StreamSupport.stream(level.entitiesForRendering().spliterator(), false)
       .filter(e -> e.getId() == id)
       .findFirst()
@@ -729,7 +764,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           var gameMode = bot.minecraft().gameMode;
           var player = bot.minecraft().player;
           var level = bot.minecraft().level;
-          if (gameMode == null || player == null || level == null) return;
+          if (gameMode == null || player == null || level == null) {
+            return;
+          }
           var target = findEntityById(level, entityId);
           if (target == null) {
             log.debug("InteractEntity: entity id {} not found", entityId);
@@ -769,7 +806,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       callInBotContext(bot, () -> {
         bot.botControl().replace(ControlTask.once(() -> {
           var player = bot.minecraft().player;
-          if (player == null) return;
+          if (player == null) {
+            return;
+          }
           player.swing(hand);
         }));
         return null;
@@ -839,7 +878,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       return;
     }
 
-    var ref = activePaths.computeIfAbsent(botId, k -> new AtomicReference<>());
+    var ref = activePaths.computeIfAbsent(botId, _ -> new AtomicReference<>());
     ref.set(future);
 
     // Send MOVING once on start.
@@ -850,8 +889,12 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     Runnable schedule = new Runnable() {
       @Override
       public void run() {
-        if (completed.get() || serverObserver.isCancelled()) return;
-        if (future.isDone()) return;
+        if (completed.get() || serverObserver.isCancelled()) {
+          return;
+        }
+        if (future.isDone()) {
+          return;
+        }
         emitProgress(bot, serverObserver, goalPositionSupplier, PathfindStatus.PATHFIND_STATUS_MOVING, null);
         soulFireServer.scheduler().schedule(this, PATH_PROGRESS_INTERVAL_MS, TimeUnit.MILLISECONDS);
       }
@@ -866,14 +909,18 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       activePaths.remove(botId, ref);
     });
 
-    future.whenComplete((result, error) -> {
-      if (!completed.compareAndSet(false, true)) return;
+    future.whenComplete((_, error) -> {
+      if (!completed.compareAndSet(false, true)) {
+        return;
+      }
       activePaths.remove(botId, ref);
-      if (serverObserver.isCancelled()) return;
+      if (serverObserver.isCancelled()) {
+        return;
+      }
       try {
         if (error == null) {
           emitProgress(bot, serverObserver, goalPositionSupplier, PathfindStatus.PATHFIND_STATUS_COMPLETED, null);
-        } else if (error instanceof java.util.concurrent.CancellationException) {
+        } else if (error instanceof CancellationException) {
           emitProgress(bot, serverObserver, goalPositionSupplier, PathfindStatus.PATHFIND_STATUS_CANCELLED, "cancelled");
         } else {
           var msg = error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
@@ -891,7 +938,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
                                    WorldPositionSupplier goalPosSupplier,
                                    PathfindStatus status,
                                    String error) {
-    if (observer.isCancelled()) return;
+    if (observer.isCancelled()) {
+      return;
+    }
     var progressBuilder = PathfindProgress.newBuilder().setStatus(status);
     try {
       var player = bot.minecraft().player;
@@ -939,7 +988,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         var scorer = block.getRadius() <= 0
           ? (GoalScorer) new PosGoal(vec)
           : new CloseToPosGoal(vec, radius);
-        WorldPositionSupplier supplier = b -> Vec3.atCenterOf(pos);
+        WorldPositionSupplier supplier = _ -> Vec3.atCenterOf(pos);
         yield new ResolvedGoal(scorer, supplier);
       }
       case NEAR -> {
@@ -949,7 +998,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         var radius = Math.max(1, Math.round(near.getRadius()));
         yield new ResolvedGoal(
           new CloseToPosGoal(vec, radius),
-          b -> new Vec3(pos.getX(), pos.getY(), pos.getZ()));
+          _ -> new Vec3(pos.getX(), pos.getY(), pos.getZ()));
       }
       case ENTITY -> {
         var entityGoal = goal.getEntity();
@@ -971,7 +1020,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           new CloseToPosGoal(vec, radius),
           b -> {
             var live = b.minecraft().level;
-            if (live == null) return entityPos;
+            if (live == null) {
+              return entityPos;
+            }
             var found = findEntityById(live, id);
             return found == null ? entityPos : found.position();
           });

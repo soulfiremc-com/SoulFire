@@ -183,12 +183,8 @@ public sealed interface TypeDescriptor {
       && resolvedB instanceof Parameterized(PortType baseB, List<TypeDescriptor> _) && (baseB == PortType.COLLECTION || baseB == PortType.LIST || baseB == PortType.SET)) {
       return true;
     }
-    if (resolvedB instanceof Simple(PortType typeB) && typeB == PortType.COLLECTION
-      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && (baseA == PortType.COLLECTION || baseA == PortType.LIST || baseA == PortType.SET)) {
-      return true;
-    }
-
-    return false;
+    return resolvedB instanceof Simple(PortType typeB) && typeB == PortType.COLLECTION
+      && resolvedA instanceof Parameterized(PortType baseA, List<TypeDescriptor> _) && (baseA == PortType.COLLECTION || baseA == PortType.LIST || baseA == PortType.SET);
   }
 
   /// Creates a fresh bindings map for unification.

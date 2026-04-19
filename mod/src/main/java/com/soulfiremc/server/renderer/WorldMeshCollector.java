@@ -18,11 +18,13 @@
 package com.soulfiremc.server.renderer;
 
 import lombok.experimental.UtilityClass;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HalfTransparentBlock;
@@ -36,6 +38,7 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -152,7 +155,7 @@ public class WorldMeshCollector {
   }
 
   private static boolean shouldEmitBlockFace(
-    net.minecraft.world.level.BlockGetter level,
+    BlockGetter level,
     BlockState blockState,
     BlockPos blockPos,
     RendererAssets.GeometryFace face
@@ -320,11 +323,11 @@ public class WorldMeshCollector {
   private static int fluidFaceColor(RenderContext ctx, FluidState fluidState, BlockState blockState, BlockPos blockPos, float shade) {
     var tintIndex = fluidState.is(FluidTags.WATER) ? 0 : -1;
     var face = RendererAssets.GeometryFace.of(
-      new org.joml.Vector3f[]{
-        new org.joml.Vector3f(0.0F, 0.0F, 0.0F),
-        new org.joml.Vector3f(0.0F, 0.0F, 1.0F),
-        new org.joml.Vector3f(1.0F, 0.0F, 1.0F),
-        new org.joml.Vector3f(1.0F, 0.0F, 0.0F)
+      new Vector3f[]{
+        new Vector3f(0.0F, 0.0F, 0.0F),
+        new Vector3f(0.0F, 0.0F, 1.0F),
+        new Vector3f(1.0F, 0.0F, 1.0F),
+        new Vector3f(1.0F, 0.0F, 0.0F)
       },
       new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
       fluidState.is(FluidTags.LAVA) ? RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState).stillTexture() : RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState).stillTexture(),
@@ -384,7 +387,7 @@ public class WorldMeshCollector {
     return !isFaceOccludedBySelf(blockState, side) && !isNeighborSameFluid(fluidState, neighborFluid);
   }
 
-  private static float calculateAverageHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, float currentHeight, float height1, float height2, BlockPos pos) {
+  private static float calculateAverageHeight(ClientLevel level, Fluid fluid, float currentHeight, float height1, float height2, BlockPos pos) {
     if (height2 >= 1.0F || height1 >= 1.0F) {
       return 1.0F;
     }
@@ -414,17 +417,17 @@ public class WorldMeshCollector {
     }
   }
 
-  private static float getFluidHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, BlockPos pos) {
+  private static float getFluidHeight(ClientLevel level, Fluid fluid, BlockPos pos) {
     var state = level.getBlockState(pos);
     return getFluidHeight(level, fluid, pos, state, state.getFluidState());
   }
 
-  private static float getFluidHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, BlockPos pos, BlockState blockState, FluidState fluidState) {
+  private static float getFluidHeight(ClientLevel level, Fluid fluid, BlockPos pos, BlockState blockState, FluidState fluidState) {
     if (fluid.isSame(fluidState.getType())) {
       var aboveState = level.getBlockState(pos.above());
       return fluid.isSame(aboveState.getFluidState().getType()) ? 1.0F : fluidState.getOwnHeight();
     }
-    return !blockState.isSolid() ? 0.0F : -1.0F;
+    return blockState.isSolid() ? -1.0F : 0.0F;
   }
 
   static RenderQuad toRenderQuad(

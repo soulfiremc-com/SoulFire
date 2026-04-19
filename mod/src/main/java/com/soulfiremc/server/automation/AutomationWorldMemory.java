@@ -43,14 +43,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Predicate;
 
 public final class AutomationWorldMemory {
@@ -145,7 +138,7 @@ public final class AutomationWorldMemory {
     }
 
     return containers.values().stream()
-      .filter(container -> container.inspected())
+      .filter(AutomationWorldMemory.RememberedContainer::inspected)
       .filter(container -> container.contents().entrySet().stream()
         .anyMatch(entry -> AutomationRequirements.matchesItem(requirementKey, entry.getKey()) && entry.getValue() > 0))
       .filter(container -> isReachable(container.pos()))
@@ -273,19 +266,19 @@ public final class AutomationWorldMemory {
   }
 
   public Collection<RememberedBlock> rememberedBlocks() {
-    return java.util.List.copyOf(blocks.values());
+    return List.copyOf(blocks.values());
   }
 
   public Collection<RememberedContainer> rememberedContainers() {
-    return java.util.List.copyOf(containers.values());
+    return List.copyOf(containers.values());
   }
 
   public Collection<RememberedEntity> rememberedEntities() {
-    return java.util.List.copyOf(entities.values());
+    return List.copyOf(entities.values());
   }
 
   public Collection<RememberedItem> rememberedDroppedItems() {
-    return java.util.List.copyOf(droppedItems.values());
+    return List.copyOf(droppedItems.values());
   }
 
   public static boolean isInterestingBlock(BlockState state) {
@@ -431,7 +424,7 @@ public final class AutomationWorldMemory {
 
   private static Comparator<Map.Entry<Long, Long>> unreachableComparator(@Nullable Vec3 origin) {
     if (origin == null) {
-      return Comparator.<Map.Entry<Long, Long>>comparingLong(entry -> entry.getValue()).reversed();
+      return Comparator.<Map.Entry<Long, Long>>comparingLong(Map.Entry::getValue).reversed();
     }
     return Comparator.comparingDouble(entry -> BlockPos.of(entry.getKey()).getCenter().distanceToSqr(origin));
   }

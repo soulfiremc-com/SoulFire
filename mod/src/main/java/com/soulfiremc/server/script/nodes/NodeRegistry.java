@@ -43,16 +43,12 @@ import com.soulfiremc.server.script.nodes.variable.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Modifier;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /// Registry of all available script node types.
-/// Metadata is stored separately from node instances — nodes are pure executors.
+ /// Metadata is stored separately from node instances — nodes are pure executors.
 @Slf4j
 public final class NodeRegistry {
   private static final Map<String, Supplier<ScriptNode>> FACTORIES = new ConcurrentHashMap<>();

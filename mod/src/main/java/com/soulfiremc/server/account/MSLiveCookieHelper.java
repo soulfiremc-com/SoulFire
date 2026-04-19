@@ -116,7 +116,7 @@ public final class MSLiveCookieHelper {
     JsonArray arr;
     try {
       arr = GsonInstance.GSON.fromJson(cookieJson, JsonArray.class);
-    } catch (Exception e) {
+    } catch (Exception _) {
       return "";
     }
     if (arr == null || arr.isEmpty()) {
@@ -145,7 +145,7 @@ public final class MSLiveCookieHelper {
           if (!isLiveDomain(domain)) {
             continue;
           }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
         }
       }
 
@@ -188,7 +188,7 @@ public final class MSLiveCookieHelper {
   }
 
   private static boolean isLiveDomain(String domain) {
-    return domain.equals("login.live.com") || domain.endsWith(".login.live.com");
+    return "login.live.com".equals(domain) || domain.endsWith(".login.live.com");
   }
 
   private static String stripEnclosingQuotes(String v) {

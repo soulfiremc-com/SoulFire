@@ -28,6 +28,7 @@ import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.database.AuditLogType;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
 import com.soulfiremc.server.user.PermissionContext;
+import com.soulfiremc.server.util.structs.GsonInstance;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -35,12 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.core.registries.BuiltInRegistries;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Callable;
 
 @Slf4j
@@ -289,7 +285,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     try {
       var instance = requireInstance(instanceId);
       var rolePolicy = fromProtoRolePolicy(request.getRolePolicy());
-      instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(rolePolicy.name()));
+      instance.updateInstanceSetting(AutomationSettings.ROLE_POLICY, GsonInstance.GSON.toJsonTree(rolePolicy.name()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "role-policy=" + AutomationControlSupport.formatEnumId(rolePolicy));
 
       responseObserver.onNext(SetAutomationRolePolicyResponse.newBuilder()
@@ -311,7 +307,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
 
     try {
       var instance = requireInstance(instanceId);
-      instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.updateInstanceSetting(AutomationSettings.SHARED_STRUCTURE_INTEL, GsonInstance.GSON.toJsonTree(request.getEnabled()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-structure-intel=" + request.getEnabled());
 
       responseObserver.onNext(SetAutomationSharedStructuresResponse.newBuilder()
@@ -333,7 +329,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
 
     try {
       var instance = requireInstance(instanceId);
-      instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.updateInstanceSetting(AutomationSettings.SHARED_TARGET_CLAIMS, GsonInstance.GSON.toJsonTree(request.getEnabled()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-target-claims=" + request.getEnabled());
 
       responseObserver.onNext(SetAutomationSharedClaimsResponse.newBuilder()
@@ -355,7 +351,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
 
     try {
       var instance = requireInstance(instanceId);
-      instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.updateInstanceSetting(AutomationSettings.SHARED_END_ENTRY, GsonInstance.GSON.toJsonTree(request.getEnabled()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "shared-end-entry=" + request.getEnabled());
 
       responseObserver.onNext(SetAutomationSharedEndEntryResponse.newBuilder()
@@ -378,7 +374,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
 
     try {
       var instance = requireInstance(instanceId);
-      instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getMaxEndBots()));
+      instance.updateInstanceSetting(AutomationSettings.MAX_END_BOTS, GsonInstance.GSON.toJsonTree(request.getMaxEndBots()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "max-end-bots=" + request.getMaxEndBots());
 
       responseObserver.onNext(SetAutomationMaxEndBotsResponse.newBuilder()
@@ -429,7 +425,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     try {
       var instance = requireInstance(instanceId);
       var override = fromProtoObjectiveOverride(request.getObjective());
-      instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+      instance.updateInstanceSetting(AutomationSettings.OBJECTIVE_OVERRIDE, GsonInstance.GSON.toJsonTree(override.name()));
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "objective-override=" + AutomationControlSupport.formatEnumId(override));
 
       responseObserver.onNext(SetAutomationObjectiveOverrideResponse.newBuilder()
@@ -454,7 +450,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
       var override = fromProtoRoleOverride(request.getRole());
       var targetBots = targetConfiguredBots(instance, request.getBotIdsList(), "role override updated");
       for (var botId : targetBots.validBotIds()) {
-        instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+        instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, GsonInstance.GSON.toJsonTree(override.name()));
       }
       instance.addAuditLog(user, AuditLogType.AUTOMATION_UPDATE_SETTINGS, "role-override=" + AutomationControlSupport.formatEnumId(override));
 
@@ -953,13 +949,13 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
                                      UUID botId,
                                      UpdateAutomationBotSettingsRequest request) {
     if (request.hasEnabled()) {
-      instance.updateBotSetting(botId, AutomationSettings.ENABLED, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getEnabled()));
+      instance.updateBotSetting(botId, AutomationSettings.ENABLED, GsonInstance.GSON.toJsonTree(request.getEnabled()));
       if (!request.getEnabled() && connectedBot != null) {
         connectedBot.automation().stop();
       }
     }
     if (request.hasAllowDeathRecovery()) {
-      instance.updateBotSetting(botId, AutomationSettings.ALLOW_DEATH_RECOVERY, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(request.getAllowDeathRecovery()));
+      instance.updateBotSetting(botId, AutomationSettings.ALLOW_DEATH_RECOVERY, GsonInstance.GSON.toJsonTree(request.getAllowDeathRecovery()));
     }
     if (request.hasMemoryScanRadius()) {
       AutomationControlSupport.setBotIntSetting(instance, botId, AutomationSettings.MEMORY_SCAN_RADIUS, request.getMemoryScanRadius());
@@ -975,7 +971,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
     }
     if (request.hasRoleOverride()) {
       var override = fromProtoRoleOverride(request.getRoleOverride());
-      instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, com.soulfiremc.server.util.structs.GsonInstance.GSON.toJsonTree(override.name()));
+      instance.updateBotSetting(botId, AutomationSettings.ROLE_OVERRIDE, GsonInstance.GSON.toJsonTree(override.name()));
     }
   }
 
@@ -1118,7 +1114,7 @@ public final class AutomationServiceImpl extends AutomationServiceGrpc.Automatio
   private static UUID parseUuid(String raw, String fieldName) {
     try {
       return UUID.fromString(raw);
-    } catch (IllegalArgumentException e) {
+    } catch (IllegalArgumentException _) {
       throw Status.INVALID_ARGUMENT.withDescription("Invalid %s '%s'".formatted(fieldName, raw)).asRuntimeException();
     }
   }

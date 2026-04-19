@@ -374,12 +374,11 @@ public final class ScriptTriggerService {
 
     // 1. Cancel interval tasks, unregister event listeners, dispose subscriptions
     for (var listener : listeners) {
-      if (listener instanceof CancellableTask task) {
-        task.cancel();
-      } else if (listener instanceof EventListenerHolder<?> holder) {
-        holder.unregister();
-      } else if (listener instanceof DisposableHolder holder) {
-        holder.dispose();
+      switch (listener) {
+        case CancellableTask task -> task.cancel();
+        case EventListenerHolder<?> holder -> holder.unregister();
+        case DisposableHolder holder -> holder.dispose();
+        case null, default -> {}
       }
     }
 

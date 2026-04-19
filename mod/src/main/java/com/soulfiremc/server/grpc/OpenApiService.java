@@ -27,6 +27,7 @@ import com.linecorp.armeria.server.Server;
 import com.linecorp.armeria.server.ServiceConfig;
 import com.linecorp.armeria.server.ServiceRequestContext;
 import com.soulfiremc.server.SoulFireServer;
+import com.soulfiremc.server.settings.server.ServerSettings;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -77,7 +78,7 @@ public final class OpenApiService implements HttpService {
       var specification =
         OpenApiSpecGenerator.generate(
           services,
-          soulFireServer.settingsSource().get(com.soulfiremc.server.settings.server.ServerSettings.PUBLIC_ADDRESS)
+          soulFireServer.settingsSource().get(ServerSettings.PUBLIC_ADDRESS)
         );
       openApiDocument = JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(specification);
       generationFailure = null;

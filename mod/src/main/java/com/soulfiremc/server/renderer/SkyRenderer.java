@@ -54,8 +54,7 @@ public class SkyRenderer {
       sky = lerpColor(sky, 0xFFFFFFFF, stars * (1.0F - dayCenter) * (1.0F - rain * 0.8F));
     }
 
-    sky = multiplyColor(sky, 1.0F - thunder * 0.45F);
-    return sky;
+    return multiplyColor(sky, 1.0F - thunder * 0.45F);
   }
 
   private static float proceduralClouds(double dirX, double dirY, double dirZ, long tick) {

@@ -19,11 +19,7 @@ package com.soulfiremc.server.account;
 
 import com.google.gson.JsonElement;
 import com.soulfiremc.grpc.generated.MinecraftAccountProto;
-import com.soulfiremc.server.account.service.AccountData;
-import com.soulfiremc.server.account.service.BedrockData;
-import com.soulfiremc.server.account.service.OfflineJavaData;
-import com.soulfiremc.server.account.service.OnlineChainJavaData;
-import com.soulfiremc.server.account.service.OnlineSimpleJavaData;
+import com.soulfiremc.server.account.service.*;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.util.SFHelpers;
 import lombok.With;
@@ -33,14 +29,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /// Represents an authenticated MC account. This can be a premium, offline or bedrock account. Beware
-/// that the profileId is not a valid online UUID for offline and bedrock accounts.
-///
-/// @param authType           The type of authentication
-/// @param profileId          Identifier that uniquely identifies the account
-/// @param lastKnownName      The last known name of the account
-/// @param accountData        The data of the account (values depend on the authType)
-/// @param settings           Per-bot settings
-/// @param persistentMetadata Persistent metadata stored with the account
+ /// that the profileId is not a valid online UUID for offline and bedrock accounts.
+ ///
+ /// @param authType           The type of authentication
+ /// @param profileId          Identifier that uniquely identifies the account
+ /// @param lastKnownName      The last known name of the account
+ /// @param accountData        The data of the account (values depend on the authType)
+ /// @param settings           Per-bot settings
+ /// @param persistentMetadata Persistent metadata stored with the account
 @With
 public record MinecraftAccount(
   AuthType authType,

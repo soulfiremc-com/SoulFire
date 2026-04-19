@@ -20,6 +20,7 @@ package com.soulfiremc.server.script.nodes.collection;
 import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 public final class ListRemoveAtNode extends AbstractScriptNode {
@@ -40,7 +41,7 @@ public final class ListRemoveAtNode extends AbstractScriptNode {
 
   @Override
   public Mono<Map<String, NodeValue>> executeReactive(NodeRuntime runtime, Map<String, NodeValue> inputs) {
-    var list = new java.util.ArrayList<>(getListInput(inputs, "list"));
+    var list = new ArrayList<>(getListInput(inputs, "list"));
     var index = getIntInput(inputs, "index", -1);
     if (index >= 0 && index < list.size()) {
       list.remove(index);

@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.server;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import com.soulfiremc.server.account.AuthType;
 import com.soulfiremc.server.account.MinecraftAccount;
@@ -49,7 +50,7 @@ final class StickyProxyAllocatorTest {
         new StickyProxyAllocator.ProxyAllocation(fallbackProxy, 1)),
       true);
 
-    assertEquals(fallbackProxy, assignments.get(0).proxy(), "Fallback account should not steal the sticky proxy");
+    assertEquals(fallbackProxy, assignments.getFirst().proxy(), "Fallback account should not steal the sticky proxy");
     assertEquals(stickyProxy, assignments.get(1).proxy(), "Sticky account should retain its saved proxy");
   }
 
@@ -82,7 +83,7 @@ final class StickyProxyAllocatorTest {
       "Stored fingerprint should match the currently selected proxy");
   }
 
-  private static MinecraftAccount account(String name, Map<String, Map<String, com.google.gson.JsonElement>> persistentMetadata) {
+  private static MinecraftAccount account(String name, Map<String, Map<String, JsonElement>> persistentMetadata) {
     return new MinecraftAccount(
       AuthType.OFFLINE,
       UUID.nameUUIDFromBytes(name.getBytes()),

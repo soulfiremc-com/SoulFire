@@ -29,21 +29,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.socket.DatagramPacket;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandRequest;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5InitialRequest;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5PasswordAuthRequest;
-import io.netty.handler.codec.socksx.v5.Socks5AddressType;
-import io.netty.handler.codec.socksx.v5.Socks5AuthMethod;
-import io.netty.handler.codec.socksx.v5.Socks5ClientEncoder;
-import io.netty.handler.codec.socksx.v5.Socks5CommandResponse;
-import io.netty.handler.codec.socksx.v5.Socks5CommandResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5CommandStatus;
-import io.netty.handler.codec.socksx.v5.Socks5CommandType;
-import io.netty.handler.codec.socksx.v5.Socks5InitialResponse;
-import io.netty.handler.codec.socksx.v5.Socks5InitialResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponse;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthStatus;
+import io.netty.handler.codec.socksx.v5.*;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -53,11 +39,11 @@ import java.net.SocketAddress;
 import java.net.UnknownHostException;
 
 /// Implements SOCKS5 UDP ASSOCIATE (RFC 1928, command 0x03) for proxying
-/// UDP traffic through a SOCKS5 proxy. Used for Bedrock Edition connections
-/// which use RakNet over UDP instead of TCP.
-///
-/// Opens a TCP control connection to the SOCKS5 proxy for the handshake,
-/// then wraps/unwraps UDP datagrams with the SOCKS5 UDP relay header.
+ /// UDP traffic through a SOCKS5 proxy. Used for Bedrock Edition connections
+ /// which use RakNet over UDP instead of TCP.
+ ///
+ /// Opens a TCP control connection to the SOCKS5 proxy for the handshake,
+ /// then wraps/unwraps UDP datagrams with the SOCKS5 UDP relay header.
 @Slf4j
 public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
   private static final String SOCKS5_DECODER = "socks5Decoder";
@@ -103,29 +89,33 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
 
   @Override
   public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-    if (msg instanceof ByteBuf buf) {
-      var header = buildSocks5UdpHeader(ctx.alloc(), originalDestination);
-      ctx.write(Unpooled.wrappedBuffer(header, buf), promise);
-    } else if (msg instanceof DatagramPacket packet) {
-      var header = buildSocks5UdpHeader(ctx.alloc(), originalDestination);
-      var content = Unpooled.wrappedBuffer(header, packet.content().retain());
-      ctx.write(new DatagramPacket(content, relayAddress), promise);
-      packet.release();
-    } else {
-      super.write(ctx, msg, promise);
+    switch (msg) {
+      case ByteBuf buf -> {
+        var header = buildSocks5UdpHeader(ctx.alloc(), originalDestination);
+        ctx.write(Unpooled.wrappedBuffer(header, buf), promise);
+      }
+      case DatagramPacket packet -> {
+        var header = buildSocks5UdpHeader(ctx.alloc(), originalDestination);
+        var content = Unpooled.wrappedBuffer(header, packet.content().retain());
+        ctx.write(new DatagramPacket(content, relayAddress), promise);
+        packet.release();
+      }
+      case null, default -> super.write(ctx, msg, promise);
     }
   }
 
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-    if (msg instanceof ByteBuf buf) {
-      skipSocks5UdpHeader(buf);
-      ctx.fireChannelRead(buf);
-    } else if (msg instanceof DatagramPacket packet) {
-      skipSocks5UdpHeader(packet.content());
-      ctx.fireChannelRead(packet);
-    } else {
-      super.channelRead(ctx, msg);
+    switch (msg) {
+      case ByteBuf buf -> {
+        skipSocks5UdpHeader(buf);
+        ctx.fireChannelRead(buf);
+      }
+      case DatagramPacket packet -> {
+        skipSocks5UdpHeader(packet.content());
+        ctx.fireChannelRead(packet);
+      }
+      case null, default -> super.channelRead(ctx, msg);
     }
   }
 
@@ -193,14 +183,11 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-      if (msg instanceof Socks5InitialResponse response) {
-        handleInitialResponse(ctx, response);
-      } else if (msg instanceof Socks5PasswordAuthResponse response) {
-        handleAuthResponse(ctx, response);
-      } else if (msg instanceof Socks5CommandResponse response) {
-        handleCommandResponse(response);
-      } else {
-        super.channelRead(ctx, msg);
+      switch (msg) {
+        case Socks5InitialResponse response -> handleInitialResponse(ctx, response);
+        case Socks5PasswordAuthResponse response -> handleAuthResponse(ctx, response);
+        case Socks5CommandResponse response -> handleCommandResponse(response);
+        case null, default -> super.channelRead(ctx, msg);
       }
     }
 

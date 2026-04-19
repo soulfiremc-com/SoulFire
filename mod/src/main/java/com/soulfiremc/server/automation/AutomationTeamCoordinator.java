@@ -30,15 +30,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 public final class AutomationTeamCoordinator {
   private static final long BLOCK_EXPIRY_MILLIS = 15L * 60L * 1000L;
@@ -983,13 +977,13 @@ public final class AutomationTeamCoordinator {
       .anyMatch(block -> block.state().getBlock() == Blocks.DRAGON_EGG);
   }
 
-  private java.util.stream.Stream<SharedBlock> observedBlocks(@Nullable UUID botId, ResourceKey<Level> dimension) {
+  private Stream<SharedBlock> observedBlocks(@Nullable UUID botId, ResourceKey<Level> dimension) {
     var blocks = sharedBlocks.getOrDefault(dimension, Map.of()).values().stream();
     if (botId != null && (!sharedStructureIntelEnabled() || independentMode())) {
       return blocks.filter(block -> block.observerBotId().equals(botId));
     }
     if (botId == null && !sharedStructureIntelEnabled()) {
-      return java.util.stream.Stream.empty();
+      return Stream.empty();
     }
     return blocks;
   }

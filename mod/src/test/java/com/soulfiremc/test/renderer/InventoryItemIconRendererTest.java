@@ -19,18 +19,20 @@ package com.soulfiremc.test.renderer;
 
 import com.soulfiremc.server.renderer.InventoryItemIconRenderer;
 import com.soulfiremc.test.utils.TestBootstrap;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assumptions;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageInputStream;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.util.Base64;
 
@@ -131,7 +133,7 @@ class InventoryItemIconRendererTest {
     assertTrue(centerAlpha > 0);
   }
 
-  private static java.awt.Rectangle visibleBounds(java.awt.image.BufferedImage image) {
+  private static Rectangle visibleBounds(BufferedImage image) {
     int minX = Integer.MAX_VALUE;
     int minY = Integer.MAX_VALUE;
     int maxX = Integer.MIN_VALUE;
@@ -152,6 +154,6 @@ class InventoryItemIconRendererTest {
     if (minX == Integer.MAX_VALUE) {
       return null;
     }
-    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
   }
 }

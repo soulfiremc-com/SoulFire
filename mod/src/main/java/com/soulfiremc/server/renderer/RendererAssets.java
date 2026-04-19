@@ -29,6 +29,7 @@ import com.soulfiremc.mod.mixin.soulfire.accessor.MixinTextureAtlasAccessor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.FaceInfo;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -46,6 +47,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -55,15 +57,19 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HalfTransparentBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -234,7 +240,7 @@ public final class RendererAssets {
   public TextureImage mapTexture(byte[] colors) {
     var pixels = new int[colors.length];
     for (var i = 0; i < colors.length; i++) {
-      pixels[i] = net.minecraft.world.level.material.MapColor.getColorFromPackedId(colors[i]);
+      pixels[i] = MapColor.getColorFromPackedId(colors[i]);
     }
 
     return new TextureImage(128, 128, 128, 1, 1, false, new int[]{0}, pixels, true, false);
@@ -246,14 +252,14 @@ public final class RendererAssets {
   }
 
   public int resolveTint(BlockState state, BlockPos pos) {
-    if (!state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)) {
+    if (!state.hasProperty(BlockStateProperties.WATERLOGGED)) {
       return 0xFFFFFFFF;
     }
 
     return 0xFFFFFFFF;
   }
 
-  public int resolveTint(net.minecraft.client.multiplayer.ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
+  public int resolveTint(ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
     if (tintIndex < 0) {
       return 0xFFFFFFFF;
     }
@@ -341,7 +347,7 @@ public final class RendererAssets {
     }
 
     var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
-    var slim = player.getSkin().model().name().equalsIgnoreCase("SLIM");
+    var slim = "SLIM".equalsIgnoreCase(player.getSkin().model().name());
     var armWidth = slim ? 0.1875F : 0.25F;
     var armOverlayInflate = 0.015625F;
     var limbOverlayInflate = 0.015625F;
@@ -517,7 +523,7 @@ public final class RendererAssets {
 
       model.setupAnim(renderState);
 
-      var renderOffset = renderState.passengerOffset != null ? renderState.passengerOffset : net.minecraft.world.phys.Vec3.ZERO;
+      var renderOffset = renderState.passengerOffset != null ? renderState.passengerOffset : Vec3.ZERO;
       var poseStack = new PoseStack();
       applyLivingModelPose(
         poseStack,
@@ -605,7 +611,7 @@ public final class RendererAssets {
 
   private List<GeometryFace> extractModelGeometry(EntityModel<?> model, PoseStack poseStack, TextureImage texture, AlphaMode alphaMode) {
     var faces = new ArrayList<GeometryFace>();
-    model.root().visit(poseStack, (pose, path, index, cube) -> {
+    model.root().visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
         var vertices = new Vector3f[4];
         var uv = new float[8];
@@ -1602,7 +1608,7 @@ public final class RendererAssets {
   private ResourceManager currentResourceManager() {
     try {
       return Minecraft.getInstance().getResourceManager();
-    } catch (Throwable t) {
+    } catch (Throwable _) {
       return ResourceManager.Empty.INSTANCE;
     }
   }
@@ -1963,7 +1969,7 @@ public final class RendererAssets {
 
   private record TextKey(String text, int width, int textColor, int backgroundColor) {}
 
-  private static final class EmptyBlockGetterProxy implements net.minecraft.world.level.BlockGetter {
+  private static final class EmptyBlockGetterProxy implements BlockGetter {
     private static final EmptyBlockGetterProxy INSTANCE = new EmptyBlockGetterProxy();
 
     @Override
@@ -1978,7 +1984,7 @@ public final class RendererAssets {
 
     @Override
     public FluidState getFluidState(BlockPos pos) {
-      return net.minecraft.world.level.material.Fluids.EMPTY.defaultFluidState();
+      return Fluids.EMPTY.defaultFluidState();
     }
 
     @Override

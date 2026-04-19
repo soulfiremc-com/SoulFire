@@ -20,13 +20,18 @@ package com.soulfiremc.server.renderer;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.mojang.blaze3d.vertex.PoseStack;
+import it.unimi.dsi.fastutil.ints.IntList;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
@@ -40,28 +45,25 @@ import net.minecraft.client.resources.model.sprite.SpriteGetter;
 import net.minecraft.client.resources.model.sprite.SpriteId;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.client.gui.Font;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.w3c.dom.Node;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageTypeSpecifier;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
+import javax.imageio.*;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -219,7 +221,7 @@ public final class InventoryItemIconRenderer {
     Set<RendererAssets.TextureImage> textures,
     BakedQuad bakedQuad,
     Matrix4f transform,
-    it.unimi.dsi.fastutil.ints.IntList tintLayers
+    IntList tintLayers
   ) {
     var materialInfo = bakedQuad.materialInfo();
     if (materialInfo == null || materialInfo.sprite() == null || materialInfo.sprite().contents() == null) {
@@ -360,7 +362,7 @@ public final class InventoryItemIconRenderer {
     RendererAssets.TextureImage texture,
     int color
   ) {
-    modelPart.visit(poseStack, (pose, path, index, cube) -> {
+    modelPart.visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
         var vertices = new Vector3f[4];
         var uv = new float[8];
@@ -490,7 +492,7 @@ public final class InventoryItemIconRenderer {
     return normalized;
   }
 
-  private static java.awt.Rectangle visibleBounds(List<BufferedImage> frames) {
+  private static Rectangle visibleBounds(List<BufferedImage> frames) {
     int minX = Integer.MAX_VALUE;
     int minY = Integer.MAX_VALUE;
     int maxX = Integer.MIN_VALUE;
@@ -510,10 +512,10 @@ public final class InventoryItemIconRenderer {
     if (minX == Integer.MAX_VALUE) {
       return null;
     }
-    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
   }
 
-  private static java.awt.Rectangle visibleBounds(BufferedImage image) {
+  private static Rectangle visibleBounds(BufferedImage image) {
     int minX = Integer.MAX_VALUE;
     int minY = Integer.MAX_VALUE;
     int maxX = Integer.MIN_VALUE;
@@ -534,7 +536,7 @@ public final class InventoryItemIconRenderer {
     if (minX == Integer.MAX_VALUE) {
       return null;
     }
-    return new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
   }
 
   private static void rasterPass(
@@ -1108,7 +1110,7 @@ public final class InventoryItemIconRenderer {
     }
 
     @Override
-    public void submitFlame(PoseStack poseStack, EntityRenderState entityRenderState, org.joml.Quaternionf rotation) {
+    public void submitFlame(PoseStack poseStack, EntityRenderState entityRenderState, Quaternionf rotation) {
       unsupported = true;
     }
 
@@ -1118,7 +1120,7 @@ public final class InventoryItemIconRenderer {
     }
 
     @Override
-    public void submitMovingBlock(PoseStack poseStack, net.minecraft.client.renderer.block.MovingBlockRenderState movingBlockRenderState) {
+    public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
       unsupported = true;
     }
 
@@ -1126,7 +1128,7 @@ public final class InventoryItemIconRenderer {
     public void submitBlockModel(
       PoseStack poseStack,
       RenderType renderType,
-      List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts,
+      List<BlockStateModelPart> parts,
       int[] tints,
       int light,
       int overlay,
@@ -1138,7 +1140,7 @@ public final class InventoryItemIconRenderer {
     @Override
     public void submitBreakingBlockModel(
       PoseStack poseStack,
-      net.minecraft.client.renderer.block.dispatch.BlockStateModel blockStateModel,
+      BlockStateModel blockStateModel,
       long seed,
       int color
     ) {

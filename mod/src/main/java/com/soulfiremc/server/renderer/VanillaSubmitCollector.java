@@ -26,6 +26,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
@@ -33,27 +34,32 @@ import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
-import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import net.minecraft.client.renderer.state.level.CameraEntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.state.level.ParticlesRenderState;
+import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -76,7 +82,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     this.font = Minecraft.getInstance().font;
   }
 
-  static SceneData collectEntity(RenderContext ctx, net.minecraft.world.entity.Entity entity, @Nullable EntityRenderState renderState) {
+  static SceneData collectEntity(RenderContext ctx, Entity entity, @Nullable EntityRenderState renderState) {
     var state = renderState != null ? renderState : RendererAssets.instance().entityRenderState(entity);
     if (state == null) {
       return SceneData.EMPTY;
@@ -99,7 +105,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   static SceneData collectBlockEntity(RenderContext ctx, BlockEntity blockEntity) {
     var collector = new VanillaSubmitCollector(ctx);
     var dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
-    dispatcher.prepare(new net.minecraft.world.phys.Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ()));
+    dispatcher.prepare(new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ()));
     var renderState = dispatcher.tryExtractRenderState(blockEntity, 1.0F, null);
     if (renderState == null) {
       return SceneData.EMPTY;
@@ -145,12 +151,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private CameraRenderState cameraRenderState() {
     var cameraState = new CameraRenderState();
-    cameraState.blockPos = net.minecraft.core.BlockPos.containing(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
-    cameraState.pos = new net.minecraft.world.phys.Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    cameraState.blockPos = BlockPos.containing(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    cameraState.pos = new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
     cameraState.initialized = true;
     cameraState.orientation = new Quaternionf();
-    cameraState.projectionMatrix = new org.joml.Matrix4f(ctx.camera().projectionMatrix());
-    cameraState.viewRotationMatrix = new org.joml.Matrix4f(ctx.camera().viewMatrix());
+    cameraState.projectionMatrix = new Matrix4f(ctx.camera().projectionMatrix());
+    cameraState.viewRotationMatrix = new Matrix4f(ctx.camera().viewMatrix());
     cameraState.depthFar = ctx.camera().farPlane();
     cameraState.entityRenderState = new CameraEntityRenderState();
     return cameraState;
@@ -175,14 +181,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         transform(poseStack, piece.relativeX() + (float) bounds.maxX, piece.relativeY() + (float) bounds.maxY + 0.001F, piece.relativeZ() + (float) bounds.maxZ),
         transform(poseStack, piece.relativeX() + (float) bounds.maxX, piece.relativeY() + (float) bounds.maxY + 0.001F, piece.relativeZ() + (float) bounds.minZ)
       };
-      addFace(vertices, WHITE_TEXTURE, RendererAssets.AlphaMode.TRANSLUCENT, ((int) (piece.alpha() * 255.0F) << 24), 0, true, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F});
+      addFace(vertices, WHITE_TEXTURE, RendererAssets.AlphaMode.TRANSLUCENT, (int) (piece.alpha() * 255.0F) << 24, 0, true, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F});
     }
   }
 
   @Override
   public void submitNameTag(
     PoseStack poseStack,
-    net.minecraft.world.phys.Vec3 position,
+    Vec3 position,
     int color,
     Component text,
     boolean outline,
@@ -213,7 +219,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   public void submitFlame(PoseStack poseStack, EntityRenderState entityRenderState, Quaternionf rotation) {
     var width = Math.max(0.3F, entityRenderState.boundingBoxWidth * 0.9F);
     var height = Math.max(0.5F, entityRenderState.boundingBoxHeight * 1.1F);
-    var fire = assets.texture(net.minecraft.resources.Identifier.withDefaultNamespace("block/fire_0"));
+    var fire = assets.texture(Identifier.withDefaultNamespace("block/fire_0"));
     var vertices = new Vector3f[]{
       transform(poseStack, -width * 0.5F, 0.0F, 0.0F),
       transform(poseStack, -width * 0.5F, height, 0.0F),
@@ -316,7 +322,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       for (var quad : part.getQuads(null)) {
         appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints);
       }
-      for (var direction : net.minecraft.core.Direction.values()) {
+      for (var direction : Direction.values()) {
         for (var quad : part.getQuads(direction)) {
           appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints);
         }
@@ -327,7 +333,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   @Override
   public void submitBreakingBlockModel(PoseStack poseStack, BlockStateModel blockStateModel, long seed, int color) {
     var parts = new ArrayList<BlockStateModelPart>();
-    blockStateModel.collectParts(net.minecraft.util.RandomSource.create(seed), parts);
+    blockStateModel.collectParts(RandomSource.create(seed), parts);
     submitBlockModel(poseStack, null, parts, new int[0], 0, 0, color);
   }
 
@@ -361,14 +367,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     for (Map.Entry<?, ?> entry : ((MixinQuadParticleRenderStateAccessor) quadParticles).soulfire$getParticles().entrySet()) {
-      if (!(entry.getKey() instanceof net.minecraft.client.particle.SingleQuadParticle.Layer layer)
+      if (!(entry.getKey() instanceof SingleQuadParticle.Layer layer)
         || !(entry.getValue() instanceof MixinQuadParticleStorageAccessor storage)) {
         continue;
       }
 
       var texture = assets.textureAtlas(layer.textureAtlasLocation());
       var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
-      storage.soulfire$forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, light) -> {
+      storage.soulfire$forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, _) -> {
         var rotation = new Quaternionf(qx, qy, qz, qw);
         var vertices = new Vector3f[]{
           rotateParticleVertex(rotation, x, y, z, size, 1.0F, -1.0F),
@@ -389,7 +395,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int color,
     int emission
   ) {
-    modelPart.visit(poseStack, (pose, path, index, cube) -> {
+    modelPart.visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
         var vertices = new Vector3f[4];
         var uv = new float[8];
@@ -406,7 +412,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     });
   }
 
-  private void appendBakedQuad(BakedQuad quad, org.joml.Matrix4fc poseMatrix, @Nullable RenderType renderType, int baseColor, @Nullable int[] tints) {
+  private void appendBakedQuad(BakedQuad quad, Matrix4fc poseMatrix, @Nullable RenderType renderType, int baseColor, @Nullable int[] tints) {
     if (quad == null || quad.materialInfo() == null || quad.materialInfo().sprite() == null || quad.materialInfo().sprite().contents() == null) {
       return;
     }
@@ -528,7 +534,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private String plainText(FormattedCharSequence sequence) {
     var builder = new StringBuilder();
-    sequence.accept((index, style, codePoint) -> {
+    sequence.accept((_, _, codePoint) -> {
       builder.appendCodePoint(codePoint);
       return true;
     });
@@ -542,13 +548,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private final class CapturingVertexConsumer implements VertexConsumer {
-    private final org.joml.Matrix4fc pose;
+    private final Matrix4fc pose;
     private final RenderType renderType;
     private final RendererAssets.AlphaMode alphaMode;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
     private CapturedVertex current;
 
-    private CapturingVertexConsumer(org.joml.Matrix4fc pose, RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+    private CapturingVertexConsumer(Matrix4fc pose, RenderType renderType, RendererAssets.AlphaMode alphaMode) {
       this.pose = pose;
       this.renderType = renderType;
       this.alphaMode = alphaMode;

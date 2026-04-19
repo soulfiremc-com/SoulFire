@@ -25,9 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static com.soulfiremc.test.script.ScriptTestHelper.executeNode;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 /// Tests the VECTOR3 node execution path.
 final class Vector3NodeTest {

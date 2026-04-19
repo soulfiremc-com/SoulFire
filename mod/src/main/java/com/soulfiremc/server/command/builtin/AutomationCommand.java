@@ -22,7 +22,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.automation.AutomationControlSupport;
 import com.soulfiremc.server.automation.AutomationRequirements;
@@ -33,10 +37,12 @@ import com.soulfiremc.server.database.AuditLogType;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
 import com.soulfiremc.server.util.structs.GsonInstance;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.*;
 
@@ -496,8 +502,8 @@ public final class AutomationCommand {
     dispatcher.register(root);
   }
 
-  private static void applyPreset(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-                                  AutomationSettings.Preset preset) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+  private static void applyPreset(CommandContext<CommandSourceStack> context,
+                                  AutomationSettings.Preset preset) throws CommandSyntaxException {
     forEveryInstance(context, instance -> {
       AutomationControlSupport.applyInstancePresetSettings(instance, preset);
       instance.addAuditLog(context.getSource().source(), AuditLogType.AUTOMATION_APPLY_PRESET, "preset=" + AutomationControlSupport.formatEnumId(preset));
@@ -516,8 +522,8 @@ public final class AutomationCommand {
     });
   }
 
-  private static int showMemoryStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-                                      int maxEntries) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+  private static int showMemoryStatus(CommandContext<CommandSourceStack> context,
+                                      int maxEntries) throws CommandSyntaxException {
     return forEveryBot(context, bot -> {
       var memory = readMemorySnapshot(bot, maxEntries);
       context.getSource().source().sendInfo("%s: ticks=%d blocks=%d containers=%d entities=%d dropped=%d unreachable=%d".formatted(
@@ -581,8 +587,8 @@ public final class AutomationCommand {
     });
   }
 
-  private static int showCoordinationStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-                                            int maxEntries) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+  private static int showCoordinationStatus(CommandContext<CommandSourceStack> context,
+                                            int maxEntries) throws CommandSyntaxException {
     return forEveryInstance(context, instance -> {
       var snapshot = instance.automationCoordinator().coordinationSnapshot(maxEntries);
       var summary = snapshot.summary();
@@ -690,14 +696,14 @@ public final class AutomationCommand {
     private static final TargetSuggestionProvider INSTANCE = new TargetSuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       var suggestions = new LinkedHashSet<String>();
       suggestions.addAll(AutomationRequirements.aliases());
       BuiltInRegistries.ITEM.listElementIds()
         .map(ResourceKey::identifier)
-        .map(id -> id.getPath())
+        .map(Identifier::getPath)
         .forEach(suggestions::add);
       suggestions.forEach(builder::suggest);
       return builder.buildFuture();
@@ -708,9 +714,9 @@ public final class AutomationCommand {
     private static final PresetSuggestionProvider INSTANCE = new PresetSuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       for (var preset : AutomationSettings.Preset.values()) {
         builder.suggest(formatEnumId(preset));
       }
@@ -722,9 +728,9 @@ public final class AutomationCommand {
     private static final RolePolicySuggestionProvider INSTANCE = new RolePolicySuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       for (var rolePolicy : AutomationSettings.RolePolicy.values()) {
         builder.suggest(formatEnumId(rolePolicy));
       }
@@ -736,9 +742,9 @@ public final class AutomationCommand {
     private static final RoleOverrideSuggestionProvider INSTANCE = new RoleOverrideSuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       for (var roleOverride : AutomationSettings.RoleOverride.values()) {
         builder.suggest(formatEnumId(roleOverride));
       }
@@ -750,9 +756,9 @@ public final class AutomationCommand {
     private static final QuotaTargetSuggestionProvider INSTANCE = new QuotaTargetSuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       builder.suggest("blaze_rod");
       builder.suggest("ender_pearl");
       builder.suggest("ender_eye");
@@ -766,9 +772,9 @@ public final class AutomationCommand {
     private static final ObjectiveOverrideSuggestionProvider INSTANCE = new ObjectiveOverrideSuggestionProvider();
 
     @Override
-    public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
-      com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+    public CompletableFuture<Suggestions> getSuggestions(
+      CommandContext<CommandSourceStack> context,
+      SuggestionsBuilder builder) {
       for (var objectiveOverride : AutomationSettings.ObjectiveOverride.values()) {
         builder.suggest(formatEnumId(objectiveOverride));
       }

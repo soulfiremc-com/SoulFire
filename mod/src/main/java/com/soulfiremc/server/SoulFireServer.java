@@ -33,11 +33,7 @@ import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.grpc.LogServiceImpl;
 import com.soulfiremc.server.grpc.RPCServer;
 import com.soulfiremc.server.metrics.ServerMetricsCollector;
-import com.soulfiremc.server.settings.lib.InstanceSettingsImpl;
-import com.soulfiremc.server.settings.lib.ServerSettingsDelegate;
-import com.soulfiremc.server.settings.lib.ServerSettingsImpl;
-import com.soulfiremc.server.settings.lib.ServerSettingsSource;
-import com.soulfiremc.server.settings.lib.SettingsPageRegistry;
+import com.soulfiremc.server.settings.lib.*;
 import com.soulfiremc.server.settings.server.DevSettings;
 import com.soulfiremc.server.settings.server.ServerSettings;
 import com.soulfiremc.server.spark.SFSparkPlugin;
@@ -78,10 +74,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /// The main class of the SoulFire server.
-/// A SoulFire server can hold and manage multiple instances.
-/// It also provides an RPC server to communicate with the SoulFire client.
-/// More than one SoulFireServer can be running at the same time, but on different ports.
-/// Usually there is only one SoulFireServer running on a jvm, but it is possible to run multiple.
+ /// A SoulFire server can hold and manage multiple instances.
+ /// It also provides an RPC server to communicate with the SoulFire client.
+ /// More than one SoulFireServer can be running at the same time, but on different ports.
+ /// Usually there is only one SoulFireServer running on a jvm, but it is possible to run multiple.
 @Slf4j
 @Getter
 public final class SoulFireServer {

@@ -19,17 +19,12 @@ package com.soulfiremc.server.automation;
 
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.pathfinding.BlockPlaceAgainstData;
 import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.execution.PathExecutor;
-import com.soulfiremc.server.pathfinding.goals.AwayFromPosGoal;
-import com.soulfiremc.server.pathfinding.goals.BreakBlockPosGoal;
-import com.soulfiremc.server.pathfinding.goals.CloseToPosGoal;
-import com.soulfiremc.server.pathfinding.goals.DynamicGoalScorer;
-import com.soulfiremc.server.pathfinding.goals.GoalScorer;
-import com.soulfiremc.server.pathfinding.goals.PosGoal;
-import com.soulfiremc.server.pathfinding.goals.XZGoal;
+import com.soulfiremc.server.pathfinding.goals.*;
 import com.soulfiremc.server.pathfinding.graph.BlockFace;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraintImpl;
 import com.soulfiremc.server.plugins.KillAura;
@@ -39,11 +34,14 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.InventoryMenu;
@@ -57,14 +55,11 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Slf4j
 public final class AutomationController {
@@ -795,7 +790,7 @@ public final class AutomationController {
   }
 
   private Map<String, Integer> inventorySnapshot() {
-    var snapshot = new java.util.HashMap<String, Integer>();
+    var snapshot = new HashMap<String, Integer>();
     for (var requirement : TRACKED_TEAM_REQUIREMENTS) {
       snapshot.put(requirement, AutomationInventory.countInventory(bot, requirement));
     }
@@ -998,7 +993,7 @@ public final class AutomationController {
     }
 
     recipe.ingredients().stream()
-      .collect(java.util.stream.Collectors.groupingBy(AutomationRecipes.IngredientPlacement::requirementKey, java.util.stream.Collectors.counting()))
+      .collect(Collectors.groupingBy(AutomationRecipes.IngredientPlacement::requirementKey, Collectors.counting()))
       .forEach((key, amount) -> {
         var required = Math.toIntExact(amount) * batches;
         var current = AutomationInventory.countInventory(bot, key);
@@ -1010,7 +1005,7 @@ public final class AutomationController {
     return dependencies;
   }
 
-  private boolean hasRememberedBlock(java.util.function.Predicate<BlockState> predicate) {
+  private boolean hasRememberedBlock(Predicate<BlockState> predicate) {
     return worldMemory.findNearestBlock(bot, predicate).isPresent();
   }
 
@@ -1084,7 +1079,7 @@ public final class AutomationController {
     return origin.above();
   }
 
-  private Optional<Entity> findEntity(java.util.UUID uuid) {
+  private Optional<Entity> findEntity(UUID uuid) {
     var level = bot.minecraft().level;
     if (level == null) {
       return Optional.empty();
@@ -1112,7 +1107,7 @@ public final class AutomationController {
     return Optional.of(player.position().add(direction.normalize().scale(64)));
   }
 
-  private Optional<BlockPos> findAnyPortal(net.minecraft.resources.ResourceKey<Level> dimension) {
+  private Optional<BlockPos> findAnyPortal(ResourceKey<Level> dimension) {
     var level = bot.minecraft().level;
     if (level != null && level.dimension() == dimension) {
       var localPortal = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.NETHER_PORTAL);
@@ -2313,8 +2308,8 @@ public final class AutomationController {
 
       var resultSlot = 0;
       var recipeSlots = recipe.station() == AutomationRecipes.CraftingStation.CRAFTING_TABLE
-        ? java.util.stream.IntStream.rangeClosed(1, 9)
-        : java.util.stream.IntStream.rangeClosed(1, 4);
+        ? IntStream.rangeClosed(1, 9)
+        : IntStream.rangeClosed(1, 4);
       AutomationInventory.clearCraftingSlots(menu, recipeSlots, player);
       for (var ingredient : recipe.ingredients()) {
         if (!AutomationInventory.moveOneIngredient(menu, ingredient.slot(), ingredient.requirementKey(), player)) {
@@ -2404,7 +2399,7 @@ public final class AutomationController {
         return ActionResult.SUCCEEDED;
       }
 
-      if (!(player.containerMenu instanceof net.minecraft.world.inventory.AbstractFurnaceMenu furnaceMenu)) {
+      if (!(player.containerMenu instanceof AbstractFurnaceMenu furnaceMenu)) {
         if (furnacePos == null) {
           var remembered = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.FURNACE);
           if (remembered.isPresent()) {
@@ -2466,12 +2461,12 @@ public final class AutomationController {
   }
 
   private final class BarterAction implements AutomationAction {
-    private final java.util.UUID piglinId;
+    private final UUID piglinId;
     private int stage;
     private @Nullable CompletableFuture<Void> future;
     private long stageTick;
 
-    private BarterAction(java.util.UUID piglinId) {
+    private BarterAction(UUID piglinId) {
       this.piglinId = piglinId;
     }
 
@@ -2530,12 +2525,12 @@ public final class AutomationController {
   }
 
   private final class KillEntityAction implements AutomationAction {
-    private final java.util.UUID entityId;
+    private final UUID entityId;
     private final String label;
     private int stage;
     private @Nullable CompletableFuture<Void> future;
 
-    private KillEntityAction(java.util.UUID entityId, String label) {
+    private KillEntityAction(UUID entityId, String label) {
       this.entityId = entityId;
       this.label = label;
     }
@@ -2707,12 +2702,12 @@ public final class AutomationController {
 
   private final class UsePortalAction implements AutomationAction {
     private final Block portalBlock;
-    private final net.minecraft.resources.ResourceKey<Level> targetDimension;
+    private final ResourceKey<Level> targetDimension;
     private int stage;
     private @Nullable CompletableFuture<Void> future;
     private @Nullable BlockPos portalPos;
 
-    private UsePortalAction(Block portalBlock, net.minecraft.resources.ResourceKey<Level> targetDimension) {
+    private UsePortalAction(Block portalBlock, ResourceKey<Level> targetDimension) {
       this.portalBlock = portalBlock;
       this.targetDimension = targetDimension;
     }
@@ -2826,8 +2821,8 @@ public final class AutomationController {
     private List<BlockPos> missingFrameBlocks(Level level) {
       return requiredFrame.stream()
         .filter(pos -> level.getBlockState(pos).getBlock() != Blocks.OBSIDIAN)
-        .sorted(Comparator.comparingInt((BlockPos pos) -> pos.getY())
-          .thenComparingInt(pos -> pos.getX())
+        .sorted(Comparator.comparingInt(Vec3i::getY)
+          .thenComparingInt(Vec3i::getX)
           .thenComparingInt(pos -> pos.getZ()))
         .toList();
     }
@@ -2861,12 +2856,12 @@ public final class AutomationController {
   }
 
   private static final class AttackEntityTask implements ControlTask {
-    private final java.util.UUID entityId;
+    private final UUID entityId;
     private final int maxTicks;
     private int ticks;
     private boolean done;
 
-    private AttackEntityTask(java.util.UUID entityId, int maxTicks) {
+    private AttackEntityTask(UUID entityId, int maxTicks) {
       this.entityId = entityId;
       this.maxTicks = maxTicks;
     }
@@ -2929,14 +2924,14 @@ public final class AutomationController {
   }
 
   private static final class RangedAttackTask implements ControlTask {
-    private final java.util.UUID entityId;
+    private final UUID entityId;
     private final int maxTicks;
     private int ticks;
     private int chargeTicks;
     private boolean strafeRight = true;
     private boolean done;
 
-    private RangedAttackTask(java.util.UUID entityId, int maxTicks) {
+    private RangedAttackTask(UUID entityId, int maxTicks) {
       this.entityId = entityId;
       this.maxTicks = maxTicks;
     }
@@ -3016,7 +3011,7 @@ public final class AutomationController {
     }
 
     @Override
-    public void onStopped(com.soulfiremc.server.bot.ControlStopReason reason, @Nullable Throwable cause) {
+    public void onStopped(ControlStopReason reason, @Nullable Throwable cause) {
       BotConnection.currentOptional().ifPresent(bot -> {
         var player = bot.minecraft().player;
         if (player != null && player.isUsingItem()) {
@@ -3075,7 +3070,7 @@ public final class AutomationController {
     }
 
     @Override
-    public void onStopped(com.soulfiremc.server.bot.ControlStopReason reason, @Nullable Throwable cause) {
+    public void onStopped(ControlStopReason reason, @Nullable Throwable cause) {
       BotConnection.currentOptional().ifPresent(bot -> bot.controlState().resetAll());
     }
   }
