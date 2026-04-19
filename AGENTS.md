@@ -23,3 +23,7 @@ Place tests beside the module you modify, e.g., new mod behavior belongs in `mod
 
 Commits follow Conventional Commits (`fix:`, `feat:`, `ci:`); keep subjects under 72 characters and group logically related changes together. Reference issues in the body, add `BREAKING CHANGE:` notes when behavior shifts, and avoid drive-by reformatting. Pull requests need a clear summary, affected modules, and evidence of testing (command output or screenshots/CLI transcripts when user-facing). Request reviews early for large changes but ensure CI is green before merge.
 
+## Fabric loom sources
+
+After running the `./gradlew genSources` command, the generated sources jar is placed into:
+`./.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-<something>/<minecraftVersion>/minecraft-merged-<something>-<minecraftVersion>-sources.jar`
