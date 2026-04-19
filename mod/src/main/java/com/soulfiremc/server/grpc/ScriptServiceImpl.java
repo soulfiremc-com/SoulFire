@@ -26,6 +26,7 @@ import com.linecorp.armeria.server.ServiceRequestContext;
 import com.soulfiremc.grpc.generated.*;
 import com.soulfiremc.grpc.generated.PortType;
 import com.soulfiremc.grpc.generated.ScriptNode;
+import com.soulfiremc.grpc.generated.TypeDescriptor;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.database.generated.Tables;
