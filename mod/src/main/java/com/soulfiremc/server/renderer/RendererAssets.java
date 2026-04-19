@@ -306,8 +306,8 @@ public final class RendererAssets {
 
     addCuboid(
       faces,
-      -0.25F, 1.25F, -0.25F,
-      0.25F, 1.75F, 0.25F,
+      -0.25F, 1.5F, -0.25F,
+      0.25F, 2.0F, 0.25F,
       skin,
       AlphaMode.CUTOUT,
       playerHeadUvSet(false),
@@ -317,8 +317,8 @@ public final class RendererAssets {
 
     addCuboid(
       faces,
-      -0.25F, 0.5F, -0.125F,
-      0.25F, 1.25F, 0.125F,
+      -0.25F, 0.75F, -0.125F,
+      0.25F, 1.5F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
       playerBodyUvSet(false),
@@ -328,8 +328,8 @@ public final class RendererAssets {
 
     addCuboid(
       faces,
-      -0.25F, 0.0F, -0.125F,
-      -0.0625F, 0.75F, 0.125F,
+      -0.24375F, 0.0F, -0.125F,
+      0.00625F, 0.75F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
       playerRightLegUvSet(false),
@@ -339,8 +339,8 @@ public final class RendererAssets {
 
     addCuboid(
       faces,
-      0.0625F, 0.0F, -0.125F,
-      0.25F, 0.75F, 0.125F,
+      -0.00625F, 0.0F, -0.125F,
+      0.24375F, 0.75F, 0.125F,
       skin,
       AlphaMode.CUTOUT,
       playerLeftLegUvSet(false),
@@ -351,8 +351,8 @@ public final class RendererAssets {
     if (lod == EntityLod.NEAR) {
       addCuboid(
         faces,
-        -0.25F - armWidth, 0.5F, -0.125F,
-        -0.25F, 1.25F, 0.125F,
+        slim ? -0.4375F : -0.5F, 0.75F, -0.125F,
+        -0.25F, 1.5F, 0.125F,
         skin,
         AlphaMode.CUTOUT,
         playerRightArmUvSet(slim, false),
@@ -361,8 +361,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        0.25F, 0.5F, -0.125F,
-        0.25F + armWidth, 1.25F, 0.125F,
+        0.25F, 0.75F, -0.125F,
+        slim ? 0.4375F : 0.5F, 1.5F, 0.125F,
         skin,
         AlphaMode.CUTOUT,
         playerLeftArmUvSet(slim, false),
@@ -372,8 +372,8 @@ public final class RendererAssets {
 
       addCuboid(
         faces,
-        -0.25F - headOverlayInflate, 1.25F - headOverlayInflate, -0.25F - headOverlayInflate,
-        0.25F + headOverlayInflate, 1.75F + headOverlayInflate, 0.25F + headOverlayInflate,
+        -0.25F - headOverlayInflate, 1.5F - headOverlayInflate, -0.25F - headOverlayInflate,
+        0.25F + headOverlayInflate, 2.0F + headOverlayInflate, 0.25F + headOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerHeadUvSet(true),
@@ -382,8 +382,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        -0.25F - bodyOverlayInflate, 0.5F - bodyOverlayInflate, -0.125F - bodyOverlayInflate,
-        0.25F + bodyOverlayInflate, 1.25F + bodyOverlayInflate, 0.125F + bodyOverlayInflate,
+        -0.25F - bodyOverlayInflate, 0.75F - bodyOverlayInflate, -0.125F - bodyOverlayInflate,
+        0.25F + bodyOverlayInflate, 1.5F + bodyOverlayInflate, 0.125F + bodyOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerBodyUvSet(true),
@@ -392,8 +392,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        -0.25F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
-        -0.0625F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
+        -0.24375F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
+        0.00625F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerRightLegUvSet(true),
@@ -402,8 +402,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        0.0625F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
-        0.25F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
+        -0.00625F - limbOverlayInflate, 0.0F - limbOverlayInflate, -0.125F - limbOverlayInflate,
+        0.24375F + limbOverlayInflate, 0.75F + limbOverlayInflate, 0.125F + limbOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerLeftLegUvSet(true),
@@ -412,8 +412,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        -0.25F - armWidth - armOverlayInflate, 0.5F - armOverlayInflate, -0.125F - armOverlayInflate,
-        -0.25F + armOverlayInflate, 1.25F + armOverlayInflate, 0.125F + armOverlayInflate,
+        (slim ? -0.4375F : -0.5F) - armOverlayInflate, 0.75F - armOverlayInflate, -0.125F - armOverlayInflate,
+        -0.25F + armOverlayInflate, 1.5F + armOverlayInflate, 0.125F + armOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerRightArmUvSet(slim, true),
@@ -422,8 +422,8 @@ public final class RendererAssets {
       );
       addCuboid(
         faces,
-        0.25F - armOverlayInflate, 0.5F - armOverlayInflate, -0.125F - armOverlayInflate,
-        0.25F + armWidth + armOverlayInflate, 1.25F + armOverlayInflate, 0.125F + armOverlayInflate,
+        0.25F - armOverlayInflate, 0.75F - armOverlayInflate, -0.125F - armOverlayInflate,
+        (slim ? 0.4375F : 0.5F) + armOverlayInflate, 1.5F + armOverlayInflate, 0.125F + armOverlayInflate,
         skin,
         AlphaMode.CUTOUT,
         playerLeftArmUvSet(slim, true),
@@ -954,6 +954,10 @@ public final class RendererAssets {
     if (forceTranslucent) {
       return AlphaMode.TRANSLUCENT;
     }
+    var vanillaAlphaMode = vanillaAlphaMode(state);
+    if (vanillaAlphaMode != null) {
+      return vanillaAlphaMode;
+    }
     if (state.getFluidState().is(FluidTags.WATER)) {
       return AlphaMode.TRANSLUCENT;
     }
@@ -972,7 +976,7 @@ public final class RendererAssets {
       return AlphaMode.TRANSLUCENT;
     }
     if (block instanceof LeavesBlock) {
-      return texture.hasTranslucentPixels() ? AlphaMode.TRANSLUCENT : AlphaMode.CUTOUT;
+      return AlphaMode.CUTOUT;
     }
 
     var hint = textureHint.toLowerCase(Locale.ROOT);
@@ -1006,6 +1010,29 @@ public final class RendererAssets {
       type = type.getSuperclass();
     }
     return null;
+  }
+
+  @Nullable
+  private AlphaMode vanillaAlphaMode(BlockState state) {
+    try {
+      var itemBlockRenderTypesClass = Class.forName("net.minecraft.client.renderer.ItemBlockRenderTypes");
+      var renderTypeClass = Class.forName("net.minecraft.client.renderer.RenderType");
+      var getChunkRenderType = itemBlockRenderTypesClass.getMethod("getChunkRenderType", BlockState.class);
+      var translucent = renderTypeClass.getMethod("translucent").invoke(null);
+      var cutout = renderTypeClass.getMethod("cutout").invoke(null);
+      var cutoutMipped = renderTypeClass.getMethod("cutoutMipped").invoke(null);
+      var tripwire = renderTypeClass.getMethod("tripwire").invoke(null);
+      var renderType = getChunkRenderType.invoke(null, state);
+      if (renderType == translucent) {
+        return AlphaMode.TRANSLUCENT;
+      }
+      if (renderType == cutout || renderType == cutoutMipped || renderType == tripwire) {
+        return AlphaMode.CUTOUT;
+      }
+      return AlphaMode.OPAQUE;
+    } catch (Throwable ignored) {
+      return null;
+    }
   }
 
   @Nullable
