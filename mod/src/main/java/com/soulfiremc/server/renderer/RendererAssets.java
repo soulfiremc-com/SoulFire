@@ -28,7 +28,9 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.FaceInfo;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.ClientAsset;
 import net.minecraft.core.Direction;
@@ -148,9 +150,14 @@ public final class RendererAssets {
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (rawRenderer != null) {
         EntityRenderState renderState = (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F);
-        var textureLocation = invokeTextureLocation(rawRenderer, renderState);
-        if (textureLocation instanceof Identifier identifier) {
-          return texture(identifier);
+        if (rawRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer
+          && renderState instanceof LivingEntityRenderState livingState) {
+          @SuppressWarnings("rawtypes")
+          var rawLivingRenderer = (LivingEntityRenderer) livingRenderer;
+          var textureLocation = rawLivingRenderer.getTextureLocation(livingState);
+          if (textureLocation instanceof Identifier identifier) {
+            return texture(identifier);
+          }
         }
       }
     } catch (Throwable t) {
@@ -954,10 +961,6 @@ public final class RendererAssets {
     if (forceTranslucent) {
       return AlphaMode.TRANSLUCENT;
     }
-    var vanillaAlphaMode = vanillaAlphaMode(state);
-    if (vanillaAlphaMode != null) {
-      return vanillaAlphaMode;
-    }
     if (state.getFluidState().is(FluidTags.WATER)) {
       return AlphaMode.TRANSLUCENT;
     }
@@ -990,49 +993,6 @@ public final class RendererAssets {
       return AlphaMode.CUTOUT;
     }
     return AlphaMode.OPAQUE;
-  }
-
-  @Nullable
-  private Object invokeTextureLocation(EntityRenderer<?, ?> renderer, EntityRenderState renderState) throws ReflectiveOperationException {
-    Class<?> type = renderer.getClass();
-    while (type != null) {
-      for (var method : type.getDeclaredMethods()) {
-        if (!method.getName().equals("getTextureLocation") || method.getParameterCount() != 1) {
-          continue;
-        }
-        var parameterType = method.getParameterTypes()[0];
-        if (!parameterType.isAssignableFrom(renderState.getClass())) {
-          continue;
-        }
-        method.setAccessible(true);
-        return method.invoke(renderer, renderState);
-      }
-      type = type.getSuperclass();
-    }
-    return null;
-  }
-
-  @Nullable
-  private AlphaMode vanillaAlphaMode(BlockState state) {
-    try {
-      var itemBlockRenderTypesClass = Class.forName("net.minecraft.client.renderer.ItemBlockRenderTypes");
-      var renderTypeClass = Class.forName("net.minecraft.client.renderer.RenderType");
-      var getChunkRenderType = itemBlockRenderTypesClass.getMethod("getChunkRenderType", BlockState.class);
-      var translucent = renderTypeClass.getMethod("translucent").invoke(null);
-      var cutout = renderTypeClass.getMethod("cutout").invoke(null);
-      var cutoutMipped = renderTypeClass.getMethod("cutoutMipped").invoke(null);
-      var tripwire = renderTypeClass.getMethod("tripwire").invoke(null);
-      var renderType = getChunkRenderType.invoke(null, state);
-      if (renderType == translucent) {
-        return AlphaMode.TRANSLUCENT;
-      }
-      if (renderType == cutout || renderType == cutoutMipped || renderType == tripwire) {
-        return AlphaMode.CUTOUT;
-      }
-      return AlphaMode.OPAQUE;
-    } catch (Throwable ignored) {
-      return null;
-    }
   }
 
   @Nullable

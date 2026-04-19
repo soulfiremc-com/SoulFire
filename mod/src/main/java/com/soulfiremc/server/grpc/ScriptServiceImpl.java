@@ -42,10 +42,9 @@ import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.registries.Registries;
 import org.jooq.impl.DSL;
 
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -1675,29 +1674,17 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
     return Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build();
   }
 
-  /// Gets all known biome IDs via reflection on net.minecraft.world.level.biome.Biomes.
-  /// Falls back to empty list if the class is not available.
-  @SuppressWarnings("unchecked")
+  /// Gets all known biome IDs from the built-in biome registry.
   private static List<String> getBiomeIds() {
-    try {
-      var biomesClass = Class.forName("net.minecraft.world.level.biome.Biomes");
-      var biomeIds = new ArrayList<String>();
-      for (var field : biomesClass.getDeclaredFields()) {
-        if (Modifier.isStatic(field.getModifiers())
-          && field.getType() == ResourceKey.class) {
-          try {
-            var key = (ResourceKey<?>) field.get(null);
-            biomeIds.add(key.identifier().toString());
-          } catch (IllegalAccessException _) {
-            // skip inaccessible fields
-          }
-        }
-      }
-      return biomeIds;
-    } catch (ClassNotFoundException _) {
-      log.warn("Biomes class not found, returning empty biome list");
+    var biomeRegistry = BuiltInRegistries.REGISTRY.getValue(Registries.BIOME.identifier());
+    if (biomeRegistry == null) {
       return List.of();
     }
+
+    return biomeRegistry.listElementIds()
+      .map(key -> key.identifier().toString())
+      .sorted()
+      .toList();
   }
 
   @Override
