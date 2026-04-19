@@ -97,6 +97,15 @@ message InventorySlot {
   // Only present when the item has a custom name component (e.g., renamed in an anvil).
   // Contains the plain text string, not JSON text components.
   optional string display_name = 4;
+
+  // Base64-encoded square icon image for this item's inventory render.
+  // The image is rendered server-side to match the item's resolved in-game appearance.
+  // Static items are sent as PNG. Animated items may be sent as GIF.
+  optional string icon_base64 = 5;
+
+  // MIME type for the rendered item icon image.
+  // Values: "image/png" or "image/gif".
+  optional string icon_mime_type = 6;
 }
 
 // Real-time state of a connected bot.

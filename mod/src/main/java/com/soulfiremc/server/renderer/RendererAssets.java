@@ -1785,6 +1785,22 @@ public final class RendererAssets {
       return height;
     }
 
+    public boolean isAnimated() {
+      return frameCount > 1 || frameOrder.length > 1;
+    }
+
+    public int animationFrameCount() {
+      return Math.max(1, frameOrder.length);
+    }
+
+    public int animationFrameTime() {
+      return frameTime;
+    }
+
+    public long animationCycleTicks() {
+      return (long) animationFrameCount() * Math.max(1, frameTime);
+    }
+
     public boolean hasAlpha() {
       return hasAlpha;
     }

@@ -26,6 +26,7 @@ import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.plugins.DialogHandler;
+import com.soulfiremc.server.renderer.InventoryItemIconRenderer;
 import com.soulfiremc.server.renderer.RenderConstants;
 import com.soulfiremc.server.renderer.SoftwareRenderer;
 import com.soulfiremc.server.settings.lib.InstanceSettingsImpl;
@@ -118,18 +119,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
       for (var slot : container.slots) {
         var item = slot.getItem();
         if (!item.isEmpty()) {
-          var slotBuilder = InventorySlot.newBuilder()
-            .setSlot(slot.index)
-            .setItemId(item.typeHolder().getRegisteredName())
-            .setCount(item.getCount());
-
-          // Check for custom display name
-          var displayName = item.getHoverName();
-          if (item.has(DataComponents.CUSTOM_NAME)) {
-            slotBuilder.setDisplayName(displayName.getString());
-          }
-
-          builder.addInventory(slotBuilder.build());
+          builder.addInventory(buildInventorySlot(slot.index, item));
         }
       }
     }
@@ -148,6 +138,42 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
 
   private static <T> T callInBotContext(BotConnection botConnection, Callable<T> callable) throws Exception {
     return botConnection.runnableWrapper().wrap(callable).call();
+  }
+
+  private static InventorySlot buildInventorySlot(int slotIndex, net.minecraft.world.item.ItemStack item) {
+    var slotBuilder = InventorySlot.newBuilder()
+      .setSlot(slotIndex)
+      .setItemId(item.typeHolder().getRegisteredName())
+      .setCount(item.getCount());
+
+    if (item.has(DataComponents.CUSTOM_NAME)) {
+      slotBuilder.setDisplayName(item.getHoverName().getString());
+    }
+
+    return slotBuilder.build();
+  }
+
+  private static InventorySlot buildInventorySlot(
+    Minecraft minecraft,
+    net.minecraft.client.multiplayer.ClientLevel level,
+    net.minecraft.world.entity.ItemOwner itemOwner,
+    int slotIndex,
+    net.minecraft.world.item.ItemStack item
+  ) {
+    var slotBuilder = buildInventorySlot(slotIndex, item).toBuilder();
+
+    try {
+      var renderedIcon = InventoryItemIconRenderer.render(minecraft, level, itemOwner, item);
+      if (!renderedIcon.base64().isEmpty()) {
+        slotBuilder
+          .setIconBase64(renderedIcon.base64())
+          .setIconMimeType(renderedIcon.mimeType());
+      }
+    } catch (Throwable t) {
+      log.debug("Failed to render inventory icon for {}", item.typeHolder().getRegisteredName(), t);
+    }
+
+    return slotBuilder.build();
   }
 
   /**
@@ -1509,31 +1535,13 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         for (var slot : container.slots) {
           var item = slot.getItem();
           if (!item.isEmpty()) {
-            var slotBuilder = InventorySlot.newBuilder()
-              .setSlot(slot.index)
-              .setItemId(item.typeHolder().getRegisteredName())
-              .setCount(item.getCount());
-
-            if (item.has(DataComponents.CUSTOM_NAME)) {
-              slotBuilder.setDisplayName(item.getHoverName().getString());
-            }
-
-            responseBuilder.addSlots(slotBuilder.build());
+            responseBuilder.addSlots(buildInventorySlot(minecraft, minecraft.level, player, slot.index, item));
           }
         }
 
         var carried = container.getCarried();
         if (!carried.isEmpty()) {
-          var carriedBuilder = InventorySlot.newBuilder()
-            .setSlot(-1)
-            .setItemId(carried.typeHolder().getRegisteredName())
-            .setCount(carried.getCount());
-
-          if (carried.has(DataComponents.CUSTOM_NAME)) {
-            carriedBuilder.setDisplayName(carried.getHoverName().getString());
-          }
-
-          responseBuilder.setCarriedItem(carriedBuilder.build());
+          responseBuilder.setCarriedItem(buildInventorySlot(minecraft, minecraft.level, player, -1, carried));
         }
 
         return responseBuilder.build();
