@@ -25,6 +25,8 @@ import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.awt.image.BufferedImage;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class RendererAssetsTest {
@@ -58,5 +60,17 @@ class RendererAssetsTest {
     var textTexture = assets.textTexture(Component.literal("SoulFire"), 96, 0xFFFFFFFF, 0x66000000);
     assertTrue(textTexture.width() > 0);
     assertTrue(textTexture.height() > 0);
+  }
+
+  @Test
+  void samplesWideNonAnimatedTextureWithoutOverflow() {
+    var image = new BufferedImage(8, 1, BufferedImage.TYPE_INT_ARGB);
+    for (var x = 0; x < image.getWidth(); x++) {
+      image.setRGB(x, 0, 0xFF000000 | x);
+    }
+
+    var texture = RendererAssets.TextureImage.from(image, null);
+    assertDoesNotThrow(() -> texture.sample(0.25F, 0.75F, 0L));
+    assertEquals(0xFF000002, texture.sample(0.25F, 0.75F, 0L));
   }
 }

@@ -1672,8 +1672,8 @@ public final class RendererAssets {
       var height = image.getHeight();
       var pixels = image.getRGB(0, 0, width, height, null, 0, width);
       var animation = metadata != null && metadata.has("animation") ? metadata.getAsJsonObject("animation") : null;
-      var frameHeight = animation != null && animation.has("height") ? animation.get("height").getAsInt() : width;
-      frameHeight = frameHeight <= 0 || frameHeight > height ? width : frameHeight;
+      var frameHeight = animation != null && animation.has("height") ? animation.get("height").getAsInt() : Math.min(width, height);
+      frameHeight = frameHeight <= 0 || frameHeight > height ? Math.min(width, height) : frameHeight;
       frameHeight = Math.max(1, frameHeight);
       var frameCount = Math.max(1, height / frameHeight);
       var frameTime = animation != null && animation.has("frametime") ? Math.max(1, animation.get("frametime").getAsInt()) : 1;
@@ -1720,12 +1720,20 @@ public final class RendererAssets {
     }
 
     public int sample(float u, float v, long tick) {
+      if (pixels.length == 0 || width <= 0) {
+        return 0;
+      }
+
       var wrappedU = u - (float) Math.floor(u);
       var wrappedV = v - (float) Math.floor(v);
-      var frameIndex = frameOrder[(int) ((tick / frameTime) % frameOrder.length)];
-      var yOffset = frameIndex * frameHeight;
+      var availableHeight = Math.max(1, pixels.length / width);
+      var clampedFrameHeight = Math.max(1, Math.min(frameHeight, availableHeight));
+      var availableFrameCount = Math.max(1, availableHeight / clampedFrameHeight);
+      var frameOrderIndex = (int) ((tick / frameTime) % frameOrder.length);
+      var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
+      var yOffset = frameIndex * clampedFrameHeight;
       var x = Math.min(width - 1, Math.max(0, (int) (wrappedU * width)));
-      var y = Math.min(frameHeight - 1, Math.max(0, (int) (wrappedV * frameHeight))) + yOffset;
+      var y = Math.min(clampedFrameHeight - 1, Math.max(0, (int) (wrappedV * clampedFrameHeight))) + yOffset;
       return pixels[x + y * width];
     }
 
