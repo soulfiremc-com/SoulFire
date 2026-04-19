@@ -63,12 +63,18 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
   private final SoulFireServer soulFireServer;
 
   /**
-   * Builds a BotLiveState from a LocalPlayer.
+   * Builds a BotLiveState from a LocalPlayer. Exposed package-private so
+   * {@link BotLiveServiceImpl} can reuse the same snapshot structure for its
+   * initial and resync messages without duplicating the serialization logic.
    *
    * @param player           The player to extract data from
    * @param includeInventory Whether to include full inventory data (more expensive)
    * @return The built BotLiveState
    */
+  static BotLiveState buildLiveStatePublic(Minecraft minecraft, LocalPlayer player, boolean includeInventory) {
+    return buildLiveState(minecraft, player, includeInventory);
+  }
+
   private static BotLiveState buildLiveState(Minecraft minecraft, LocalPlayer player, boolean includeInventory) {
     var builder = BotLiveState.newBuilder()
       .setX(player.getX())

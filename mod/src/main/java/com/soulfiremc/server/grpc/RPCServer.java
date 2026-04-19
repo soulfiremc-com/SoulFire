@@ -104,6 +104,7 @@ public final class RPCServer {
         ))
         .addService(new AutomationServiceImpl(soulFireServer))
         .addService(new BotServiceImpl(soulFireServer))
+        .addService(new BotLiveServiceImpl(soulFireServer))
         .addService(new ClientServiceImpl(soulFireServer))
         .addService(new CommandServiceImpl(soulFireServer))
         .addService(new DownloadServiceImpl())

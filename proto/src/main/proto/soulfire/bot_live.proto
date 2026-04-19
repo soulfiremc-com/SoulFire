@@ -1,0 +1,737 @@
+syntax = "proto3";
+
+option java_package = "com.soulfiremc.grpc.generated";
+option java_multiple_files = true;
+
+package soulfire.v1;
+
+import "soulfire/api_docs.proto";
+import "soulfire/bot.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// BotLiveService - Streaming Events, Interactions, and Pathfinding
+// ============================================================================
+//
+// BotLiveService is the automation-first API surface for SoulFire bots. It
+// complements BotService (which is polling/snapshot oriented) by providing:
+//
+// - A single streaming event channel per bot (state deltas, chat, lifecycle,
+//   entities, block updates) so automation clients don't need to poll.
+// - High-level imperative actions (dig, place, attack, use, interact) that
+//   target specific coordinates or entity ids rather than relying on the bot's
+//   current look direction.
+// - World queries (block lookup, block search, nearby entities) against the
+//   bot's loaded world view.
+// - Pathfinding as a streaming RPC: submit a goal, receive progress/completion
+//   events.
+//
+// The service is intended to make SoulFire feel like a library from the
+// caller's perspective (mineflayer/azalea style) while keeping the server
+// authoritative.
+//
+// All RPCs require READ_BOT_INFO (for reads and event streams) or
+// UPDATE_BOT_CONFIG (for actions) on the owning instance.
+// ============================================================================
+
+// A block position in a specific dimension. Coordinates are Minecraft block
+// integers (not chunk-relative).
+message BlockPosition {
+  // Block X coordinate. East is positive.
+  int32 x = 1 [(google.api.field_behavior) = REQUIRED];
+  // Block Y coordinate. Vertical axis.
+  int32 y = 2 [(google.api.field_behavior) = REQUIRED];
+  // Block Z coordinate. South is positive.
+  int32 z = 3 [(google.api.field_behavior) = REQUIRED];
+  // Namespaced dimension id. Examples: "minecraft:overworld",
+  // "minecraft:the_nether", "minecraft:the_end". Optional; if empty the
+  // bot's current dimension is used.
+  string dimension = 4;
+}
+
+// A precise world position. Used for entity/actor locations and pathfinding
+// goals where sub-block precision matters.
+message WorldPosition {
+  double x = 1 [(google.api.field_behavior) = REQUIRED];
+  double y = 2 [(google.api.field_behavior) = REQUIRED];
+  double z = 3 [(google.api.field_behavior) = REQUIRED];
+  string dimension = 4;
+}
+
+// The face of a block that an action targets. Used when placing a block or
+// right-clicking a block with an item to indicate which side the player is
+// interacting with.
+enum BlockFace {
+  BLOCK_FACE_UNSPECIFIED = 0;
+  BLOCK_FACE_DOWN = 1;
+  BLOCK_FACE_UP = 2;
+  BLOCK_FACE_NORTH = 3;
+  BLOCK_FACE_SOUTH = 4;
+  BLOCK_FACE_WEST = 5;
+  BLOCK_FACE_EAST = 6;
+}
+
+// Which hand to use for an action. Mirrors Minecraft's main-hand / off-hand
+// distinction.
+enum Hand {
+  HAND_UNSPECIFIED = 0;
+  HAND_MAIN = 1;
+  HAND_OFF = 2;
+}
+
+// A block observed in the bot's world view, including its type and runtime
+// property state (e.g. "facing": "north", "waterlogged": "true").
+message BlockState {
+  // The block position.
+  BlockPosition position = 1 [(google.api.field_behavior) = REQUIRED];
+  // The namespaced block id (e.g. "minecraft:oak_log").
+  string block_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // Flattened block state properties (name -> value) for the block. Empty for
+  // blocks with no variants.
+  map<string, string> properties = 3;
+}
+
+// A brief summary of an entity in the bot's world view. Intended for use as
+// a repeated item in list responses and streaming events.
+message NearbyEntity {
+  // The numeric network entity id assigned by the server.
+  // Use this to target the entity in AttackEntity / InteractEntity.
+  int32 entity_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // The namespaced entity type (e.g. "minecraft:zombie", "minecraft:player").
+  string entity_type = 2 [(google.api.field_behavior) = REQUIRED];
+  // Current world position of the entity.
+  WorldPosition position = 3 [(google.api.field_behavior) = REQUIRED];
+  // Straight-line distance from the bot, in blocks.
+  float distance = 4 [(google.api.field_behavior) = REQUIRED];
+  // Display name if the entity has one. For players this is the username.
+  optional string display_name = 5;
+  // True if this entity is a player.
+  bool is_player = 6;
+  // Current health, if known. Not populated for entities without a health
+  // attribute or when the bot cannot observe it.
+  optional float health = 7;
+}
+
+// ============================================================================
+// Event stream
+// ============================================================================
+
+// Options controlling which categories of events are delivered by
+// WatchBotEvents. Each category is opt-in; a stream with no categories
+// enabled still emits the initial snapshot and then stays silent.
+message BotEventFilter {
+  // Deliver position / rotation / health / food / xp / dimension / game mode
+  // changes as BotStateDelta.
+  bool include_state_deltas = 1;
+  // Deliver incoming chat and system messages as BotChatEvent.
+  bool include_chat = 2;
+  // Deliver connect / disconnect / spawn / death / respawn events as
+  // BotLifecycleEvent.
+  bool include_lifecycle = 3;
+  // Deliver entity spawn / update / despawn within entity_radius as
+  // BotEntityEvent. Setting this without a positive radius defaults to 32
+  // blocks to keep the stream manageable.
+  bool include_entity_events = 4;
+  // Maximum radius (blocks) for entity events. Ignored if
+  // include_entity_events is false. Server clamps to a sane upper bound.
+  float entity_radius = 5;
+  // Deliver block change events within block_radius around the bot as
+  // BotBlockUpdateEvent. Setting this without a positive radius defaults to
+  // 16 blocks.
+  bool include_block_updates = 6;
+  // Maximum radius (blocks) for block updates. Ignored if
+  // include_block_updates is false. Server clamps to a sane upper bound.
+  float block_radius = 7;
+}
+
+// Request to subscribe to a bot's live event stream.
+message WatchBotEventsRequest {
+  // Owning instance UUID.
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Target bot profile UUID.
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Which event categories to include in the stream.
+  BotEventFilter filter = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Partial update to the bot's live state. Only fields present have changed
+// since the last delta or snapshot. Clients should merge deltas onto their
+// local copy of BotLiveState.
+message BotStateDelta {
+  optional double x = 1;
+  optional double y = 2;
+  optional double z = 3;
+  optional float x_rot = 4;
+  optional float y_rot = 5;
+  optional float health = 6;
+  optional float max_health = 7;
+  optional int32 food_level = 8;
+  optional float saturation_level = 9;
+  optional int32 selected_hotbar_slot = 10;
+  optional string dimension = 11;
+  optional int32 experience_level = 12;
+  optional float experience_progress = 13;
+  optional GameMode game_mode = 14;
+}
+
+// Source of a chat message.
+enum ChatSource {
+  CHAT_SOURCE_UNSPECIFIED = 0;
+  // Sent by another player (player chat).
+  CHAT_SOURCE_PLAYER = 1;
+  // Server-wide broadcast or system announcement.
+  CHAT_SOURCE_SYSTEM = 2;
+  // Action bar overlay (the thin strip above the hotbar).
+  CHAT_SOURCE_ACTION_BAR = 3;
+  // Whisper directed at this bot.
+  CHAT_SOURCE_WHISPER = 4;
+}
+
+// A single chat or system message observed by the bot.
+message BotChatEvent {
+  // Where the message came from.
+  ChatSource source = 1 [(google.api.field_behavior) = REQUIRED];
+  // Plain-text rendering of the message with formatting codes stripped.
+  // Stable across Minecraft versions; suitable for pattern matching.
+  string plain_text = 2 [(google.api.field_behavior) = REQUIRED];
+  // Original JSON text component for callers that need formatting, colors,
+  // click events, or translation keys. Present when available from the server.
+  optional string json_component = 3;
+  // Sender display name for PLAYER and WHISPER sources.
+  optional string sender_name = 4;
+  // Sender profile UUID for PLAYER and WHISPER sources, when resolvable.
+  optional string sender_id = 5;
+  // Server-side timestamp at which the message was received.
+  google.protobuf.Timestamp received_at = 6;
+}
+
+// Lifecycle event kind for the bot's Minecraft session.
+enum BotLifecycleKind {
+  BOT_LIFECYCLE_UNSPECIFIED = 0;
+  BOT_LIFECYCLE_CONNECTING = 1;
+  BOT_LIFECYCLE_CONNECTED = 2;
+  BOT_LIFECYCLE_SPAWNED = 3;
+  BOT_LIFECYCLE_DIED = 4;
+  BOT_LIFECYCLE_RESPAWNED = 5;
+  BOT_LIFECYCLE_DISCONNECTED = 6;
+}
+
+// Lifecycle event for the bot's connection and player state.
+message BotLifecycleEvent {
+  BotLifecycleKind kind = 1 [(google.api.field_behavior) = REQUIRED];
+  // Free-form detail message (disconnect reason, death message, etc.).
+  optional string message = 2;
+}
+
+// Entity event kind.
+enum EntityEventKind {
+  ENTITY_EVENT_UNSPECIFIED = 0;
+  // Entity entered the bot's observation radius.
+  ENTITY_EVENT_SPAWN = 1;
+  // Entity metadata or position updated.
+  ENTITY_EVENT_UPDATE = 2;
+  // Entity left the observation radius or was removed.
+  ENTITY_EVENT_DESPAWN = 3;
+}
+
+// An entity change within the bot's observation radius.
+message BotEntityEvent {
+  EntityEventKind kind = 1 [(google.api.field_behavior) = REQUIRED];
+  // Entity summary at the time of the event. For DESPAWN, only entity_id is
+  // guaranteed to be populated.
+  NearbyEntity entity = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// A block change observed within the bot's block radius.
+message BotBlockUpdateEvent {
+  BlockPosition position = 1 [(google.api.field_behavior) = REQUIRED];
+  // Previous block id, if the client tracked it. Can be empty on initial
+  // observation.
+  string old_block_id = 2;
+  // New block id after the change.
+  string new_block_id = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// A single message on the bot event stream.
+message BotEvent {
+  oneof event {
+    // Initial snapshot or periodic resync. Sent once on stream open and any
+    // time the server detects the client's view may have diverged.
+    BotLiveState snapshot = 1;
+    BotStateDelta state_delta = 2;
+    BotChatEvent chat = 3;
+    BotLifecycleEvent lifecycle = 4;
+    BotEntityEvent entity_event = 5;
+    BotBlockUpdateEvent block_update = 6;
+  }
+}
+
+// ============================================================================
+// Chat
+// ============================================================================
+
+message SendChatRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // The chat message to send. Treated as a literal chat message. To execute a
+  // slash command, include the leading "/"; the server will route it
+  // appropriately.
+  string message = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SendChatResponse {
+}
+
+// ============================================================================
+// World queries
+// ============================================================================
+
+message GetBlockRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  BlockPosition position = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message GetBlockResponse {
+  // True if the chunk containing the requested position is loaded for this
+  // bot. When false, the block field is not populated.
+  bool loaded = 1 [(google.api.field_behavior) = REQUIRED];
+  // The observed block state. Absent when loaded is false.
+  optional BlockState block = 2;
+}
+
+message FindBlocksRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Block ids to match (namespaced, e.g. "minecraft:diamond_ore"). A block
+  // matches if its id equals any entry in this list.
+  repeated string block_ids = 3 [(google.api.field_behavior) = REQUIRED];
+  // Maximum search radius in blocks, measured from the bot's current block
+  // position. Server clamps to an implementation-defined maximum.
+  int32 max_distance = 4 [(google.api.field_behavior) = REQUIRED];
+  // Maximum number of matches to return. Results are ordered by ascending
+  // distance from the bot.
+  int32 max_count = 5 [(google.api.field_behavior) = REQUIRED];
+}
+
+message FindBlocksResponse {
+  repeated BlockState blocks = 1;
+}
+
+message ListNearbyEntitiesRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Maximum radius in blocks from the bot. Server clamps to an
+  // implementation-defined maximum.
+  float radius = 3 [(google.api.field_behavior) = REQUIRED];
+  // Optional filter: if non-empty, only entities whose namespaced type is in
+  // this list are returned.
+  repeated string entity_types = 4;
+  // If true, include players in the result. Defaults to true.
+  bool include_players = 5;
+}
+
+message ListNearbyEntitiesResponse {
+  // Entities ordered by ascending distance from the bot.
+  repeated NearbyEntity entities = 1;
+}
+
+// ============================================================================
+// Imperative actions
+// ============================================================================
+
+message DigBlockRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Block to break. Must be within reach of the bot.
+  BlockPosition position = 3 [(google.api.field_behavior) = REQUIRED];
+  // If true, cancel an in-progress dig on this block instead of starting one.
+  bool cancel = 4;
+}
+
+message DigBlockResponse {
+}
+
+message PlaceBlockRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // The block the bot is placing against (the block being clicked).
+  BlockPosition against = 3 [(google.api.field_behavior) = REQUIRED];
+  // Which face of `against` is being clicked. The new block is placed adjacent
+  // to that face.
+  BlockFace face = 4 [(google.api.field_behavior) = REQUIRED];
+  // Which hand holds the item being placed.
+  Hand hand = 5 [(google.api.field_behavior) = REQUIRED];
+}
+
+message PlaceBlockResponse {
+}
+
+message UseItemRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Which hand's item to use (e.g. eat food, draw a bow, throw a splash
+  // potion).
+  Hand hand = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message UseItemResponse {
+}
+
+message AttackEntityRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Network entity id from NearbyEntity.entity_id. Must currently be in the
+  // bot's observation set.
+  int32 entity_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // If true, perform a sprint-boosted critical hit when applicable (swings
+  // the main hand and applies knockback).
+  bool sprinting = 4;
+}
+
+message AttackEntityResponse {
+}
+
+message InteractEntityRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Network entity id from NearbyEntity.entity_id.
+  int32 entity_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // Which hand to interact with.
+  Hand hand = 4 [(google.api.field_behavior) = REQUIRED];
+  // True if the bot is sneaking during the interaction (affects e.g. whether
+  // a villager trade menu opens).
+  bool sneaking = 5;
+}
+
+message InteractEntityResponse {
+}
+
+message SwingArmRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  Hand hand = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SwingArmResponse {
+}
+
+// ============================================================================
+// Pathfinding
+// ============================================================================
+
+// A pathfinding destination. Exactly one variant must be set.
+message PathfindGoal {
+  // Reach a specific block within `radius` blocks (euclidean).
+  message BlockGoal {
+    BlockPosition position = 1 [(google.api.field_behavior) = REQUIRED];
+    // Acceptable distance from `position` at which to consider the goal
+    // reached. 0 means "stand on the block".
+    float radius = 2;
+  }
+  // Reach a world position within `radius` blocks.
+  message NearGoal {
+    WorldPosition position = 1 [(google.api.field_behavior) = REQUIRED];
+    float radius = 2;
+  }
+  // Reach the current location of an entity, within `radius` blocks.
+  // The path will be updated as the entity moves (follow behavior).
+  message EntityGoal {
+    int32 entity_id = 1 [(google.api.field_behavior) = REQUIRED];
+    float radius = 2;
+  }
+  // Reach an XZ column, ignoring Y.
+  message XZGoal {
+    double x = 1 [(google.api.field_behavior) = REQUIRED];
+    double z = 2 [(google.api.field_behavior) = REQUIRED];
+    string dimension = 3;
+    float radius = 4;
+  }
+  oneof goal {
+    BlockGoal block = 1;
+    NearGoal near = 2;
+    EntityGoal entity = 3;
+    XZGoal xz = 4;
+  }
+}
+
+message PathfindOptions {
+  // If true, the bot may break blocks along the path when necessary.
+  bool allow_mining = 1;
+  // If true, the bot may place blocks (e.g. bridge, pillar) when necessary.
+  bool allow_placing = 2;
+  // If true, the bot may take damage (e.g. short fall) when useful.
+  bool allow_damage = 3;
+  // Maximum wall-clock seconds for planning + traversal. 0 means server default.
+  int32 timeout_seconds = 4;
+}
+
+message GoToRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  PathfindGoal goal = 3 [(google.api.field_behavior) = REQUIRED];
+  PathfindOptions options = 4;
+}
+
+// Status of a pathfinding attempt.
+enum PathfindStatus {
+  PATHFIND_STATUS_UNSPECIFIED = 0;
+  // Planning has started; no path yet.
+  PATHFIND_STATUS_PLANNING = 1;
+  // A path was found and traversal has started.
+  PATHFIND_STATUS_MOVING = 2;
+  // The goal was reached.
+  PATHFIND_STATUS_COMPLETED = 3;
+  // No path could be found (unreachable) or a timeout / obstacle aborted
+  // traversal. See `error` for detail.
+  PATHFIND_STATUS_FAILED = 4;
+  // Aborted by the client via StopPathfinding.
+  PATHFIND_STATUS_CANCELLED = 5;
+}
+
+message PathfindProgress {
+  PathfindStatus status = 1 [(google.api.field_behavior) = REQUIRED];
+  // Remaining straight-line distance to the goal in blocks, if known.
+  optional float distance_remaining = 2;
+  // Current bot position, populated on MOVING updates.
+  optional WorldPosition position = 3;
+  // Present when status is FAILED. Human-readable failure reason.
+  optional string error = 4;
+}
+
+message StopPathfindingRequest {
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  string bot_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+}
+
+message StopPathfindingResponse {
+}
+
+// ============================================================================
+// Service
+// ============================================================================
+
+// Live bot automation service. See file header for scope and design notes.
+//
+// Permissions:
+// - READ_BOT_INFO: required for WatchBotEvents, GetBlock, FindBlocks,
+//                  ListNearbyEntities.
+// - UPDATE_BOT_CONFIG: required for SendChat, DigBlock, PlaceBlock, UseItem,
+//                      AttackEntity, InteractEntity, SwingArm, GoTo,
+//                      StopPathfinding.
+//
+// Error handling mirrors BotService:
+// - NOT_FOUND: instance or bot does not exist.
+// - FAILED_PRECONDITION: bot is not online, target not loaded, or the
+//                        requested action is not currently valid.
+// - OUT_OF_RANGE: target is outside the bot's reach / observation radius.
+// - INTERNAL: unexpected server errors.
+service BotLiveService {
+  // Subscribes to a single multiplexed event stream for one bot. The first
+  // message is always a snapshot; subsequent messages are deltas and events
+  // according to the filter. The server may emit additional snapshots if the
+  // session reconnects or the client falls behind.
+  rpc WatchBotEvents (WatchBotEventsRequest) returns (stream BotEvent) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Watch bot events"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      execution: "Opens a live event stream until the client cancels or the bot disconnects."
+      side_effects: "Allocates server-side subscription resources for the bot."
+    };
+  }
+
+  // Sends a chat message (or slash command) from the bot to the connected
+  // Minecraft server. Messages prefixed with "/" are routed as commands.
+  rpc SendChat (SendChatRequest) returns (SendChatResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/chat:send"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Send chat"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      execution: "Queued for the next game tick."
+      side_effects: "Transmits the message to the Minecraft server."
+    };
+  }
+
+  // Returns the block at a world position, if the chunk is loaded.
+  rpc GetBlock (GetBlockRequest) returns (GetBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/instances/{instance_id}/bots/{bot_id}/world/block"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get block"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+    };
+  }
+
+  // Finds blocks of the given ids within a radius of the bot. Results are
+  // sorted by ascending distance.
+  rpc FindBlocks (FindBlocksRequest) returns (FindBlocksResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/world/blocks:find"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Find blocks"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+    };
+  }
+
+  // Lists entities within a radius of the bot, optionally filtered by type.
+  rpc ListNearbyEntities (ListNearbyEntitiesRequest) returns (ListNearbyEntitiesResponse) {
+    option (google.api.http) = {
+      get: "/v1/instances/{instance_id}/bots/{bot_id}/world/entities"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "List nearby entities"
+      permissions: "READ_BOT_INFO"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+    };
+  }
+
+  // Starts (or stops, when `cancel` is set) breaking a block at a specific
+  // position. Unlike MouseClick, the target is explicit — no raytrace from
+  // the current look direction is performed.
+  rpc DigBlock (DigBlockRequest) returns (DigBlockResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/dig"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Dig block"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Target block must be within reach and loaded."
+      execution: "Immediate"
+      side_effects: "Begins or cancels block breaking at the target."
+    };
+  }
+
+  // Places the currently held item as a block, against a specific face of a
+  // specific block.
+  rpc PlaceBlock (PlaceBlockRequest) returns (PlaceBlockResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/place"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Place block"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Target adjacent position must be within reach and loaded."
+      execution: "Immediate"
+      side_effects: "Attempts to place the held item as a block."
+    };
+  }
+
+  // Uses the item in the specified hand (eat, drink, throw, draw bow, etc.).
+  rpc UseItem (UseItemRequest) returns (UseItemResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/use-item"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Use item"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      execution: "Immediate"
+      side_effects: "Triggers the held item's use behaviour."
+    };
+  }
+
+  // Attacks a specific entity by network id.
+  rpc AttackEntity (AttackEntityRequest) returns (AttackEntityResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/attack"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Attack entity"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Target entity must be observable and within reach."
+      execution: "Immediate"
+      side_effects: "Swings the main hand and damages the target entity."
+    };
+  }
+
+  // Right-clicks / interacts with a specific entity by network id. Used for
+  // trading with villagers, mounting mobs, etc.
+  rpc InteractEntity (InteractEntityRequest) returns (InteractEntityResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/interact"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Interact with entity"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      preconditions: "Target entity must be observable and within reach."
+      execution: "Immediate"
+      side_effects: "Sends an interaction packet for the target entity."
+    };
+  }
+
+  // Swings the specified arm without a target (visual animation only).
+  rpc SwingArm (SwingArmRequest) returns (SwingArmResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/actions/swing"
+      body: "*"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Swing arm"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      execution: "Immediate"
+      side_effects: "Sends an arm swing animation packet."
+    };
+  }
+
+  // Requests the bot to pathfind to a goal. Returns a stream of progress
+  // events terminating with COMPLETED, FAILED, or CANCELLED. A new GoTo for
+  // the same bot supersedes any in-progress pathfinding; the previous stream
+  // is closed with CANCELLED.
+  rpc GoTo (GoToRequest) returns (stream PathfindProgress) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Pathfind to goal"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      preconditions: "Bot must be online."
+      execution: "Starts a pathfinding session that streams progress updates."
+      side_effects: "Drives bot movement until the goal is reached, aborted, or cancelled."
+    };
+  }
+
+  // Cancels any in-progress pathfinding session for this bot.
+  rpc StopPathfinding (StopPathfindingRequest) returns (StopPathfindingResponse) {
+    option (google.api.http) = {
+      post: "/v1/instances/{instance_id}/bots/{bot_id}/pathfind:stop"
+    };
+    option (soulfire.v1.api_method) = {
+      display_name: "Stop pathfinding"
+      permissions: "UPDATE_BOT_CONFIG"
+      scope: "instance.bot"
+      execution: "Immediate"
+      side_effects: "Cancels any in-progress pathfinding session for this bot."
+    };
+  }
+}
