@@ -70,15 +70,22 @@ public class SoftwareRenderer {
       var camera = new Camera(eyePos, yRot, xRot, width, height, fov, maxDistance + 32.0F);
       var ctx = RenderContext.create(level, camera, maxDistance);
 
+      var dynamicCollectNanos = 0L;
+
+      var blockEntityCollectStart = System.nanoTime();
+      var blockEntityScene = SceneCollector.collectBlockEntities(ctx);
+      dynamicCollectNanos += System.nanoTime() - blockEntityCollectStart;
+
       var worldCollectStart = System.nanoTime();
       var worldScene = WorldMeshCollector.collect(ctx);
       debugTrace.worldCollectNanos(System.nanoTime() - worldCollectStart);
 
       var dynamicCollectStart = System.nanoTime();
-      var dynamicScene = SceneCollector.collect(ctx, localPlayer);
-      debugTrace.dynamicCollectNanos(System.nanoTime() - dynamicCollectStart);
+      var dynamicScene = SceneCollector.collectEntitiesAndWeather(ctx, localPlayer);
+      dynamicCollectNanos += System.nanoTime() - dynamicCollectStart;
+      debugTrace.dynamicCollectNanos(dynamicCollectNanos);
 
-      var sceneData = worldScene.merge(dynamicScene);
+      var sceneData = worldScene.merge(blockEntityScene).merge(dynamicScene);
       var buffers = new RasterBuffers(width, height);
 
       var rasterStart = System.nanoTime();

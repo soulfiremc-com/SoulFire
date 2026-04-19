@@ -5,6 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "headless.sound.MixinNarrator",
+    "soulfire.accessor.MixinQuadParticleStorageAccessor",
+    "soulfire.accessor.MixinQuadParticleRenderStateAccessor",
+    "soulfire.accessor.MixinSpriteContentsAccessor",
+    "soulfire.accessor.MixinTextureAtlasAccessor",
     "soulfire.api.MixinConnection",
     "soulfire.api.MixinPacketListener$ListenerAndPacket",
     "soulfire.api.MixinPlayer",

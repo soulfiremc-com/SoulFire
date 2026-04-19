@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HalfTransparentBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -116,7 +117,7 @@ public class WorldMeshCollector {
           var blockState = section.getBlockState(localX, localY, localZ);
           var fluidState = blockState.getFluidState();
           var pureFluidBlock = !fluidState.isEmpty() && blockState.getBlock() == fluidState.createLegacyBlock().getBlock();
-          if (!pureFluidBlock && !blockState.isAir() && blockState.getBlock() != Blocks.VOID_AIR) {
+          if (!pureFluidBlock && !blockState.isAir() && blockState.getBlock() != Blocks.VOID_AIR && !shouldSkipStaticBlockGeometry(ctx, blockPos)) {
             for (var face : assets.blockGeometry(blockState).faces()) {
               if (!shouldEmitBlockFace(level, blockState, blockPos, face)) {
                 continue;
@@ -144,6 +145,10 @@ public class WorldMeshCollector {
     }
 
     return builder.build();
+  }
+
+  private static boolean shouldSkipStaticBlockGeometry(RenderContext ctx, BlockPos blockPos) {
+    return ctx.vanillaRenderedBlockEntities().contains(blockPos.asLong());
   }
 
   private static boolean shouldEmitBlockFace(

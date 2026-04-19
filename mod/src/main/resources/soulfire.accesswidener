@@ -58,3 +58,11 @@ accessible field net/minecraft/client/renderer/item/ItemStackRenderState$LayerRe
 accessible field net/minecraft/client/renderer/item/ItemStackRenderState$LayerRenderState foilType Lnet/minecraft/client/renderer/item/ItemStackRenderState$FoilType;
 accessible field net/minecraft/client/renderer/item/ItemStackRenderState$LayerRenderState specialRenderer Lnet/minecraft/client/renderer/special/SpecialModelRenderer;
 accessible field net/minecraft/client/renderer/item/ItemStackRenderState$LayerRenderState argumentForSpecialRendering Ljava/lang/Object;
+
+accessible class net/minecraft/client/renderer/state/level/QuadParticleRenderState$Storage
+accessible field net/minecraft/client/renderer/state/level/QuadParticleRenderState particles Ljava/util/Map;
+
+accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;
+accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()I
+accessible method net/minecraft/client/renderer/texture/TextureAtlas getHeight ()I
+accessible field net/minecraft/client/renderer/texture/SpriteContents originalImage Lcom/mojang/blaze3d/platform/NativeImage;

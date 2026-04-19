@@ -19,6 +19,7 @@ package com.soulfiremc.server.renderer;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -30,6 +31,7 @@ public record RenderContext(
   int minY,
   int maxY,
   long animationTick,
+  Set<Long> vanillaRenderedBlockEntities,
   ConcurrentMap<Long, Float> localLightCache,
   SectionMeshCache sectionMeshCache
 ) {
@@ -42,6 +44,7 @@ public record RenderContext(
       level.getMinY(),
       level.getMaxY(),
       level.getOverworldClockTime(),
+      ConcurrentHashMap.newKeySet(),
       new ConcurrentHashMap<>(),
       SectionMeshCache.forLevel(level)
     );

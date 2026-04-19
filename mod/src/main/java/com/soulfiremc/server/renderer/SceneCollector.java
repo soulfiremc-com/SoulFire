@@ -21,21 +21,22 @@ import lombok.experimental.UtilityClass;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Display;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.awt.image.BufferedImage;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 /// Collects dynamic scene primitives that are not part of the chunk-section world mesh.
@@ -44,7 +45,7 @@ public class SceneCollector {
   private static final RendererAssets.TextureImage RAIN_TEXTURE = createRainTexture();
   private static final RendererAssets.TextureImage SHADOW_TEXTURE = createShadowTexture();
 
-  public static SceneData collect(RenderContext ctx, LocalPlayer localPlayer) {
+  public static SceneData collectEntitiesAndWeather(RenderContext ctx, LocalPlayer localPlayer) {
     var level = ctx.level();
     var assets = RendererAssets.instance();
     var builder = SceneData.builder();
@@ -72,246 +73,12 @@ public class SceneCollector {
       trace.entityVisible();
 
       var lod = entityLod(distanceSq);
-      if (entity instanceof Display.BlockDisplay blockDisplay) {
-        collectBlockDisplay(ctx, blockDisplay, assets, builder);
-      } else if (entity instanceof Display.ItemDisplay itemDisplay) {
-        collectItemDisplay(ctx, itemDisplay, assets, builder, billboardBuckets, distanceSq, lod);
-      } else if (entity instanceof Display.TextDisplay textDisplay) {
-        collectTextDisplay(ctx, textDisplay, assets, builder, billboardBuckets, distanceSq);
-      } else if (entity instanceof ItemFrame frame) {
-        collectItemFrame(ctx, frame, assets, builder, billboardBuckets, distanceSq, lod);
-      } else if (entity instanceof ItemEntity itemEntity) {
-        collectItemEntity(ctx, itemEntity, assets, builder, billboardBuckets, distanceSq, lod);
-      } else {
-        collectGenericEntity(ctx, entity, assets, builder, billboardBuckets, distanceSq, lod);
-      }
+      collectGenericEntity(ctx, entity, assets, builder, billboardBuckets, distanceSq, lod);
     }
 
+    builder.addAll(VanillaSubmitCollector.collectParticles(ctx));
     collectWeather(level, ctx, builder, billboardBuckets);
     return builder.build();
-  }
-
-  private static void collectBlockDisplay(
-    RenderContext ctx,
-    Display.BlockDisplay blockDisplay,
-    RendererAssets assets,
-    SceneData.Builder builder
-  ) {
-    var renderState = blockDisplay.renderState();
-    var blockRenderState = blockDisplay.blockRenderState();
-    if (renderState == null || blockRenderState == null) {
-      return;
-    }
-
-    var transform = assets.displayMatrix(renderState, 1.0F)
-      .translate((float) blockDisplay.getX(), (float) blockDisplay.getY(), (float) blockDisplay.getZ());
-    for (var face : assets.blockGeometry(blockRenderState.blockState()).faces()) {
-      builder.add(WorldMeshCollector.toRenderQuad(face.transformed(transform), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
-    }
-
-    addShadow(blockDisplay, builder);
-  }
-
-  private static void collectItemDisplay(
-    RenderContext ctx,
-    Display.ItemDisplay itemDisplay,
-    RendererAssets assets,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets,
-    double distanceSq,
-    RendererAssets.EntityLod lod
-  ) {
-    var renderState = itemDisplay.renderState();
-    var itemRenderState = itemDisplay.itemRenderState();
-    if (renderState == null || itemRenderState == null) {
-      return;
-    }
-
-    var itemModel = assets.itemRenderModel(itemRenderState.itemStack());
-    var transform = assets.displayMatrix(renderState, 1.0F)
-      .mul(assets.itemDisplayTransform(itemRenderState.itemTransform()))
-      .translate((float) itemDisplay.getX(), (float) itemDisplay.getY(), (float) itemDisplay.getZ());
-    for (var face : itemModel.geometry().faces()) {
-      builder.add(WorldMeshCollector.toRenderQuad(face.transformed(transform), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
-    }
-
-    if (itemModel.geometry().faces().isEmpty() && itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
-      addBillboard(
-        ctx,
-        builder,
-        billboardBuckets,
-        buildBillboard(
-          ctx.camera(),
-          itemDisplay.getX(),
-          itemDisplay.getY() + 0.5,
-          itemDisplay.getZ(),
-          lod == RendererAssets.EntityLod.MEDIUM ? 0.65F : 0.5F,
-          lod == RendererAssets.EntityLod.MEDIUM ? 0.65F : 0.5F,
-          itemModel.billboard().texture(),
-          itemModel.billboard().alphaMode(),
-          0xFFFFFFFF,
-          0,
-          BillboardMode.FULL
-        ),
-        lod == RendererAssets.EntityLod.MEDIUM ? 6 : 3,
-        distanceSq > 24 * 24
-      );
-    }
-
-    addShadow(itemDisplay, builder);
-  }
-
-  private static void collectTextDisplay(
-    RenderContext ctx,
-    Display.TextDisplay textDisplay,
-    RendererAssets assets,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets,
-    double distanceSq
-  ) {
-    var renderState = textDisplay.renderState();
-    var textRenderState = textDisplay.textRenderState();
-    if (renderState == null || textRenderState == null) {
-      return;
-    }
-
-    var textColor = 0xFF000000 | (textRenderState.textOpacity().get(1.0F) & 0xFF) << 24 | 0x00FFFFFF;
-    var backgroundColor = textRenderState.backgroundColor().get(1.0F);
-    var texture = assets.textTexture(textRenderState.text(), textRenderState.lineWidth(), textColor, backgroundColor);
-    var width = Math.max(0.5F, (float) textDisplay.getBbWidth());
-    var height = Math.max(0.25F, textDisplay.getBbHeight() == 0.0F ? 0.35F : (float) textDisplay.getBbHeight());
-    var mode = switch (renderState.billboardConstraints()) {
-      case FIXED -> BillboardMode.VERTICAL;
-      default -> BillboardMode.FULL;
-    };
-
-    addBillboard(
-      ctx,
-      builder,
-      billboardBuckets,
-      buildBillboard(
-        ctx.camera(),
-        textDisplay.getX(),
-        textDisplay.getY() + height * 0.5F,
-        textDisplay.getZ(),
-        width,
-        height,
-        texture,
-        RendererAssets.AlphaMode.TRANSLUCENT,
-        0xFFFFFFFF,
-        0,
-        mode
-      ),
-      10,
-      distanceSq > 48 * 48
-    );
-
-    addShadow(textDisplay, builder);
-  }
-
-  private static void collectItemFrame(
-    RenderContext ctx,
-    ItemFrame frame,
-    RendererAssets assets,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets,
-    double distanceSq,
-    RendererAssets.EntityLod lod
-  ) {
-    var item = frame.getItem();
-    var mapId = item.get(DataComponents.MAP_ID);
-    if (mapId != null) {
-      var mapData = ctx.level().getMapData(mapId);
-      if (mapData != null) {
-        addBillboard(
-          ctx,
-          builder,
-          billboardBuckets,
-          buildBillboard(
-            ctx.camera(),
-            frame.getX(),
-            frame.getY(),
-            frame.getZ(),
-            1.0F,
-            1.0F,
-            assets.mapTexture(mapData.colors),
-            RendererAssets.AlphaMode.OPAQUE,
-            0xFFFFFFFF,
-            0,
-            BillboardMode.VERTICAL
-          ),
-          9,
-          distanceSq > 56 * 56
-        );
-        return;
-      }
-    }
-
-    var itemModel = assets.itemRenderModel(item);
-    var transform = new Matrix4f()
-      .translate((float) frame.getX(), (float) frame.getY(), (float) frame.getZ())
-      .scale(0.6F);
-    for (var face : itemModel.geometry().faces()) {
-      builder.add(WorldMeshCollector.toRenderQuad(face.transformed(transform), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
-    }
-    if (itemModel.geometry().faces().isEmpty() && itemModel.billboard() != null && lod != RendererAssets.EntityLod.NEAR) {
-      addBillboard(
-        ctx,
-        builder,
-        billboardBuckets,
-        buildBillboard(
-          ctx.camera(),
-          frame.getX(),
-          frame.getY(),
-          frame.getZ(),
-          0.8F,
-          0.8F,
-          itemModel.billboard().texture(),
-          itemModel.billboard().alphaMode(),
-          0xFFFFFFFF,
-          0,
-          BillboardMode.VERTICAL
-        ),
-        8,
-        distanceSq > 40 * 40
-      );
-    }
-  }
-
-  private static void collectItemEntity(
-    RenderContext ctx,
-    ItemEntity itemEntity,
-    RendererAssets assets,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets,
-    double distanceSq,
-    RendererAssets.EntityLod lod
-  ) {
-    var itemModel = assets.itemRenderModel(itemEntity.getItem());
-    var billboard = itemModel.billboard();
-    var texture = billboard != null ? billboard.texture() : assets.entityTexture(itemEntity);
-    addBillboard(
-      ctx,
-      builder,
-      billboardBuckets,
-      buildBillboard(
-        ctx.camera(),
-        itemEntity.getX(),
-        itemEntity.getY() + 0.15,
-        itemEntity.getZ(),
-        lod == RendererAssets.EntityLod.NEAR ? 0.4F : lod == RendererAssets.EntityLod.MEDIUM ? 0.28F : 0.2F,
-        lod == RendererAssets.EntityLod.NEAR ? 0.4F : lod == RendererAssets.EntityLod.MEDIUM ? 0.28F : 0.2F,
-        texture,
-        billboard != null ? billboard.alphaMode() : RendererAssets.AlphaMode.CUTOUT,
-        0xFFFFFFFF,
-        0,
-        BillboardMode.FULL
-      ),
-      lod == RendererAssets.EntityLod.NEAR ? 7 : 2,
-      distanceSq > 20 * 20
-    );
-
-    addShadow(itemEntity, builder);
   }
 
   private static void collectGenericEntity(
@@ -333,7 +100,11 @@ public class SceneCollector {
     var renderY = entity.getY() + renderOffset.y;
     var renderZ = entity.getZ() + renderOffset.z;
     var texture = assets.entityTexture(entity);
-    if (lod == RendererAssets.EntityLod.FAR) {
+    var vanillaScene = VanillaSubmitCollector.collectEntity(ctx, entity, renderState);
+    var usedVanillaCollector = vanillaScene.totalQuadCount() > 0;
+    if (usedVanillaCollector) {
+      builder.addAll(vanillaScene);
+    } else if (lod == RendererAssets.EntityLod.FAR) {
       addBillboard(
         ctx,
         builder,
@@ -360,8 +131,74 @@ public class SceneCollector {
       }
     }
 
-    addEntityLabels(ctx, assets, builder, billboardBuckets, renderState, renderX, renderY, renderZ);
-    addShadow(entity, builder);
+    if (!usedVanillaCollector) {
+      addEntityLabels(ctx, assets, builder, billboardBuckets, renderState, renderX, renderY, renderZ);
+      addShadow(entity, builder);
+    }
+  }
+
+  public static SceneData collectBlockEntities(RenderContext ctx) {
+    var builder = SceneData.builder();
+    var level = ctx.level();
+    var camera = ctx.camera();
+    var seen = new HashSet<BlockPos>();
+
+    for (var blockEntity : level.getGloballyRenderedBlockEntities()) {
+      collectBlockEntity(ctx, builder, seen, blockEntity);
+    }
+
+    var chunkRadius = Mth.ceil(ctx.maxDistance() / 16.0) + 1;
+    var centerChunkX = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeX()));
+    var centerChunkZ = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeZ()));
+    var sectionMargin = 16.0;
+    var probeY = Mth.floor(camera.eyeY());
+    for (var chunkX = centerChunkX - chunkRadius; chunkX <= centerChunkX + chunkRadius; chunkX++) {
+      for (var chunkZ = centerChunkZ - chunkRadius; chunkZ <= centerChunkZ + chunkRadius; chunkZ++) {
+        var chunkCenterX = chunkX * 16.0 + 8.0;
+        var chunkCenterZ = chunkZ * 16.0 + 8.0;
+        var dx = chunkCenterX - camera.eyeX();
+        var dz = chunkCenterZ - camera.eyeZ();
+        if (dx * dx + dz * dz > (ctx.maxDistance() + sectionMargin) * (ctx.maxDistance() + sectionMargin)) {
+          continue;
+        }
+        if (!level.hasChunkAt(new BlockPos(chunkX << 4, probeY, chunkZ << 4))) {
+          continue;
+        }
+
+        LevelChunk chunk = level.getChunk(chunkX, chunkZ);
+        for (var blockEntity : chunk.getBlockEntities().values()) {
+          collectBlockEntity(ctx, builder, seen, blockEntity);
+        }
+      }
+    }
+    return builder.build();
+  }
+
+  private static void collectBlockEntity(RenderContext ctx, SceneData.Builder builder, HashSet<BlockPos> seen, BlockEntity blockEntity) {
+    var pos = blockEntity.getBlockPos();
+    if (!seen.add(pos.immutable())) {
+      return;
+    }
+
+    var centerX = pos.getX() + 0.5;
+    var centerY = pos.getY() + 0.5;
+    var centerZ = pos.getZ() + 0.5;
+    var dx = centerX - ctx.camera().eyeX();
+    var dy = centerY - ctx.camera().eyeY();
+    var dz = centerZ - ctx.camera().eyeZ();
+    if (dx * dx + dy * dy + dz * dz > ctx.maxDistanceSq()) {
+      return;
+    }
+
+    if (!ctx.camera().isVisibleAabb(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0)) {
+      return;
+    }
+
+    var scene = VanillaSubmitCollector.collectBlockEntity(ctx, blockEntity);
+    if (scene.totalQuadCount() > 0) {
+      ctx.vanillaRenderedBlockEntities().add(pos.asLong());
+      builder.addAll(scene);
+    }
   }
 
   private static void collectWeather(

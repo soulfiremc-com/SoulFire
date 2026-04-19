@@ -24,6 +24,8 @@ import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mojang.math.Quadrant;
+import com.soulfiremc.mod.mixin.soulfire.accessor.MixinSpriteContentsAccessor;
+import com.soulfiremc.mod.mixin.soulfire.accessor.MixinTextureAtlasAccessor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
@@ -35,6 +37,8 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.ClientAsset;
@@ -201,6 +205,10 @@ public final class RendererAssets {
   public TextureImage texture(Identifier textureLocation) {
     var normalizedPath = normalizeTexturePath(textureLocation);
     return textureCache.computeIfAbsent(normalizedPath.toString(), _ -> loadTexture(normalizedPath));
+  }
+
+  public TextureImage textureAtlas(Identifier atlasLocation) {
+    return textureCache.computeIfAbsent("atlas:" + atlasLocation, _ -> loadAtlasTexture(atlasLocation));
   }
 
   public TextureImage waterOverlayTexture() {
@@ -1534,6 +1542,34 @@ public final class RendererAssets {
       RenderDebugTrace.current().missingTexture(normalized.toString(), t);
       log.debug("Missing renderer texture {}", normalized, t);
       return MISSING_TEXTURE;
+    }
+  }
+
+  private TextureImage loadAtlasTexture(Identifier atlasLocation) {
+    try {
+      var atlas = Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(atlasLocation);
+      var image = new BufferedImage(atlas.getWidth(), atlas.getHeight(), BufferedImage.TYPE_INT_ARGB);
+      for (var sprite : ((MixinTextureAtlasAccessor) atlas).soulfire$getSprites()) {
+        if (sprite == null || sprite.contents() == null || ((MixinSpriteContentsAccessor) sprite.contents()).soulfire$getOriginalImage() == null) {
+          continue;
+        }
+
+        drawAtlasSprite(image, sprite);
+      }
+      return TextureImage.from(image, null);
+    } catch (Throwable t) {
+      log.debug("Failed to reconstruct atlas texture {}", atlasLocation, t);
+      return MISSING_TEXTURE;
+    }
+  }
+
+  private void drawAtlasSprite(BufferedImage atlasImage, TextureAtlasSprite sprite) {
+    var contents = sprite.contents();
+    var source = ((MixinSpriteContentsAccessor) contents).soulfire$getOriginalImage();
+    for (var y = 0; y < contents.height(); y++) {
+      for (var x = 0; x < contents.width(); x++) {
+        atlasImage.setRGB(sprite.getX() + x, sprite.getY() + y, source.getPixel(x, y));
+      }
     }
   }
 
