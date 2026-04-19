@@ -224,7 +224,8 @@ public final class InventoryItemIconRenderer {
       return;
     }
 
-    var textureId = materialInfo.sprite().contents().name();
+    var sprite = materialInfo.sprite();
+    var textureId = sprite.contents().name();
     if (textureId == null) {
       return;
     }
@@ -235,8 +236,8 @@ public final class InventoryItemIconRenderer {
     for (var i = 0; i < 4; i++) {
       vertices[i] = transform.transformPosition(new Vector3f(bakedQuad.position(i)));
       var packedUv = bakedQuad.packedUV(i);
-      uv[i * 2] = Float.intBitsToFloat((int) packedUv);
-      uv[i * 2 + 1] = Float.intBitsToFloat((int) (packedUv >>> 32));
+      uv[i * 2] = normalizeSpriteU(sprite, Float.intBitsToFloat((int) packedUv));
+      uv[i * 2 + 1] = normalizeSpriteV(sprite, Float.intBitsToFloat((int) (packedUv >>> 32)));
     }
 
     var tintColor = 0xFFFFFFFF;
@@ -865,6 +866,22 @@ public final class InventoryItemIconRenderer {
 
   private static int normalizeTint(int tint) {
     return (tint & 0xFF000000) == 0 ? 0xFF000000 | tint : tint;
+  }
+
+  private static float normalizeSpriteU(TextureAtlasSprite sprite, float atlasU) {
+    var span = sprite.getU1() - sprite.getU0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return Math.max(0.0F, Math.min(1.0F, (atlasU - sprite.getU0()) / span));
+  }
+
+  private static float normalizeSpriteV(TextureAtlasSprite sprite, float atlasV) {
+    var span = sprite.getV1() - sprite.getV0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return Math.max(0.0F, Math.min(1.0F, (atlasV - sprite.getV0()) / span));
   }
 
   private static int applyGuiLighting(int color, Vector3f[] vertices, boolean shade, int emission) {

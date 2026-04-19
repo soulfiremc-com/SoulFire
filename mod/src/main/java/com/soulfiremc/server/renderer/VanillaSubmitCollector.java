@@ -23,6 +23,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.soulfiremc.mod.mixin.soulfire.accessor.MixinQuadParticleRenderStateAccessor;
 import com.soulfiremc.mod.mixin.soulfire.accessor.MixinQuadParticleStorageAccessor;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
@@ -40,7 +41,9 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
@@ -57,6 +60,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -91,23 +95,71 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     this.font = Minecraft.getInstance().font;
   }
 
+  static void prepareEntityDispatcher(RenderContext ctx, @Nullable LocalPlayer cameraEntity) {
+    var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+    var preparedCamera = new net.minecraft.client.Camera();
+    var activeCameraEntity = cameraEntity != null ? cameraEntity : Minecraft.getInstance().player;
+    if (activeCameraEntity == null) {
+      dispatcher.resetCamera();
+      return;
+    }
+
+    preparedCamera.setLevel(ctx.level());
+    preparedCamera.setEntity(activeCameraEntity);
+    preparedCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    preparedCamera.setRotation(activeCameraEntity.getViewYRot(1.0F), activeCameraEntity.getViewXRot(1.0F));
+    dispatcher.prepare(preparedCamera, activeCameraEntity);
+  }
+
+  static void resetEntityDispatcher() {
+    Minecraft.getInstance().getEntityRenderDispatcher().resetCamera();
+  }
+
+  @Nullable
+  static EntityRenderState extractEntityState(Entity entity) {
+    try {
+      var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+      @SuppressWarnings({"rawtypes"})
+      EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
+      return rawRenderer != null ? (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F) : null;
+    } catch (Throwable t) {
+      return null;
+    }
+  }
+
   static SceneData collectEntity(RenderContext ctx, Entity entity, @Nullable EntityRenderState renderState) {
-    var state = renderState != null ? renderState : RendererAssets.instance().entityRenderState(entity);
+    var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+    @SuppressWarnings({"rawtypes"})
+    EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
+    if (rawRenderer == null) {
+      return SceneData.EMPTY;
+    }
+
+    var state = renderState != null ? renderState : extractEntityState(entity);
     if (state == null) {
       return SceneData.EMPTY;
     }
 
     var collector = new VanillaSubmitCollector(ctx);
-    var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
-    dispatcher.submit(
-      state,
-      collector.cameraRenderState(),
-      entity.getX(),
-      entity.getY(),
-      entity.getZ(),
-      new PoseStack(),
-      collector
-    );
+    var cameraState = collector.cameraRenderState();
+    var poseStack = new PoseStack();
+    var renderOffset = rawRenderer.getRenderOffset(state);
+    poseStack.pushPose();
+    poseStack.translate(entity.getX() + renderOffset.x(), entity.getY() + renderOffset.y(), entity.getZ() + renderOffset.z());
+    rawRenderer.submit(state, poseStack, collector, cameraState);
+    if (state.displayFireAnimation) {
+      collector.submitFlame(poseStack, state, Mth.rotationAroundAxis(Mth.Y_AXIS, cameraState.orientation, new Quaternionf()));
+    }
+    if (state instanceof AvatarRenderState) {
+      poseStack.translate(-renderOffset.x(), -renderOffset.y(), -renderOffset.z());
+    }
+    if (!state.shadowPieces.isEmpty()) {
+      collector.submitShadow(poseStack, state.shadowRadius, state.shadowPieces);
+    }
+    if (!(state instanceof AvatarRenderState)) {
+      poseStack.translate(-renderOffset.x(), -renderOffset.y(), -renderOffset.z());
+    }
+    poseStack.popPose();
     return collector.builder.build();
   }
 
@@ -328,11 +380,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   ) {
     var texture = textureImage(sprite);
     if (texture == null) {
-      return;
+      texture = textureFromRenderType(renderType);
     }
+    var faceEmission = emission >= 0 && emission <= 15 ? emission : 0;
+    var outlineColor = emission > 15 || emission < 0 ? emission : 0;
 
     model.setupAnim(state);
-    appendModelPartGeometry(model.root(), poseStack, texture, alphaMode(renderType, texture), color, emission);
+    appendModelPartGeometry(model.root(), poseStack, texture, alphaMode(renderType, texture), color, faceEmission, outlineColor);
   }
 
   @Override
@@ -351,10 +405,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   ) {
     var texture = textureImage(sprite);
     if (texture == null) {
-      return;
+      texture = textureFromRenderType(renderType);
     }
+    var faceEmission = emission >= 0 && emission <= 15 ? emission : 0;
+    var outlineColor = emission > 15 || emission < 0 ? emission : 0;
 
-    appendModelPartGeometry(modelPart, poseStack, texture, alphaMode(renderType, texture), color, emission);
+    appendModelPartGeometry(modelPart, poseStack, texture, alphaMode(renderType, texture), color, faceEmission, outlineColor);
   }
 
   @Override
@@ -450,21 +506,32 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
     int color,
-    int emission
+    int emission,
+    int outlineColor
   ) {
     modelPart.visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
         var vertices = new Vector3f[4];
+        var outlineVertices = outlineColor != 0 ? new Vector3f[4] : null;
         var uv = new float[8];
         for (var i = 0; i < polygon.vertices().length; i++) {
           var vertex = polygon.vertices()[i];
-          vertices[i] = pose.pose().transformPosition(vertex.x() / 16.0F, vertex.y() / 16.0F, vertex.z() / 16.0F, new Vector3f());
+          var localX = vertex.x() / 16.0F;
+          var localY = vertex.y() / 16.0F;
+          var localZ = vertex.z() / 16.0F;
+          vertices[i] = pose.pose().transformPosition(localX, localY, localZ, new Vector3f());
+          if (outlineVertices != null) {
+            outlineVertices[i] = pose.pose().transformPosition(localX * 1.03F, localY * 1.03F, localZ * 1.03F, new Vector3f());
+          }
           uv[i * 2] = vertex.u();
           uv[i * 2 + 1] = vertex.v();
         }
 
         var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
         builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F));
+        if (outlineVertices != null) {
+          addFace(outlineVertices, WHITE_TEXTURE, RendererAssets.AlphaMode.OPAQUE, outlineColor, 0, true, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F});
+        }
       }
     });
   }
@@ -474,15 +541,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    var texture = assets.texture(quad.materialInfo().sprite().contents().name());
+    var sprite = quad.materialInfo().sprite();
+    var texture = assets.texture(sprite.contents().name());
     var vertices = new Vector3f[4];
     var uv = new float[8];
     for (var i = 0; i < 4; i++) {
       Vector3fc position = quad.position(i);
       vertices[i] = poseMatrix.transformPosition(new Vector3f(position));
       var packedUv = quad.packedUV(i);
-      uv[i * 2] = Float.intBitsToFloat((int) packedUv);
-      uv[i * 2 + 1] = Float.intBitsToFloat((int) (packedUv >>> 32));
+      uv[i * 2] = normalizeSpriteU(sprite, Float.intBitsToFloat((int) packedUv));
+      uv[i * 2 + 1] = normalizeSpriteV(sprite, Float.intBitsToFloat((int) (packedUv >>> 32)));
     }
 
     var color = baseColor;
@@ -544,6 +612,26 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return texture.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+  }
+
+  private float normalizeSpriteU(TextureAtlasSprite sprite, float atlasU) {
+    var span = sprite.getU1() - sprite.getU0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return clamp01((atlasU - sprite.getU0()) / span);
+  }
+
+  private float normalizeSpriteV(TextureAtlasSprite sprite, float atlasV) {
+    var span = sprite.getV1() - sprite.getV0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return clamp01((atlasV - sprite.getV0()) / span);
+  }
+
+  private float clamp01(float value) {
+    return Math.max(0.0F, Math.min(1.0F, value));
   }
 
   private int modulateColor(int left, int right) {

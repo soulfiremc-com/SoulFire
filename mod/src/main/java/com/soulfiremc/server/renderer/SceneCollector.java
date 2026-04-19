@@ -45,27 +45,32 @@ public class SceneCollector {
     var billboardBuckets = new HashMap<Long, Integer>();
     var trace = RenderDebugTrace.current();
 
-    for (var entity : level.entitiesForRendering()) {
-      if (entity == localPlayer) {
-        continue;
-      }
-      trace.entityConsidered();
+    VanillaSubmitCollector.prepareEntityDispatcher(ctx, localPlayer);
+    try {
+      for (var entity : level.entitiesForRendering()) {
+        if (entity == localPlayer) {
+          continue;
+        }
+        trace.entityConsidered();
 
-      var dx = entity.getX() - ctx.camera().eyeX();
-      var dy = entity.getY() - ctx.camera().eyeY();
-      var dz = entity.getZ() - ctx.camera().eyeZ();
-      var distanceSq = dx * dx + dy * dy + dz * dz;
-      if (distanceSq > ctx.maxDistanceSq()) {
-        continue;
-      }
+        var dx = entity.getX() - ctx.camera().eyeX();
+        var dy = entity.getY() - ctx.camera().eyeY();
+        var dz = entity.getZ() - ctx.camera().eyeZ();
+        var distanceSq = dx * dx + dy * dy + dz * dz;
+        if (distanceSq > ctx.maxDistanceSq()) {
+          continue;
+        }
 
-      var bounds = entity.getBoundingBox();
-      if (!ctx.camera().isVisibleAabb(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ)) {
-        continue;
-      }
-      trace.entityVisible();
+        var bounds = entity.getBoundingBox();
+        if (!ctx.camera().isVisibleAabb(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ)) {
+          continue;
+        }
+        trace.entityVisible();
 
-      collectGenericEntity(ctx, entity, builder);
+        collectGenericEntity(ctx, entity, builder);
+      }
+    } finally {
+      VanillaSubmitCollector.resetEntityDispatcher();
     }
 
     builder.addAll(VanillaSubmitCollector.collectParticles(ctx));
@@ -73,13 +78,8 @@ public class SceneCollector {
     return builder.build();
   }
 
-  private static void collectGenericEntity(
-    RenderContext ctx,
-    Entity entity,
-    SceneData.Builder builder
-  ) {
-    var assets = RendererAssets.instance();
-    var renderState = assets.entityRenderState(entity);
+  private static void collectGenericEntity(RenderContext ctx, Entity entity, SceneData.Builder builder) {
+    var renderState = VanillaSubmitCollector.extractEntityState(entity);
     if (renderState != null && renderState.isInvisible && !renderState.appearsGlowing()) {
       return;
     }

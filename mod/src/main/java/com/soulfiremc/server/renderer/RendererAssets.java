@@ -619,19 +619,6 @@ public final class RendererAssets {
     if (quad == null) {
       throw new NullPointerException("vanilla quad is null");
     }
-    var vertices = new Vector3f[4];
-    var uv = new float[8];
-    for (var i = 0; i < 4; i++) {
-      var position = quad.position(i);
-      var packedUv = quad.packedUV(i);
-      if (position == null) {
-        throw new NullPointerException("quad position[" + i + "] is null");
-      }
-      vertices[i] = new Vector3f(position);
-      uv[i * 2] = Float.intBitsToFloat((int) packedUv);
-      uv[i * 2 + 1] = Float.intBitsToFloat((int) (packedUv >>> 32));
-    }
-
     var materialInfo = quad.materialInfo();
     if (materialInfo == null) {
       throw new NullPointerException("quad.materialInfo is null");
@@ -648,6 +635,18 @@ public final class RendererAssets {
     if (spriteId == null) {
       throw new NullPointerException("quad.materialInfo.sprite.contents.name is null");
     }
+    var vertices = new Vector3f[4];
+    var uv = new float[8];
+    for (var i = 0; i < 4; i++) {
+      var position = quad.position(i);
+      var packedUv = quad.packedUV(i);
+      if (position == null) {
+        throw new NullPointerException("quad position[" + i + "] is null");
+      }
+      vertices[i] = new Vector3f(position);
+      uv[i * 2] = normalizeSpriteU(sprite, Float.intBitsToFloat((int) packedUv));
+      uv[i * 2 + 1] = normalizeSpriteV(sprite, Float.intBitsToFloat((int) (packedUv >>> 32)));
+    }
     var texture = texture(spriteId);
     var alphaMode = chooseAlphaMode(state, texture, spriteId.getPath(), false);
     return GeometryFace.of(
@@ -660,6 +659,22 @@ public final class RendererAssets {
       materialInfo.lightEmission(),
       materialInfo.shade()
     );
+  }
+
+  private float normalizeSpriteU(TextureAtlasSprite sprite, float atlasU) {
+    var span = sprite.getU1() - sprite.getU0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return Mth.clamp((atlasU - sprite.getU0()) / span, 0.0F, 1.0F);
+  }
+
+  private float normalizeSpriteV(TextureAtlasSprite sprite, float atlasV) {
+    var span = sprite.getV1() - sprite.getV0();
+    if (Math.abs(span) < 1.0E-6F) {
+      return 0.0F;
+    }
+    return Mth.clamp((atlasV - sprite.getV0()) / span, 0.0F, 1.0F);
   }
 
   private BlockGeometry fallbackCube(BlockState state) {

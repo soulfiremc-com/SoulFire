@@ -6,6 +6,8 @@ accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()L
 
 accessible method net/minecraft/client/Minecraft getTickTargetMillis (F)F
 accessible method net/minecraft/client/Minecraft runTick (Z)V
+accessible method net/minecraft/client/Camera setRotation (FF)V
+accessible method net/minecraft/client/Camera setPosition (DDD)V
 
 accessible field net/minecraft/client/Minecraft gameThread Ljava/lang/Thread;
 accessible field net/minecraft/client/Minecraft packetProcessor Lnet/minecraft/network/PacketProcessor;
