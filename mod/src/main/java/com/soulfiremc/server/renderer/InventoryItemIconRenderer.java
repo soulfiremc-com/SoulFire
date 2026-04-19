@@ -275,7 +275,7 @@ public final class InventoryItemIconRenderer {
       layer.itemTransform.apply(false, poseState);
       poseState.mulPose(layer.localTransform);
 
-      ((SpecialModelRenderer<Object>) layer.specialRenderer).submit(
+      layer.specialRenderer.submit(
         layer.argumentForSpecialRendering,
         pose,
         collector,
@@ -350,7 +350,7 @@ public final class InventoryItemIconRenderer {
     RendererAssets.TextureImage texture,
     int color
   ) {
-    ((Model) model).setupAnim(state);
+    model.setupAnim(state);
     appendModelPartGeometry(quads, textures, model.root(), poseStack, texture, color);
   }
 
@@ -966,7 +966,7 @@ public final class InventoryItemIconRenderer {
 
     var identity = renderState.getModelIdentity();
     if (identity instanceof List<?> list) {
-      return List.copyOf((List<Object>) list);
+      return List.copyOf(list);
     }
     return identity == null ? List.of() : List.of(identity);
   }

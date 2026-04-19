@@ -167,7 +167,7 @@ public final class RendererAssets {
       @SuppressWarnings({"rawtypes", "unchecked"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
       if (rawRenderer != null) {
-        EntityRenderState renderState = (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F);
+        EntityRenderState renderState = rawRenderer.createRenderState(entity, 1.0F);
         if (rawRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer
           && renderState instanceof LivingEntityRenderState livingState) {
           @SuppressWarnings("rawtypes")
@@ -193,7 +193,7 @@ public final class RendererAssets {
       var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
       @SuppressWarnings({"rawtypes", "unchecked"})
       EntityRenderer rawRenderer = dispatcher.getRenderer(entity);
-      return rawRenderer != null ? (EntityRenderState) rawRenderer.createRenderState(entity, 1.0F) : null;
+      return rawRenderer != null ? rawRenderer.createRenderState(entity, 1.0F) : null;
     } catch (Throwable t) {
       log.debug("Failed to extract entity render state for {}", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()), t);
       return null;
@@ -333,7 +333,7 @@ public final class RendererAssets {
 
   private TextureImage playerTexture(AbstractClientPlayer player) {
     try {
-      return this.texture((ClientAsset.Texture) player.getSkin().body());
+      return this.texture(player.getSkin().body());
     } catch (Throwable t) {
       log.debug("Failed to compose player sprite for {}", player.getUUID(), t);
       return MISSING_TEXTURE;
@@ -341,12 +341,12 @@ public final class RendererAssets {
   }
 
   private List<GeometryFace> buildPlayerModel(AbstractClientPlayer player, EntityLod lod) {
-    var vanillaFaces = tryBuildVanillaLivingModel(player, texture((ClientAsset.Texture) player.getSkin().body()), 0.9375F);
+    var vanillaFaces = tryBuildVanillaLivingModel(player, texture(player.getSkin().body()), 0.9375F);
     if (!vanillaFaces.isEmpty()) {
       return vanillaFaces;
     }
 
-    var skin = this.texture((ClientAsset.Texture) player.getSkin().body());
+    var skin = this.texture(player.getSkin().body());
     var slim = "SLIM".equalsIgnoreCase(player.getSkin().model().name());
     var armWidth = slim ? 0.1875F : 0.25F;
     var armOverlayInflate = 0.015625F;
@@ -510,7 +510,7 @@ public final class RendererAssets {
       }
       @SuppressWarnings("rawtypes")
       var rawLivingRenderer = (LivingEntityRenderer) livingRenderer;
-      var model = (EntityModel) rawLivingRenderer.getModel();
+      var model = rawLivingRenderer.getModel();
       if (model == null) {
         throw new NullPointerException("renderer model is null");
       }

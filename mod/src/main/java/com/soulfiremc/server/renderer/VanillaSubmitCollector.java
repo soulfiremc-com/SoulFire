@@ -275,7 +275,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    ((Model) model).setupAnim(state);
+    model.setupAnim(state);
     appendModelPartGeometry(model.root(), poseStack, texture, alphaMode(renderType, texture), color, emission);
   }
 

@@ -1153,7 +1153,7 @@ public final class MCPService {
     return new McpServerFeatures.AsyncToolSpecification(
       new McpSchema.Tool(name, null, description, new McpSchema.JsonSchema(
         "object",
-        (Map<String, Object>) (Map<String, ?>) properties,
+        (Map<String, Object>) properties,
         required,
         null, null, null
       ), null, null, null),

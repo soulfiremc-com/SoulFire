@@ -143,7 +143,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       .setBlockId(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
     for (var property : state.getProperties()) {
       @SuppressWarnings({"rawtypes", "unchecked"})
-      var name = ((Property) property).getName();
+      var name = property.getName();
       builder.putProperties(name, getPropertyValueAsString(state, property));
     }
     return builder.build();

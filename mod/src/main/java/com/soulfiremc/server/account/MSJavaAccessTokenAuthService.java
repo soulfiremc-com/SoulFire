@@ -45,7 +45,7 @@ public final class MSJavaAccessTokenAuthService
     return CompletableFuture.supplyAsync(() -> {
       try {
         var token = new MinecraftToken(data.expireTimeMs, "Bearer", data.accessToken);
-        var profile = (MinecraftProfile) LenniHttpHelper.client(proxyData)
+        var profile = LenniHttpHelper.client(proxyData)
           .executeAndHandle(new MinecraftProfileRequest(token));
         return new MinecraftAccount(
           AuthType.MICROSOFT_JAVA_ACCESS_TOKEN,

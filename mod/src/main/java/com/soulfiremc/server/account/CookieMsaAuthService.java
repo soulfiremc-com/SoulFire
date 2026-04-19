@@ -61,7 +61,7 @@ public class CookieMsaAuthService extends MsaAuthService {
       .getFirstValue("code")
       .orElseThrow(() -> new IOException("Missing authorization code in redirect"));
 
-    return (MsaToken) httpClient.executeAndHandle(
+    return httpClient.executeAndHandle(
       new MsaAuthCodeTokenRequest(applicationConfig, code));
   }
 }

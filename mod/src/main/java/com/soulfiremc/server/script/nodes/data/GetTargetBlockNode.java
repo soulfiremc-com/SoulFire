@@ -81,7 +81,7 @@ public final class GetTargetBlockNode extends AbstractScriptNode {
     ));
 
     if (hitResult.getType() == HitResult.Type.BLOCK) {
-      var blockHit = (BlockHitResult) hitResult;
+      var blockHit = hitResult;
       var blockPos = blockHit.getBlockPos();
       var blockState = level.getBlockState(blockPos);
       var blockId = BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).toString();
