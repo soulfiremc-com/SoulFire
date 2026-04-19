@@ -45,6 +45,7 @@ class RendererAssetsTest {
     var assets = RendererAssets.instance();
     assertFalse(assets.blockGeometry(Blocks.STONE.defaultBlockState()).faces().isEmpty());
     assertFalse(assets.blockGeometry(Blocks.STONE_SLAB.defaultBlockState()).faces().isEmpty());
+    assertFalse(assets.blockGeometry(Blocks.GLASS.defaultBlockState()).faces().isEmpty());
   }
 
   @Test

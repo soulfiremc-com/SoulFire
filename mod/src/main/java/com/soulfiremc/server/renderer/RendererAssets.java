@@ -691,7 +691,10 @@ public final class RendererAssets {
     var textures = parent != null ? new HashMap<>(parent.textures) : new HashMap<String, String>();
     if (json.has("textures")) {
       for (var entry : json.getAsJsonObject("textures").entrySet()) {
-        textures.put(entry.getKey(), entry.getValue().getAsString());
+        var textureReference = parseTextureReferenceValue(entry.getValue());
+        if (textureReference != null) {
+          textures.put(entry.getKey(), textureReference);
+        }
       }
     }
 
@@ -701,6 +704,29 @@ public final class RendererAssets {
       elements = parseModelElements(json.getAsJsonArray("elements"));
     }
     return new ResolvedModel(textures, elements, ambientOcclusion);
+  }
+
+  @Nullable
+  private String parseTextureReferenceValue(JsonElement textureElement) {
+    if (textureElement == null || textureElement.isJsonNull()) {
+      return null;
+    }
+
+    if (textureElement.isJsonPrimitive()) {
+      return textureElement.getAsString();
+    }
+
+    if (textureElement.isJsonObject()) {
+      var textureObject = textureElement.getAsJsonObject();
+      if (textureObject.has("sprite") && textureObject.get("sprite").isJsonPrimitive()) {
+        return textureObject.get("sprite").getAsString();
+      }
+      if (textureObject.has("texture") && textureObject.get("texture").isJsonPrimitive()) {
+        return textureObject.get("texture").getAsString();
+      }
+    }
+
+    return null;
   }
 
   private List<ModelElement> parseModelElements(JsonArray array) {
