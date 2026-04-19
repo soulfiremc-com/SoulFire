@@ -206,7 +206,8 @@ public final class RasterPipeline {
   private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, float depthBias) {
     var ndcX = vertex.x() / (vertex.z() * camera.tanHalfFovX());
     var ndcY = vertex.y() / (vertex.z() * camera.tanHalfFovY());
-    var screenX = (float) ((ndcX * 0.5 + 0.5) * camera.width());
+    // SoulFire's historical camera convention maps positive camera X toward the left side of the screen.
+    var screenX = (float) ((0.5 - ndcX * 0.5) * camera.width());
     var screenY = (float) ((0.5 - ndcY * 0.5) * camera.height());
     var inverseDepth = 1.0F / vertex.z();
     return new ProjectedVertex(
@@ -237,6 +238,9 @@ public final class RasterPipeline {
     var v2 = triangle.v2();
     var area = edge(v0.x(), v0.y(), v1.x(), v1.y(), v2.x(), v2.y());
     if (Math.abs(area) < 1.0E-5F) {
+      return;
+    }
+    if (!triangle.doubleSided() && area <= 0.0F) {
       return;
     }
     var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());

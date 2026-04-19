@@ -101,7 +101,9 @@ public class WorldMeshCollector {
         for (var localX = 0; localX < 16; localX++) {
           blockPos.set(originX + localX, originY + localY, originZ + localZ);
           var blockState = section.getBlockState(localX, localY, localZ);
-          if (!blockState.isAir() && blockState.getBlock() != Blocks.VOID_AIR) {
+          var fluidState = blockState.getFluidState();
+          var pureFluidBlock = !fluidState.isEmpty() && blockState.getBlock() == fluidState.createLegacyBlock().getBlock();
+          if (!pureFluidBlock && !blockState.isAir() && blockState.getBlock() != Blocks.VOID_AIR) {
             for (var face : assets.blockGeometry(blockState).faces()) {
               if (!shouldEmitBlockFace(level, blockState, blockPos, face)) {
                 continue;
@@ -120,7 +122,6 @@ public class WorldMeshCollector {
             }
           }
 
-          var fluidState = blockState.getFluidState();
           if (!fluidState.isEmpty()) {
             emitFluidFaces(ctx, builder, blockState, fluidState, blockPos);
           }
