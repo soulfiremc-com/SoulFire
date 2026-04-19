@@ -21,13 +21,20 @@ import lombok.experimental.UtilityClass;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HalfTransparentBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
 
@@ -154,121 +161,255 @@ public class WorldMeshCollector {
     FluidState fluidState,
     BlockPos blockPos
   ) {
+    var level = ctx.level();
     var fluid = RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState);
     if (fluid == RendererAssets.FluidGeometry.EMPTY || fluid.surfaceHeight() <= 0.0F) {
       return;
     }
 
-    var tintIndex = fluidState.is(net.minecraft.tags.FluidTags.WATER) ? 0 : -1;
-    var topFace = RendererAssets.GeometryFace.of(
+    var isLava = fluidState.is(FluidTags.LAVA);
+    var belowState = level.getBlockState(blockPos.relative(Direction.DOWN));
+    var belowFluid = belowState.getFluidState();
+    var aboveState = level.getBlockState(blockPos.relative(Direction.UP));
+    var aboveFluid = aboveState.getFluidState();
+    var northState = level.getBlockState(blockPos.relative(Direction.NORTH));
+    var northFluid = northState.getFluidState();
+    var southState = level.getBlockState(blockPos.relative(Direction.SOUTH));
+    var southFluid = southState.getFluidState();
+    var westState = level.getBlockState(blockPos.relative(Direction.WEST));
+    var westFluid = westState.getFluidState();
+    var eastState = level.getBlockState(blockPos.relative(Direction.EAST));
+    var eastFluid = eastState.getFluidState();
+
+    var renderTop = !isNeighborSameFluid(fluidState, aboveFluid);
+    var renderBottom = shouldRenderFluidFace(fluidState, blockState, Direction.DOWN, belowFluid)
+      && !isFaceOccludedByNeighbor(Direction.DOWN, 0.8888889F, belowState);
+    var renderNorth = shouldRenderFluidFace(fluidState, blockState, Direction.NORTH, northFluid);
+    var renderSouth = shouldRenderFluidFace(fluidState, blockState, Direction.SOUTH, southFluid);
+    var renderWest = shouldRenderFluidFace(fluidState, blockState, Direction.WEST, westFluid);
+    var renderEast = shouldRenderFluidFace(fluidState, blockState, Direction.EAST, eastFluid);
+    if (!(renderTop || renderBottom || renderNorth || renderSouth || renderWest || renderEast)) {
+      return;
+    }
+
+    var fluidType = fluidState.getType();
+    var centerHeight = getFluidHeight(level, fluidType, blockPos, blockState, fluidState);
+    float northEastHeight;
+    float northWestHeight;
+    float southEastHeight;
+    float southWestHeight;
+    if (centerHeight >= 1.0F) {
+      northEastHeight = northWestHeight = southEastHeight = southWestHeight = 1.0F;
+    } else {
+      northEastHeight = calculateAverageHeight(level, fluidType, centerHeight, getFluidHeight(level, fluidType, blockPos.north(), northState, northFluid), getFluidHeight(level, fluidType, blockPos.east(), eastState, eastFluid), blockPos.north().east());
+      northWestHeight = calculateAverageHeight(level, fluidType, centerHeight, getFluidHeight(level, fluidType, blockPos.north(), northState, northFluid), getFluidHeight(level, fluidType, blockPos.west(), westState, westFluid), blockPos.north().west());
+      southEastHeight = calculateAverageHeight(level, fluidType, centerHeight, getFluidHeight(level, fluidType, blockPos.south(), southState, southFluid), getFluidHeight(level, fluidType, blockPos.east(), eastState, eastFluid), blockPos.south().east());
+      southWestHeight = calculateAverageHeight(level, fluidType, centerHeight, getFluidHeight(level, fluidType, blockPos.south(), southState, southFluid), getFluidHeight(level, fluidType, blockPos.west(), westState, westFluid), blockPos.south().west());
+    }
+
+    var topInset = 0.001F;
+    var bottomInset = renderBottom ? 0.001F : 0.0F;
+    if (renderTop && !isFaceOccludedByNeighbor(Direction.UP, Math.min(Math.min(northWestHeight, southWestHeight), Math.min(southEastHeight, northEastHeight)), aboveState)) {
+      northWestHeight -= topInset;
+      southWestHeight -= topInset;
+      southEastHeight -= topInset;
+      northEastHeight -= topInset;
+
+      var flow = fluidState.getFlow(level, blockPos);
+      var topTexture = flow.x == 0.0 && flow.z == 0.0 ? fluid.stillTexture() : fluid.flowTexture();
+      var topUv = topFaceUv(flow);
+      var topColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, 1.0F);
+      builder.add(new RenderQuad(
+        new RenderVertex(blockPos.getX(), blockPos.getY() + northWestHeight, blockPos.getZ(), topUv[0], topUv[1]),
+        new RenderVertex(blockPos.getX(), blockPos.getY() + southWestHeight, blockPos.getZ() + 1.0F, topUv[2], topUv[3]),
+        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + southEastHeight, blockPos.getZ() + 1.0F, topUv[4], topUv[5]),
+        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + northEastHeight, blockPos.getZ(), topUv[6], topUv[7]),
+        topTexture,
+        fluid.alphaMode(),
+        topColor,
+        fluidState.shouldRenderBackwardUpFace(level, blockPos.above()),
+        0.0F
+      ));
+    }
+
+    if (renderBottom) {
+      var bottomColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, 0.5F);
+      builder.add(new RenderQuad(
+        new RenderVertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 0.0F, 1.0F),
+        new RenderVertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ(), 0.0F, 0.0F),
+        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ(), 1.0F, 0.0F),
+        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 1.0F, 1.0F),
+        fluid.stillTexture(),
+        fluid.alphaMode(),
+        bottomColor,
+        false,
+        0.0F
+      ));
+    }
+
+    emitFluidSide(ctx, builder, fluidState, blockState, blockPos, Direction.NORTH, renderNorth, northWestHeight, northEastHeight, 0.0F, 0.0F, 1.0F, 0.0F, 0.8F, isLava, northState);
+    emitFluidSide(ctx, builder, fluidState, blockState, blockPos, Direction.SOUTH, renderSouth, southEastHeight, southWestHeight, 1.0F, 1.0F, 0.0F, 1.0F, 0.8F, isLava, southState);
+    emitFluidSide(ctx, builder, fluidState, blockState, blockPos, Direction.WEST, renderWest, southWestHeight, northWestHeight, 0.0F, 1.0F, 0.0F, 0.0F, 0.6F, isLava, westState);
+    emitFluidSide(ctx, builder, fluidState, blockState, blockPos, Direction.EAST, renderEast, northEastHeight, southEastHeight, 1.0F, 0.0F, 1.0F, 1.0F, 0.6F, isLava, eastState);
+  }
+
+  private static void emitFluidSide(
+    RenderContext ctx,
+    SceneData.Builder builder,
+    FluidState fluidState,
+    BlockState blockState,
+    BlockPos blockPos,
+    Direction side,
+    boolean shouldRender,
+    float leftHeight,
+    float rightHeight,
+    float leftX,
+    float leftZ,
+    float rightX,
+    float rightZ,
+    float shade,
+    boolean isLava,
+    BlockState neighborState
+  ) {
+    if (!shouldRender && leftHeight <= 0.0F && rightHeight <= 0.0F) {
+      return;
+    }
+    if (!shouldRender && isFaceOccludedByNeighbor(side, Math.max(leftHeight, rightHeight), neighborState)) {
+      return;
+    }
+
+    var texture = RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState).flowTexture();
+    if (!isLava) {
+      var block = neighborState.getBlock();
+      if (block instanceof HalfTransparentBlock || block instanceof LeavesBlock) {
+        texture = RendererAssets.instance().waterOverlayTexture();
+      }
+    }
+
+    var v0 = (1.0F - leftHeight) * 0.5F;
+    var v1 = (1.0F - rightHeight) * 0.5F;
+    var baseColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, shade);
+    builder.add(new RenderQuad(
+      new RenderVertex(blockPos.getX() + leftX, blockPos.getY() + leftHeight, blockPos.getZ() + leftZ, 0.0F, v0),
+      new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + rightHeight, blockPos.getZ() + rightZ, 0.5F, v1),
+      new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + 0.001F, blockPos.getZ() + rightZ, 0.5F, 0.5F),
+      new RenderVertex(blockPos.getX() + leftX, blockPos.getY() + 0.001F, blockPos.getZ() + leftZ, 0.0F, 0.5F),
+      texture,
+      fluidState.is(FluidTags.WATER) ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
+      baseColor,
+      texture == RendererAssets.instance().waterOverlayTexture(),
+      0.0F
+    ));
+  }
+
+  private static int fluidFaceColor(RenderContext ctx, FluidState fluidState, BlockState blockState, BlockPos blockPos, float shade) {
+    var tintIndex = fluidState.is(FluidTags.WATER) ? 0 : -1;
+    var face = RendererAssets.GeometryFace.of(
       new org.joml.Vector3f[]{
-        new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 0.0F),
-        new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 1.0F),
-        new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 1.0F),
-        new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 0.0F)
+        new org.joml.Vector3f(0.0F, 0.0F, 0.0F),
+        new org.joml.Vector3f(0.0F, 0.0F, 1.0F),
+        new org.joml.Vector3f(1.0F, 0.0F, 1.0F),
+        new org.joml.Vector3f(1.0F, 0.0F, 0.0F)
       },
       new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-      fluid.stillTexture(),
-      fluid.alphaMode(),
+      fluidState.is(FluidTags.LAVA) ? RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState).stillTexture() : RendererAssets.instance().fluidGeometry(fluidState, blockPos, blockState).stillTexture(),
+      fluidState.is(FluidTags.WATER) ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
       Direction.UP,
       tintIndex,
-      fluid.emission(),
+      fluidState.is(FluidTags.LAVA) ? 15 : 0,
       false
     );
-    addFluidFace(ctx, builder, topFace, blockState, blockPos);
+    var color = LightingCalculator.faceColor(ctx, face, blockState, blockPos);
+    return LightingCalculator.brighten(color, shade);
+  }
 
-    for (var direction : List.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST)) {
-      var neighborPos = blockPos.relative(direction);
-      var neighborFluid = ctx.level().getFluidState(neighborPos);
-      if (!neighborFluid.isEmpty()
-        && neighborFluid.getType().isSame(fluidState.getType())
-        && neighborFluid.getHeight(ctx.level(), neighborPos) >= fluid.surfaceHeight() - 0.02F) {
-        continue;
-      }
+  private static float[] topFaceUv(Vec3 flow) {
+    if (flow.x == 0.0 && flow.z == 0.0) {
+      return new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F};
+    }
 
-      RendererAssets.GeometryFace sideFace = switch (direction) {
-        case NORTH -> RendererAssets.GeometryFace.of(
-          new org.joml.Vector3f[]{
-            new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 0.0F),
-            new org.joml.Vector3f(1.0F, 0.0F, 0.0F),
-            new org.joml.Vector3f(0.0F, 0.0F, 0.0F),
-            new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 0.0F)
-          },
-          new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-          fluid.flowTexture(),
-          fluid.alphaMode(),
-          Direction.NORTH,
-          tintIndex,
-          fluid.emission(),
-          false
-        );
-        case SOUTH -> RendererAssets.GeometryFace.of(
-          new org.joml.Vector3f[]{
-            new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 1.0F),
-            new org.joml.Vector3f(0.0F, 0.0F, 1.0F),
-            new org.joml.Vector3f(1.0F, 0.0F, 1.0F),
-            new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 1.0F)
-          },
-          new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-          fluid.flowTexture(),
-          fluid.alphaMode(),
-          Direction.SOUTH,
-          tintIndex,
-          fluid.emission(),
-          false
-        );
-        case WEST -> RendererAssets.GeometryFace.of(
-          new org.joml.Vector3f[]{
-            new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 0.0F),
-            new org.joml.Vector3f(0.0F, 0.0F, 0.0F),
-            new org.joml.Vector3f(0.0F, 0.0F, 1.0F),
-            new org.joml.Vector3f(0.0F, fluid.surfaceHeight(), 1.0F)
-          },
-          new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-          fluid.flowTexture(),
-          fluid.alphaMode(),
-          Direction.WEST,
-          tintIndex,
-          fluid.emission(),
-          false
-        );
-        case EAST -> RendererAssets.GeometryFace.of(
-          new org.joml.Vector3f[]{
-            new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 1.0F),
-            new org.joml.Vector3f(1.0F, 0.0F, 1.0F),
-            new org.joml.Vector3f(1.0F, 0.0F, 0.0F),
-            new org.joml.Vector3f(1.0F, fluid.surfaceHeight(), 0.0F)
-          },
-          new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-          fluid.flowTexture(),
-          fluid.alphaMode(),
-          Direction.EAST,
-          tintIndex,
-          fluid.emission(),
-          false
-        );
-        default -> null;
-      };
-      if (sideFace != null) {
-        addFluidFace(ctx, builder, sideFace, blockState, blockPos);
+    var angle = (float) Mth.atan2(flow.z, flow.x) - (float) (Math.PI / 2.0);
+    var sin = Mth.sin(angle) * 0.25F;
+    var cos = Mth.cos(angle) * 0.25F;
+    return new float[]{
+      0.5F + (-cos - sin), 0.5F + (-cos + sin),
+      0.5F + (-cos + sin), 0.5F + (cos + sin),
+      0.5F + (cos + sin), 0.5F + (cos - sin),
+      0.5F + (cos - sin), 0.5F + (-cos - sin)
+    };
+  }
+
+  private static boolean isNeighborSameFluid(FluidState firstState, FluidState secondState) {
+    return secondState.getType().isSame(firstState.getType());
+  }
+
+  private static boolean isFaceOccludedByState(Direction face, float height, BlockState state) {
+    VoxelShape shape = state.getFaceOcclusionShape(face.getOpposite());
+    if (shape == Shapes.empty()) {
+      return false;
+    }
+    if (shape == Shapes.block()) {
+      var fullHeight = height == 1.0F;
+      return face != Direction.UP || fullHeight;
+    }
+
+    VoxelShape fluidShape = Shapes.box(0.0, 0.0, 0.0, 1.0, height, 1.0);
+    return Shapes.blockOccludes(fluidShape, shape, face);
+  }
+
+  private static boolean isFaceOccludedByNeighbor(Direction face, float height, BlockState state) {
+    return isFaceOccludedByState(face, height, state);
+  }
+
+  private static boolean isFaceOccludedBySelf(BlockState state, Direction face) {
+    return isFaceOccludedByState(face.getOpposite(), 1.0F, state);
+  }
+
+  private static boolean shouldRenderFluidFace(FluidState fluidState, BlockState blockState, Direction side, FluidState neighborFluid) {
+    return !isFaceOccludedBySelf(blockState, side) && !isNeighborSameFluid(fluidState, neighborFluid);
+  }
+
+  private static float calculateAverageHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, float currentHeight, float height1, float height2, BlockPos pos) {
+    if (height2 >= 1.0F || height1 >= 1.0F) {
+      return 1.0F;
+    }
+
+    var weightedHeight = new float[2];
+    if (height2 > 0.0F || height1 > 0.0F) {
+      var cornerHeight = getFluidHeight(level, fluid, pos);
+      if (cornerHeight >= 1.0F) {
+        return 1.0F;
       }
+      addWeightedHeight(weightedHeight, cornerHeight);
+    }
+
+    addWeightedHeight(weightedHeight, currentHeight);
+    addWeightedHeight(weightedHeight, height2);
+    addWeightedHeight(weightedHeight, height1);
+    return weightedHeight[0] / weightedHeight[1];
+  }
+
+  private static void addWeightedHeight(float[] output, float height) {
+    if (height >= 0.8F) {
+      output[0] += height * 10.0F;
+      output[1] += 10.0F;
+    } else if (height >= 0.0F) {
+      output[0] += height;
+      output[1] += 1.0F;
     }
   }
 
-  private static void addFluidFace(
-    RenderContext ctx,
-    SceneData.Builder builder,
-    RendererAssets.GeometryFace face,
-    BlockState blockState,
-    BlockPos blockPos
-  ) {
-    var color = LightingCalculator.faceColor(ctx, face, blockState, blockPos);
-    if (blockState.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) {
-      color = LightingCalculator.brighten(color, 1.1F);
-    } else {
-      color = LightingCalculator.brighten(color, 0.85F);
+  private static float getFluidHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, BlockPos pos) {
+    var state = level.getBlockState(pos);
+    return getFluidHeight(level, fluid, pos, state, state.getFluidState());
+  }
+
+  private static float getFluidHeight(net.minecraft.client.multiplayer.ClientLevel level, Fluid fluid, BlockPos pos, BlockState blockState, FluidState fluidState) {
+    if (fluid.isSame(fluidState.getType())) {
+      var aboveState = level.getBlockState(pos.above());
+      return fluid.isSame(aboveState.getFluidState().getType()) ? 1.0F : fluidState.getOwnHeight();
     }
-    builder.add(toRenderQuad(face, blockPos.getX(), blockPos.getY(), blockPos.getZ(), color, false, 0.0F));
+    return !blockState.isSolid() ? 0.0F : -1.0F;
   }
 
   static RenderQuad toRenderQuad(

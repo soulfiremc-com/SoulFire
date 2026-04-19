@@ -47,6 +47,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.server.packs.resources.ResourceManager;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -56,6 +57,8 @@ import org.joml.Vector3fc;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -167,6 +170,10 @@ public final class RendererAssets {
   public TextureImage texture(Identifier textureLocation) {
     var normalizedPath = normalizeTexturePath(textureLocation);
     return textureCache.computeIfAbsent(normalizedPath.toString(), _ -> loadTexture(normalizedPath));
+  }
+
+  public TextureImage waterOverlayTexture() {
+    return texture(Identifier.withDefaultNamespace("block/water_overlay"));
   }
 
   public TextureImage remoteTexture(String url) {
@@ -1210,11 +1217,14 @@ public final class RendererAssets {
 
   private TextureImage loadTexture(Identifier texturePath) {
     var normalized = normalizeTexturePath(texturePath);
-    var metadataPath = "assets/%s/%s.mcmeta".formatted(normalized.getNamespace(), normalized.getPath());
-    try (var imageStream = Objects.requireNonNull(RendererAssets.class.getClassLoader().getResourceAsStream("assets/%s/%s".formatted(normalized.getNamespace(), normalized.getPath())))) {
+    var metadataLocation = normalized.withPath(normalized.getPath() + ".mcmeta");
+    try (var imageStream = openResourceStream(normalized)) {
+      if (imageStream == null) {
+        throw new IllegalStateException("Missing resource " + normalized);
+      }
       var image = ImageIO.read(imageStream);
       JsonObject metadata = null;
-      try (var metadataStream = RendererAssets.class.getClassLoader().getResourceAsStream(metadataPath)) {
+      try (var metadataStream = openResourceStream(metadataLocation)) {
         if (metadataStream != null) {
           metadata = JsonParser.parseString(new String(metadataStream.readAllBytes())).getAsJsonObject();
         }
@@ -1228,16 +1238,35 @@ public final class RendererAssets {
 
   @Nullable
   private JsonObject loadJson(Identifier pathWithFolder) {
-    var path = "assets/%s/%s.json".formatted(pathWithFolder.getNamespace(), pathWithFolder.getPath());
-    try (var stream = RendererAssets.class.getClassLoader().getResourceAsStream(path)) {
+    var jsonLocation = pathWithFolder.withPath(pathWithFolder.getPath() + ".json");
+    try (var stream = openResourceStream(jsonLocation)) {
       if (stream == null) {
         return null;
       }
 
       return JsonParser.parseString(new String(stream.readAllBytes())).getAsJsonObject();
     } catch (Throwable t) {
-      log.debug("Failed to load renderer json {}", path, t);
+      log.debug("Failed to load renderer json {}", jsonLocation, t);
       return null;
+    }
+  }
+
+  @Nullable
+  private InputStream openResourceStream(Identifier location) throws IOException {
+    var resourceManager = currentResourceManager();
+    var resource = resourceManager.getResource(location);
+    if (resource.isPresent()) {
+      return resource.get().open();
+    }
+
+    return RendererAssets.class.getClassLoader().getResourceAsStream("assets/%s/%s".formatted(location.getNamespace(), location.getPath()));
+  }
+
+  private ResourceManager currentResourceManager() {
+    try {
+      return Minecraft.getInstance().getResourceManager();
+    } catch (Throwable t) {
+      return ResourceManager.Empty.INSTANCE;
     }
   }
 
