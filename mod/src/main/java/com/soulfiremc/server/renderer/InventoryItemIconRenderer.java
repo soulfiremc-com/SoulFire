@@ -88,11 +88,10 @@ public final class InventoryItemIconRenderer {
     .expireAfterAccess(Duration.ofMinutes(10))
     .build();
 
-  private static final int ICON_RENDER_SIZE = 32;
+  private static final int ICON_RENDER_SIZE = 64;
   private static final int ICON_OUTPUT_SIZE = 32;
   private static final int ICON_PADDING = 2;
-  private static final float GUI_PIXELS_PER_UNIT = 32.0F;
-  private static final float GUI_CENTER = 16.0F;
+  private static final float GUI_PIXELS_PER_UNIT = 16.0F;
   private static final int MAX_GIF_FRAMES = 16;
   private static final Identifier ENCHANTED_GLINT_ITEM = Identifier.withDefaultNamespace("misc/enchanted_glint_item");
 
@@ -385,7 +384,8 @@ public final class InventoryItemIconRenderer {
   }
 
   private static BufferedImage renderFrame(IconScene scene, long animationTick) {
-    var buffers = new RasterBuffers(ICON_RENDER_SIZE, ICON_RENDER_SIZE);
+    var renderSize = Math.max(ICON_RENDER_SIZE, requiredRenderSize(scene));
+    var buffers = new RasterBuffers(renderSize, renderSize);
     buffers.clearColor(0x00000000);
     buffers.clearDepth();
 
@@ -398,6 +398,25 @@ public final class InventoryItemIconRenderer {
     }
 
     return buffers.image();
+  }
+
+  private static int requiredRenderSize(IconScene scene) {
+    var maxExtent = 0.0F;
+    for (var quad : scene.quads()) {
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v0().x()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v1().x()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v2().x()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v3().x()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v0().y()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v1().y()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v2().y()));
+      maxExtent = Math.max(maxExtent, Math.abs(quad.v3().y()));
+    }
+
+    return Math.max(
+      ICON_RENDER_SIZE,
+      (int) Math.ceil(maxExtent * GUI_PIXELS_PER_UNIT * 2.0F) + ICON_PADDING * 4
+    );
   }
 
   private static List<BufferedImage> fitFramesToSlot(List<BufferedImage> frames) {
@@ -512,7 +531,7 @@ public final class InventoryItemIconRenderer {
       if (quad.alphaMode() != alphaMode) {
         continue;
       }
-      emitProjectedTriangles(quad, projectedTriangles);
+      emitProjectedTriangles(quad, projectedTriangles, buffers.image().getWidth(), buffers.image().getHeight());
     }
 
     if (projectedTriangles.isEmpty()) {
@@ -528,12 +547,12 @@ public final class InventoryItemIconRenderer {
     }
   }
 
-  private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out) {
+  private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out, int width, int height) {
     var projected = new ProjectedVertex[]{
-      projectVertex(quad.v0(), quad.depthBias()),
-      projectVertex(quad.v1(), quad.depthBias()),
-      projectVertex(quad.v2(), quad.depthBias()),
-      projectVertex(quad.v3(), quad.depthBias())
+      projectVertex(quad.v0(), quad.depthBias(), width, height),
+      projectVertex(quad.v1(), quad.depthBias(), width, height),
+      projectVertex(quad.v2(), quad.depthBias(), width, height),
+      projectVertex(quad.v3(), quad.depthBias(), width, height)
     };
     var sortDepth =
       (projected[0].depth() + projected[1].depth() + projected[2].depth() + projected[3].depth()) / 4.0F;
@@ -559,9 +578,11 @@ public final class InventoryItemIconRenderer {
     ));
   }
 
-  private static ProjectedVertex projectVertex(RenderVertex vertex, float depthBias) {
-    var screenX = GUI_CENTER + vertex.x() * GUI_PIXELS_PER_UNIT;
-    var screenY = GUI_CENTER - vertex.y() * GUI_PIXELS_PER_UNIT;
+  private static ProjectedVertex projectVertex(RenderVertex vertex, float depthBias, int width, int height) {
+    var centerX = width * 0.5F;
+    var centerY = height * 0.5F;
+    var screenX = centerX + vertex.x() * GUI_PIXELS_PER_UNIT;
+    var screenY = centerY - vertex.y() * GUI_PIXELS_PER_UNIT;
     var depth = -vertex.z() + depthBias;
     return new ProjectedVertex(
       screenX,
