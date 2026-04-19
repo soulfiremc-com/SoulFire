@@ -82,10 +82,9 @@ public final class InventoryItemIconRenderer {
     .expireAfterAccess(Duration.ofMinutes(10))
     .build();
 
-  private static final int ICON_SIZE = 32;
-  private static final float CAMERA_DISTANCE = 2.6F;
-  private static final double CAMERA_FOV = 35.0;
-  private static final float NORMALIZED_MODEL_SIZE = 1.55F;
+  private static final int ICON_SIZE = 16;
+  private static final float GUI_PIXELS_PER_UNIT = 16.0F;
+  private static final float GUI_CENTER = 8.0F;
   private static final int MAX_GIF_FRAMES = 16;
   private static final Identifier ENCHANTED_GLINT_ITEM = Identifier.withDefaultNamespace("misc/enchanted_glint_item");
 
@@ -121,13 +120,7 @@ public final class InventoryItemIconRenderer {
       return missingImage();
     }
 
-    var normalizedQuads = normalizeQuads(scene.quads());
-    if (normalizedQuads.isEmpty()) {
-      return missingImage();
-    }
-
-    var normalizedScene = new IconScene(normalizedQuads, scene.textures(), scene.hasFoil());
-    var encodedImage = encodeScene(normalizedScene);
+    var encodedImage = encodeScene(scene);
     return encodedImage != null ? encodedImage : missingImage();
   }
 
@@ -333,66 +326,6 @@ public final class InventoryItemIconRenderer {
     }
   }
 
-  private static List<RenderQuad> normalizeQuads(List<RenderQuad> quads) {
-    var minX = Float.POSITIVE_INFINITY;
-    var minY = Float.POSITIVE_INFINITY;
-    var minZ = Float.POSITIVE_INFINITY;
-    var maxX = Float.NEGATIVE_INFINITY;
-    var maxY = Float.NEGATIVE_INFINITY;
-    var maxZ = Float.NEGATIVE_INFINITY;
-
-    for (var quad : quads) {
-      for (var vertex : List.of(quad.v0(), quad.v1(), quad.v2(), quad.v3())) {
-        minX = Math.min(minX, vertex.x());
-        minY = Math.min(minY, vertex.y());
-        minZ = Math.min(minZ, vertex.z());
-        maxX = Math.max(maxX, vertex.x());
-        maxY = Math.max(maxY, vertex.y());
-        maxZ = Math.max(maxZ, vertex.z());
-      }
-    }
-
-    if (!Float.isFinite(minX) || !Float.isFinite(maxX)) {
-      return List.of();
-    }
-
-    var sizeX = maxX - minX;
-    var sizeY = maxY - minY;
-    var sizeZ = maxZ - minZ;
-    var maxSize = Math.max(0.0001F, Math.max(sizeX, Math.max(sizeY, sizeZ)));
-    var centerX = (minX + maxX) * 0.5F;
-    var centerY = (minY + maxY) * 0.5F;
-    var centerZ = (minZ + maxZ) * 0.5F;
-    var transform = new Matrix4f()
-      .translate(-centerX, -centerY, -centerZ)
-      .scale(NORMALIZED_MODEL_SIZE / maxSize);
-
-    var normalized = new ArrayList<RenderQuad>(quads.size());
-    for (var quad : quads) {
-      normalized.add(transformQuad(quad, transform));
-    }
-    return normalized;
-  }
-
-  private static RenderQuad transformQuad(RenderQuad quad, Matrix4f transform) {
-    return new RenderQuad(
-      transformVertex(quad.v0(), transform),
-      transformVertex(quad.v1(), transform),
-      transformVertex(quad.v2(), transform),
-      transformVertex(quad.v3(), transform),
-      quad.texture(),
-      quad.alphaMode(),
-      quad.color(),
-      quad.doubleSided(),
-      quad.depthBias()
-    );
-  }
-
-  private static RenderVertex transformVertex(RenderVertex vertex, Matrix4f transform) {
-    var transformed = transform.transformPosition(new Vector3f(vertex.x(), vertex.y(), vertex.z()));
-    return new RenderVertex(transformed.x, transformed.y, transformed.z, vertex.u(), vertex.v());
-  }
-
   private static Matrix4f layerTransform(ItemStackRenderState.LayerRenderState layer) {
     var pose = new PoseStack();
     var poseState = pose.last();
@@ -483,15 +416,13 @@ public final class InventoryItemIconRenderer {
   }
 
   private static BufferedImage renderFrame(IconScene scene, long animationTick) {
-    var camera = new Camera(new Vec3(0.0, 0.0, CAMERA_DISTANCE), 180.0F, 0.0F, ICON_SIZE, ICON_SIZE, CAMERA_FOV, 8.0F);
     var buffers = new RasterBuffers(ICON_SIZE, ICON_SIZE);
     buffers.clearColor(0x00000000);
     buffers.clearDepth();
 
-    var sceneData = toSceneData(scene.quads());
-    rasterPass(camera, animationTick, sceneData.opaque(), buffers, true, false, false);
-    rasterPass(camera, animationTick, sceneData.cutout(), buffers, true, true, false);
-    rasterPass(camera, animationTick, sceneData.translucent(), buffers, false, false, true);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.OPAQUE, true);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.CUTOUT, true);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.TRANSLUCENT, false);
 
     if (scene.hasFoil()) {
       applyFoil(buffers, animationTick);
@@ -500,144 +431,84 @@ public final class InventoryItemIconRenderer {
     return buffers.image();
   }
 
-  private static SceneData toSceneData(List<RenderQuad> quads) {
-    var builder = SceneData.builder();
-    for (var quad : quads) {
-      builder.add(quad);
-    }
-    return builder.build();
-  }
-
   private static void rasterPass(
-    Camera camera,
     long animationTick,
-    RenderQuad[] quads,
+    List<RenderQuad> quads,
     RasterBuffers buffers,
-    boolean writeDepth,
-    boolean alphaTest,
-    boolean translucent
+    RendererAssets.AlphaMode alphaMode,
+    boolean writeDepth
   ) {
-    if (quads.length == 0) {
-      return;
-    }
-
-    var triangles = projectQuads(camera, quads);
-    if (triangles.isEmpty()) {
-      return;
-    }
-    if (translucent) {
-      triangles.sort((left, right) -> Float.compare(right.sortDepth(), left.sortDepth()));
-    }
-
-    for (var triangle : triangles) {
-      rasterizeTriangle(camera, animationTick, triangle, buffers, writeDepth, alphaTest, translucent);
-    }
-  }
-
-  private static ArrayList<ProjectedTriangle> projectQuads(Camera camera, RenderQuad[] quads) {
-    var triangles = new ArrayList<ProjectedTriangle>(quads.length * 2);
+    var projectedTriangles = new ArrayList<ProjectedTriangle>();
     for (var quad : quads) {
-      emitProjectedTriangles(camera, quad, triangles);
+      if (quad.alphaMode() != alphaMode) {
+        continue;
+      }
+      emitProjectedTriangles(quad, projectedTriangles);
     }
-    return triangles;
-  }
 
-  private static void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
-    var clipped = clipQuadToNearPlane(camera, quad);
-    if (clipped.length < 3) {
+    if (projectedTriangles.isEmpty()) {
       return;
     }
 
-    var projected = new ProjectedVertex[clipped.length];
-    var totalDepth = 0.0F;
-    for (var i = 0; i < clipped.length; i++) {
-      projected[i] = projectVertex(camera, clipped[i], quad.depthBias());
-      totalDepth += clipped[i].z();
+    if (alphaMode == RendererAssets.AlphaMode.TRANSLUCENT) {
+      projectedTriangles.sort((left, right) -> Float.compare(right.sortDepth(), left.sortDepth()));
     }
-    var sortDepth = totalDepth / clipped.length;
-    for (var i = 1; i < projected.length - 1; i++) {
-      out.add(new ProjectedTriangle(
-        projected[0],
-        projected[i],
-        projected[i + 1],
-        quad.texture(),
-        quad.alphaMode(),
-        quad.color(),
-        quad.doubleSided(),
-        sortDepth
-      ));
+
+    for (var triangle : projectedTriangles) {
+      rasterizeTriangle(animationTick, triangle, buffers, writeDepth);
     }
   }
 
-  private static ClipVertex[] clipQuadToNearPlane(Camera camera, RenderQuad quad) {
-    var input = new ClipVertex[]{
-      toClipVertex(camera, quad.v0()),
-      toClipVertex(camera, quad.v1()),
-      toClipVertex(camera, quad.v2()),
-      toClipVertex(camera, quad.v3())
+  private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out) {
+    var projected = new ProjectedVertex[]{
+      projectVertex(quad.v0(), quad.depthBias()),
+      projectVertex(quad.v1(), quad.depthBias()),
+      projectVertex(quad.v2(), quad.depthBias()),
+      projectVertex(quad.v3(), quad.depthBias())
     };
-    var output = new ArrayList<ClipVertex>(6);
-    var near = camera.nearPlane();
-    for (var i = 0; i < input.length; i++) {
-      var current = input[i];
-      var next = input[(i + 1) % input.length];
-      var currentInside = current.z() >= near;
-      var nextInside = next.z() >= near;
-
-      if (currentInside && nextInside) {
-        output.add(next);
-      } else if (currentInside != nextInside) {
-        var t = (near - current.z()) / (next.z() - current.z());
-        var intersection = new ClipVertex(
-          current.x() + (next.x() - current.x()) * t,
-          current.y() + (next.y() - current.y()) * t,
-          near,
-          current.u() + (next.u() - current.u()) * t,
-          current.v() + (next.v() - current.v()) * t
-        );
-        output.add(intersection);
-        if (nextInside) {
-          output.add(next);
-        }
-      }
-    }
-    return output.toArray(ClipVertex[]::new);
+    var sortDepth =
+      (projected[0].depth() + projected[1].depth() + projected[2].depth() + projected[3].depth()) / 4.0F;
+    out.add(new ProjectedTriangle(
+      projected[0],
+      projected[1],
+      projected[2],
+      quad.texture(),
+      quad.alphaMode(),
+      quad.color(),
+      quad.doubleSided(),
+      sortDepth
+    ));
+    out.add(new ProjectedTriangle(
+      projected[0],
+      projected[2],
+      projected[3],
+      quad.texture(),
+      quad.alphaMode(),
+      quad.color(),
+      quad.doubleSided(),
+      sortDepth
+    ));
   }
 
-  private static ClipVertex toClipVertex(Camera camera, RenderVertex vertex) {
-    return new ClipVertex(
-      camera.viewX(vertex.x(), vertex.y(), vertex.z()),
-      camera.viewY(vertex.x(), vertex.y(), vertex.z()),
-      camera.viewZ(vertex.x(), vertex.y(), vertex.z()),
+  private static ProjectedVertex projectVertex(RenderVertex vertex, float depthBias) {
+    var screenX = GUI_CENTER + vertex.x() * GUI_PIXELS_PER_UNIT;
+    var screenY = GUI_CENTER - vertex.y() * GUI_PIXELS_PER_UNIT;
+    var depth = -vertex.z() + depthBias;
+    return new ProjectedVertex(
+      screenX,
+      screenY,
+      depth,
+      1.0F,
       vertex.u(),
       vertex.v()
     );
   }
 
-  private static ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, float depthBias) {
-    var ndcX = vertex.x() / (vertex.z() * camera.tanHalfFovX());
-    var ndcY = vertex.y() / (vertex.z() * camera.tanHalfFovY());
-    var screenX = (float) ((0.5 - ndcX * 0.5) * camera.width());
-    var screenY = (float) ((0.5 - ndcY * 0.5) * camera.height());
-    var inverseDepth = 1.0F / vertex.z();
-    return new ProjectedVertex(
-      screenX,
-      screenY,
-      vertex.z() + depthBias,
-      inverseDepth,
-      vertex.u() * inverseDepth,
-      vertex.v() * inverseDepth
-    );
-  }
-
   private static void rasterizeTriangle(
-    Camera camera,
     long animationTick,
     ProjectedTriangle triangle,
     RasterBuffers buffers,
-    boolean writeDepth,
-    boolean alphaTest,
-    boolean translucent
+    boolean writeDepth
   ) {
     var v0 = triangle.v0();
     var v1 = triangle.v1();
@@ -653,8 +524,8 @@ public final class InventoryItemIconRenderer {
     var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());
     var topLeft1 = isTopLeft(v2.x(), v2.y(), v0.x(), v0.y());
     var topLeft2 = isTopLeft(v0.x(), v0.y(), v1.x(), v1.y());
-    var width = camera.width();
-    var height = camera.height();
+    var width = buffers.image().getWidth();
+    var height = buffers.image().getHeight();
     var colorBuffer = buffers.colorBuffer();
     var depthBuffer = buffers.depthBuffer();
 
@@ -695,7 +566,7 @@ public final class InventoryItemIconRenderer {
         if (alpha == 0) {
           continue;
         }
-        if (alphaTest && alpha < 51) {
+        if (triangle.alphaMode() == RendererAssets.AlphaMode.CUTOUT && alpha < 51) {
           continue;
         }
 
@@ -716,7 +587,7 @@ public final class InventoryItemIconRenderer {
         }
 
         colorBuffer[rasterIndex] = blend(colorBuffer[rasterIndex], color);
-        if (translucent && writeDepth) {
+        if (writeDepth) {
           depthBuffer[rasterIndex] = depth;
         }
       }
