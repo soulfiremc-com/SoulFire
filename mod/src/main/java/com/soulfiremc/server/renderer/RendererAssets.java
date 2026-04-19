@@ -25,7 +25,6 @@ import com.mojang.math.Quadrant;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.BiomeColors;
 import net.minecraft.client.renderer.FaceInfo;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -213,15 +212,16 @@ public final class RendererAssets {
       return 0xFFFFFFFF;
     }
 
+    var biome = level.getBiome(pos).value();
     var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
     if (blockId.contains("water")) {
-      return 0xFF000000 | BiomeColors.getAverageWaterColor(level, pos);
+      return 0xFF000000 | biome.getWaterColor();
     }
     if (blockId.contains("leaves") || blockId.contains("vine")) {
-      return 0xFF000000 | BiomeColors.getAverageFoliageColor(level, pos);
+      return 0xFF000000 | biome.getFoliageColor();
     }
     if (blockId.contains("grass") || blockId.contains("fern")) {
-      return 0xFF000000 | BiomeColors.getAverageGrassColor(level, pos);
+      return 0xFF000000 | biome.getGrassColor(pos.getX(), pos.getZ());
     }
 
     return 0xFFFFFFFF;
