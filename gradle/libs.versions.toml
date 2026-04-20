@@ -11,7 +11,7 @@ jooq = "3.21.2"
 flyway = "12.4.0"
 
 [plugins]
-protobuf = "com.google.protobuf:0.9.6"
+protobuf = "com.google.protobuf:0.10.0"
 jmh = "me.champeau.jmh:0.7.3"
 jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooq" }
 
