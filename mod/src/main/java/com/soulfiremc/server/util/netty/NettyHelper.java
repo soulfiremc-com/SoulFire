@@ -27,6 +27,7 @@ import io.netty.handler.proxy.HttpProxyHandler;
 import io.netty.handler.proxy.Socks4ProxyHandler;
 import io.netty.handler.proxy.Socks5ProxyHandler;
 import org.cloudburstmc.netty.channel.raknet.RakClientChannel;
+import org.cloudburstmc.netty.handler.codec.raknet.client.RakClientProxyRouteHandler;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -57,7 +58,7 @@ public final class NettyHelper {
       case SOCKS5 -> {
         if (isBedrock) {
           if (channel instanceof RakClientChannel rakChannel) {
-            rakChannel.rakPipeline().addLast(PROXY_NAME, new Socks5UdpRelayHandler(
+            rakChannel.rakPipeline().addAfter(RakClientProxyRouteHandler.NAME, PROXY_NAME, new Socks5UdpRelayHandler(
               (InetSocketAddress) proxy.address(), proxy.username(), proxy.password()));
           } else {
             throw new IllegalStateException("Expected RakClientChannel for Bedrock connection, but got: " + channel.getClass());
