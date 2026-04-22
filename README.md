@@ -68,8 +68,7 @@ how to import proxies in the [proxy documentation](https://soulfiremc.com/docs/u
 
 There are many websites that offer free proxies, but be careful as many of them are not reliable or secure.
 
-Our recommended proxy provider is [Thordata](https://affiliate.thordata.com/soulfire), who sponsors SoulFire.
-They offer premium residential proxies with excellent speeds - use code **THORDATA** for 20% off your first purchase.
+Our recommended proxy provider is [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=soulfire), who sponsors SoulFire.
 
 For a full list of recommended providers, check out our [Get Proxies](https://soulfiremc.com/get-proxies) page.
 
