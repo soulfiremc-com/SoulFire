@@ -12,7 +12,7 @@ rootProject.subprojects.forEach { subproject ->
 }
 
 dependencies {
-  javadocClasspath("org.projectlombok:lombok:1.18.44")
+  javadocClasspath("org.projectlombok:lombok:1.18.46")
   javadocClasspath(libs.immutables.value)
   javadocClasspath(libs.immutables.gson)
 
