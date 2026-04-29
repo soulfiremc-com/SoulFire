@@ -68,7 +68,8 @@ how to import proxies in the [proxy documentation](https://soulfiremc.com/docs/u
 
 There are many websites that offer free proxies, but be careful as many of them are not reliable or secure.
 
-Our recommended proxy provider is [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=soulfire), who sponsors SoulFire.
+Our recommended proxy providers are [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=soulfire) and
+[Proxy-Seller](https://proxy-seller.com/?partner=GRJY71PA3XWPPP&utm_source=get-proxies&utm_campaign=soulfire), who sponsor SoulFire.
 
 For a full list of recommended providers, check out our [Get Proxies](https://soulfiremc.com/get-proxies) page.
 
