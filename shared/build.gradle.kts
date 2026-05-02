@@ -18,7 +18,7 @@ dependencies {
 
   api("at.yawk.lz4:lz4-java:1.11.0")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:6.11.1")
+  api("com.github.oshi:oshi-core:7.0.1")
   api("com.google.code.gson:gson:2.13.2")
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.6.0-jre")
