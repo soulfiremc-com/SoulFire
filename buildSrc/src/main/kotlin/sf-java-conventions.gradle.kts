@@ -76,6 +76,7 @@ tasks {
     reports.junitXml.required = true
     reports.html.required = true
     useJUnitPlatform()
+    systemProperty("java.awt.headless", "true")
     maxParallelForks = Runtime.getRuntime().availableProcessors().div(2).coerceAtLeast(1)
   }
   withType<Jar> {
