@@ -1,14 +1,14 @@
 [versions]
 log4j = "2.25.4"
-grpc = "1.80.0"
+grpc = "1.81.0"
 protobuf = "4.34.1"
 reactor-netty = "1.3.5"
 reactor-core = "3.8.5"
 armeria = "1.38.0"
-classtransform = "1.14.1"
+classtransform = "1.15.0"
 kyori = "5.0.1"
 jooq = "3.21.2"
-flyway = "12.4.0"
+flyway = "12.5.0"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.0"
@@ -17,17 +17,17 @@ jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooq" }
 
 [libraries]
 gradle-plugin-shadow = "gradle.plugin.com.github.johnrengelman:shadow:8.0.0"
-gradle-plugin-lombok = "io.freefair.gradle:lombok-plugin:9.2.0"
+gradle-plugin-lombok = "io.freefair.gradle:lombok-plugin:9.5.0"
 gradle-plugin-indra-git = "net.kyori:indra-git:4.0.0"
 gradle-plugin-loom = "net.fabricmc:fabric-loom:1.16.1"
 gradle-plugin-spotless = "com.diffplug.spotless:spotless-plugin-gradle:8.4.0"
-gradle-plugin-freefair = "io.freefair.gradle:maven-plugin:9.2.0"
+gradle-plugin-freefair = "io.freefair.gradle:maven-plugin:9.5.0"
 log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }
 log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
 log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
 log4j-iostreams = { module = "org.apache.logging.log4j:log4j-iostreams", version.ref = "log4j" }
 log4j-jul = { module = "org.apache.logging.log4j:log4j-jul", version.ref = "log4j" }
-jline = "org.jline:jline-terminal-jansi:3.30.9"
+jline = "org.jline:jline-terminal-jansi:3.30.12"
 jansi = "org.fusesource.jansi:jansi:2.4.3"
 ansi4j-core-api = "com.github.PavelKastornyy.ansi4j:ansi4j-core-api:ansi4j-1.1.0"
 ansi4j-core-impl = "com.github.PavelKastornyy.ansi4j:ansi4j-core-impl:ansi4j-1.1.0"
@@ -37,11 +37,11 @@ disruptor = "com.lmax:disruptor:4.0.0"
 picoli = "info.picocli:picocli:4.7.7"
 picoli-codegen = "info.picocli:picocli-codegen:4.7.7"
 commons-validator = "commons-validator:commons-validator:1.10.1"
-commons-io = "commons-io:commons-io:2.21.0"
+commons-io = "commons-io:commons-io:2.22.0"
 guava = "com.google.guava:guava:33.6.0-jre"
-gson = "com.google.code.gson:gson:2.13.2"
+gson = "com.google.code.gson:gson:2.14.0"
 fastutil = "it.unimi.dsi:fastutil:8.5.18"
-caffeine = "com.github.ben-manes.caffeine:caffeine:3.2.3"
+caffeine = "com.github.ben-manes.caffeine:caffeine:3.2.4"
 jetbrains-annotations = "org.jetbrains:annotations:26.1.0"
 reflect = "net.lenni0451:Reflect:1.6.3"
 lambdaevents = "net.lenni0451:LambdaEvents:2.4.2"
@@ -65,7 +65,7 @@ reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "react
 reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", version.ref = "reactor-netty" }
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
-openai = "com.openai:openai-java:4.32.0"
+openai = "com.openai:openai-java:4.33.0"
 immutables-value = "org.immutables:value:2.12.1"
 immutables-gson = "org.immutables:gson:2.12.1"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
@@ -77,7 +77,7 @@ hikaricp = "com.zaxxer:HikariCP:7.0.2"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.8"
 sqlite = "org.xerial:sqlite-jdbc:3.53.0.0"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
-kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.3.20"
+kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.3.21"
 classtransform-mixinstranslator = { module = "net.lenni0451.classtransform:mixinstranslator", version.ref = "classtransform" }
 classtransform-additionalclassprovider = { module = "net.lenni0451.classtransform:additionalclassprovider", version.ref = "classtransform" }
 kyori-plain = { module = "net.kyori:adventure-text-serializer-plain", version.ref = "kyori" }
