@@ -27,7 +27,7 @@ log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "lo
 log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
 log4j-iostreams = { module = "org.apache.logging.log4j:log4j-iostreams", version.ref = "log4j" }
 log4j-jul = { module = "org.apache.logging.log4j:log4j-jul", version.ref = "log4j" }
-jline = "org.jline:jline-terminal-jansi:3.30.12"
+jline = "org.jline:jline-terminal-jansi:3.30.13"
 jansi = "org.fusesource.jansi:jansi:2.4.3"
 ansi4j-core-api = "com.github.PavelKastornyy.ansi4j:ansi4j-core-api:ansi4j-1.1.0"
 ansi4j-core-impl = "com.github.PavelKastornyy.ansi4j:ansi4j-core-impl:ansi4j-1.1.0"
@@ -65,7 +65,7 @@ reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "react
 reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", version.ref = "reactor-netty" }
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
-openai = "com.openai:openai-java:4.33.0"
+openai = "com.openai:openai-java:4.34.0"
 immutables-value = "org.immutables:value:2.12.1"
 immutables-gson = "org.immutables:gson:2.12.1"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
