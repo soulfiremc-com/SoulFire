@@ -59,7 +59,7 @@ dependencies {
   api(projects.buildData)
 
   // Newest netty
-  api("io.netty:netty-all:4.2.12.Final")
+  api("io.netty:netty-all:4.2.13.Final")
 
   api("io.github.classgraph:classgraph:4.8.184")
 
