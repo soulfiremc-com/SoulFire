@@ -65,12 +65,25 @@ public final class SFSessionService {
       .responseSingle(
         (res, content) -> {
           if (res.status().codeClass() != HttpStatusClass.SUCCESS) {
-            throw new RuntimeException("Failed to join server: " + res.status().code());
+            throw new JoinServerException(res.status().code());
           }
 
           return content.asString();
         })
       .block();
+  }
+
+  public static final class JoinServerException extends RuntimeException {
+    private final int statusCode;
+
+    private JoinServerException(int statusCode) {
+      super("Failed to join server: HTTP " + statusCode);
+      this.statusCode = statusCode;
+    }
+
+    public int statusCode() {
+      return statusCode;
+    }
   }
 
   @SuppressWarnings("unused") // Used by GSON

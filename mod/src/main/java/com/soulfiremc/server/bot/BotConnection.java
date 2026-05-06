@@ -243,6 +243,7 @@ public final class BotConnection {
         }
 
         scheduler.execute(() -> {
+          var disconnectReason = Component.text("Tick loop ended");
           try {
             minecraft.gameThread = Thread.currentThread();
             minecraft.packetProcessor.runningThread = minecraft.gameThread;
@@ -250,12 +251,57 @@ public final class BotConnection {
               minecraft.runTick(true);
             }
           } catch (Throwable t) {
-            log.error("Error while running bot connection", t);
+            var conciseConnectionError = conciseConnectionError(t);
+            if (conciseConnectionError.isPresent()) {
+              var message = conciseConnectionError.get();
+              disconnectReason = Component.text(message);
+              log.warn("Bot connection ended: {}", message);
+              log.debug("Full bot connection error", t);
+            } else {
+              log.error("Error while running bot connection", t);
+            }
           } finally {
-            this.disconnect(Component.text("Tick loop ended"));
+            this.disconnect(disconnectReason);
           }
         });
       });
+  }
+
+  private static Optional<String> conciseConnectionError(Throwable throwable) {
+    var joinServerException = findCause(throwable, SFSessionService.JoinServerException.class);
+    if (joinServerException.isPresent()) {
+      return Optional.of("Failed to join server: session server returned HTTP " + joinServerException.get().statusCode());
+    }
+
+    var rootCause = rootCause(throwable);
+    if (rootCause.getClass().getName().equals("reactor.netty.http.client.PrematureCloseException")) {
+      return Optional.of("Failed to join server: connection closed before the session server responded");
+    }
+
+    if (rootCause instanceof IllegalArgumentException illegalArgumentException) {
+      return Optional.ofNullable(illegalArgumentException.getMessage());
+    }
+
+    return Optional.empty();
+  }
+
+  private static <T extends Throwable> Optional<T> findCause(Throwable throwable, Class<T> type) {
+    for (var current = throwable; current != null; current = current.getCause()) {
+      if (type.isInstance(current)) {
+        return Optional.of(type.cast(current));
+      }
+    }
+
+    return Optional.empty();
+  }
+
+  private static Throwable rootCause(Throwable throwable) {
+    var current = throwable;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+
+    return current;
   }
 
   public void disconnect(Component reason) {
