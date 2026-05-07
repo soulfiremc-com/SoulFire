@@ -7,7 +7,7 @@ reactor-core = "3.8.5"
 armeria = "1.38.0"
 classtransform = "1.15.0"
 kyori = "5.0.1"
-jooq = "3.21.2"
+jooq = "3.21.3"
 flyway = "12.5.0"
 
 [plugins]
@@ -75,7 +75,7 @@ flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 hikaricp = "com.zaxxer:HikariCP:7.0.2"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.8"
-sqlite = "org.xerial:sqlite-jdbc:3.53.0.0"
+sqlite = "org.xerial:sqlite-jdbc:3.53.1.0"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
 kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.3.21"
 classtransform-mixinstranslator = { module = "net.lenni0451.classtransform:mixinstranslator", version.ref = "classtransform" }
