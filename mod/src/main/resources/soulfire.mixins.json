@@ -48,6 +48,7 @@
     "headless.rendering.MixinRenderSystem",
     "headless.rendering.MixinRenderTarget",
     "headless.rendering.MixinScreen",
+    "headless.rendering.MixinTextureAtlas",
     "headless.rendering.MixinTextureAtlasSprite",
     "headless.sound.MixinMusicManager",
     "headless.sound.MixinSoundBufferLibrary",
