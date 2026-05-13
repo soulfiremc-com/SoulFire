@@ -51,7 +51,7 @@ dependencies {
   api("org.lwjgl:lwjgl-stb:3.4.1")
   api("org.lwjgl:lwjgl-tinyfd:3.4.1")
   api("org.lwjgl:lwjgl:3.4.1")
-  api("org.slf4j:slf4j-api:2.0.17")
+  api("org.slf4j:slf4j-api:2.0.18")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.4")
   api("org.checkerframework:checker-qual:4.1.0")
