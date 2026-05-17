@@ -66,8 +66,8 @@ reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", ve
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
 openai = "com.openai:openai-java:4.36.0"
-immutables-value = "org.immutables:value:2.12.1"
-immutables-gson = "org.immutables:gson:2.12.1"
+immutables-value = "org.immutables:value:2.12.2"
+immutables-gson = "org.immutables:gson:2.12.2"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
 jooq-codegen = { module = "org.jooq:jooq-codegen", version.ref = "jooq" }
 jooq-meta-extensions = { module = "org.jooq:jooq-meta-extensions", version.ref = "jooq" }
