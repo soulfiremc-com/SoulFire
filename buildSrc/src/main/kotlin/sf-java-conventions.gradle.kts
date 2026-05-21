@@ -31,9 +31,9 @@ dependencies {
   errorprone("com.google.errorprone:error_prone_core:2.49.0")
   spotbugs("com.github.spotbugs:spotbugs:4.9.8")
 
-  rewrite("org.openrewrite.recipe:rewrite-static-analysis:2.34.1")
-  rewrite("org.openrewrite.recipe:rewrite-migrate-java:3.34.1")
-  rewrite("org.openrewrite.recipe:rewrite-rewrite:0.24.3")
+  rewrite("org.openrewrite.recipe:rewrite-static-analysis:2.35.0")
+  rewrite("org.openrewrite.recipe:rewrite-migrate-java:3.35.0")
+  rewrite("org.openrewrite.recipe:rewrite-rewrite:0.25.0")
 }
 
 tasks {
