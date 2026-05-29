@@ -8,7 +8,7 @@ armeria = "1.39.0"
 classtransform = "1.15.0"
 kyori = "5.1.1"
 jooq = "3.21.4"
-flyway = "12.6.2"
+flyway = "12.7.0"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.0"
