@@ -17,21 +17,33 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.botfixes;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.authlib.yggdrasil.YggdrasilMinecraftSessionService;
+import com.soulfiremc.server.account.service.BedrockData;
+import com.soulfiremc.server.account.service.OfflineJavaData;
+import com.soulfiremc.server.account.service.OnlineChainJavaData;
+import com.soulfiremc.server.account.service.OnlineSimpleJavaData;
 import com.soulfiremc.server.bot.BotConnection;
+import com.soulfiremc.server.util.SFHelpers;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.UUID;
 
 @Mixin(YggdrasilMinecraftSessionService.class)
 public class MixinYggdrasilMinecraftSessionService {
-  @Inject(method = "joinServer", at = @At("HEAD"), cancellable = true)
-  private void joinServer(UUID profileId, String authenticationToken, String serverId, CallbackInfo ci) {
+  @WrapMethod(method = "joinServer")
+  private void joinServer(UUID profileId, String authenticationToken, String serverId, Operation<Void> original) {
     var bot = BotConnection.current();
-    bot.sessionService().joinServer(serverId);
-    ci.cancel();
+    var account = bot.settingsSource().stem();
+    var actualProfileId = bot.accountProfileId();
+    var actualAuthenticationToken = switch (account.accountData()) {
+      case OnlineChainJavaData onlineChainJavaData -> onlineChainJavaData.getJavaAuthManager(bot.proxy()).getMinecraftToken().getUpToDateUnchecked().getToken();
+      case OnlineSimpleJavaData onlineSimpleJavaData -> onlineSimpleJavaData.accessToken();
+      case OfflineJavaData ignored -> throw new IllegalArgumentException("Invalid auth type: " + account.authType());
+      case BedrockData ignored -> throw new IllegalArgumentException("Invalid auth type: " + account.authType());
+    };
+
+    original.call(actualProfileId, actualAuthenticationToken, serverId);
   }
 }

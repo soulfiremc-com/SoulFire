@@ -104,7 +104,6 @@ public final class BotConnection {
   private final Minecraft minecraft;
   @Nullable
   private final SFProxy proxy;
-  private final SFSessionService sessionService;
   private final boolean isStatusPing;
   @Setter
   private ProtocolVersion currentProtocolVersion;
@@ -148,7 +147,6 @@ public final class BotConnection {
     this.serverAddress = serverAddress;
     this.proxy = proxyData;
     this.minecraft = createMinecraftCopy(minecraftAccount);
-    this.sessionService = new SFSessionService(this);
     this.currentProtocolVersion = currentProtocolVersion;
     this.isStatusPing = isStatusPing;
     this.shutdownHooks.add(() -> instanceManager.automationCoordinator().releaseBot(this));
@@ -268,11 +266,6 @@ public final class BotConnection {
   }
 
   private static Optional<String> conciseConnectionError(Throwable throwable) {
-    var joinServerException = findCause(throwable, SFSessionService.JoinServerException.class);
-    if (joinServerException.isPresent()) {
-      return Optional.of("Failed to join server: session server returned HTTP " + joinServerException.get().statusCode());
-    }
-
     var rootCause = rootCause(throwable);
     if (rootCause.getClass().getName().equals("reactor.netty.http.client.PrematureCloseException")) {
       return Optional.of("Failed to join server: connection closed before the session server responded");
