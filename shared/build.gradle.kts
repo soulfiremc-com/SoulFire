@@ -13,7 +13,7 @@ dependencies {
   api("org.ow2.asm:asm-tree:9.10.1")
   api("org.ow2.asm:asm-util:9.10.1")
   api("net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
-  api("net.fabricmc:fabric-loader:0.19.2")
+  api("net.fabricmc:fabric-loader:0.19.3")
   api("net.fabricmc:mapping-io:0.8.0")
 
   api("at.yawk.lz4:lz4-java:1.11.0")
@@ -54,7 +54,7 @@ dependencies {
   api("org.slf4j:slf4j-api:2.0.18")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.4")
-  api("org.checkerframework:checker-qual:4.1.0")
+  api("org.checkerframework:checker-qual:4.2.0")
 
   api(projects.buildData)
 
