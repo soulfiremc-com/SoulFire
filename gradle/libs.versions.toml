@@ -77,7 +77,7 @@ hikaricp = "com.zaxxer:HikariCP:7.0.2"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.8"
 sqlite = "org.xerial:sqlite-jdbc:3.53.1.0"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
-kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.3.21"
+kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.4.0"
 classtransform-mixinstranslator = { module = "net.lenni0451.classtransform:mixinstranslator", version.ref = "classtransform" }
 classtransform-additionalclassprovider = { module = "net.lenni0451.classtransform:additionalclassprovider", version.ref = "classtransform" }
 kyori-plain = { module = "net.kyori:adventure-text-serializer-plain", version.ref = "kyori" }
