@@ -29,7 +29,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 public sealed interface MCAuthService<I, T>
-  permits MSBedrockCredentialsAuthService, MSBedrockDeviceCodeAuthService, MSJavaAccessTokenAuthService, MSJavaCookiesAuthService, MSJavaCredentialsAuthService, MSJavaDeviceCodeAuthService, MSJavaRefreshTokenAuthService, OfflineAuthService {
+  permits MSBedrockCredentialsAuthService, MSBedrockDeviceCodeAuthService, MSJavaAccessTokenAuthService, MSJavaCookiesAuthService, MSJavaCredentialsAuthService, MSJavaDeviceCodeAuthService, MSJavaRefreshTokenAuthService, OfflineAuthService, TheAlteningAuthService {
   static MCAuthService<String, ?> convertService(AccountTypeCredentials service) {
     return switch (service) {
       case MICROSOFT_JAVA_CREDENTIALS -> MSJavaCredentialsAuthService.INSTANCE;
@@ -38,6 +38,7 @@ public sealed interface MCAuthService<I, T>
       case MICROSOFT_JAVA_REFRESH_TOKEN -> MSJavaRefreshTokenAuthService.INSTANCE;
       case MICROSOFT_JAVA_COOKIES -> MSJavaCookiesAuthService.INSTANCE;
       case MICROSOFT_JAVA_ACCESS_TOKEN -> MSJavaAccessTokenAuthService.INSTANCE;
+      case THE_ALTENING -> TheAlteningAuthService.INSTANCE;
       case UNRECOGNIZED -> throw new IllegalArgumentException("Unrecognized service");
     };
   }
@@ -60,6 +61,7 @@ public sealed interface MCAuthService<I, T>
       case MICROSOFT_JAVA_REFRESH_TOKEN -> MSJavaRefreshTokenAuthService.INSTANCE;
       case MICROSOFT_JAVA_COOKIES -> MSJavaCookiesAuthService.INSTANCE;
       case MICROSOFT_JAVA_ACCESS_TOKEN -> MSJavaAccessTokenAuthService.INSTANCE;
+      case THE_ALTENING -> TheAlteningAuthService.INSTANCE;
       case UNRECOGNIZED -> throw new IllegalArgumentException("Unrecognized service");
     };
   }
@@ -74,6 +76,7 @@ public sealed interface MCAuthService<I, T>
       case MICROSOFT_JAVA_REFRESH_TOKEN -> MSJavaRefreshTokenAuthService.INSTANCE;
       case MICROSOFT_JAVA_COOKIES -> MSJavaCookiesAuthService.INSTANCE;
       case MICROSOFT_JAVA_ACCESS_TOKEN -> MSJavaAccessTokenAuthService.INSTANCE;
+      case THE_ALTENING -> TheAlteningAuthService.INSTANCE;
     };
   }
 

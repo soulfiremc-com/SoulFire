@@ -60,6 +60,7 @@ public record MinecraftAccount(
         case ONLINE_SIMPLE_JAVA_DATA -> OnlineSimpleJavaData.fromProto(account.getOnlineSimpleJavaData());
         case OFFLINE_JAVA_DATA -> OfflineJavaData.fromProto(account.getOfflineJavaData());
         case BEDROCK_DATA -> BedrockData.fromProto(account.getBedrockData());
+        case THE_ALTENING_JAVA_DATA -> TheAlteningJavaData.fromProto(account.getTheAlteningJavaData());
         case ACCOUNTDATA_NOT_SET -> throw new IllegalArgumentException("AccountData not set");
       },
       SettingsSource.Stem.settingsFromProto(account.getConfigList()),
@@ -84,6 +85,7 @@ public record MinecraftAccount(
       case OfflineJavaData offlineJavaData -> () -> builder.setOfflineJavaData(offlineJavaData.toProto());
       case OnlineChainJavaData onlineChainJavaData -> () -> builder.setOnlineChainJavaData(onlineChainJavaData.toProto());
       case OnlineSimpleJavaData onlineSimpleJavaData -> () -> builder.setOnlineSimpleJavaData(onlineSimpleJavaData.toProto());
+      case TheAlteningJavaData theAlteningJavaData -> () -> builder.setTheAlteningJavaData(theAlteningJavaData.toProto());
     });
 
     // Preserve per-account bot settings when instance config is serialized back to protobuf.

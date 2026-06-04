@@ -24,6 +24,7 @@ message CredentialsAuthRequest {
   // - MICROSOFT_BEDROCK_CREDENTIALS: Payload format is "email:password"
   // - OFFLINE: Payload is the username to use (no authentication performed)
   // - MICROSOFT_JAVA_REFRESH_TOKEN: Payload is a Microsoft refresh token
+  // - THE_ALTENING: Payload is a TheAltening account token
   AccountTypeCredentials service = 2 [(google.api.field_behavior) = REQUIRED];
 
   // List of authentication credentials/data strings.

@@ -77,6 +77,10 @@ enum AccountTypeCredentials {
   // Cannot be refreshed; used until expiry.
   // Payload format: raw JWT access token string.
   MICROSOFT_JAVA_ACCESS_TOKEN = 7;
+  // TheAltening Java Edition authentication using a generated account token.
+  // Authenticates against TheAltening's Yggdrasil-compatible auth server.
+  // Payload format: raw TheAltening account token string.
+  THE_ALTENING = 8;
 }
 
 // Authentication service types that use the OAuth 2.0 Device Code flow.
@@ -94,7 +98,8 @@ enum AccountTypeDeviceCode {
 }
 
 // Represents an authenticated Minecraft account that can be used by bots.
-// This can be a premium Microsoft account (Java or Bedrock) or an offline account.
+// This can be a Microsoft account (Java or Bedrock), TheAltening Java account,
+// raw Java access-token account, or offline account.
 // The account contains authentication data, profile information, and per-account settings.
 // Used throughout the system for instance configuration and bot management.
 message MinecraftAccountProto {
@@ -127,6 +132,9 @@ message MinecraftAccountProto {
     // Authenticated via raw Minecraft Java access token.
     // Account data stored in OnlineSimpleJavaData.
     MICROSOFT_JAVA_ACCESS_TOKEN = 9;
+    // Authenticated via TheAltening account token.
+    // Account data stored in TheAlteningJavaData.
+    THE_ALTENING = 10;
   }
 
   // Authentication chain data for online Java Edition accounts.
@@ -157,6 +165,15 @@ message MinecraftAccountProto {
     int64 expire_time_ms = 2 [(google.api.field_behavior) = REQUIRED];
   }
 
+  // Account data for Java Edition accounts authenticated through TheAltening.
+  // Stores the imported account token and the current Yggdrasil access token.
+  message TheAlteningJavaData {
+    // The raw TheAltening account token used to authenticate and refresh this account.
+    string account_token = 1 [(google.api.field_behavior) = REQUIRED];
+    // The current Yggdrasil access token returned by TheAltening.
+    string access_token = 2 [(google.api.field_behavior) = REQUIRED];
+  }
+
   // Authentication chain data for Bedrock Edition accounts.
   // Contains Xbox Live and Bedrock-specific authentication details.
   // Used for Microsoft-authenticated Bedrock accounts.
@@ -171,7 +188,7 @@ message MinecraftAccountProto {
   // Determines which account_data field is populated.
   AccountTypeProto type = 1 [(google.api.field_behavior) = REQUIRED];
   // The unique profile identifier (UUID) for this account.
-  // For online accounts: The official Minecraft profile UUID from Microsoft.
+  // For online accounts: The profile UUID returned by the authentication provider.
   // For offline accounts: A deterministic UUID derived from the username.
   // Format: Standard UUID string (e.g., "550e8400-e29b-41d4-a716-446655440000").
   string profile_id = 2 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
@@ -191,6 +208,8 @@ message MinecraftAccountProto {
     BedrockData bedrock_data = 7;
     // Data for Java accounts authenticated with a raw access token.
     OnlineSimpleJavaData online_simple_java_data = 10;
+    // Data for Java accounts authenticated through TheAltening.
+    TheAlteningJavaData the_altening_java_data = 11;
   }
   // Per-bot configuration settings stored with the account.
   // Organized as namespace -> key -> value mappings.

@@ -31,6 +31,7 @@ public enum AuthType {
   MICROSOFT_JAVA_REFRESH_TOKEN("Microsoft Java Refresh Token", OnlineChainJavaData.class),
   MICROSOFT_JAVA_COOKIES("Microsoft Java Cookies", OnlineChainJavaData.class),
   MICROSOFT_JAVA_ACCESS_TOKEN("Microsoft Java Access Token", OnlineSimpleJavaData.class),
+  THE_ALTENING("TheAltening", TheAlteningJavaData.class),
   OFFLINE("Offline", OfflineJavaData.class);
 
   private final String displayName;

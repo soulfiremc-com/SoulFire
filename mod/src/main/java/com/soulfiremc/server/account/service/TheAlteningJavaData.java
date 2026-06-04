@@ -17,5 +17,19 @@
  */
 package com.soulfiremc.server.account.service;
 
-public sealed interface AccountData permits BedrockData, OfflineJavaData, OnlineChainJavaData, OnlineSimpleJavaData, TheAlteningJavaData {
+import com.soulfiremc.grpc.generated.MinecraftAccountProto;
+
+/// Account data for Java Edition accounts authenticated through TheAltening.
+/// The account token is the imported token used to obtain a current Yggdrasil access token.
+public record TheAlteningJavaData(String accountToken, String accessToken) implements AccountData {
+  public static TheAlteningJavaData fromProto(MinecraftAccountProto.TheAlteningJavaData data) {
+    return new TheAlteningJavaData(data.getAccountToken(), data.getAccessToken());
+  }
+
+  public MinecraftAccountProto.TheAlteningJavaData toProto() {
+    return MinecraftAccountProto.TheAlteningJavaData.newBuilder()
+      .setAccountToken(accountToken)
+      .setAccessToken(accessToken)
+      .build();
+  }
 }
