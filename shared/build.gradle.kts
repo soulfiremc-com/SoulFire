@@ -18,7 +18,7 @@ dependencies {
 
   api("at.yawk.lz4:lz4-java:1.11.0")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:7.2.1")
+  api("com.github.oshi:oshi-core:7.3.0")
   api("com.google.code.gson:gson:2.14.0")
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.6.0-jre")
@@ -41,7 +41,7 @@ dependencies {
   api("org.apache.commons:commons-compress:1.28.0")
   api("org.apache.commons:commons-lang3:3.20.0")
   api("org.jcraft:jorbis:0.0.17")
-  api("org.joml:joml:1.10.8")
+  api("org.joml:joml:1.10.9")
   api("org.jspecify:jspecify:1.0.0")
   api("org.lwjgl:lwjgl-freetype:3.4.1")
   api("org.lwjgl:lwjgl-glfw:3.4.1")

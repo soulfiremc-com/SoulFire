@@ -4,11 +4,11 @@ grpc = "1.81.0"
 protobuf = "4.35.0"
 reactor-netty = "1.3.5"
 reactor-core = "3.8.5"
-armeria = "1.39.0"
+armeria = "1.39.1"
 classtransform = "1.15.0"
 kyori = "5.1.1"
-jooq = "3.21.4"
-flyway = "12.7.0"
+jooq = "3.21.5"
+flyway = "12.8.1"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.0"
@@ -19,7 +19,7 @@ jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooq" }
 gradle-plugin-shadow = "gradle.plugin.com.github.johnrengelman:shadow:8.0.0"
 gradle-plugin-lombok = "io.freefair.gradle:lombok-plugin:9.5.0"
 gradle-plugin-indra-git = "net.kyori:indra-git:4.0.0"
-gradle-plugin-loom = "net.fabricmc:fabric-loom:1.16.3"
+gradle-plugin-loom = "net.fabricmc:fabric-loom:1.17.2"
 gradle-plugin-spotless = "com.diffplug.spotless:spotless-plugin-gradle:8.6.0"
 gradle-plugin-freefair = "io.freefair.gradle:maven-plugin:9.5.0"
 log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }
@@ -65,7 +65,7 @@ reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "react
 reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", version.ref = "reactor-netty" }
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
-openai = "com.openai:openai-java:4.38.0"
+openai = "com.openai:openai-java:4.39.1"
 immutables-value = "org.immutables:value:2.12.2"
 immutables-gson = "org.immutables:gson:2.12.2"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
@@ -75,7 +75,7 @@ flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 hikaricp = "com.zaxxer:HikariCP:7.0.2"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.8"
-sqlite = "org.xerial:sqlite-jdbc:3.53.1.0"
+sqlite = "org.xerial:sqlite-jdbc:3.53.2.0"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
 kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.4.0"
 classtransform-mixinstranslator = { module = "net.lenni0451.classtransform:mixinstranslator", version.ref = "classtransform" }
@@ -87,7 +87,7 @@ angus = "org.eclipse.angus:angus-mail:2.0.5"
 javax-annotations = "javax.annotation:javax.annotation-api:1.3.2"
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 junit = "org.junit.jupiter:junit-jupiter:6.1.0"
-evalex = "com.ezylang:EvalEx:3.6.1"
+evalex = "com.ezylang:EvalEx:3.6.2"
 
 [bundles]
 bom = ["netty-bom", "armeria-bom", "protobuf-bom", "kotlin-bom"]
