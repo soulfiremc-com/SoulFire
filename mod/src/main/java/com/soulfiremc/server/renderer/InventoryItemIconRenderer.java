@@ -41,7 +41,6 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.component.DataComponentMap;
@@ -1317,12 +1316,7 @@ public final class InventoryItemIconRenderer {
       if (location == null) {
         continue;
       }
-      if (TextureAtlas.LOCATION_BLOCKS.equals(location)
-        || TextureAtlas.LOCATION_ITEMS.equals(location)
-        || TextureAtlas.LOCATION_PARTICLES.equals(location)) {
-        return RendererAssets.instance().textureAtlas(location);
-      }
-      return RendererAssets.instance().texture(location);
+      return RendererAssets.instance().renderTexture(location);
     }
 
     return null;

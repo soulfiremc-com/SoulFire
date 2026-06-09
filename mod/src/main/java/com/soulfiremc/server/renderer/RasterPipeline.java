@@ -137,7 +137,14 @@ public final class RasterPipeline {
   }
 
   private void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
-    var clipped = clipQuadToViewFrustum(camera, quad);
+    var viewVertices = new ClipVertex[]{
+      toClipVertex(camera, quad.v0()),
+      toClipVertex(camera, quad.v1()),
+      toClipVertex(camera, quad.v2()),
+      toClipVertex(camera, quad.v3())
+    };
+    var sortDepth = sortDepth(viewVertices[0], viewVertices[2]);
+    var clipped = clipQuadToViewFrustum(camera, viewVertices);
     if (clipped.length < 3) {
       return;
     }
@@ -155,20 +162,15 @@ public final class RasterPipeline {
         quad.alphaMode(),
         quad.color(),
         quad.doubleSided(),
-        sortDepth(clipped[0], clipped[i], clipped[i + 1]),
+        sortDepth,
         quad.alphaCutoutThreshold()
       ));
     }
   }
 
-  private ClipVertex[] clipQuadToViewFrustum(Camera camera, RenderQuad quad) {
+  private ClipVertex[] clipQuadToViewFrustum(Camera camera, ClipVertex[] quad) {
     var vertices = new ArrayList<ClipVertex>(8);
-    vertices.addAll(java.util.List.of(
-      toClipVertex(camera, quad.v0()),
-      toClipVertex(camera, quad.v1()),
-      toClipVertex(camera, quad.v2()),
-      toClipVertex(camera, quad.v3())
-    ));
+    vertices.addAll(java.util.List.of(quad));
 
     for (var plane : ClipPlane.values()) {
       vertices = clipAgainstPlane(camera, vertices, plane);
@@ -257,10 +259,10 @@ public final class RasterPipeline {
     return far / (far - near) - far * near / ((far - near) * viewDepth);
   }
 
-  private float sortDepth(ClipVertex v0, ClipVertex v1, ClipVertex v2) {
-    var x = (v0.x() + v1.x() + v2.x()) / 3.0F;
-    var y = (v0.y() + v1.y() + v2.y()) / 3.0F;
-    var z = (v0.z() + v1.z() + v2.z()) / 3.0F;
+  private float sortDepth(ClipVertex v0, ClipVertex v2) {
+    var x = (v0.x() + v2.x()) * 0.5F;
+    var y = (v0.y() + v2.y()) * 0.5F;
+    var z = (v0.z() + v2.z()) * 0.5F;
     return x * x + y * y + z * z;
   }
 

@@ -41,6 +41,7 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
@@ -203,6 +204,11 @@ public final class RendererAssets {
 
   public TextureImage textureAtlas(Identifier atlasLocation) {
     return textureCache.computeIfAbsent("atlas:" + atlasLocation, _ -> loadAtlasTexture(atlasLocation));
+  }
+
+  public TextureImage renderTexture(Identifier textureLocation) {
+    var runtimeTexture = runtimeTexture(textureLocation);
+    return runtimeTexture != null ? runtimeTexture : texture(textureLocation);
   }
 
   public TextureImage waterOverlayTexture() {
@@ -1247,9 +1253,40 @@ public final class RendererAssets {
     return buffered;
   }
 
-  private TextureImage loadAtlasTexture(Identifier atlasLocation) {
+  @Nullable
+  private TextureImage runtimeTexture(Identifier textureLocation) {
     try {
-      var atlas = Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(atlasLocation);
+      var texture = Minecraft.getInstance().getTextureManager().getTexture(textureLocation);
+      if (texture instanceof DynamicTexture dynamicTexture) {
+        var pixels = dynamicTexture.getPixels();
+        return pixels != null ? TextureImage.from(nativeImageToBufferedImage(pixels), null) : null;
+      }
+      if (texture instanceof TextureAtlas atlas) {
+        return textureCache.computeIfAbsent("atlas-texture:" + textureLocation, _ -> loadAtlasTexture(atlas));
+      }
+    } catch (Throwable t) {
+      log.debug("Failed to resolve runtime renderer texture {}", textureLocation, t);
+    }
+
+    return null;
+  }
+
+  private TextureImage loadAtlasTexture(Identifier atlasLocation) {
+    var runtimeTexture = runtimeTexture(atlasLocation);
+    if (runtimeTexture != null) {
+      return runtimeTexture;
+    }
+
+    try {
+      return loadAtlasTexture(Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(atlasLocation));
+    } catch (Throwable t) {
+      log.debug("Failed to reconstruct atlas texture {}", atlasLocation, t);
+      return MISSING_TEXTURE;
+    }
+  }
+
+  private TextureImage loadAtlasTexture(TextureAtlas atlas) {
+    try {
       var image = new BufferedImage(atlas.getWidth(), atlas.getHeight(), BufferedImage.TYPE_INT_ARGB);
       for (var sprite : ((MixinTextureAtlasAccessor) atlas).soulfire$getSprites()) {
         if (sprite == null || sprite.contents() == null || ((MixinSpriteContentsAccessor) sprite.contents()).soulfire$getOriginalImage() == null) {
@@ -1260,7 +1297,7 @@ public final class RendererAssets {
       }
       return TextureImage.from(image, null);
     } catch (Throwable t) {
-      log.debug("Failed to reconstruct atlas texture {}", atlasLocation, t);
+      log.debug("Failed to reconstruct atlas texture {}", atlas.location(), t);
       return MISSING_TEXTURE;
     }
   }

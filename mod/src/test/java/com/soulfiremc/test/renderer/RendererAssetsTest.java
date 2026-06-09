@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.awt.image.BufferedImage;
+import java.util.HashSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,6 +41,20 @@ class RendererAssetsTest {
     var texture = RendererAssets.instance().texture(Identifier.withDefaultNamespace("block/stone"));
     assertTrue(texture.width() > 0);
     assertTrue(texture.height() > 0);
+  }
+
+  @Test
+  void loadsSandTextureWithVisiblePixelVariation() {
+    var texture = RendererAssets.instance().texture(Identifier.withDefaultNamespace("block/sand"));
+    var image = texture.toBufferedImage();
+    var colors = new HashSet<Integer>();
+    for (var y = 0; y < image.getHeight(); y++) {
+      for (var x = 0; x < image.getWidth(); x++) {
+        colors.add(image.getRGB(x, y) & 0x00FFFFFF);
+      }
+    }
+
+    assertTrue(colors.size() > 1);
   }
 
   @Test

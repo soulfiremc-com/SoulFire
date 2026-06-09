@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.awt.image.BufferedImage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RasterPipelineTest {
@@ -77,6 +78,31 @@ class RasterPipelineTest {
   }
 
   @Test
+  void translucentSortingUsesOneDepthKeyPerSourceQuad() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-0.8F, -0.8F, 8.5F, 0.8F, 0.8F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.TRANSLUCENT, 0x80FFFFFF));
+    scene.add(customQuad(
+      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      new RenderVertex(-1.0F, 1.0F, 12.0F, 0.0F, 0.0F),
+      new RenderVertex(1.0F, 1.0F, 12.0F, 1.0F, 0.0F),
+      new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      solidTexture(0xFFFF0000),
+      RendererAssets.AlphaMode.TRANSLUCENT,
+      0x80FFFFFF
+    ));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var upperColor = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2 - 2);
+    var lowerColor = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2 + 2);
+    assertRedBlendedOverBlue(upperColor);
+    assertRedBlendedOverBlue(lowerColor);
+  }
+
+  @Test
   void equalDepthOpaqueFragmentsUseBlaze3dLequalDepthTest() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -101,6 +127,27 @@ class RasterPipelineTest {
     pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF000000, 3);
+  }
+
+  @Test
+  void cameraFrustumUsesBlaze3dViewRotationConvention() {
+    var camera = new Camera(new Vec3(10.0, 65.0, -4.0), 35.0F, -12.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    assertTrue(camera.isVisibleAabb(
+      camera.eyeX() + camera.forwardX() * 8.0 - 0.5,
+      camera.eyeY() + camera.forwardY() * 8.0 - 0.5,
+      camera.eyeZ() + camera.forwardZ() * 8.0 - 0.5,
+      camera.eyeX() + camera.forwardX() * 8.0 + 0.5,
+      camera.eyeY() + camera.forwardY() * 8.0 + 0.5,
+      camera.eyeZ() + camera.forwardZ() * 8.0 + 0.5
+    ));
+    assertFalse(camera.isVisibleAabb(
+      camera.eyeX() - camera.forwardX() * 8.0 - 0.5,
+      camera.eyeY() - camera.forwardY() * 8.0 - 0.5,
+      camera.eyeZ() - camera.forwardZ() * 8.0 - 0.5,
+      camera.eyeX() - camera.forwardX() * 8.0 + 0.5,
+      camera.eyeY() - camera.forwardY() * 8.0 + 0.5,
+      camera.eyeZ() - camera.forwardZ() * 8.0 + 0.5
+    ));
   }
 
   @Test
@@ -164,10 +211,36 @@ class RasterPipelineTest {
     );
   }
 
+  private static RenderQuad customQuad(
+    RenderVertex v0,
+    RenderVertex v1,
+    RenderVertex v2,
+    RenderVertex v3,
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color
+  ) {
+    return new RenderQuad(
+      v0,
+      v1,
+      v2,
+      v3,
+      texture,
+      alphaMode,
+      color,
+      false,
+      0.0F
+    );
+  }
+
   private static RendererAssets.TextureImage solidTexture(int argb) {
     var image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
     image.setRGB(0, 0, argb);
     return RendererAssets.TextureImage.from(image, null);
+  }
+
+  private static void assertRedBlendedOverBlue(int color) {
+    assertTrue(((color >> 16) & 0xFF) > (color & 0xFF), () -> "expected red over blue blend but was 0x" + Integer.toHexString(color));
   }
 
   private static void assertColorNear(int actual, int expected, int tolerance) {

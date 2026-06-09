@@ -737,12 +737,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       if (location == null) {
         continue;
       }
-      if (TextureAtlas.LOCATION_BLOCKS.equals(location)
-        || TextureAtlas.LOCATION_ITEMS.equals(location)
-        || TextureAtlas.LOCATION_PARTICLES.equals(location)) {
-        return assets.textureAtlas(location);
-      }
-      return assets.texture(location);
+      return assets.renderTexture(location);
     }
 
     return WHITE_TEXTURE;
