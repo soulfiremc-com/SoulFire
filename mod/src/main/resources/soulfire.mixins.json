@@ -32,6 +32,7 @@
   ],
   "client": [
     "headless.MixinMinecraft",
+    "headless.debloat.MixinAddressCheck",
     "headless.debloat.MixinDataFetcherSubscription",
     "headless.debloat.MixinQuickPlayLog",
     "headless.debloat.MixinRealmsAvailability",
