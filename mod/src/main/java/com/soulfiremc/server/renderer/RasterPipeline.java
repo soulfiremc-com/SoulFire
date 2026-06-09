@@ -24,8 +24,6 @@ import java.util.stream.IntStream;
 /// Projects and rasterizes scene geometry into the target buffers.
 public final class RasterPipeline {
   private static final int TILE_SIZE = 32;
-  private static final int CUTOUT_ALPHA_THRESHOLD = 51;
-
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     renderSky(ctx, buffers);
     rasterPass(ctx.camera(), ctx.animationTick(), sceneData.opaque(), buffers, true, false, false);
@@ -139,18 +137,15 @@ public final class RasterPipeline {
   }
 
   private void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
-    var clipped = clipQuadToNearPlane(camera, quad);
+    var clipped = clipQuadToViewFrustum(camera, quad);
     if (clipped.length < 3) {
       return;
     }
 
     var projected = new ProjectedVertex[clipped.length];
-    var totalDepth = 0.0F;
     for (var i = 0; i < clipped.length; i++) {
       projected[i] = projectVertex(camera, clipped[i], quad.depthBias());
-      totalDepth += clipped[i].z();
     }
-    var sortDepth = totalDepth / clipped.length;
     for (var i = 1; i < projected.length - 1; i++) {
       out.add(new ProjectedTriangle(
         projected[0],
@@ -160,44 +155,72 @@ public final class RasterPipeline {
         quad.alphaMode(),
         quad.color(),
         quad.doubleSided(),
-        sortDepth
+        sortDepth(clipped[0], clipped[i], clipped[i + 1]),
+        quad.alphaCutoutThreshold()
       ));
     }
   }
 
-  private ClipVertex[] clipQuadToNearPlane(Camera camera, RenderQuad quad) {
-    var input = new ClipVertex[]{
+  private ClipVertex[] clipQuadToViewFrustum(Camera camera, RenderQuad quad) {
+    var vertices = new ArrayList<ClipVertex>(8);
+    vertices.addAll(java.util.List.of(
       toClipVertex(camera, quad.v0()),
       toClipVertex(camera, quad.v1()),
       toClipVertex(camera, quad.v2()),
       toClipVertex(camera, quad.v3())
-    };
-    var output = new ArrayList<ClipVertex>(6);
-    var near = camera.nearPlane();
-    for (var i = 0; i < input.length; i++) {
-      var current = input[i];
-      var next = input[(i + 1) % input.length];
-      var currentInside = current.z() >= near;
-      var nextInside = next.z() >= near;
+    ));
+
+    for (var plane : ClipPlane.values()) {
+      vertices = clipAgainstPlane(camera, vertices, plane);
+      if (vertices.isEmpty()) {
+        return new ClipVertex[0];
+      }
+    }
+    return vertices.toArray(ClipVertex[]::new);
+  }
+
+  private ArrayList<ClipVertex> clipAgainstPlane(Camera camera, ArrayList<ClipVertex> input, ClipPlane plane) {
+    var output = new ArrayList<ClipVertex>(input.size() + 1);
+    for (var i = 0; i < input.size(); i++) {
+      var current = input.get(i);
+      var next = input.get((i + 1) % input.size());
+      var currentDistance = clipDistance(camera, current, plane);
+      var nextDistance = clipDistance(camera, next, plane);
+      var currentInside = currentDistance >= 0.0F;
+      var nextInside = nextDistance >= 0.0F;
 
       if (currentInside && nextInside) {
         output.add(next);
       } else if (currentInside != nextInside) {
-        var t = (near - current.z()) / (next.z() - current.z());
-        var intersection = new ClipVertex(
-          current.x() + (next.x() - current.x()) * t,
-          current.y() + (next.y() - current.y()) * t,
-          near,
-          current.u() + (next.u() - current.u()) * t,
-          current.v() + (next.v() - current.v()) * t
-        );
-        output.add(intersection);
+        var t = currentDistance / (currentDistance - nextDistance);
+        output.add(interpolate(current, next, t));
         if (nextInside) {
           output.add(next);
         }
       }
     }
-    return output.toArray(ClipVertex[]::new);
+    return output;
+  }
+
+  private float clipDistance(Camera camera, ClipVertex vertex, ClipPlane plane) {
+    return switch (plane) {
+      case NEAR -> vertex.z() - camera.nearPlane();
+      case FAR -> camera.farPlane() - vertex.z();
+      case LEFT -> (float) (vertex.z() * camera.tanHalfFovX() - vertex.x());
+      case RIGHT -> (float) (vertex.z() * camera.tanHalfFovX() + vertex.x());
+      case TOP -> (float) (vertex.z() * camera.tanHalfFovY() - vertex.y());
+      case BOTTOM -> (float) (vertex.z() * camera.tanHalfFovY() + vertex.y());
+    };
+  }
+
+  private ClipVertex interpolate(ClipVertex current, ClipVertex next, float t) {
+    return new ClipVertex(
+      current.x() + (next.x() - current.x()) * t,
+      current.y() + (next.y() - current.y()) * t,
+      current.z() + (next.z() - current.z()) * t,
+      current.u() + (next.u() - current.u()) * t,
+      current.v() + (next.v() - current.v()) * t
+    );
   }
 
   private ClipVertex toClipVertex(Camera camera, RenderVertex vertex) {
@@ -217,14 +240,28 @@ public final class RasterPipeline {
     var screenX = (float) ((0.5 - ndcX * 0.5) * camera.width());
     var screenY = (float) ((0.5 - ndcY * 0.5) * camera.height());
     var inverseDepth = 1.0F / vertex.z();
+    var biasedDepth = Math.clamp(vertex.z() + depthBias, camera.nearPlane(), camera.farPlane());
     return new ProjectedVertex(
       screenX,
       screenY,
-      vertex.z() + depthBias,
+      windowDepth(camera, biasedDepth),
       inverseDepth,
       vertex.u() * inverseDepth,
       vertex.v() * inverseDepth
     );
+  }
+
+  private float windowDepth(Camera camera, float viewDepth) {
+    var near = camera.nearPlane();
+    var far = camera.farPlane();
+    return far / (far - near) - far * near / ((far - near) * viewDepth);
+  }
+
+  private float sortDepth(ClipVertex v0, ClipVertex v1, ClipVertex v2) {
+    var x = (v0.x() + v1.x() + v2.x()) / 3.0F;
+    var y = (v0.y() + v1.y() + v2.y()) / 3.0F;
+    var z = (v0.z() + v1.z() + v2.z()) / 3.0F;
+    return x * x + y * y + z * z;
   }
 
   private void rasterizeTriangle(
@@ -281,7 +318,7 @@ public final class RasterPipeline {
         var normalizedW2 = w2 / area;
         var depth = normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth();
         var rasterIndex = y * width + x;
-        if (depth >= depthBuffer[rasterIndex]) {
+        if (!(depth <= depthBuffer[rasterIndex])) {
           continue;
         }
 
@@ -294,7 +331,7 @@ public final class RasterPipeline {
         if (alpha == 0) {
           continue;
         }
-        if (alphaTest && alpha < CUTOUT_ALPHA_THRESHOLD) {
+        if (triangle.alphaCutoutThreshold() > 0 && alpha < triangle.alphaCutoutThreshold()) {
           continue;
         }
 
@@ -366,7 +403,18 @@ public final class RasterPipeline {
     var outR = (int) (srcR * srcAlpha + dstR * invAlpha);
     var outG = (int) (srcG * srcAlpha + dstG * invAlpha);
     var outB = (int) (srcB * srcAlpha + dstB * invAlpha);
-    return 0xFF000000 | (outR << 16) | (outG << 8) | outB;
+    var dstA = (dstColor >>> 24) & 0xFF;
+    var outA = Math.min(255, (int) (srcA + dstA * invAlpha));
+    return (outA << 24) | (outR << 16) | (outG << 8) | outB;
+  }
+
+  private enum ClipPlane {
+    NEAR,
+    FAR,
+    LEFT,
+    RIGHT,
+    TOP,
+    BOTTOM
   }
 
   private record ClipVertex(float x, float y, float z, float u, float v) {}

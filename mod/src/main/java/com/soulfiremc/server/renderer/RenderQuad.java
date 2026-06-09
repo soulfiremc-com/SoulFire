@@ -27,5 +27,28 @@ public record RenderQuad(
   RendererAssets.AlphaMode alphaMode,
   int color,
   boolean doubleSided,
-  float depthBias
-) {}
+  float depthBias,
+  int alphaCutoutThreshold
+) {
+  public RenderQuad(
+    RenderVertex v0,
+    RenderVertex v1,
+    RenderVertex v2,
+    RenderVertex v3,
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    boolean doubleSided,
+    float depthBias
+  ) {
+    this(v0, v1, v2, v3, texture, alphaMode, color, doubleSided, depthBias, defaultAlphaCutoutThreshold(alphaMode));
+  }
+
+  public static int defaultAlphaCutoutThreshold(RendererAssets.AlphaMode alphaMode) {
+    return switch (alphaMode) {
+      case OPAQUE -> 0;
+      case CUTOUT -> 128;
+      case TRANSLUCENT -> 3;
+    };
+  }
+}

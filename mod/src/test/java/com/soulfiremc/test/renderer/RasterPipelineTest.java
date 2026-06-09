@@ -19,10 +19,12 @@ package com.soulfiremc.test.renderer;
 
 import com.soulfiremc.server.renderer.*;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.awt.image.BufferedImage;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RasterPipelineTest {
@@ -72,6 +74,71 @@ class RasterPipelineTest {
     assertChannelNear((color >> 16) & 0xFF, 128, 8);
     assertChannelNear((color >> 8) & 0xFF, 0, 3);
     assertChannelNear(color & 0xFF, 127, 8);
+  }
+
+  @Test
+  void equalDepthOpaqueFragmentsUseBlaze3dLequalDepthTest() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void geometryBehindFarPlaneIsClipped() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 8.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 12.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF000000, 3);
+  }
+
+  @Test
+  void cutoutUsesTerrainHalfAlphaThresholdByDefault() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.2F, -1.2F, 6.0F, 1.2F, 1.2F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0x40FF0000), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF0000FF, 3);
+  }
+
+  @Test
+  void manualProjectionMatchesJomlViewRotationProjectionMatrix() {
+    var camera = new Camera(new Vec3(10.0, 65.0, -4.0), 35.0F, -12.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var worldX = camera.eyeX() + camera.forwardX() * 10.0 + camera.rightX() * 1.5 + camera.upX() * 0.75;
+    var worldY = camera.eyeY() + camera.forwardY() * 10.0 + camera.rightY() * 1.5 + camera.upY() * 0.75;
+    var worldZ = camera.eyeZ() + camera.forwardZ() * 10.0 + camera.rightZ() * 1.5 + camera.upZ() * 0.75;
+
+    var projected = camera.viewRotationProjectionMatrix().transformProject(new Vector3f(
+      (float) (worldX - camera.eyeX()),
+      (float) (worldY - camera.eyeY()),
+      (float) (worldZ - camera.eyeZ())
+    ));
+    var matrixScreenX = (projected.x() + 1.0F) * 0.5F * WIDTH;
+    var matrixScreenY = (1.0F - projected.y()) * 0.5F * HEIGHT;
+
+    var manualNdcX = camera.viewX(worldX, worldY, worldZ) / (camera.viewZ(worldX, worldY, worldZ) * camera.tanHalfFovX());
+    var manualNdcY = camera.viewY(worldX, worldY, worldZ) / (camera.viewZ(worldX, worldY, worldZ) * camera.tanHalfFovY());
+    var manualScreenX = (0.5 - manualNdcX * 0.5) * WIDTH;
+    var manualScreenY = (0.5 - manualNdcY * 0.5) * HEIGHT;
+
+    assertEquals(manualScreenX, matrixScreenX, 1.0E-4);
+    assertEquals(manualScreenY, matrixScreenY, 1.0E-4);
   }
 
   private static RenderQuad quad(

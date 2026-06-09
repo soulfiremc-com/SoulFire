@@ -439,6 +439,28 @@ public class WorldMeshCollector {
     boolean doubleSided,
     float depthBias
   ) {
+    return toRenderQuad(
+      face,
+      offsetX,
+      offsetY,
+      offsetZ,
+      color,
+      doubleSided,
+      depthBias,
+      RenderQuad.defaultAlphaCutoutThreshold(face.alphaMode())
+    );
+  }
+
+  static RenderQuad toRenderQuad(
+    RendererAssets.GeometryFace face,
+    double offsetX,
+    double offsetY,
+    double offsetZ,
+    int color,
+    boolean doubleSided,
+    float depthBias,
+    int alphaCutoutThreshold
+  ) {
     return new RenderQuad(
       new RenderVertex((float) (face.x()[0] + offsetX), (float) (face.y()[0] + offsetY), (float) (face.z()[0] + offsetZ), face.uv()[0], face.uv()[1]),
       new RenderVertex((float) (face.x()[1] + offsetX), (float) (face.y()[1] + offsetY), (float) (face.z()[1] + offsetZ), face.uv()[2], face.uv()[3]),
@@ -448,7 +470,8 @@ public class WorldMeshCollector {
       face.alphaMode(),
       color,
       doubleSided,
-      depthBias
+      depthBias,
+      alphaCutoutThreshold
     );
   }
 }

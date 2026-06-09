@@ -222,7 +222,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     cameraState.initialized = true;
     cameraState.orientation = new Quaternionf();
     cameraState.projectionMatrix = new Matrix4f(ctx.camera().projectionMatrix());
-    cameraState.viewRotationMatrix = new Matrix4f(ctx.camera().viewMatrix());
+    cameraState.viewRotationMatrix = new Matrix4f(ctx.camera().viewRotationMatrix());
     cameraState.depthFar = ctx.camera().farPlane();
     cameraState.entityRenderState = new CameraEntityRenderState();
     return cameraState;
@@ -346,8 +346,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var faceEmission = emission >= 0 && emission <= 15 ? emission : 0;
     var outlineColor = emission > 15 || emission < 0 ? emission : 0;
 
+    var alphaMode = alphaMode(renderType, texture);
     model.setupAnim(state);
-    appendModelPartGeometry(model.root(), poseStack, texture, alphaMode(renderType, texture), color, faceEmission, outlineColor);
+    appendModelPartGeometry(
+      model.root(),
+      poseStack,
+      texture,
+      alphaMode,
+      alphaCutoutThreshold(renderType, alphaMode),
+      color,
+      faceEmission,
+      outlineColor
+    );
   }
 
   @Override
@@ -371,7 +381,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var faceEmission = emission >= 0 && emission <= 15 ? emission : 0;
     var outlineColor = emission > 15 || emission < 0 ? emission : 0;
 
-    appendModelPartGeometry(modelPart, poseStack, texture, alphaMode(renderType, texture), color, faceEmission, outlineColor);
+    var alphaMode = alphaMode(renderType, texture);
+    appendModelPartGeometry(
+      modelPart,
+      poseStack,
+      texture,
+      alphaMode,
+      alphaCutoutThreshold(renderType, alphaMode),
+      color,
+      faceEmission,
+      outlineColor
+    );
   }
 
   @Override
@@ -429,7 +449,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   @Override
   public void submitCustomGeometry(PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer renderer) {
     var texture = textureFromRenderType(renderType);
-    var consumer = new CapturingVertexConsumer(poseStack.last().pose(), renderType.mode(), texture, alphaMode(renderType, texture));
+    var alphaMode = alphaMode(renderType, texture);
+    var consumer = new CapturingVertexConsumer(
+      poseStack.last().pose(),
+      renderType.mode(),
+      texture,
+      alphaMode,
+      alphaCutoutThreshold(renderType, alphaMode)
+    );
     renderer.render(poseStack.last(), consumer);
     consumer.flush();
   }
@@ -466,6 +493,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     PoseStack poseStack,
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
+    int alphaCutoutThreshold,
     int color,
     int emission,
     int outlineColor
@@ -489,7 +517,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         }
 
         var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
-        builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F));
+        builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F, alphaCutoutThreshold));
         if (outlineVertices != null) {
           addFace(outlineVertices, WHITE_TEXTURE, RendererAssets.AlphaMode.OPAQUE, outlineColor, 0, true, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F});
         }
@@ -522,17 +550,28 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
     }
 
+    var effectiveRenderType = renderType != null ? renderType : quad.materialInfo().itemRenderType();
+    var alphaMode = alphaMode(effectiveRenderType, texture);
     var face = RendererAssets.GeometryFace.of(
       vertices,
       uv,
       texture,
-      alphaMode(renderType != null ? renderType : quad.materialInfo().itemRenderType(), texture),
+      alphaMode,
       quad.direction(),
       -1,
       quad.materialInfo().lightEmission(),
       quad.materialInfo().shade()
     );
-    builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F));
+    builder.add(WorldMeshCollector.toRenderQuad(
+      face,
+      0.0,
+      0.0,
+      0.0,
+      color,
+      true,
+      0.0F,
+      alphaCutoutThreshold(effectiveRenderType, alphaMode)
+    ));
   }
 
   @Nullable
@@ -580,7 +619,30 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     float[] uv
   ) {
     var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
-    builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, doubleSided, 0.0F));
+    builder.add(WorldMeshCollector.toRenderQuad(
+      face,
+      0.0,
+      0.0,
+      0.0,
+      color,
+      doubleSided,
+      0.0F,
+      RenderQuad.defaultAlphaCutoutThreshold(alphaMode)
+    ));
+  }
+
+  private void addFace(
+    Vector3f[] vertices,
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    int emission,
+    boolean doubleSided,
+    float[] uv,
+    int alphaCutoutThreshold
+  ) {
+    var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
+    builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, doubleSided, 0.0F, alphaCutoutThreshold));
   }
 
   private Vector3f transform(PoseStack poseStack, float x, float y, float z) {
@@ -600,6 +662,23 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return texture.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+  }
+
+  private int alphaCutoutThreshold(@Nullable RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+    if (renderType == null) {
+      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+    }
+
+    var alphaCutout = renderType.pipeline().getShaderDefines().values().get("ALPHA_CUTOUT");
+    if (alphaCutout == null) {
+      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+    }
+
+    try {
+      return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
+    } catch (NumberFormatException _) {
+      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+    }
   }
 
   private float normalizeSpriteU(TextureAtlasSprite sprite, float atlasU) {
@@ -680,6 +759,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final VertexFormat.Mode mode;
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
+    private final int alphaCutoutThreshold;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
     private CapturedVertex current;
 
@@ -687,12 +767,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       Matrix4fc pose,
       VertexFormat.Mode mode,
       RendererAssets.TextureImage texture,
-      RendererAssets.AlphaMode alphaMode
+      RendererAssets.AlphaMode alphaMode,
+      int alphaCutoutThreshold
     ) {
       this.pose = pose;
       this.mode = mode;
       this.texture = texture;
       this.alphaMode = alphaMode;
+      this.alphaCutoutThreshold = alphaCutoutThreshold;
     }
 
     void flush() {
@@ -726,11 +808,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void emitQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), d.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()});
+      addFace(new Vector3f[]{a.position(), b.position(), c.position(), d.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()}, alphaCutoutThreshold);
     }
 
     private void emitTriangle(CapturedVertex a, CapturedVertex b, CapturedVertex c) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), c.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()});
+      addFace(new Vector3f[]{a.position(), b.position(), c.position(), c.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()}, alphaCutoutThreshold);
     }
 
     private void emitLine(CapturedVertex a, CapturedVertex b) {
@@ -756,7 +838,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         a.color(),
         0,
         true,
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F}
+        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
+        alphaCutoutThreshold
       );
     }
 
@@ -774,7 +857,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         vertex.color(),
         0,
         true,
-        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F}
+        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F},
+        alphaCutoutThreshold
       );
     }
 
@@ -821,7 +905,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     public VertexConsumer getBuffer(RenderType renderType) {
       return consumers.computeIfAbsent(renderType, type -> {
         var texture = textureFromRenderType(type);
-        return new CapturingVertexConsumer(new Matrix4f(), type.mode(), texture, alphaMode(type, texture));
+        var alphaMode = alphaMode(type, texture);
+        return new CapturingVertexConsumer(new Matrix4f(), type.mode(), texture, alphaMode, alphaCutoutThreshold(type, alphaMode));
       });
     }
 
@@ -843,7 +928,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           new Matrix4f(),
           VertexFormat.Mode.QUADS,
           texture,
-          currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE
+          currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
+          currentLayer.translucent() ? RenderQuad.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0
         )
       );
     }

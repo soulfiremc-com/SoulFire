@@ -18,11 +18,12 @@
 package com.soulfiremc.server.renderer;
 
 import net.minecraft.world.phys.Vec3;
+import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 
 /// Camera state shared between scene building, culling, and rasterization.
 public final class Camera {
-  private static final float DEFAULT_NEAR_PLANE = 0.05F;
+  private static final float DEFAULT_NEAR_PLANE = net.minecraft.client.Camera.PROJECTION_Z_NEAR;
 
   private final int width;
   private final int height;
@@ -46,9 +47,12 @@ public final class Camera {
   private final double screenYOffset;
   private final float nearPlane;
   private final float farPlane;
+  private final Matrix4f viewRotationMatrix;
   private final Matrix4f viewMatrix;
   private final Matrix4f projectionMatrix;
+  private final Matrix4f viewRotationProjectionMatrix;
   private final Matrix4f viewProjectionMatrix;
+  private final FrustumIntersection frustumIntersection;
 
   public Camera(Vec3 eyePos, float yRot, float xRot, int width, int height, double fov, float farPlane) {
     this.width = width;
@@ -74,9 +78,9 @@ public final class Camera {
     this.rightY = 0.0;
     this.rightZ = sinYRot;
 
-    this.upX = sinYRot * sinXRot;
+    this.upX = -sinYRot * sinXRot;
     this.upY = cosXRot;
-    this.upZ = -cosYRot * sinXRot;
+    this.upZ = cosYRot * sinXRot;
 
     var fovRad = Math.toRadians(fov);
     var aspectRatio = (double) width / height;
@@ -87,19 +91,22 @@ public final class Camera {
     this.screenXOffset = tanHalfFovX;
     this.screenYOffset = tanHalfFovY;
 
-    this.viewMatrix = new Matrix4f().lookAt(
-      (float) eyeX,
-      (float) eyeY,
-      (float) eyeZ,
-      (float) (eyeX + forwardX),
-      (float) (eyeY + forwardY),
-      (float) (eyeZ + forwardZ),
+    this.viewRotationMatrix = new Matrix4f().lookAt(
+      0.0F,
+      0.0F,
+      0.0F,
+      (float) forwardX,
+      (float) forwardY,
+      (float) forwardZ,
       (float) upX,
       (float) upY,
       (float) upZ
     );
+    this.viewMatrix = new Matrix4f(viewRotationMatrix).translate((float) -eyeX, (float) -eyeY, (float) -eyeZ);
     this.projectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, nearPlane, farPlane);
+    this.viewRotationProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewRotationMatrix);
     this.viewProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewMatrix);
+    this.frustumIntersection = new FrustumIntersection(viewRotationProjectionMatrix);
   }
 
   public float viewX(double worldX, double worldY, double worldZ) {
@@ -124,39 +131,19 @@ public final class Camera {
   }
 
   public boolean isVisibleAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-    var centerX = (minX + maxX) * 0.5;
-    var centerY = (minY + maxY) * 0.5;
-    var centerZ = (minZ + maxZ) * 0.5;
-    var halfX = (maxX - minX) * 0.5;
-    var halfY = (maxY - minY) * 0.5;
-    var halfZ = (maxZ - minZ) * 0.5;
-
-    var camX = viewX(centerX, centerY, centerZ);
-    var camY = viewY(centerX, centerY, centerZ);
-    var camZ = viewZ(centerX, centerY, centerZ);
-    var extentX = Math.abs(rightX) * halfX + Math.abs(rightY) * halfY + Math.abs(rightZ) * halfZ;
-    var extentY = Math.abs(upX) * halfX + Math.abs(upY) * halfY + Math.abs(upZ) * halfZ;
-    var extentZ = Math.abs(forwardX) * halfX + Math.abs(forwardY) * halfY + Math.abs(forwardZ) * halfZ;
-    var furthestZ = camZ + extentZ;
-
-    if (furthestZ < nearPlane || camZ - extentZ > farPlane) {
-      return false;
-    }
-    if (camX - extentX > furthestZ * tanHalfFovX) {
-      return false;
-    }
-    if (camX + extentX < -furthestZ * tanHalfFovX) {
-      return false;
-    }
-    if (camY - extentY > furthestZ * tanHalfFovY) {
-      return false;
-    }
-    return !(camY + extentY < -furthestZ * tanHalfFovY);
+    return frustumIntersection.testAab(
+      (float) (minX - eyeX),
+      (float) (minY - eyeY),
+      (float) (minZ - eyeZ),
+      (float) (maxX - eyeX),
+      (float) (maxY - eyeY),
+      (float) (maxZ - eyeZ)
+    );
   }
 
   public double sampleDirX(int x, int y) {
-    var screenX = screenXOffset - x * screenXMult;
-    var screenY = screenYOffset - y * screenYMult;
+    var screenX = screenXOffset - (x + 0.5) * screenXMult;
+    var screenY = screenYOffset - (y + 0.5) * screenYMult;
     var rayX = forwardX + screenX * rightX + screenY * upX;
     var rayY = forwardY + screenY * upY;
     var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
@@ -165,8 +152,8 @@ public final class Camera {
   }
 
   public double sampleDirY(int x, int y) {
-    var screenX = screenXOffset - x * screenXMult;
-    var screenY = screenYOffset - y * screenYMult;
+    var screenX = screenXOffset - (x + 0.5) * screenXMult;
+    var screenY = screenYOffset - (y + 0.5) * screenYMult;
     var rayX = forwardX + screenX * rightX + screenY * upX;
     var rayY = forwardY + screenY * upY;
     var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
@@ -175,8 +162,8 @@ public final class Camera {
   }
 
   public double sampleDirZ(int x, int y) {
-    var screenX = screenXOffset - x * screenXMult;
-    var screenY = screenYOffset - y * screenYMult;
+    var screenX = screenXOffset - (x + 0.5) * screenXMult;
+    var screenY = screenYOffset - (y + 0.5) * screenYMult;
     var rayX = forwardX + screenX * rightX + screenY * upX;
     var rayY = forwardY + screenY * upY;
     var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
@@ -256,12 +243,20 @@ public final class Camera {
     return farPlane;
   }
 
+  public Matrix4f viewRotationMatrix() {
+    return new Matrix4f(viewRotationMatrix);
+  }
+
   public Matrix4f viewMatrix() {
     return new Matrix4f(viewMatrix);
   }
 
   public Matrix4f projectionMatrix() {
     return new Matrix4f(projectionMatrix);
+  }
+
+  public Matrix4f viewRotationProjectionMatrix() {
+    return new Matrix4f(viewRotationProjectionMatrix);
   }
 
   public Matrix4f viewProjectionMatrix() {

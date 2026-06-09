@@ -26,5 +26,19 @@ public record ProjectedTriangle(
   RendererAssets.AlphaMode alphaMode,
   int color,
   boolean doubleSided,
-  float sortDepth
-) {}
+  float sortDepth,
+  int alphaCutoutThreshold
+) {
+  public ProjectedTriangle(
+    ProjectedVertex v0,
+    ProjectedVertex v1,
+    ProjectedVertex v2,
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    boolean doubleSided,
+    float sortDepth
+  ) {
+    this(v0, v1, v2, texture, alphaMode, color, doubleSided, sortDepth, RenderQuad.defaultAlphaCutoutThreshold(alphaMode));
+  }
+}
