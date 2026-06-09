@@ -19,11 +19,13 @@ package com.soulfiremc.server.grpc;
 
 import com.google.common.base.Stopwatch;
 import com.soulfiremc.grpc.generated.*;
+import com.soulfiremc.server.SoulFireScheduler;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.account.MinecraftAccount;
 import com.soulfiremc.server.account.OfflineAuthService;
 import com.soulfiremc.server.api.SoulFireAPI;
 import com.soulfiremc.server.api.event.bot.BotPacketPreReceiveEvent;
+import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotConnectionFactory;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.instance.BotSettings;
@@ -41,6 +43,7 @@ import net.kyori.adventure.text.Component;
 import net.minecraft.network.protocol.status.ClientboundStatusResponsePacket;
 
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,34 +70,64 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
     var settingsSource = instance.settingsSource();
 
     var cancellationCollector = new CancellationCollector(responseObserver);
+    var activeConnections = ConcurrentHashMap.<BotConnection>newKeySet();
+    cancellationCollector.addCancelHook(() ->
+      activeConnections.forEach(connection -> disconnectConnection(connection, "Proxy check cancelled")));
     try {
-      instance.scheduler().execute(() -> {
+      var checkStarted = new AtomicBoolean();
+      instance.scheduler().execute(SoulFireScheduler.FinalizableRunnable.withFinalizer(() -> {
+        checkStarted.set(true);
         try {
-          SFHelpers.maxFutures(instance.scheduler(), settingsSource.get(ProxySettings.PROXY_CHECK_CONCURRENCY), request.getProxyList(), payload -> {
-              var proxy = SFProxy.fromProto(payload);
+          var concurrency = settingsSource.get(ProxySettings.PROXY_CHECK_CONCURRENCY);
+          var timeoutSeconds = settingsSource.get(ProxySettings.PROXY_CHECK_TIMEOUT);
+          var botSettingsSource = new BotSettingsImpl(PROXY_CHECK_ACCOUNT, settingsSource);
+          var protocolVersion = botSettingsSource.get(BotSettings.PROTOCOL_VERSION, BotSettings.PROTOCOL_VERSION_PARSER);
+          var serverAddress = BotConnectionFactory.parseAddress(settingsSource.get(ProxySettings.PROXY_CHECK_ADDRESS), protocolVersion);
+
+          log.info(
+            "Starting proxy check for {} proxies with concurrency {}, timeout {}s and target {}",
+            request.getProxyCount(),
+            concurrency,
+            timeoutSeconds,
+            serverAddress);
+
+          SFHelpers.maxFutures(instance.scheduler(), concurrency, request.getProxyList(), payload -> {
               var stopWatch = Stopwatch.createStarted();
-              var deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(settingsSource.get(ProxySettings.PROXY_CHECK_TIMEOUT));
-              var botSettingsSource = new BotSettingsImpl(PROXY_CHECK_ACCOUNT, settingsSource);
-              var protocolVersion = botSettingsSource.get(BotSettings.PROTOCOL_VERSION, BotSettings.PROTOCOL_VERSION_PARSER);
-              var serverAddress = BotConnectionFactory.parseAddress(settingsSource.get(ProxySettings.PROXY_CHECK_ADDRESS), protocolVersion);
-              var factory = new BotConnectionFactory(
-                instance,
-                botSettingsSource,
-                protocolVersion,
-                serverAddress,
-                proxy
-              );
+              var deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+              SFProxy proxy = null;
+              BotConnection connection = null;
+              var resultReady = false;
               var valid = false;
-              var connection = factory.prepareConnection(true);
               try {
+                proxy = SFProxy.fromProto(payload);
+
+                if (cancellationCollector.cancelled()) {
+                  return;
+                }
+
+                var factory = new BotConnectionFactory(
+                  instance,
+                  botSettingsSource,
+                  protocolVersion,
+                  serverAddress,
+                  proxy
+                );
+                connection = factory.prepareConnection(true);
+                activeConnections.add(connection);
+
+                if (cancellationCollector.cancelled()) {
+                  return;
+                }
+
+                var checkedConnection = connection;
                 try {
                   var latch = new CountDownLatch(1);
                   var statusReceived = new AtomicBoolean(false);
 
-                  connection.shutdownHooks().add(latch::countDown);
+                  checkedConnection.shutdownHooks().add(latch::countDown);
 
                   Consumer<BotPacketPreReceiveEvent> listener = event -> {
-                    if (event.connection() == connection && event.packet() instanceof ClientboundStatusResponsePacket) {
+                    if (event.connection() == checkedConnection && event.packet() instanceof ClientboundStatusResponsePacket) {
                       statusReceived.set(true);
                       latch.countDown();
                     }
@@ -103,7 +136,7 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
 
                   try {
                     log.debug("Checking proxy: {}", proxy);
-                    connection.connect().get(remainingNanos(deadlineNanos), TimeUnit.NANOSECONDS);
+                    checkedConnection.connect().get(remainingNanos(deadlineNanos), TimeUnit.NANOSECONDS);
 
                     valid = latch.await(remainingNanos(deadlineNanos), TimeUnit.NANOSECONDS) && statusReceived.get();
                   } finally {
@@ -114,14 +147,15 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
                     Thread.currentThread().interrupt();
                   }
 
-                  log.trace("Proxy check error for {}", proxy, t);
+                  log.trace("Proxy check error for {}", proxyDescription(proxy, payload), t);
                 }
 
                 var result = ProxyCheckResponseSingle.newBuilder()
                   .setProxy(payload)
-                  .setLatency((int) stopWatch.stop().elapsed(TimeUnit.MILLISECONDS))
+                  .setLatency((int) stopWatch.elapsed(TimeUnit.MILLISECONDS))
                   .setValid(valid)
                   .build();
+                resultReady = true;
 
                 synchronized (responseObserver) {
                   if (responseObserver.isCancelled()) {
@@ -138,14 +172,33 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
                     .setSingle(result)
                     .build());
                 }
+              } catch (Throwable t) {
+                if (resultReady) {
+                  throw t;
+                }
+
+                if (t instanceof InterruptedException) {
+                  Thread.currentThread().interrupt();
+                }
+
+                log.debug("Proxy check setup failed for {}", proxyDescription(proxy, payload), t);
+                sendProxyCheckResult(responseObserver, ProxyCheckResponseSingle.newBuilder()
+                  .setProxy(payload)
+                  .setLatency((int) stopWatch.elapsed(TimeUnit.MILLISECONDS))
+                  .setValid(false)
+                  .build());
               } finally {
-                connection.scheduler().execute(() -> connection.disconnect(Component.text("Proxy check completed")));
+                if (connection != null) {
+                  activeConnections.remove(connection);
+                  disconnectConnection(connection, "Proxy check completed");
+                }
               }
             },
             cancellationCollector);
 
           synchronized (responseObserver) {
             if (responseObserver.isCancelled()) {
+              log.info("Proxy check cancelled for {} proxies", request.getProxyCount());
               return;
             }
 
@@ -154,15 +207,17 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
               .build());
             responseObserver.onCompleted();
           }
+
+          log.info("Finished proxy check for {} proxies", request.getProxyCount());
         } catch (Throwable t) {
           log.error("Error during async proxy check", t);
-          synchronized (responseObserver) {
-            if (!responseObserver.isCancelled()) {
-              responseObserver.onError(Status.INTERNAL.withDescription(t.getMessage()).withCause(t).asRuntimeException());
-            }
-          }
+          sendError(responseObserver, Status.INTERNAL.withDescription(t.getMessage()).withCause(t));
         }
-      });
+      }, () -> {
+        if (!checkStarted.get()) {
+          sendError(responseObserver, Status.UNAVAILABLE.withDescription("Instance scheduler is stopped"));
+        }
+      }));
     } catch (Throwable t) {
       log.error("Error checking proxy", t);
       throw Status.INTERNAL.withDescription(t.getMessage()).withCause(t).asRuntimeException();
@@ -171,5 +226,37 @@ public final class ProxyCheckServiceImpl extends ProxyCheckServiceGrpc.ProxyChec
 
   private static long remainingNanos(long deadlineNanos) {
     return Math.max(1, deadlineNanos - System.nanoTime());
+  }
+
+  private static void disconnectConnection(BotConnection connection, String reason) {
+    connection.scheduler().execute(() -> connection.disconnect(Component.text(reason)));
+  }
+
+  private static String proxyDescription(SFProxy proxy, ProxyProto payload) {
+    return proxy == null ? payload.getAddress() : proxy.toString();
+  }
+
+  private static void sendProxyCheckResult(
+    ServerCallStreamObserver<ProxyCheckResponse> responseObserver,
+    ProxyCheckResponseSingle result) {
+    synchronized (responseObserver) {
+      if (responseObserver.isCancelled()) {
+        return;
+      }
+
+      responseObserver.onNext(ProxyCheckResponse.newBuilder()
+        .setSingle(result)
+        .build());
+    }
+  }
+
+  private static void sendError(
+    ServerCallStreamObserver<ProxyCheckResponse> responseObserver,
+    Status status) {
+    synchronized (responseObserver) {
+      if (!responseObserver.isCancelled()) {
+        responseObserver.onError(status.asRuntimeException());
+      }
+    }
   }
 }

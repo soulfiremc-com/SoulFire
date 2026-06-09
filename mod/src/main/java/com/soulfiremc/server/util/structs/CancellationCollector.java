@@ -28,8 +28,9 @@ import java.util.concurrent.CompletableFuture;
 public final class CancellationCollector {
   private static final int CLEANUP_THRESHOLD = 100;
   private final List<CompletableFuture<?>> futures = new ArrayList<>();
+  private final List<Runnable> cancelHooks = new ArrayList<>();
   @Getter
-  private boolean cancelled;
+  private volatile boolean cancelled;
 
   public CancellationCollector(StreamObserver<?> casted) {
     var observer = (ServerCallStreamObserver<?>) casted;
@@ -57,15 +58,40 @@ public final class CancellationCollector {
     return future;
   }
 
-  public synchronized void cancelAll() {
-    if (cancelled) {
-      return;
+  public void addCancelHook(Runnable hook) {
+    var runNow = false;
+    synchronized (this) {
+      if (cancelled) {
+        runNow = true;
+      } else {
+        cancelHooks.add(hook);
+      }
     }
 
-    cancelled = true;
-    for (var future : futures) {
+    if (runNow) {
+      hook.run();
+    }
+  }
+
+  public void cancelAll() {
+    List<CompletableFuture<?>> futuresToCancel;
+    List<Runnable> hooksToRun;
+    synchronized (this) {
+      if (cancelled) {
+        return;
+      }
+
+      cancelled = true;
+      futuresToCancel = List.copyOf(futures);
+      hooksToRun = List.copyOf(cancelHooks);
+      futures.clear();
+      cancelHooks.clear();
+    }
+
+    for (var future : futuresToCancel) {
       future.cancel(true);
     }
-    futures.clear();
+
+    hooksToRun.forEach(Runnable::run);
   }
 }

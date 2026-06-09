@@ -46,6 +46,9 @@ import java.util.*;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.*;
 import java.util.regex.Pattern;
 
@@ -107,32 +110,83 @@ public final class SFHelpers {
   }
 
   public static <S> void maxFutures(SoulFireScheduler scheduler, int maxConcurrency, Collection<S> source, Consumer<S> task, CancellationCollector cancellationCollector) {
-    var semaphore = new Semaphore(maxConcurrency);
-    var phaser = new Phaser(1);
-    for (var item : source) {
-      if (cancellationCollector.cancelled()) {
-        break;
-      }
-
-      semaphore.acquireUninterruptibly();
-
-      if (cancellationCollector.cancelled()) {
-        semaphore.release();
-        break;
-      }
-
-      phaser.register();
-      scheduler.execute(() -> {
-        try {
-          task.accept(item);
-        } finally {
-          semaphore.release();
-          phaser.arriveAndDeregister();
-        }
-      });
+    if (maxConcurrency < 1) {
+      throw new IllegalArgumentException("maxConcurrency must be at least 1");
     }
 
-    phaser.arriveAndAwaitAdvance();
+    var semaphore = new Semaphore(maxConcurrency);
+    var phaser = new Phaser(1);
+    try {
+      for (var item : source) {
+        if (!acquirePermit(semaphore, cancellationCollector)) {
+          break;
+        }
+
+        if (cancellationCollector.cancelled()) {
+          semaphore.release();
+          break;
+        }
+
+        phaser.register();
+        var taskFinished = new AtomicBoolean();
+        Runnable finishTask = () -> {
+          if (taskFinished.compareAndSet(false, true)) {
+            semaphore.release();
+            phaser.arriveAndDeregister();
+          }
+        };
+
+        var scheduledTask = SoulFireScheduler.FinalizableRunnable.withFinalizer(() -> {
+          try {
+            if (!cancellationCollector.cancelled()) {
+              task.accept(item);
+            }
+          } finally {
+            finishTask.run();
+          }
+        }, finishTask);
+
+        try {
+          scheduler.execute(scheduledTask);
+        } catch (Throwable t) {
+          finishTask.run();
+          throw t;
+        }
+      }
+    } finally {
+      awaitScheduledTasks(phaser, cancellationCollector);
+    }
+  }
+
+  private static boolean acquirePermit(Semaphore semaphore, CancellationCollector cancellationCollector) {
+    while (!cancellationCollector.cancelled()) {
+      try {
+        if (semaphore.tryAcquire(100, TimeUnit.MILLISECONDS)) {
+          return true;
+        }
+      } catch (InterruptedException _) {
+        Thread.currentThread().interrupt();
+        cancellationCollector.cancelAll();
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  private static void awaitScheduledTasks(Phaser phaser, CancellationCollector cancellationCollector) {
+    var phase = phaser.arriveAndDeregister();
+    while (phaser.getRegisteredParties() > 0 && !cancellationCollector.cancelled()) {
+      try {
+        phase = phaser.awaitAdvanceInterruptibly(phase, 100, TimeUnit.MILLISECONDS);
+      } catch (TimeoutException _) {
+        // Re-check cancellation periodically instead of blocking forever.
+      } catch (InterruptedException _) {
+        Thread.currentThread().interrupt();
+        cancellationCollector.cancelAll();
+        return;
+      }
+    }
   }
 
   public static int getRandomInt(int min, int max) {
