@@ -29,17 +29,17 @@ public final class RasterPipeline {
   private static final int TILE_SIZE = 32;
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     renderSky(ctx, buffers);
-    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.opaque(), buffers, true, false, false);
-    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.cutout(), buffers, true, true, false);
-    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.translucent(), buffers, false, false, true);
+    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.opaque(), buffers, false);
+    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.cutout(), buffers, false);
+    rasterPass(ctx.camera(), ctx.animationTick(), sceneData.translucent(), buffers, true);
   }
 
   public void renderSynthetic(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, int clearColor) {
     buffers.clearColor(clearColor);
     buffers.clearDepth();
-    rasterPass(camera, animationTick, sceneData.opaque(), buffers, true, false, false);
-    rasterPass(camera, animationTick, sceneData.cutout(), buffers, true, true, false);
-    rasterPass(camera, animationTick, sceneData.translucent(), buffers, false, false, true);
+    rasterPass(camera, animationTick, sceneData.opaque(), buffers, false);
+    rasterPass(camera, animationTick, sceneData.cutout(), buffers, false);
+    rasterPass(camera, animationTick, sceneData.translucent(), buffers, true);
   }
 
   private void renderSky(RenderContext ctx, RasterBuffers buffers) {
@@ -65,8 +65,6 @@ public final class RasterPipeline {
     long animationTick,
     RenderQuad[] quads,
     RasterBuffers buffers,
-    boolean writeDepth,
-    boolean alphaTest,
     boolean sortBackToFront
   ) {
     if (quads.length == 0) {
@@ -76,7 +74,7 @@ public final class RasterPipeline {
     var triangles = projectQuads(camera, quads);
     if (sortBackToFront) {
       RenderDebugTrace.current().translucentTriangles(triangles.size());
-    } else if (alphaTest) {
+    } else if (quads[0].material().alphaMode() == RendererAssets.AlphaMode.CUTOUT) {
       RenderDebugTrace.current().cutoutTriangles(triangles.size());
     } else {
       RenderDebugTrace.current().opaqueTriangles(triangles.size());
@@ -126,7 +124,7 @@ public final class RasterPipeline {
       var maxX = Math.min(width - 1, minX + TILE_SIZE - 1);
       var maxY = Math.min(height - 1, minY + TILE_SIZE - 1);
       for (var triangle : bins[tileIndex]) {
-        rasterizeTriangle(camera, animationTick, triangle, buffers, minX, minY, maxX, maxY, writeDepth, alphaTest, sortBackToFront);
+        rasterizeTriangle(camera, animationTick, triangle, buffers, minX, minY, maxX, maxY);
       }
     });
   }
@@ -222,13 +220,29 @@ public final class RasterPipeline {
       current.z() + (next.z() - current.z()) * t,
       current.w() + (next.w() - current.w()) * t,
       current.u() + (next.u() - current.u()) * t,
-      current.v() + (next.v() - current.v()) * t
+      current.v() + (next.v() - current.v()) * t,
+      current.a() + (next.a() - current.a()) * t,
+      current.r() + (next.r() - current.r()) * t,
+      current.g() + (next.g() - current.g()) * t,
+      current.b() + (next.b() - current.b()) * t
     );
   }
 
   private ClipVertex toClipVertex(Matrix4f viewProjection, RenderVertex vertex) {
     var clip = viewProjection.transform(new Vector4f(vertex.x(), vertex.y(), vertex.z(), 1.0F));
-    return new ClipVertex(clip.x, clip.y, clip.z, clip.w, vertex.u(), vertex.v());
+    var color = vertex.color();
+    return new ClipVertex(
+      clip.x,
+      clip.y,
+      clip.z,
+      clip.w,
+      vertex.u(),
+      vertex.v(),
+      (color >>> 24) & 0xFF,
+      (color >>> 16) & 0xFF,
+      (color >>> 8) & 0xFF,
+      color & 0xFF
+    );
   }
 
   private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, float depthBias) {
@@ -245,7 +259,11 @@ public final class RasterPipeline {
       biasedDepth,
       inverseW,
       vertex.u() * inverseW,
-      vertex.v() * inverseW
+      vertex.v() * inverseW,
+      vertex.a() * inverseW,
+      vertex.r() * inverseW,
+      vertex.g() * inverseW,
+      vertex.b() * inverseW
     );
   }
 
@@ -264,10 +282,7 @@ public final class RasterPipeline {
     int clipMinX,
     int clipMinY,
     int clipMaxX,
-    int clipMaxY,
-    boolean writeDepth,
-    boolean alphaTest,
-    boolean translucent
+    int clipMaxY
   ) {
     var v0 = triangle.v0();
     var v1 = triangle.v1();
@@ -311,7 +326,7 @@ public final class RasterPipeline {
         var normalizedW2 = w2 / area;
         var depth = normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth();
         var rasterIndex = y * width + x;
-        if (!(depth <= depthBuffer[rasterIndex])) {
+        if (!material.depthTest().passes(depth, depthBuffer[rasterIndex])) {
           continue;
         }
 
@@ -319,7 +334,8 @@ public final class RasterPipeline {
         var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
         var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
         var sampled = material.texture().sample(u, v, animationTick);
-        var color = modulate(sampled, material.color());
+        var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
+        var color = modulate(modulate(sampled, vertexColor), material.color());
         var alpha = (color >>> 24) & 0xFF;
         if (alpha == 0) {
           continue;
@@ -328,25 +344,40 @@ public final class RasterPipeline {
           continue;
         }
 
-        if (material.alphaMode() == RendererAssets.AlphaMode.OPAQUE || alphaTest) {
-          depthBuffer[rasterIndex] = depth;
+        if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT) {
+          if (material.depthWrite()) {
+            depthBuffer[rasterIndex] = depth;
+          }
           colorBuffer[rasterIndex] = forceOpaque(color);
           continue;
         }
 
-        if (translucent) {
-          colorBuffer[rasterIndex] = blend(colorBuffer[rasterIndex], color);
-          if (writeDepth) {
-            depthBuffer[rasterIndex] = depth;
-          }
-        } else {
-          if (writeDepth) {
-            depthBuffer[rasterIndex] = depth;
-          }
-          colorBuffer[rasterIndex] = forceOpaque(color);
+        colorBuffer[rasterIndex] = blend(colorBuffer[rasterIndex], color);
+        if (material.depthWrite()) {
+          depthBuffer[rasterIndex] = depth;
         }
       }
     }
+  }
+
+  private int interpolatedColor(
+    float weight0,
+    float weight1,
+    float weight2,
+    float inverseW,
+    ProjectedVertex v0,
+    ProjectedVertex v1,
+    ProjectedVertex v2
+  ) {
+    var a = colorChannel((weight0 * v0.aOverW() + weight1 * v1.aOverW() + weight2 * v2.aOverW()) / inverseW);
+    var r = colorChannel((weight0 * v0.rOverW() + weight1 * v1.rOverW() + weight2 * v2.rOverW()) / inverseW);
+    var g = colorChannel((weight0 * v0.gOverW() + weight1 * v1.gOverW() + weight2 * v2.gOverW()) / inverseW);
+    var b = colorChannel((weight0 * v0.bOverW() + weight1 * v1.bOverW() + weight2 * v2.bOverW()) / inverseW);
+    return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private int colorChannel(float value) {
+    return Math.clamp(Math.round(value), 0, 255);
   }
 
   private boolean isInside(float area, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
@@ -410,5 +441,5 @@ public final class RasterPipeline {
     BOTTOM
   }
 
-  private record ClipVertex(float x, float y, float z, float w, float u, float v) {}
+  private record ClipVertex(float x, float y, float z, float w, float u, float v, float a, float r, float g, float b) {}
 }

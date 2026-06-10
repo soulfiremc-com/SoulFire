@@ -88,10 +88,10 @@ class RasterPipelineTest {
     var scene = SceneData.builder();
     scene.add(quad(-0.8F, -0.8F, 8.5F, 0.8F, 0.8F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.TRANSLUCENT, 0x80FFFFFF));
     scene.add(customQuad(
-      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
-      new RenderVertex(-1.0F, 1.0F, 12.0F, 0.0F, 0.0F),
-      new RenderVertex(1.0F, 1.0F, 12.0F, 1.0F, 0.0F),
-      new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 12.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 12.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
       solidTexture(0xFFFF0000),
       RendererAssets.AlphaMode.TRANSLUCENT,
       0x80FFFFFF
@@ -103,6 +103,92 @@ class RasterPipelineTest {
     var lowerColor = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2 + 2);
     assertRedBlendedOverBlue(upperColor);
     assertRedBlendedOverBlue(lowerColor);
+  }
+
+  @Test
+  void vertexColorIsInterpolatedBeforeMaterialTint() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(new RenderQuad(
+      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFF0000),
+      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFF0000),
+      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFF00FF00),
+      new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xFF00FF00),
+      RenderMaterial.create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+    ));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var leftColor = buffers.image().getRGB(WIDTH / 2 - 7, HEIGHT / 2);
+    var rightColor = buffers.image().getRGB(WIDTH / 2 + 7, HEIGHT / 2);
+    assertTrue(
+      ((leftColor >> 8) & 0xFF) > ((leftColor >> 16) & 0xFF),
+      () -> "expected left screen sample to stay green-dominant but was 0x" + Integer.toHexString(leftColor)
+    );
+    assertTrue(
+      ((rightColor >> 16) & 0xFF) > ((rightColor >> 8) & 0xFF),
+      () -> "expected right screen sample to stay red-dominant but was 0x" + Integer.toHexString(rightColor)
+    );
+  }
+
+  @Test
+  void depthTestCanBeDisabledForSeeThroughGeometry() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 8.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 8.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 8.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 8.0F, 1.0F, 1.0F),
+      new RenderMaterial(
+        solidTexture(0xFF00FF00),
+        RendererAssets.AlphaMode.OPAQUE,
+        0xFFFFFFFF,
+        false,
+        0.0F,
+        0,
+        RenderMaterial.DepthTest.ALWAYS_PASS,
+        false
+      )
+    ));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void disabledDepthWritesDoNotOccludeLaterGeometry() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      new RenderMaterial(
+        solidTexture(0xFFFF0000),
+        RendererAssets.AlphaMode.OPAQUE,
+        0xFFFFFFFF,
+        false,
+        0.0F,
+        0,
+        RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
+        false
+      )
+    ));
+    scene.add(quad(-1.0F, -1.0F, 8.0F, 1.0F, 1.0F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF0000FF, 3);
   }
 
   @Test
@@ -190,10 +276,10 @@ class RasterPipelineTest {
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     var scene = SceneData.builder();
     scene.add(customQuad(
-      new RenderVertex(-0.4F, -0.4F, 0.01F, 0.0F, 1.0F),
-      new RenderVertex(-0.4F, 0.4F, 0.01F, 0.0F, 0.0F),
-      new RenderVertex(0.4F, 0.4F, 1.0F, 1.0F, 0.0F),
-      new RenderVertex(0.4F, -0.4F, 1.0F, 1.0F, 1.0F),
+      vertex(-0.4F, -0.4F, 0.01F, 0.0F, 1.0F),
+      vertex(-0.4F, 0.4F, 0.01F, 0.0F, 0.0F),
+      vertex(0.4F, 0.4F, 1.0F, 1.0F, 0.0F),
+      vertex(0.4F, -0.4F, 1.0F, 1.0F, 1.0F),
       solidTexture(0xFFFF0000),
       RendererAssets.AlphaMode.OPAQUE,
       0xFFFFFFFF
@@ -287,10 +373,10 @@ class RasterPipelineTest {
     int color
   ) {
     return new RenderQuad(
-      new RenderVertex(minX, minY, z, 0.0F, 1.0F),
-      new RenderVertex(minX, maxY, z, 0.0F, 0.0F),
-      new RenderVertex(maxX, maxY, z, 1.0F, 0.0F),
-      new RenderVertex(maxX, minY, z, 1.0F, 1.0F),
+      vertex(minX, minY, z, 0.0F, 1.0F),
+      vertex(minX, maxY, z, 0.0F, 0.0F),
+      vertex(maxX, maxY, z, 1.0F, 0.0F),
+      vertex(maxX, minY, z, 1.0F, 1.0F),
       RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
@@ -311,6 +397,20 @@ class RasterPipelineTest {
       v3,
       RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
+  }
+
+  private static RenderQuad customQuad(
+    RenderVertex v0,
+    RenderVertex v1,
+    RenderVertex v2,
+    RenderVertex v3,
+    RenderMaterial material
+  ) {
+    return new RenderQuad(v0, v1, v2, v3, material);
+  }
+
+  private static RenderVertex vertex(float x, float y, float z, float u, float v) {
+    return new RenderVertex(x, y, z, u, v, 0xFFFFFFFF);
   }
 
   private static RendererAssets.TextureImage solidTexture(int argb) {

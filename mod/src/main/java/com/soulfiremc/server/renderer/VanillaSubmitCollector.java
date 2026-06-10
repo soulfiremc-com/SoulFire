@@ -17,11 +17,11 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.soulfiremc.mod.mixin.soulfire.accessor.MixinQuadParticleRenderStateAccessor;
-import com.soulfiremc.mod.mixin.soulfire.accessor.MixinQuadParticleStorageAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
@@ -278,7 +278,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     poseStack.scale(0.025F, -0.025F, 0.025F);
     var textColor = seeThrough ? 0xFFFFFFFF : 0xCCFFFFFF;
     var backgroundColor = seeThrough ? 0x40000000 : 0x30000000;
-    addComponentQuad(poseStack, name, xOffset(name), offset, textColor, backgroundColor);
+    addComponentQuad(
+      poseStack,
+      name,
+      xOffset(name),
+      offset,
+      textColor,
+      backgroundColor,
+      seeThrough ? RenderMaterial.DepthTest.ALWAYS_PASS : RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
+      !seeThrough
+    );
     poseStack.popPose();
   }
 
@@ -295,7 +304,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int backgroundColor,
     int outlineColor
   ) {
-    addSequenceQuad(poseStack, text, x, y, color, backgroundColor, textDepthBias(displayMode));
+    addSequenceQuad(poseStack, text, x, y, color, backgroundColor, textDepthBias(displayMode), textDepthTest(displayMode), textDepthWrite(displayMode));
   }
 
   @Override
@@ -369,7 +378,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       alphaCutoutThreshold(renderType, alphaMode),
       color,
       faceEmission,
-      outlineColor
+      outlineColor,
+      renderType
     );
   }
 
@@ -403,7 +413,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       alphaCutoutThreshold(renderType, alphaMode),
       color,
       faceEmission,
-      outlineColor
+      outlineColor,
+      renderType
     );
   }
 
@@ -468,7 +479,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       renderType.mode(),
       texture,
       alphaMode,
-      alphaCutoutThreshold(renderType, alphaMode)
+      alphaCutoutThreshold(renderType, alphaMode),
+      renderType.pipeline().getDepthStencilState()
     );
     renderer.render(poseStack.last(), consumer);
     consumer.flush();
@@ -480,15 +492,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    for (Map.Entry<?, ?> entry : ((MixinQuadParticleRenderStateAccessor) quadParticles).soulfire$getParticles().entrySet()) {
-      if (!(entry.getKey() instanceof SingleQuadParticle.Layer layer)
-        || !(entry.getValue() instanceof MixinQuadParticleStorageAccessor storage)) {
-        continue;
-      }
-
+    for (Map.Entry<SingleQuadParticle.Layer, QuadParticleRenderState.Storage> entry : quadParticles.particles.entrySet()) {
+      var layer = entry.getKey();
+      var storage = entry.getValue();
       var texture = assets.textureAtlas(layer.textureAtlasLocation());
       var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
-      storage.soulfire$forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, _) -> {
+      storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, _) -> {
         var rotation = new Quaternionf(qx, qy, qz, qw);
         var worldX = x + (float) ctx.camera().eyeX();
         var worldY = y + (float) ctx.camera().eyeY();
@@ -512,7 +521,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int alphaCutoutThreshold,
     int color,
     int emission,
-    int outlineColor
+    int outlineColor,
+    @Nullable RenderType renderType
   ) {
     modelPart.visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
@@ -533,7 +543,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         }
 
         var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
-        builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F, alphaCutoutThreshold));
+        builder.add(withDepthState(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, true, 0.0F, alphaCutoutThreshold), renderType));
         if (outlineVertices != null) {
           addFace(outlineVertices, WHITE_TEXTURE, RendererAssets.AlphaMode.OPAQUE, outlineColor, 0, true, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F});
         }
@@ -578,7 +588,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       quad.materialInfo().lightEmission(),
       quad.materialInfo().shade()
     );
-    builder.add(WorldMeshCollector.toRenderQuad(
+    builder.add(withDepthState(WorldMeshCollector.toRenderQuad(
       face,
       0.0,
       0.0,
@@ -587,7 +597,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       true,
       0.0F,
       alphaCutoutThreshold(effectiveRenderType, alphaMode)
-    ));
+    ), effectiveRenderType));
   }
 
   @Nullable
@@ -598,13 +608,32 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return assets.texture(sprite.contents().name());
   }
 
-  private void addComponentQuad(PoseStack poseStack, Component text, float x, float y, int color, int backgroundColor) {
+  private void addComponentQuad(
+    PoseStack poseStack,
+    Component text,
+    float x,
+    float y,
+    int color,
+    int backgroundColor,
+    RenderMaterial.DepthTest depthTest,
+    boolean depthWrite
+  ) {
     var width = Math.max(16, font.width(text) + 4);
     var texture = assets.textTexture(text, width, color, backgroundColor);
-    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture);
+    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, 0.0F, depthTest, depthWrite);
   }
 
-  private void addSequenceQuad(PoseStack poseStack, FormattedCharSequence text, float x, float y, int color, int backgroundColor, float depthBias) {
+  private void addSequenceQuad(
+    PoseStack poseStack,
+    FormattedCharSequence text,
+    float x,
+    float y,
+    int color,
+    int backgroundColor,
+    float depthBias,
+    RenderMaterial.DepthTest depthTest,
+    boolean depthWrite
+  ) {
     var plain = plainText(text);
     if (plain.isEmpty()) {
       return;
@@ -612,19 +641,37 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     var width = Math.max(16, font.width(text) + 4);
     var texture = assets.textTexture(Component.literal(plain), width, color, backgroundColor);
-    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, depthBias);
+    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, depthBias, depthTest, depthWrite);
   }
 
   private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
-    addTexturedQuad(poseStack, width, height, x, y, texture, 0.0F);
+    addTexturedQuad(poseStack, width, height, x, y, texture, 0.0F, RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL, true);
   }
 
-  private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture, float depthBias) {
-    builder.add(BillboardGeometry.textQuad(poseStack, width, height, x, y, texture, depthBias));
+  private void addTexturedQuad(
+    PoseStack poseStack,
+    float width,
+    float height,
+    float x,
+    float y,
+    RendererAssets.TextureImage texture,
+    float depthBias,
+    RenderMaterial.DepthTest depthTest,
+    boolean depthWrite
+  ) {
+    builder.add(withDepthTest(BillboardGeometry.textQuad(poseStack, width, height, x, y, texture, depthBias), depthTest, depthWrite));
   }
 
   private float textDepthBias(Font.DisplayMode displayMode) {
     return displayMode == Font.DisplayMode.POLYGON_OFFSET ? -1.0F : 0.0F;
+  }
+
+  private RenderMaterial.DepthTest textDepthTest(Font.DisplayMode displayMode) {
+    return displayMode == Font.DisplayMode.SEE_THROUGH ? RenderMaterial.DepthTest.ALWAYS_PASS : RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL;
+  }
+
+  private boolean textDepthWrite(Font.DisplayMode displayMode) {
+    return displayMode != Font.DisplayMode.SEE_THROUGH;
   }
 
   private void addFace(
@@ -680,6 +727,22 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return texture.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+  }
+
+  private RenderQuad withDepthState(RenderQuad quad, @Nullable RenderType renderType) {
+    if (renderType == null) {
+      return quad;
+    }
+
+    return withMaterial(quad, quad.material().withDepthState(renderType.pipeline().getDepthStencilState()));
+  }
+
+  private RenderQuad withDepthTest(RenderQuad quad, RenderMaterial.DepthTest depthTest, boolean depthWrite) {
+    return withMaterial(quad, quad.material().withDepthTest(depthTest, depthWrite));
+  }
+
+  private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {
+    return new RenderQuad(quad.v0(), quad.v1(), quad.v2(), quad.v3(), material);
   }
 
   private int alphaCutoutThreshold(@Nullable RenderType renderType, RendererAssets.AlphaMode alphaMode) {
@@ -749,6 +812,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
     private final int alphaCutoutThreshold;
+    @Nullable
+    private final DepthStencilState depthStencilState;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
     private float lineWidth = 1.0F;
     private CapturedVertex current;
@@ -758,13 +823,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       VertexFormat.Mode mode,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode,
-      int alphaCutoutThreshold
+      int alphaCutoutThreshold,
+      @Nullable DepthStencilState depthStencilState
     ) {
       this.pose = pose;
       this.mode = mode;
       this.texture = texture;
       this.alphaMode = alphaMode;
       this.alphaCutoutThreshold = alphaCutoutThreshold;
+      this.depthStencilState = depthStencilState;
     }
 
     void flush() {
@@ -808,11 +875,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void emitQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), d.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()}, alphaCutoutThreshold);
+      addCapturedFace(
+        new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
+        new int[]{a.color(), b.color(), c.color(), d.color()},
+        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()}
+      );
     }
 
     private void emitTriangle(CapturedVertex a, CapturedVertex b, CapturedVertex c) {
-      addFace(new Vector3f[]{a.position(), b.position(), c.position(), c.position()}, texture, alphaMode, a.color(), 0, true, new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()}, alphaCutoutThreshold);
+      addCapturedFace(
+        new Vector3f[]{a.position(), b.position(), c.position(), c.position()},
+        new int[]{a.color(), b.color(), c.color(), c.color()},
+        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()}
+      );
     }
 
     private void emitLine(CapturedVertex a, CapturedVertex b) {
@@ -830,20 +905,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         side.set((float) ctx.camera().screenLeftX(), (float) ctx.camera().screenLeftY(), (float) ctx.camera().screenLeftZ());
       }
       side.normalize(Math.max(0.005F, lineWidth * 0.005F));
-      addFace(
+      addCapturedFace(
         new Vector3f[]{
           new Vector3f(a.position()).sub(side),
           new Vector3f(a.position()).add(side),
           new Vector3f(b.position()).add(side),
           new Vector3f(b.position()).sub(side)
         },
-        texture,
-        alphaMode,
-        a.color(),
-        0,
-        true,
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
-        alphaCutoutThreshold
+        new int[]{a.color(), a.color(), b.color(), b.color()},
+        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F}
       );
     }
 
@@ -851,21 +921,31 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var size = 0.03F;
       var right = new Vector3f((float) ctx.camera().screenLeftX(), (float) ctx.camera().screenLeftY(), (float) ctx.camera().screenLeftZ()).normalize(size);
       var up = new Vector3f((float) ctx.camera().upX(), (float) ctx.camera().upY(), (float) ctx.camera().upZ()).normalize(size);
-      addFace(
+      addCapturedFace(
         new Vector3f[]{
           new Vector3f(vertex.position()).sub(right).sub(up),
           new Vector3f(vertex.position()).sub(right).add(up),
           new Vector3f(vertex.position()).add(right).add(up),
           new Vector3f(vertex.position()).add(right).sub(up)
         },
-        texture,
-        alphaMode,
-        vertex.color(),
-        0,
-        true,
-        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F},
-        alphaCutoutThreshold
+        new int[]{vertex.color(), vertex.color(), vertex.color(), vertex.color()},
+        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F}
       );
+    }
+
+    private void addCapturedFace(Vector3f[] positions, int[] colors, float[] uv) {
+      var material = RenderMaterial.create(texture, alphaMode, 0xFFFFFFFF, true, 0.0F, alphaCutoutThreshold).withDepthState(depthStencilState);
+      builder.add(new RenderQuad(
+        renderVertex(positions[0], uv[0], uv[1], colors[0]),
+        renderVertex(positions[1], uv[2], uv[3], colors[1]),
+        renderVertex(positions[2], uv[4], uv[5], colors[2]),
+        renderVertex(positions[3], uv[6], uv[7], colors[3]),
+        material
+      ));
+    }
+
+    private RenderVertex renderVertex(Vector3f position, float u, float v, int color) {
+      return new RenderVertex(position.x(), position.y(), position.z(), u, v, color);
     }
 
     @Override
@@ -915,7 +995,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return consumers.computeIfAbsent(renderType, type -> {
         var texture = textureFromRenderType(type);
         var alphaMode = alphaMode(type, texture);
-        return new CapturingVertexConsumer(new Matrix4f(), type.mode(), texture, alphaMode, alphaCutoutThreshold(type, alphaMode));
+        return new CapturingVertexConsumer(
+          new Matrix4f(),
+          type.mode(),
+          texture,
+          alphaMode,
+          alphaCutoutThreshold(type, alphaMode),
+          type.pipeline().getDepthStencilState()
+        );
       });
     }
 
@@ -947,7 +1034,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           VertexFormat.Mode.QUADS,
           texture,
           currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
-          currentLayer.translucent() ? RenderMaterial.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0
+          currentLayer.translucent() ? RenderMaterial.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0,
+          new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, !currentLayer.translucent())
         )
       );
     }

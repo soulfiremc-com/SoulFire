@@ -18,4 +18,4 @@
 package com.soulfiremc.server.renderer;
 
 /// A single textured world-space vertex used by the software rasterizer.
-public record RenderVertex(float x, float y, float z, float u, float v) {}
+public record RenderVertex(float x, float y, float z, float u, float v, int color) {}

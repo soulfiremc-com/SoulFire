@@ -583,7 +583,11 @@ public final class InventoryItemIconRenderer {
       depth,
       1.0F,
       vertex.u(),
-      vertex.v()
+      vertex.v(),
+      (vertex.color() >>> 24) & 0xFF,
+      (vertex.color() >>> 16) & 0xFF,
+      (vertex.color() >>> 8) & 0xFF,
+      vertex.color() & 0xFF
     );
   }
 
@@ -645,7 +649,8 @@ public final class InventoryItemIconRenderer {
         var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
         var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
         var sampled = material.texture().sample(u, v, animationTick);
-        var color = modulate(sampled, material.color());
+        var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
+        var color = modulate(modulate(sampled, vertexColor), material.color());
         var alpha = (color >>> 24) & 0xFF;
         if (alpha == 0) {
           continue;
@@ -676,6 +681,26 @@ public final class InventoryItemIconRenderer {
         }
       }
     }
+  }
+
+  private static int interpolatedColor(
+    float weight0,
+    float weight1,
+    float weight2,
+    float inverseW,
+    ProjectedVertex v0,
+    ProjectedVertex v1,
+    ProjectedVertex v2
+  ) {
+    var a = colorChannel((weight0 * v0.aOverW() + weight1 * v1.aOverW() + weight2 * v2.aOverW()) / inverseW);
+    var r = colorChannel((weight0 * v0.rOverW() + weight1 * v1.rOverW() + weight2 * v2.rOverW()) / inverseW);
+    var g = colorChannel((weight0 * v0.gOverW() + weight1 * v1.gOverW() + weight2 * v2.gOverW()) / inverseW);
+    var b = colorChannel((weight0 * v0.bOverW() + weight1 * v1.bOverW() + weight2 * v2.bOverW()) / inverseW);
+    return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private static int colorChannel(float value) {
+    return Math.clamp(Math.round(value), 0, 255);
   }
 
   private static void applyFoil(RasterBuffers buffers, long animationTick) {
@@ -969,7 +994,11 @@ public final class InventoryItemIconRenderer {
     float depth,
     float inverseW,
     float uOverW,
-    float vOverW
+    float vOverW,
+    float aOverW,
+    float rOverW,
+    float gOverW,
+    float bOverW
   ) {}
 
   private record ProjectedTriangle(
@@ -1216,9 +1245,18 @@ public final class InventoryItemIconRenderer {
             emitTriangle(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
           }
         }
-        case TRIANGLE_STRIP, TRIANGLE_FAN -> {
+        case TRIANGLE_STRIP -> {
           for (var i = 0; i + 2 < vertices.size(); i++) {
-            emitTriangle(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+            if ((i & 1) == 0) {
+              emitTriangle(quads, textures, vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+            } else {
+              emitTriangle(quads, textures, vertices.get(i + 1), vertices.get(i), vertices.get(i + 2));
+            }
+          }
+        }
+        case TRIANGLE_FAN -> {
+          for (var i = 1; i + 1 < vertices.size(); i++) {
+            emitTriangle(quads, textures, vertices.getFirst(), vertices.get(i), vertices.get(i + 1));
           }
         }
         default -> {
@@ -1227,22 +1265,23 @@ public final class InventoryItemIconRenderer {
     }
 
     private void emitQuad(List<RenderQuad> quads, Set<RendererAssets.TextureImage> textures, CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
-      var face = RendererAssets.GeometryFace.of(
-        new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
-        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()},
-        texture,
-        alphaMode,
-        null,
-        -1,
-        0,
-        true
-      );
-      quads.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, a.color(), true, 0.0F));
+      quads.add(new RenderQuad(
+        renderVertex(a),
+        renderVertex(b),
+        renderVertex(c),
+        renderVertex(d),
+        RenderMaterial.create(texture, alphaMode, 0xFFFFFFFF, true, 0.0F)
+      ));
       textures.add(texture);
     }
 
     private void emitTriangle(List<RenderQuad> quads, Set<RendererAssets.TextureImage> textures, CapturedVertex a, CapturedVertex b, CapturedVertex c) {
       emitQuad(quads, textures, a, b, c, c);
+    }
+
+    private RenderVertex renderVertex(CapturedVertex vertex) {
+      var position = vertex.position();
+      return new RenderVertex(position.x(), position.y(), position.z(), vertex.u(), vertex.v(), vertex.color());
     }
 
     @Override

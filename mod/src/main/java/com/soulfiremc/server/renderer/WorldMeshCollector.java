@@ -44,6 +44,7 @@ import org.joml.Vector3f;
 /// Builds raster-ready world meshes from the loaded chunk sections around the camera.
 @UtilityClass
 public class WorldMeshCollector {
+  private static final int WHITE = 0xFFFFFFFF;
 
   public static SceneData collect(RenderContext ctx) {
     var builder = SceneData.builder();
@@ -235,10 +236,10 @@ public class WorldMeshCollector {
       var topUv = topFaceUv(flow);
       var topColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, 1.0F);
       builder.add(new RenderQuad(
-        new RenderVertex(blockPos.getX(), blockPos.getY() + northWestHeight, blockPos.getZ(), topUv[0], topUv[1]),
-        new RenderVertex(blockPos.getX(), blockPos.getY() + southWestHeight, blockPos.getZ() + 1.0F, topUv[2], topUv[3]),
-        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + southEastHeight, blockPos.getZ() + 1.0F, topUv[4], topUv[5]),
-        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + northEastHeight, blockPos.getZ(), topUv[6], topUv[7]),
+        vertex(blockPos.getX(), blockPos.getY() + northWestHeight, blockPos.getZ(), topUv[0], topUv[1]),
+        vertex(blockPos.getX(), blockPos.getY() + southWestHeight, blockPos.getZ() + 1.0F, topUv[2], topUv[3]),
+        vertex(blockPos.getX() + 1.0F, blockPos.getY() + southEastHeight, blockPos.getZ() + 1.0F, topUv[4], topUv[5]),
+        vertex(blockPos.getX() + 1.0F, blockPos.getY() + northEastHeight, blockPos.getZ(), topUv[6], topUv[7]),
         RenderMaterial.create(topTexture, fluid.alphaMode(), topColor, fluidState.shouldRenderBackwardUpFace(level, blockPos.above()), 0.0F)
       ));
       RenderDebugTrace.current().fluidTopQuad();
@@ -247,10 +248,10 @@ public class WorldMeshCollector {
     if (renderBottom) {
       var bottomColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, 0.5F);
       builder.add(new RenderQuad(
-        new RenderVertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 0.0F, 1.0F),
-        new RenderVertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ(), 0.0F, 0.0F),
-        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ(), 1.0F, 0.0F),
-        new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 1.0F, 1.0F),
+        vertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 0.0F, 1.0F),
+        vertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ(), 0.0F, 0.0F),
+        vertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ(), 1.0F, 0.0F),
+        vertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 1.0F, 1.0F),
         RenderMaterial.create(fluid.stillTexture(), fluid.alphaMode(), bottomColor, false, 0.0F)
       ));
       RenderDebugTrace.current().fluidBottomQuad();
@@ -299,10 +300,10 @@ public class WorldMeshCollector {
     var v1 = (1.0F - rightHeight) * 0.5F;
     var baseColor = fluidFaceColor(ctx, fluidState, blockState, blockPos, shade);
     builder.add(new RenderQuad(
-      new RenderVertex(blockPos.getX() + leftX, blockPos.getY() + leftHeight, blockPos.getZ() + leftZ, 0.0F, v0),
-      new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + rightHeight, blockPos.getZ() + rightZ, 0.5F, v1),
-      new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + 0.001F, blockPos.getZ() + rightZ, 0.5F, 0.5F),
-      new RenderVertex(blockPos.getX() + leftX, blockPos.getY() + 0.001F, blockPos.getZ() + leftZ, 0.0F, 0.5F),
+      vertex(blockPos.getX() + leftX, blockPos.getY() + leftHeight, blockPos.getZ() + leftZ, 0.0F, v0),
+      vertex(blockPos.getX() + rightX, blockPos.getY() + rightHeight, blockPos.getZ() + rightZ, 0.5F, v1),
+      vertex(blockPos.getX() + rightX, blockPos.getY() + 0.001F, blockPos.getZ() + rightZ, 0.5F, 0.5F),
+      vertex(blockPos.getX() + leftX, blockPos.getY() + 0.001F, blockPos.getZ() + leftZ, 0.0F, 0.5F),
       RenderMaterial.create(
         texture,
         fluidState.is(FluidTags.WATER) ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
@@ -456,11 +457,15 @@ public class WorldMeshCollector {
     int alphaCutoutThreshold
   ) {
     return new RenderQuad(
-      new RenderVertex((float) (face.x()[0] + offsetX), (float) (face.y()[0] + offsetY), (float) (face.z()[0] + offsetZ), face.uv()[0], face.uv()[1]),
-      new RenderVertex((float) (face.x()[1] + offsetX), (float) (face.y()[1] + offsetY), (float) (face.z()[1] + offsetZ), face.uv()[2], face.uv()[3]),
-      new RenderVertex((float) (face.x()[2] + offsetX), (float) (face.y()[2] + offsetY), (float) (face.z()[2] + offsetZ), face.uv()[4], face.uv()[5]),
-      new RenderVertex((float) (face.x()[3] + offsetX), (float) (face.y()[3] + offsetY), (float) (face.z()[3] + offsetZ), face.uv()[6], face.uv()[7]),
-      new RenderMaterial(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold)
+      vertex((float) (face.x()[0] + offsetX), (float) (face.y()[0] + offsetY), (float) (face.z()[0] + offsetZ), face.uv()[0], face.uv()[1]),
+      vertex((float) (face.x()[1] + offsetX), (float) (face.y()[1] + offsetY), (float) (face.z()[1] + offsetZ), face.uv()[2], face.uv()[3]),
+      vertex((float) (face.x()[2] + offsetX), (float) (face.y()[2] + offsetY), (float) (face.z()[2] + offsetZ), face.uv()[4], face.uv()[5]),
+      vertex((float) (face.x()[3] + offsetX), (float) (face.y()[3] + offsetY), (float) (face.z()[3] + offsetZ), face.uv()[6], face.uv()[7]),
+      RenderMaterial.create(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold)
     );
+  }
+
+  private static RenderVertex vertex(float x, float y, float z, float u, float v) {
+    return new RenderVertex(x, y, z, u, v, WHITE);
   }
 }

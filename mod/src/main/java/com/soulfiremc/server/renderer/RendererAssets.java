@@ -24,8 +24,6 @@ import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mojang.math.Quadrant;
-import com.soulfiremc.mod.mixin.soulfire.accessor.MixinSpriteContentsAccessor;
-import com.soulfiremc.mod.mixin.soulfire.accessor.MixinTextureAtlasAccessor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
@@ -1272,8 +1270,8 @@ public final class RendererAssets {
   private TextureImage loadAtlasTexture(TextureAtlas atlas) {
     try {
       var image = new BufferedImage(atlas.getWidth(), atlas.getHeight(), BufferedImage.TYPE_INT_ARGB);
-      for (var sprite : ((MixinTextureAtlasAccessor) atlas).soulfire$getSprites()) {
-        if (sprite == null || sprite.contents() == null || ((MixinSpriteContentsAccessor) sprite.contents()).soulfire$getOriginalImage() == null) {
+      for (var sprite : atlas.sprites) {
+        if (sprite == null || sprite.contents() == null || sprite.contents().originalImage == null) {
           continue;
         }
 
@@ -1288,7 +1286,7 @@ public final class RendererAssets {
 
   private void drawAtlasSprite(BufferedImage atlasImage, TextureAtlasSprite sprite) {
     var contents = sprite.contents();
-    var source = ((MixinSpriteContentsAccessor) contents).soulfire$getOriginalImage();
+    var source = contents.originalImage;
     for (var y = 0; y < contents.height(); y++) {
       for (var x = 0; x < contents.width(); x++) {
         atlasImage.setRGB(sprite.getX() + x, sprite.getY() + y, source.getPixel(x, y));
