@@ -400,6 +400,26 @@ class RasterPipelineTest {
   }
 
   @Test
+  void polygonOffsetTextRendersOverCoplanarSignFace() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.2F, -1.2F, 4.0F, 1.2F, 1.2F, solidTexture(0xFFB98B3A), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-0.8F, -0.2F, 4.0F, 0.0F, 1.0F),
+      vertex(-0.8F, 0.2F, 4.0F, 0.0F, 0.0F),
+      vertex(0.8F, 0.2F, 4.0F, 1.0F, 0.0F),
+      vertex(0.8F, -0.2F, 4.0F, 1.0F, 1.0F),
+      RenderMaterial.create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, -0.11F)
+    ));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF201000, 3);
+  }
+
+  @Test
   void cameraFacingBillboardKeepsTextureOrientationFacingCamera() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);

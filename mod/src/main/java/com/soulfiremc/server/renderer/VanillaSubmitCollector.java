@@ -89,12 +89,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private final RenderContext ctx;
   private final RendererAssets assets;
   private final SceneData.Builder builder = SceneData.builder();
-  private final Font font;
 
   private VanillaSubmitCollector(RenderContext ctx) {
     this.ctx = ctx;
     this.assets = RendererAssets.instance();
-    this.font = Minecraft.getInstance().font;
   }
 
   static void prepareEntityDispatcher(RenderContext ctx, @Nullable LocalPlayer cameraEntity) {
@@ -310,9 +308,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   ) {
     var bufferSource = new CapturingBufferSource();
     if (outlineColor != 0) {
-      font.drawInBatch8xOutline(text, x, y, color, outlineColor, poseStack.last().pose(), bufferSource, light);
+      font().drawInBatch8xOutline(text, x, y, color, outlineColor, poseStack.last().pose(), bufferSource, light);
     } else {
-      font.drawInBatch(text, x, y, color, shadow, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
+      font().drawInBatch(text, x, y, color, shadow, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
     }
     bufferSource.flush();
   }
@@ -691,7 +689,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int light
   ) {
     var bufferSource = new CapturingBufferSource();
-    font.drawInBatch(text, x, y, color, false, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
+    font().drawInBatch(text, x, y, color, false, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
     bufferSource.flush();
   }
 
@@ -740,7 +738,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private float xOffset(Component text) {
-    return -font.width(text) * 0.5F;
+    return -font().width(text) * 0.5F;
+  }
+
+  private Font font() {
+    return Minecraft.getInstance().font;
   }
 
   static RendererAssets.AlphaMode alphaMode(@Nullable RenderType renderType, RendererAssets.TextureImage texture, int color) {
@@ -949,6 +951,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void emitQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
+      // Vanilla font glyphs are emitted in text-local order, which is opposite this rasterizer's front-face winding.
+      if (usesFontQuadWinding(renderType)) {
+        addCapturedQuad(b, a, d, c);
+        return;
+      }
+
+      addCapturedQuad(a, b, c, d);
+    }
+
+    private void addCapturedQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
         new int[]{a.color(), b.color(), c.color(), d.color()},
@@ -1064,6 +1076,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       this.lineWidth = Math.max(1.0F, width);
       return this;
     }
+  }
+
+  private static boolean usesFontQuadWinding(@Nullable RenderType renderType) {
+    if (renderType == null) {
+      return false;
+    }
+
+    var path = renderType.pipeline().getLocation().getPath();
+    return path.startsWith("pipeline/text") || path.startsWith("pipeline/gui_text");
   }
 
   private final class CapturingBufferSource implements MultiBufferSource {
