@@ -23,6 +23,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -83,6 +84,50 @@ class VanillaSubmitCollectorTextTest {
     assertTrue(countChangedPixels(buffers, 0xFF000000) > 0);
   }
 
+  @Test
+  void capturedVerticesApplyPackedLightCoords() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newTextConsumer(collector, texture);
+
+    addGlyphVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    addGlyphVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, LightCoordsUtil.pack(0, 0));
+    addGlyphVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, LightCoordsUtil.pack(0, 0));
+    addGlyphVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertTrue(scene.totalQuadCount() > 0);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF2F2B1F, 8);
+  }
+
+  @Test
+  void capturedVerticesDefaultToFullBright() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newTextConsumer(collector, texture);
+
+    addGlyphVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F);
+    addGlyphVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F);
+    addGlyphVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F);
+    addGlyphVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F);
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertTrue(scene.totalQuadCount() > 0);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFE9D89A, 3);
+  }
+
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture) throws Exception {
     return newTextConsumer(collector, texture, RenderTypes.textIntensity(Identifier.withDefaultNamespace("font/test")));
   }
@@ -116,11 +161,23 @@ class VanillaSubmitCollectorTextTest {
     addVertex(consumer, x, y, z, u, v, 0xFFE9D89A);
   }
 
+  private static void addGlyphVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int light) {
+    addVertex(consumer, x, y, z, u, v, 0xFFE9D89A, light);
+  }
+
   private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color) {
     consumer
       .addVertex(x, y, z)
       .setColor(color)
       .setUv(u, v);
+  }
+
+  private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color, int light) {
+    consumer
+      .addVertex(x, y, z)
+      .setColor(color)
+      .setUv(u, v)
+      .setLight(light);
   }
 
   private static void flush(VertexConsumer consumer) throws Exception {
@@ -168,5 +225,15 @@ class VanillaSubmitCollectorTextTest {
       }
     }
     return count;
+  }
+
+  private static void assertColorNear(int actual, int expected, int tolerance) {
+    assertChannelNear((actual >> 16) & 0xFF, (expected >> 16) & 0xFF, tolerance);
+    assertChannelNear((actual >> 8) & 0xFF, (expected >> 8) & 0xFF, tolerance);
+    assertChannelNear(actual & 0xFF, expected & 0xFF, tolerance);
+  }
+
+  private static void assertChannelNear(int actual, int expected, int tolerance) {
+    assertTrue(Math.abs(actual - expected) <= tolerance, () -> "expected " + expected + " +/- " + tolerance + " but was " + actual);
   }
 }

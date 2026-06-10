@@ -18,6 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 import lombok.experimental.UtilityClass;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -59,8 +60,7 @@ public class SceneCollector {
           continue;
         }
 
-        var bounds = entity.getBoundingBox();
-        if (!ctx.camera().isVisibleAabb(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ)) {
+        if (!VanillaSubmitCollector.shouldRenderEntity(ctx, entity)) {
           continue;
         }
         trace.entityVisible();
@@ -131,18 +131,20 @@ public class SceneCollector {
       return;
     }
 
-    var centerX = pos.getX() + 0.5;
-    var centerY = pos.getY() + 0.5;
-    var centerZ = pos.getZ() + 0.5;
-    var dx = centerX - ctx.camera().eyeX();
-    var dy = centerY - ctx.camera().eyeY();
-    var dz = centerZ - ctx.camera().eyeZ();
-    if (dx * dx + dy * dy + dz * dz > ctx.maxDistanceSq()) {
+    if (!shouldConsiderBlockEntity(ctx, blockEntity)) {
       return;
     }
 
-    if (!ctx.camera().isVisibleAabb(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0)) {
-      return;
+    if (!isGlobalBlockEntity(ctx.level(), blockEntity)) {
+      var sectionX = SectionPos.blockToSectionCoord(pos.getX());
+      var sectionY = SectionPos.blockToSectionCoord(pos.getY());
+      var sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
+      var minX = SectionPos.sectionToBlockCoord(sectionX);
+      var minY = SectionPos.sectionToBlockCoord(sectionY);
+      var minZ = SectionPos.sectionToBlockCoord(sectionZ);
+      if (!ctx.camera().isVisibleAabb(minX, minY, minZ, minX + 16.0, minY + 16.0, minZ + 16.0)) {
+        return;
+      }
     }
 
     var scene = VanillaSubmitCollector.collectBlockEntity(ctx, blockEntity);
@@ -150,6 +152,32 @@ public class SceneCollector {
       ctx.vanillaRenderedBlockEntities().add(pos.asLong());
       builder.addAll(scene);
     }
+  }
+
+  private static boolean shouldConsiderBlockEntity(RenderContext ctx, BlockEntity blockEntity) {
+    var renderer = Minecraft.getInstance().getBlockEntityRenderDispatcher().getRenderer(blockEntity);
+    if (renderer == null) {
+      return false;
+    }
+
+    if (renderer.shouldRenderOffScreen()) {
+      return isGlobalBlockEntity(ctx.level(), blockEntity);
+    }
+
+    var viewDistance = renderer.getViewDistance();
+    var pos = blockEntity.getBlockPos();
+    var centerX = pos.getX() + 0.5;
+    var centerY = pos.getY() + 0.5;
+    var centerZ = pos.getZ() + 0.5;
+    var dx = centerX - ctx.camera().eyeX();
+    var dy = centerY - ctx.camera().eyeY();
+    var dz = centerZ - ctx.camera().eyeZ();
+    var maxDistance = Math.min(ctx.maxDistance(), viewDistance);
+    return dx * dx + dy * dy + dz * dz <= (double) maxDistance * maxDistance;
+  }
+
+  private static boolean isGlobalBlockEntity(ClientLevel level, BlockEntity blockEntity) {
+    return level.getGloballyRenderedBlockEntities().contains(blockEntity);
   }
 
   private static void collectWeather(

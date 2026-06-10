@@ -30,6 +30,7 @@ import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.Lightmap;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -115,6 +116,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     Minecraft.getInstance().getEntityRenderDispatcher().resetCamera();
   }
 
+  static boolean shouldRenderEntity(RenderContext ctx, Entity entity) {
+    try {
+      var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+      return dispatcher.shouldRender(entity, createFrustum(ctx), ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    } catch (Throwable _) {
+      var bounds = entity.getBoundingBox();
+      return ctx.camera().isVisibleAabb(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ);
+    }
+  }
+
   @Nullable
   static EntityRenderState extractEntityState(Entity entity) {
     try {
@@ -145,7 +156,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var poseStack = new PoseStack();
     var renderOffset = rawRenderer.getRenderOffset(state);
     poseStack.pushPose();
-    poseStack.translate(entity.getX() + renderOffset.x(), entity.getY() + renderOffset.y(), entity.getZ() + renderOffset.z());
+    poseStack.translate(state.x + renderOffset.x(), state.y + renderOffset.y(), state.z + renderOffset.z());
     rawRenderer.submit(state, poseStack, collector, cameraState);
     if (state.displayFireAnimation) {
       collector.submitFlame(poseStack, state, Mth.rotationAroundAxis(Mth.Y_AXIS, cameraState.orientation, new Quaternionf()));
@@ -385,7 +396,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       outlineColor,
       renderType,
       false,
-      false
+      false,
+      light
     );
   }
 
@@ -422,7 +434,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       outlineColor,
       renderType,
       sheeted,
-      false
+      false,
+      light
     );
     if (hasFoil) {
       appendModelPartGeometry(
@@ -436,7 +449,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         0,
         renderType,
         sheeted,
-        true
+        true,
+        LightCoordsUtil.FULL_BRIGHT
       );
     }
   }
@@ -444,7 +458,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   @Override
   public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
     for (var face : assets.blockGeometry(movingBlockRenderState.blockState).faces()) {
-      builder.add(WorldMeshCollector.toRenderQuad(face.transformed(poseStack.last().pose()), 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
+      var color = LightingCalculator.faceColor(ctx, face, movingBlockRenderState.blockState, movingBlockRenderState.blockPos);
+      builder.add(WorldMeshCollector.toRenderQuad(face.transformed(poseStack.last().pose()), 0.0, 0.0, 0.0, color, false, 0.0F));
     }
   }
 
@@ -460,11 +475,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   ) {
     for (var part : parts) {
       for (var quad : part.getQuads(null)) {
-        appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints);
+        appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints, light);
       }
       for (var direction : Direction.values()) {
         for (var quad : part.getQuads(direction)) {
-          appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints);
+          appendBakedQuad(quad, poseStack.last().pose(), renderType, color, tints, light);
         }
       }
     }
@@ -474,7 +489,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   public void submitBreakingBlockModel(PoseStack poseStack, BlockStateModel blockStateModel, long seed, int color) {
     var parts = new ArrayList<BlockStateModelPart>();
     blockStateModel.collectParts(RandomSource.create(seed), parts);
-    submitBlockModel(poseStack, null, parts, new int[0], 0, 0, color);
+    submitBlockModel(poseStack, null, parts, new int[0], LightCoordsUtil.FULL_BRIGHT, 0, color);
   }
 
   @Override
@@ -489,7 +504,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     ItemStackRenderState.FoilType foilType
   ) {
     for (var quad : quads) {
-      appendBakedQuad(quad, poseStack.last().pose(), quad.materialInfo() != null ? quad.materialInfo().itemRenderType() : null, color, tints);
+      appendBakedQuad(quad, poseStack.last().pose(), quad.materialInfo() != null ? quad.materialInfo().itemRenderType() : null, color, tints, light);
       if (foilType != ItemStackRenderState.FoilType.NONE) {
         appendBakedQuadGlint(quad, poseStack.last().pose(), quad.materialInfo() != null ? quad.materialInfo().itemRenderType() : null);
       }
@@ -551,7 +566,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int outlineColor,
     @Nullable RenderType renderType,
     boolean sheeted,
-    boolean glint
+    boolean glint,
+    int light
   ) {
     modelPart.visit(poseStack, (pose, _, _, cube) -> {
       for (var polygon : cube.polygons) {
@@ -574,12 +590,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         var faceAlphaMode = glint ? alphaMode : alphaMode(renderType, texture, color, uv);
         var faceAlphaCutoutThreshold = glint ? alphaCutoutThreshold : alphaCutoutThreshold(renderType, faceAlphaMode);
         var face = RendererAssets.GeometryFace.of(vertices, uv, texture, faceAlphaMode, null, -1, emission, true);
+        var litColor = glint ? color : modulateColor(color, lightColor(light, emission, renderType));
         var quad = WorldMeshCollector.toRenderQuad(
           face,
           0.0,
           0.0,
           0.0,
-          color,
+          litColor,
           false,
           0.0F,
           faceAlphaCutoutThreshold
@@ -592,11 +609,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     });
   }
 
-  private void appendBakedQuad(BakedQuad quad, Matrix4fc poseMatrix, @Nullable RenderType renderType, int baseColor, @Nullable int[] tints) {
+  private void appendBakedQuad(BakedQuad quad, Matrix4fc poseMatrix, @Nullable RenderType renderType, int baseColor, @Nullable int[] tints, int light) {
     if (quad == null || quad.materialInfo() == null || quad.materialInfo().sprite() == null || quad.materialInfo().sprite().contents() == null) {
       return;
     }
 
+    var materialInfo = quad.materialInfo();
     var sprite = quad.materialInfo().sprite();
     var texture = assets.texture(sprite.contents().name());
     var vertices = new Vector3f[4];
@@ -610,14 +628,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     var color = baseColor;
-    if (quad.materialInfo().isTinted() && tints != null) {
-      var tintIndex = quad.materialInfo().tintIndex();
+    if (materialInfo.isTinted() && tints != null) {
+      var tintIndex = materialInfo.tintIndex();
       if (tintIndex >= 0 && tintIndex < tints.length) {
         color = modulateColor(color, tints[tintIndex]);
       }
     }
-
-    var effectiveRenderType = renderType != null ? renderType : quad.materialInfo().itemRenderType();
+    var effectiveRenderType = renderType != null ? renderType : materialInfo.itemRenderType();
+    color = modulateColor(color, lightColor(light, materialInfo.lightEmission(), effectiveRenderType));
     var alphaMode = alphaMode(effectiveRenderType, texture, color, uv);
     var face = RendererAssets.GeometryFace.of(
       vertices,
@@ -626,8 +644,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       alphaMode,
       quad.direction(),
       -1,
-      quad.materialInfo().lightEmission(),
-      quad.materialInfo().shade()
+      materialInfo.lightEmission(),
+      materialInfo.shade()
     );
     builder.add(withRenderState(WorldMeshCollector.toRenderQuad(
       face,
@@ -852,6 +870,28 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
+  private int lightColor(int lightCoords, int emission, @Nullable RenderType renderType) {
+    if (!usesLightmap(renderType)) {
+      return 0xFFFFFFFF;
+    }
+
+    var litCoords = LightCoordsUtil.lightCoordsWithEmission(lightCoords, Math.clamp(emission, 0, 15));
+    if (litCoords == LightCoordsUtil.FULL_BRIGHT) {
+      return 0xFFFFFFFF;
+    }
+
+    var blockLight = LightCoordsUtil.block(litCoords) / 15.0F;
+    var skyLevel = LightCoordsUtil.sky(litCoords);
+    var skyLight = ctx.level() != null ? Lightmap.getBrightness(ctx.level().dimensionType(), skyLevel) : skyLevel / 15.0F;
+    var factor = Math.clamp(Math.max(blockLight, skyLight), 0.18F, 1.0F);
+    var channel = Math.clamp(Math.round(factor * 255.0F), 0, 255);
+    return 0xFF000000 | (channel << 16) | (channel << 8) | channel;
+  }
+
+  private boolean usesLightmap(@Nullable RenderType renderType) {
+    return renderType == null || renderType.state.toString().contains("useLightmap=true");
+  }
+
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {
     if (renderType == null) {
       return WHITE_TEXTURE;
@@ -959,7 +999,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
         new int[]{a.color(), b.color(), c.color(), d.color()},
-        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()}
+        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()},
+        new int[]{a.light(), b.light(), c.light(), d.light()}
       );
     }
 
@@ -967,7 +1008,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), c.position()},
         new int[]{a.color(), b.color(), c.color(), c.color()},
-        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()}
+        new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()},
+        new int[]{a.light(), b.light(), c.light(), c.light()}
       );
     }
 
@@ -994,7 +1036,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           new Vector3f(b.position()).sub(side)
         },
         new int[]{a.color(), a.color(), b.color(), b.color()},
-        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F}
+        new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
+        new int[]{a.light(), a.light(), b.light(), b.light()}
       );
     }
 
@@ -1010,11 +1053,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           new Vector3f(vertex.position()).add(right).sub(up)
         },
         new int[]{vertex.color(), vertex.color(), vertex.color(), vertex.color()},
-        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F}
+        new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F},
+        new int[]{vertex.light(), vertex.light(), vertex.light(), vertex.light()}
       );
     }
 
-    private void addCapturedFace(Vector3f[] positions, int[] colors, float[] uv) {
+    private void addCapturedFace(Vector3f[] positions, int[] colors, float[] uv, int[] lights) {
       var faceAlphaMode = renderType != null ? alphaMode(renderType, texture, colors, uv) : alphaMode;
       var faceAlphaCutoutThreshold = renderType != null ? alphaCutoutThreshold(renderType, faceAlphaMode) : alphaCutoutThreshold;
       var material = RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, isTextRenderType(renderType), 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
@@ -1022,21 +1066,21 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         material = material.withRenderType(renderType);
       }
       builder.add(new RenderQuad(
-        renderVertex(positions[0], uv[0], uv[1], colors[0]),
-        renderVertex(positions[1], uv[2], uv[3], colors[1]),
-        renderVertex(positions[2], uv[4], uv[5], colors[2]),
-        renderVertex(positions[3], uv[6], uv[7], colors[3]),
+        renderVertex(positions[0], uv[0], uv[1], colors[0], lights[0]),
+        renderVertex(positions[1], uv[2], uv[3], colors[1], lights[1]),
+        renderVertex(positions[2], uv[4], uv[5], colors[2], lights[2]),
+        renderVertex(positions[3], uv[6], uv[7], colors[3], lights[3]),
         material
       ));
     }
 
-    private RenderVertex renderVertex(Vector3f position, float u, float v, int color) {
-      return new RenderVertex(position.x(), position.y(), position.z(), u, v, color);
+    private RenderVertex renderVertex(Vector3f position, float u, float v, int color, int light) {
+      return new RenderVertex(position.x(), position.y(), position.z(), u, v, modulateColor(color, lightColor(light, 0, renderType)));
     }
 
     @Override
     public VertexConsumer addVertex(float x, float y, float z) {
-      current = new CapturedVertex(pose.transformPosition(new Vector3f(x, y, z)), 0xFFFFFFFF, 0.0F, 0.0F);
+      current = new CapturedVertex(pose.transformPosition(new Vector3f(x, y, z)), 0xFFFFFFFF, 0.0F, 0.0F, LightCoordsUtil.FULL_BRIGHT);
       vertices.add(current);
       return this;
     }
@@ -1065,7 +1109,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     @Override public VertexConsumer setUv1(int u, int v) { return this; }
-    @Override public VertexConsumer setUv2(int u, int v) { return this; }
+    @Override public VertexConsumer setUv2(int u, int v) {
+      if (current != null) {
+        current = current.withLight((u & 0xFFFF) | ((v & 0xFFFF) << 16));
+        vertices.set(vertices.size() - 1, current);
+      }
+      return this;
+    }
     @Override public VertexConsumer setNormal(float x, float y, float z) { return this; }
     @Override public VertexConsumer setLineWidth(float width) {
       this.lineWidth = Math.max(1.0F, width);
@@ -1143,13 +1193,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
   }
 
-  private record CapturedVertex(Vector3f position, int color, float u, float v) {
+  private record CapturedVertex(Vector3f position, int color, float u, float v, int light) {
     private CapturedVertex withColor(int color) {
-      return new CapturedVertex(position, color, u, v);
+      return new CapturedVertex(position, color, u, v, light);
     }
 
     private CapturedVertex withUv(float u, float v) {
-      return new CapturedVertex(position, color, u, v);
+      return new CapturedVertex(position, color, u, v, light);
+    }
+
+    private CapturedVertex withLight(int light) {
+      return new CapturedVertex(position, color, u, v, light);
     }
   }
 }
