@@ -39,7 +39,7 @@ class VanillaSubmitCollectorTextTest {
   private static final int HEIGHT = 96;
 
   @Test
-  void capturedTextRenderTypeQuadsRasterizeAfterWindingNormalization() throws Exception {
+  void capturedTextRenderTypeQuadsRasterizeWithVanillaVertexOrder() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
@@ -60,7 +60,34 @@ class VanillaSubmitCollectorTextTest {
     assertTrue(countChangedPixels(buffers, 0xFF000000) > 0);
   }
 
+  @Test
+  void capturedTextBackgroundQuadsRasterizeAsDoubleSidedTextEffects() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newTextConsumer(collector, texture, RenderTypes.textBackground());
+
+    addVertex(consumer, -0.75F, -0.3F, 4.0F, 0.0F, 0.0F, 0x80FFFFFF);
+    addVertex(consumer, 0.75F, -0.3F, 4.0F, 0.0F, 1.0F, 0x80FFFFFF);
+    addVertex(consumer, 0.75F, 0.3F, 4.0F, 1.0F, 1.0F, 0x80FFFFFF);
+    addVertex(consumer, -0.75F, 0.3F, 4.0F, 1.0F, 0.0F, 0x80FFFFFF);
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertTrue(scene.totalQuadCount() > 0);
+    assertTrue(scene.translucent()[0].material().doubleSided());
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    new RasterPipeline().renderSynthetic(camera, scene, buffers, 0L, 0xFF000000);
+
+    assertTrue(countChangedPixels(buffers, 0xFF000000) > 0);
+  }
+
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture) throws Exception {
+    return newTextConsumer(collector, texture, RenderTypes.textIntensity(Identifier.withDefaultNamespace("font/test")));
+  }
+
+  private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture, RenderType renderType) throws Exception {
     var consumerClass = Class.forName("com.soulfiremc.server.renderer.VanillaSubmitCollector$CapturingVertexConsumer");
     var constructor = consumerClass.getDeclaredConstructor(
       VanillaSubmitCollector.class,
@@ -80,15 +107,19 @@ class VanillaSubmitCollectorTextTest {
       texture,
       RendererAssets.AlphaMode.TRANSLUCENT,
       0,
-      RenderTypes.textIntensity(Identifier.withDefaultNamespace("font/test")),
+      renderType,
       null
     );
   }
 
   private static void addGlyphVertex(VertexConsumer consumer, float x, float y, float z, float u, float v) {
+    addVertex(consumer, x, y, z, u, v, 0xFFE9D89A);
+  }
+
+  private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color) {
     consumer
       .addVertex(x, y, z)
-      .setColor(0xFFE9D89A)
+      .setColor(color)
       .setUv(u, v);
   }
 

@@ -34,7 +34,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -61,6 +60,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
@@ -278,18 +278,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     poseStack.translate(nameTagAttachment.x, nameTagAttachment.y + 0.5, nameTagAttachment.z);
     poseStack.mulPose(cameraRenderState.orientation);
     poseStack.scale(0.025F, -0.025F, 0.025F);
-    var textColor = seeThrough ? 0xFFFFFFFF : 0xCCFFFFFF;
-    var backgroundColor = seeThrough ? 0x40000000 : 0x30000000;
-    submitComponentText(
-      poseStack,
-      name,
-      xOffset(name),
-      offset,
-      textColor,
-      backgroundColor,
-      seeThrough ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL,
-      lightCoords
-    );
+    var x = xOffset(name);
+    var backgroundColor = nameTagBackgroundColor();
+    if (seeThrough) {
+      submitComponentText(poseStack, name, x, offset, 0x80FFFFFF, backgroundColor, Font.DisplayMode.SEE_THROUGH, lightCoords);
+      submitComponentText(poseStack, name, x, offset, 0xFFFFFFFF, 0, Font.DisplayMode.NORMAL, LightCoordsUtil.lightCoordsWithEmission(lightCoords, 2));
+    } else {
+      submitComponentText(poseStack, name, x, offset, 0x80FFFFFF, backgroundColor, Font.DisplayMode.NORMAL, lightCoords);
+    }
     poseStack.popPose();
   }
 
@@ -741,6 +737,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return -font().width(text) * 0.5F;
   }
 
+  private int nameTagBackgroundColor() {
+    var opacity = Minecraft.getInstance().gameRenderer.getGameRenderState().optionsRenderState.getBackgroundOpacity(0.25F);
+    return Math.clamp((int) (opacity * 255.0F), 0, 255) << 24;
+  }
+
   private Font font() {
     return Minecraft.getInstance().font;
   }
@@ -951,12 +952,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void emitQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
-      // Vanilla font glyphs are emitted in text-local order, which is opposite this rasterizer's front-face winding.
-      if (usesFontQuadWinding(renderType)) {
-        addCapturedQuad(b, a, d, c);
-        return;
-      }
-
       addCapturedQuad(a, b, c, d);
     }
 
@@ -1022,7 +1017,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private void addCapturedFace(Vector3f[] positions, int[] colors, float[] uv) {
       var faceAlphaMode = renderType != null ? alphaMode(renderType, texture, colors, uv) : alphaMode;
       var faceAlphaCutoutThreshold = renderType != null ? alphaCutoutThreshold(renderType, faceAlphaMode) : alphaCutoutThreshold;
-      var material = RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, false, 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
+      var material = RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, isTextRenderType(renderType), 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
       if (renderType != null) {
         material = material.withRenderType(renderType);
       }
@@ -1078,7 +1073,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
   }
 
-  private static boolean usesFontQuadWinding(@Nullable RenderType renderType) {
+  private static boolean isTextRenderType(@Nullable RenderType renderType) {
     if (renderType == null) {
       return false;
     }

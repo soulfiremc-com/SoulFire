@@ -30,6 +30,8 @@ import java.util.stream.IntStream;
 /// Projects and rasterizes scene geometry into the target buffers.
 public final class RasterPipeline {
   private static final int TILE_SIZE = 32;
+  private static final float DEPTH_BIAS_SCALE = 1.0E-3F;
+
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     renderSky(ctx, buffers);
     rasterPass(ctx.camera(), ctx.animationTick(), sceneData.opaque(), buffers, false, RasterPassKind.OPAQUE);
@@ -240,9 +242,9 @@ public final class RasterPipeline {
     var ndcX = vertex.x() * inverseW;
     var ndcY = vertex.y() * inverseW;
     var ndcZ = vertex.z() * inverseW;
-    var screenX = (float) ((ndcX * 0.5F + 0.5F) * camera.width());
-    var screenY = (float) ((0.5F - ndcY * 0.5F) * camera.height());
-    var biasedDepth = Math.clamp(ndcZ * 0.5F + 0.5F + depthBias * 1.0E-4F, 0.0F, 1.0F);
+    var screenX = (ndcX * 0.5F + 0.5F) * camera.width();
+    var screenY = (0.5F - ndcY * 0.5F) * camera.height();
+    var biasedDepth = Math.clamp(ndcZ * 0.5F + 0.5F + depthBias * DEPTH_BIAS_SCALE, 0.0F, 1.0F);
     return new ProjectedVertex(
       screenX,
       screenY,
