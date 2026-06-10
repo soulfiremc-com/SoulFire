@@ -26,8 +26,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
-import org.joml.Vector3d;
-import org.joml.Vector3f;
 
 import java.awt.image.BufferedImage;
 import java.util.HashMap;
@@ -176,7 +174,7 @@ public class SceneCollector {
         ctx,
         builder,
         billboardBuckets,
-        buildBillboard(
+        BillboardGeometry.cameraFacingQuad(
           ctx.camera(),
           px,
           py,
@@ -186,8 +184,7 @@ public class SceneCollector {
           RAIN_TEXTURE,
           RendererAssets.AlphaMode.TRANSLUCENT,
           0x99D8F6FF,
-          0,
-          BillboardMode.FULL
+          0.001F
         ),
         1,
         true
@@ -223,67 +220,6 @@ public class SceneCollector {
     RenderDebugTrace.current().billboard();
   }
 
-  private static RenderQuad buildBillboard(
-    Camera camera,
-    double centerX,
-    double centerY,
-    double centerZ,
-    float width,
-    float height,
-    RendererAssets.TextureImage texture,
-    RendererAssets.AlphaMode alphaMode,
-    int tintColor,
-    int emission,
-    BillboardMode mode
-  ) {
-    var center = new Vector3d(centerX, centerY, centerZ);
-    var toCamera = new Vector3d(camera.eyeX() - center.x, camera.eyeY() - center.y, camera.eyeZ() - center.z);
-    if (toCamera.lengthSquared() < 1.0E-6) {
-      toCamera.set(0.0, 0.0, 1.0);
-    }
-    toCamera.normalize();
-
-    Vector3d right;
-    Vector3d up;
-    if (mode == BillboardMode.VERTICAL) {
-      right = new Vector3d(toCamera.z, 0.0, -toCamera.x);
-      if (right.lengthSquared() < 1.0E-6) {
-        right = new Vector3d(1.0, 0.0, 0.0);
-      }
-      right.normalize();
-      up = new Vector3d(0.0, 1.0, 0.0);
-    } else {
-      right = new Vector3d(camera.rightX(), camera.rightY(), camera.rightZ());
-      if (right.lengthSquared() < 1.0E-6) {
-        right = new Vector3d(1.0, 0.0, 0.0);
-      }
-      right.normalize();
-      up = new Vector3d(camera.upX(), camera.upY(), camera.upZ());
-      if (up.lengthSquared() < 1.0E-6) {
-        up = new Vector3d(0.0, 1.0, 0.0);
-      }
-      up.normalize();
-    }
-
-    var halfW = width * 0.5F;
-    var halfH = height * 0.5F;
-    var p0 = new Vector3f((float) (center.x - right.x * halfW - up.x * halfH), (float) (center.y - right.y * halfW - up.y * halfH), (float) (center.z - right.z * halfW - up.z * halfH));
-    var p1 = new Vector3f((float) (center.x - right.x * halfW + up.x * halfH), (float) (center.y - right.y * halfW + up.y * halfH), (float) (center.z - right.z * halfW + up.z * halfH));
-    var p2 = new Vector3f((float) (center.x + right.x * halfW + up.x * halfH), (float) (center.y + right.y * halfW + up.y * halfH), (float) (center.z + right.z * halfW + up.z * halfH));
-    var p3 = new Vector3f((float) (center.x + right.x * halfW - up.x * halfH), (float) (center.y + right.y * halfW - up.y * halfH), (float) (center.z + right.z * halfW - up.z * halfH));
-    var face = RendererAssets.GeometryFace.of(
-      new Vector3f[]{p0, p1, p2, p3},
-      new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F},
-      texture,
-      alphaMode,
-      null,
-      -1,
-      emission,
-      false
-    );
-    return WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, LightingCalculator.emissiveColor(tintColor, emission), true, 0.001F);
-  }
-
   private static RendererAssets.TextureImage createRainTexture() {
     var image = new BufferedImage(4, 16, BufferedImage.TYPE_INT_ARGB);
     for (var y = 0; y < 16; y++) {
@@ -305,8 +241,4 @@ public class SceneCollector {
     return x;
   }
 
-  private enum BillboardMode {
-    FULL,
-    VERTICAL
-  }
 }

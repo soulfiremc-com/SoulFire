@@ -613,13 +613,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
-    var vertices = new Vector3f[]{
-      poseStack.last().pose().transformPosition(new Vector3f(x, y - height, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x, y, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y - height, 0.0F))
-    };
-    addFace(vertices, texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, 0, true, new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F});
+    builder.add(BillboardGeometry.textQuad(poseStack, width, height, x, y, texture));
   }
 
   private void addFace(
@@ -640,7 +634,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       color,
       doubleSided,
       0.0F,
-      RenderQuad.defaultAlphaCutoutThreshold(alphaMode)
+      RenderMaterial.defaultAlphaCutoutThreshold(alphaMode)
     ));
   }
 
@@ -679,18 +673,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private int alphaCutoutThreshold(@Nullable RenderType renderType, RendererAssets.AlphaMode alphaMode) {
     if (renderType == null) {
-      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+      return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
     }
 
     var alphaCutout = renderType.pipeline().getShaderDefines().values().get("ALPHA_CUTOUT");
     if (alphaCutout == null) {
-      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+      return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
     }
 
     try {
       return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
     } catch (NumberFormatException _) {
-      return RenderQuad.defaultAlphaCutoutThreshold(alphaMode);
+      return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
     }
   }
 
@@ -842,7 +836,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         side = new Vector3f(direction).cross((float) ctx.camera().upX(), (float) ctx.camera().upY(), (float) ctx.camera().upZ());
       }
       if (side.lengthSquared() < 1.0E-6F) {
-        side.set((float) ctx.camera().rightX(), (float) ctx.camera().rightY(), (float) ctx.camera().rightZ());
+        side.set((float) ctx.camera().screenLeftX(), (float) ctx.camera().screenLeftY(), (float) ctx.camera().screenLeftZ());
       }
       side.normalize(Math.max(0.005F, lineWidth * 0.005F));
       addFace(
@@ -864,7 +858,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     private void emitPoint(CapturedVertex vertex) {
       var size = 0.03F;
-      var right = new Vector3f((float) ctx.camera().rightX(), (float) ctx.camera().rightY(), (float) ctx.camera().rightZ()).normalize(size);
+      var right = new Vector3f((float) ctx.camera().screenLeftX(), (float) ctx.camera().screenLeftY(), (float) ctx.camera().screenLeftZ()).normalize(size);
       var up = new Vector3f((float) ctx.camera().upX(), (float) ctx.camera().upY(), (float) ctx.camera().upZ()).normalize(size);
       addFace(
         new Vector3f[]{
@@ -962,7 +956,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           VertexFormat.Mode.QUADS,
           texture,
           currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
-          currentLayer.translucent() ? RenderQuad.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0
+          currentLayer.translucent() ? RenderMaterial.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0
         )
       );
     }

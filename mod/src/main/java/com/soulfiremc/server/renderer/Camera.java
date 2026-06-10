@@ -21,6 +21,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /// Camera state shared between scene building, culling, and rasterization.
 public final class Camera {
@@ -36,9 +37,9 @@ public final class Camera {
   private final double forwardX;
   private final double forwardY;
   private final double forwardZ;
-  private final double rightX;
-  private final double rightY;
-  private final double rightZ;
+  private final double screenLeftX;
+  private final double screenLeftY;
+  private final double screenLeftZ;
   private final double upX;
   private final double upY;
   private final double upZ;
@@ -71,22 +72,22 @@ public final class Camera {
 
     var yRotRad = Math.toRadians(yRot);
     var xRotRad = Math.toRadians(xRot);
-    var cosYRot = Math.cos(yRotRad);
-    var sinYRot = Math.sin(yRotRad);
-    var cosXRot = Math.cos(xRotRad);
-    var sinXRot = Math.sin(xRotRad);
+    this.orientation = new Quaternionf().rotationYXZ((float) Math.PI - (float) yRotRad, -(float) xRotRad, 0.0F);
+    var forward = new Vector3f(0.0F, 0.0F, -1.0F).rotate(orientation);
+    var screenLeft = new Vector3f(-1.0F, 0.0F, 0.0F).rotate(orientation);
+    var up = new Vector3f(0.0F, 1.0F, 0.0F).rotate(orientation);
 
-    this.forwardX = -sinYRot * cosXRot;
-    this.forwardY = -sinXRot;
-    this.forwardZ = cosYRot * cosXRot;
+    this.forwardX = forward.x();
+    this.forwardY = forward.y();
+    this.forwardZ = forward.z();
 
-    this.rightX = cosYRot;
-    this.rightY = 0.0;
-    this.rightZ = sinYRot;
+    this.screenLeftX = screenLeft.x();
+    this.screenLeftY = screenLeft.y();
+    this.screenLeftZ = screenLeft.z();
 
-    this.upX = -sinYRot * sinXRot;
-    this.upY = cosXRot;
-    this.upZ = cosYRot * sinXRot;
+    this.upX = up.x();
+    this.upY = up.y();
+    this.upZ = up.z();
 
     var fovRad = Math.toRadians(fov);
     var aspectRatio = (double) width / height;
@@ -97,34 +98,12 @@ public final class Camera {
     this.screenXOffset = tanHalfFovX;
     this.screenYOffset = tanHalfFovY;
 
-    this.orientation = new Quaternionf().rotationYXZ((float) Math.PI - (float) yRotRad, -(float) xRotRad, 0.0F);
     this.viewRotationMatrix = new Matrix4f().rotation(new Quaternionf(orientation).conjugate());
     this.viewMatrix = new Matrix4f(viewRotationMatrix).translate((float) -eyeX, (float) -eyeY, (float) -eyeZ);
     this.projectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, nearPlane, farPlane);
     this.viewRotationProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewRotationMatrix);
     this.viewProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewMatrix);
     this.frustumIntersection = new FrustumIntersection(viewRotationProjectionMatrix);
-  }
-
-  public float viewX(double worldX, double worldY, double worldZ) {
-    var dx = worldX - eyeX;
-    var dy = worldY - eyeY;
-    var dz = worldZ - eyeZ;
-    return (float) (dx * rightX + dy * rightY + dz * rightZ);
-  }
-
-  public float viewY(double worldX, double worldY, double worldZ) {
-    var dx = worldX - eyeX;
-    var dy = worldY - eyeY;
-    var dz = worldZ - eyeZ;
-    return (float) (dx * upX + dy * upY + dz * upZ);
-  }
-
-  public float viewZ(double worldX, double worldY, double worldZ) {
-    var dx = worldX - eyeX;
-    var dy = worldY - eyeY;
-    var dz = worldZ - eyeZ;
-    return (float) (dx * forwardX + dy * forwardY + dz * forwardZ);
   }
 
   public boolean isVisibleAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
@@ -141,9 +120,9 @@ public final class Camera {
   public double sampleDirX(int x, int y) {
     var screenX = screenXOffset - (x + 0.5) * screenXMult;
     var screenY = screenYOffset - (y + 0.5) * screenYMult;
-    var rayX = forwardX + screenX * rightX + screenY * upX;
-    var rayY = forwardY + screenY * upY;
-    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var rayX = forwardX + screenX * screenLeftX + screenY * upX;
+    var rayY = forwardY + screenX * screenLeftY + screenY * upY;
+    var rayZ = forwardZ + screenX * screenLeftZ + screenY * upZ;
     var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
     return rayX * invLen;
   }
@@ -151,9 +130,9 @@ public final class Camera {
   public double sampleDirY(int x, int y) {
     var screenX = screenXOffset - (x + 0.5) * screenXMult;
     var screenY = screenYOffset - (y + 0.5) * screenYMult;
-    var rayX = forwardX + screenX * rightX + screenY * upX;
-    var rayY = forwardY + screenY * upY;
-    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var rayX = forwardX + screenX * screenLeftX + screenY * upX;
+    var rayY = forwardY + screenX * screenLeftY + screenY * upY;
+    var rayZ = forwardZ + screenX * screenLeftZ + screenY * upZ;
     var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
     return rayY * invLen;
   }
@@ -161,9 +140,9 @@ public final class Camera {
   public double sampleDirZ(int x, int y) {
     var screenX = screenXOffset - (x + 0.5) * screenXMult;
     var screenY = screenYOffset - (y + 0.5) * screenYMult;
-    var rayX = forwardX + screenX * rightX + screenY * upX;
-    var rayY = forwardY + screenY * upY;
-    var rayZ = forwardZ + screenX * rightZ + screenY * upZ;
+    var rayX = forwardX + screenX * screenLeftX + screenY * upX;
+    var rayY = forwardY + screenX * screenLeftY + screenY * upY;
+    var rayZ = forwardZ + screenX * screenLeftZ + screenY * upZ;
     var invLen = 1.0 / Math.sqrt(rayX * rayX + rayY * rayY + rayZ * rayZ);
     return rayZ * invLen;
   }
@@ -208,16 +187,16 @@ public final class Camera {
     return forwardZ;
   }
 
-  public double rightX() {
-    return rightX;
+  public double screenLeftX() {
+    return screenLeftX;
   }
 
-  public double rightY() {
-    return rightY;
+  public double screenLeftY() {
+    return screenLeftY;
   }
 
-  public double rightZ() {
-    return rightZ;
+  public double screenLeftZ() {
+    return screenLeftZ;
   }
 
   public double upX() {

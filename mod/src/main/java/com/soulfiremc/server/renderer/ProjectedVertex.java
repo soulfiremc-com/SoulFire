@@ -22,7 +22,7 @@ public record ProjectedVertex(
   float x,
   float y,
   float depth,
-  float inverseDepth,
-  float uOverDepth,
-  float vOverDepth
+  float inverseW,
+  float uOverW,
+  float vOverW
 ) {}

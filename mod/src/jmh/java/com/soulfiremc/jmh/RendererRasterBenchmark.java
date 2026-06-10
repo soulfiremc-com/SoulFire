@@ -82,11 +82,7 @@ public class RendererRasterBenchmark {
       new RenderVertex(centerX - halfSize, centerY + halfSize, z, 0.0F, 0.0F),
       new RenderVertex(centerX + halfSize, centerY + halfSize, z, 1.0F, 0.0F),
       new RenderVertex(centerX + halfSize, centerY - halfSize, z, 1.0F, 1.0F),
-      texture,
-      alphaMode,
-      color,
-      false,
-      0.0F
+      RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
 

@@ -17,6 +17,9 @@
  */
 package com.soulfiremc.server.renderer;
 
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.stream.IntStream;
@@ -137,43 +140,40 @@ public final class RasterPipeline {
   }
 
   private void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
+    var viewProjection = camera.viewProjectionMatrix();
     var viewVertices = new ClipVertex[]{
-      toClipVertex(camera, quad.v0()),
-      toClipVertex(camera, quad.v1()),
-      toClipVertex(camera, quad.v2()),
-      toClipVertex(camera, quad.v3())
+      toClipVertex(viewProjection, quad.v0()),
+      toClipVertex(viewProjection, quad.v1()),
+      toClipVertex(viewProjection, quad.v2()),
+      toClipVertex(viewProjection, quad.v3())
     };
-    var sortDepth = sortDepth(viewVertices[0], viewVertices[2]);
-    var clipped = clipQuadToViewFrustum(camera, viewVertices);
+    var sortDepth = sortDepth(camera, quad);
+    var clipped = clipQuadToViewFrustum(viewVertices);
     if (clipped.length < 3) {
       return;
     }
 
     var projected = new ProjectedVertex[clipped.length];
     for (var i = 0; i < clipped.length; i++) {
-      projected[i] = projectVertex(camera, clipped[i], quad.depthBias());
+      projected[i] = projectVertex(camera, clipped[i], quad.material().depthBias());
     }
     for (var i = 1; i < projected.length - 1; i++) {
       out.add(new ProjectedTriangle(
         projected[0],
         projected[i],
         projected[i + 1],
-        quad.texture(),
-        quad.alphaMode(),
-        quad.color(),
-        quad.doubleSided(),
-        sortDepth,
-        quad.alphaCutoutThreshold()
+        quad.material(),
+        sortDepth
       ));
     }
   }
 
-  private ClipVertex[] clipQuadToViewFrustum(Camera camera, ClipVertex[] quad) {
+  private ClipVertex[] clipQuadToViewFrustum(ClipVertex[] quad) {
     var vertices = new ArrayList<ClipVertex>(8);
     vertices.addAll(java.util.List.of(quad));
 
     for (var plane : ClipPlane.values()) {
-      vertices = clipAgainstPlane(camera, vertices, plane);
+      vertices = clipAgainstPlane(vertices, plane);
       if (vertices.isEmpty()) {
         return new ClipVertex[0];
       }
@@ -181,13 +181,13 @@ public final class RasterPipeline {
     return vertices.toArray(ClipVertex[]::new);
   }
 
-  private ArrayList<ClipVertex> clipAgainstPlane(Camera camera, ArrayList<ClipVertex> input, ClipPlane plane) {
+  private ArrayList<ClipVertex> clipAgainstPlane(ArrayList<ClipVertex> input, ClipPlane plane) {
     var output = new ArrayList<ClipVertex>(input.size() + 1);
     for (var i = 0; i < input.size(); i++) {
       var current = input.get(i);
       var next = input.get((i + 1) % input.size());
-      var currentDistance = clipDistance(camera, current, plane);
-      var nextDistance = clipDistance(camera, next, plane);
+      var currentDistance = clipDistance(current, plane);
+      var nextDistance = clipDistance(next, plane);
       var currentInside = currentDistance >= 0.0F;
       var nextInside = nextDistance >= 0.0F;
 
@@ -204,14 +204,14 @@ public final class RasterPipeline {
     return output;
   }
 
-  private float clipDistance(Camera camera, ClipVertex vertex, ClipPlane plane) {
+  private float clipDistance(ClipVertex vertex, ClipPlane plane) {
     return switch (plane) {
-      case NEAR -> vertex.z() - camera.nearPlane();
-      case FAR -> camera.farPlane() - vertex.z();
-      case LEFT -> (float) (vertex.z() * camera.tanHalfFovX() - vertex.x());
-      case RIGHT -> (float) (vertex.z() * camera.tanHalfFovX() + vertex.x());
-      case TOP -> (float) (vertex.z() * camera.tanHalfFovY() - vertex.y());
-      case BOTTOM -> (float) (vertex.z() * camera.tanHalfFovY() + vertex.y());
+      case NEAR -> vertex.z() + vertex.w();
+      case FAR -> vertex.w() - vertex.z();
+      case LEFT -> vertex.x() + vertex.w();
+      case RIGHT -> vertex.w() - vertex.x();
+      case TOP -> vertex.w() - vertex.y();
+      case BOTTOM -> vertex.y() + vertex.w();
     };
   }
 
@@ -220,49 +220,39 @@ public final class RasterPipeline {
       current.x() + (next.x() - current.x()) * t,
       current.y() + (next.y() - current.y()) * t,
       current.z() + (next.z() - current.z()) * t,
+      current.w() + (next.w() - current.w()) * t,
       current.u() + (next.u() - current.u()) * t,
       current.v() + (next.v() - current.v()) * t
     );
   }
 
-  private ClipVertex toClipVertex(Camera camera, RenderVertex vertex) {
-    return new ClipVertex(
-      camera.viewX(vertex.x(), vertex.y(), vertex.z()),
-      camera.viewY(vertex.x(), vertex.y(), vertex.z()),
-      camera.viewZ(vertex.x(), vertex.y(), vertex.z()),
-      vertex.u(),
-      vertex.v()
-    );
+  private ClipVertex toClipVertex(Matrix4f viewProjection, RenderVertex vertex) {
+    var clip = viewProjection.transform(new Vector4f(vertex.x(), vertex.y(), vertex.z(), 1.0F));
+    return new ClipVertex(clip.x, clip.y, clip.z, clip.w, vertex.u(), vertex.v());
   }
 
   private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, float depthBias) {
-    var ndcX = vertex.x() / (vertex.z() * camera.tanHalfFovX());
-    var ndcY = vertex.y() / (vertex.z() * camera.tanHalfFovY());
-    // SoulFire's historical camera convention maps positive camera X toward the left side of the screen.
-    var screenX = (float) ((0.5 - ndcX * 0.5) * camera.width());
-    var screenY = (float) ((0.5 - ndcY * 0.5) * camera.height());
-    var inverseDepth = 1.0F / vertex.z();
-    var biasedDepth = Math.clamp(vertex.z() + depthBias, camera.nearPlane(), camera.farPlane());
+    var inverseW = 1.0F / vertex.w();
+    var ndcX = vertex.x() * inverseW;
+    var ndcY = vertex.y() * inverseW;
+    var ndcZ = vertex.z() * inverseW;
+    var screenX = (float) ((ndcX * 0.5F + 0.5F) * camera.width());
+    var screenY = (float) ((0.5F - ndcY * 0.5F) * camera.height());
+    var biasedDepth = Math.clamp(ndcZ * 0.5F + 0.5F + depthBias * 1.0E-4F, 0.0F, 1.0F);
     return new ProjectedVertex(
       screenX,
       screenY,
-      windowDepth(camera, biasedDepth),
-      inverseDepth,
-      vertex.u() * inverseDepth,
-      vertex.v() * inverseDepth
+      biasedDepth,
+      inverseW,
+      vertex.u() * inverseW,
+      vertex.v() * inverseW
     );
   }
 
-  private float windowDepth(Camera camera, float viewDepth) {
-    var near = camera.nearPlane();
-    var far = camera.farPlane();
-    return far / (far - near) - far * near / ((far - near) * viewDepth);
-  }
-
-  private float sortDepth(ClipVertex v0, ClipVertex v2) {
-    var x = (v0.x() + v2.x()) * 0.5F;
-    var y = (v0.y() + v2.y()) * 0.5F;
-    var z = (v0.z() + v2.z()) * 0.5F;
+  private float sortDepth(Camera camera, RenderQuad quad) {
+    var x = (quad.v0().x() + quad.v1().x() + quad.v2().x() + quad.v3().x()) * 0.25F - (float) camera.eyeX();
+    var y = (quad.v0().y() + quad.v1().y() + quad.v2().y() + quad.v3().y()) * 0.25F - (float) camera.eyeY();
+    var z = (quad.v0().z() + quad.v1().z() + quad.v2().z() + quad.v3().z()) * 0.25F - (float) camera.eyeZ();
     return x * x + y * y + z * z;
   }
 
@@ -286,7 +276,8 @@ public final class RasterPipeline {
     if (Math.abs(area) < 1.0E-5F) {
       return;
     }
-    if (!triangle.doubleSided() && area <= 0.0F) {
+    var material = triangle.material();
+    if (!material.doubleSided() && area <= 0.0F) {
       return;
     }
     var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());
@@ -324,20 +315,20 @@ public final class RasterPipeline {
           continue;
         }
 
-        var inverseDepth = normalizedW0 * v0.inverseDepth() + normalizedW1 * v1.inverseDepth() + normalizedW2 * v2.inverseDepth();
-        var u = (normalizedW0 * v0.uOverDepth() + normalizedW1 * v1.uOverDepth() + normalizedW2 * v2.uOverDepth()) / inverseDepth;
-        var v = (normalizedW0 * v0.vOverDepth() + normalizedW1 * v1.vOverDepth() + normalizedW2 * v2.vOverDepth()) / inverseDepth;
-        var sampled = triangle.texture().sample(u, v, animationTick);
-        var color = modulate(sampled, triangle.color());
+        var inverseW = normalizedW0 * v0.inverseW() + normalizedW1 * v1.inverseW() + normalizedW2 * v2.inverseW();
+        var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
+        var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
+        var sampled = material.texture().sample(u, v, animationTick);
+        var color = modulate(sampled, material.color());
         var alpha = (color >>> 24) & 0xFF;
         if (alpha == 0) {
           continue;
         }
-        if (triangle.alphaCutoutThreshold() > 0 && alpha < triangle.alphaCutoutThreshold()) {
+        if (material.alphaCutoutThreshold() > 0 && alpha < material.alphaCutoutThreshold()) {
           continue;
         }
 
-        if (triangle.alphaMode() == RendererAssets.AlphaMode.OPAQUE || alphaTest) {
+        if (material.alphaMode() == RendererAssets.AlphaMode.OPAQUE || alphaTest) {
           depthBuffer[rasterIndex] = depth;
           colorBuffer[rasterIndex] = forceOpaque(color);
           continue;
@@ -419,5 +410,5 @@ public final class RasterPipeline {
     BOTTOM
   }
 
-  private record ClipVertex(float x, float y, float z, float u, float v) {}
+  private record ClipVertex(float x, float y, float z, float w, float u, float v) {}
 }

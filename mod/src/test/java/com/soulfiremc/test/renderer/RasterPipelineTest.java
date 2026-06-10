@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.test.renderer;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.soulfiremc.server.renderer.*;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -204,27 +205,75 @@ class RasterPipelineTest {
   }
 
   @Test
-  void manualProjectionMatchesJomlViewRotationProjectionMatrix() {
-    var camera = new Camera(new Vec3(10.0, 65.0, -4.0), 35.0F, -12.0F, WIDTH, HEIGHT, 70.0, 64.0F);
-    var worldX = camera.eyeX() + camera.forwardX() * 10.0 + camera.rightX() * 1.5 + camera.upX() * 0.75;
-    var worldY = camera.eyeY() + camera.forwardY() * 10.0 + camera.rightY() * 1.5 + camera.upY() * 0.75;
-    var worldZ = camera.eyeZ() + camera.forwardZ() * 10.0 + camera.rightZ() * 1.5 + camera.upZ() * 0.75;
+  void textBillboardKeepsTextureOrientationFacingCamera() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var poseStack = new PoseStack();
+    poseStack.translate(0.0F, 0.0F, 4.0F);
+    poseStack.mulPose(camera.orientation());
+    poseStack.scale(1.0F, -1.0F, 1.0F);
+    var scene = SceneData.builder();
+    scene.add(BillboardGeometry.textQuad(poseStack, 2.0F, 2.0F, -1.0F, 1.0F, splitTexture(0xFFFF0000, 0xFF00FF00)));
 
-    var projected = camera.viewRotationProjectionMatrix().transformProject(new Vector3f(
-      (float) (worldX - camera.eyeX()),
-      (float) (worldY - camera.eyeY()),
-      (float) (worldZ - camera.eyeZ())
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2 - 5, HEIGHT / 2), 0xFFFF0000, 3);
+    assertColorNear(buffers.image().getRGB(WIDTH / 2 + 5, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void cameraFacingBillboardKeepsTextureOrientationFacingCamera() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(BillboardGeometry.cameraFacingQuad(
+      camera,
+      0.0,
+      0.0,
+      4.0,
+      2.0F,
+      2.0F,
+      splitTexture(0xFFFF0000, 0xFF00FF00),
+      RendererAssets.AlphaMode.OPAQUE,
+      0xFFFFFFFF,
+      0.0F
     ));
-    var matrixScreenX = (projected.x() + 1.0F) * 0.5F * WIDTH;
-    var matrixScreenY = (1.0F - projected.y()) * 0.5F * HEIGHT;
 
-    var manualNdcX = camera.viewX(worldX, worldY, worldZ) / (camera.viewZ(worldX, worldY, worldZ) * camera.tanHalfFovX());
-    var manualNdcY = camera.viewY(worldX, worldY, worldZ) / (camera.viewZ(worldX, worldY, worldZ) * camera.tanHalfFovY());
-    var manualScreenX = (0.5 - manualNdcX * 0.5) * WIDTH;
-    var manualScreenY = (0.5 - manualNdcY * 0.5) * HEIGHT;
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
 
-    assertEquals(manualScreenX, matrixScreenX, 1.0E-4);
-    assertEquals(manualScreenY, matrixScreenY, 1.0E-4);
+    assertColorNear(buffers.image().getRGB(WIDTH / 2 - 5, HEIGHT / 2), 0xFFFF0000, 3);
+    assertColorNear(buffers.image().getRGB(WIDTH / 2 + 5, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void viewProjectionMatrixProjectsCameraBasisConsistently() {
+    var camera = new Camera(new Vec3(10.0, 65.0, -4.0), 35.0F, -12.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var center = new Vector3f(
+      (float) (camera.eyeX() + camera.forwardX() * 10.0),
+      (float) (camera.eyeY() + camera.forwardY() * 10.0),
+      (float) (camera.eyeZ() + camera.forwardZ() * 10.0)
+    );
+    var screenLeft = new Vector3f(
+      (float) (center.x() + camera.screenLeftX()),
+      (float) (center.y() + camera.screenLeftY()),
+      (float) (center.z() + camera.screenLeftZ())
+    );
+    var screenUp = new Vector3f(
+      (float) (center.x() + camera.upX()),
+      (float) (center.y() + camera.upY()),
+      (float) (center.z() + camera.upZ())
+    );
+
+    var projectedCenter = camera.viewProjectionMatrix().transformProject(center);
+    var projectedLeft = camera.viewProjectionMatrix().transformProject(screenLeft);
+    var projectedUp = camera.viewProjectionMatrix().transformProject(screenUp);
+
+    assertEquals(0.0F, projectedCenter.x(), 1.0E-5F);
+    assertEquals(0.0F, projectedCenter.y(), 1.0E-5F);
+    assertTrue(projectedLeft.x() < projectedCenter.x());
+    assertTrue(projectedUp.y() > projectedCenter.y());
   }
 
   private static RenderQuad quad(
@@ -242,11 +291,7 @@ class RasterPipelineTest {
       new RenderVertex(minX, maxY, z, 0.0F, 0.0F),
       new RenderVertex(maxX, maxY, z, 1.0F, 0.0F),
       new RenderVertex(maxX, minY, z, 1.0F, 1.0F),
-      texture,
-      alphaMode,
-      color,
-      false,
-      0.0F
+      RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
 
@@ -264,17 +309,20 @@ class RasterPipelineTest {
       v1,
       v2,
       v3,
-      texture,
-      alphaMode,
-      color,
-      false,
-      0.0F
+      RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
 
   private static RendererAssets.TextureImage solidTexture(int argb) {
     var image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
     image.setRGB(0, 0, argb);
+    return RendererAssets.TextureImage.from(image, null);
+  }
+
+  private static RendererAssets.TextureImage splitTexture(int leftArgb, int rightArgb) {
+    var image = new BufferedImage(2, 1, BufferedImage.TYPE_INT_ARGB);
+    image.setRGB(0, 0, leftArgb);
+    image.setRGB(1, 0, rightArgb);
     return RendererAssets.TextureImage.from(image, null);
   }
 

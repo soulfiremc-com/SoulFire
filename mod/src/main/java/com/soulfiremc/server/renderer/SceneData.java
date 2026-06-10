@@ -59,7 +59,7 @@ public record SceneData(RenderQuad[] opaque, RenderQuad[] cutout, RenderQuad[] t
     private final ArrayList<RenderQuad> translucent = new ArrayList<>();
 
     public void add(RenderQuad quad) {
-      switch (quad.alphaMode()) {
+      switch (quad.material().alphaMode()) {
         case OPAQUE -> opaque.add(quad);
         case CUTOUT -> cutout.add(quad);
         case TRANSLUCENT -> translucent.add(quad);

@@ -239,11 +239,7 @@ public class WorldMeshCollector {
         new RenderVertex(blockPos.getX(), blockPos.getY() + southWestHeight, blockPos.getZ() + 1.0F, topUv[2], topUv[3]),
         new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + southEastHeight, blockPos.getZ() + 1.0F, topUv[4], topUv[5]),
         new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + northEastHeight, blockPos.getZ(), topUv[6], topUv[7]),
-        topTexture,
-        fluid.alphaMode(),
-        topColor,
-        fluidState.shouldRenderBackwardUpFace(level, blockPos.above()),
-        0.0F
+        RenderMaterial.create(topTexture, fluid.alphaMode(), topColor, fluidState.shouldRenderBackwardUpFace(level, blockPos.above()), 0.0F)
       ));
       RenderDebugTrace.current().fluidTopQuad();
     }
@@ -255,11 +251,7 @@ public class WorldMeshCollector {
         new RenderVertex(blockPos.getX(), blockPos.getY() + bottomInset, blockPos.getZ(), 0.0F, 0.0F),
         new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ(), 1.0F, 0.0F),
         new RenderVertex(blockPos.getX() + 1.0F, blockPos.getY() + bottomInset, blockPos.getZ() + 1.0F, 1.0F, 1.0F),
-        fluid.stillTexture(),
-        fluid.alphaMode(),
-        bottomColor,
-        false,
-        0.0F
+        RenderMaterial.create(fluid.stillTexture(), fluid.alphaMode(), bottomColor, false, 0.0F)
       ));
       RenderDebugTrace.current().fluidBottomQuad();
     }
@@ -311,11 +303,13 @@ public class WorldMeshCollector {
       new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + rightHeight, blockPos.getZ() + rightZ, 0.5F, v1),
       new RenderVertex(blockPos.getX() + rightX, blockPos.getY() + 0.001F, blockPos.getZ() + rightZ, 0.5F, 0.5F),
       new RenderVertex(blockPos.getX() + leftX, blockPos.getY() + 0.001F, blockPos.getZ() + leftZ, 0.0F, 0.5F),
-      texture,
-      fluidState.is(FluidTags.WATER) ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
-      baseColor,
-      texture == RendererAssets.instance().waterOverlayTexture(),
-      0.0F
+      RenderMaterial.create(
+        texture,
+        fluidState.is(FluidTags.WATER) ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
+        baseColor,
+        texture == RendererAssets.instance().waterOverlayTexture(),
+        0.0F
+      )
     ));
     RenderDebugTrace.current().fluidSideQuad();
   }
@@ -447,7 +441,7 @@ public class WorldMeshCollector {
       color,
       doubleSided,
       depthBias,
-      RenderQuad.defaultAlphaCutoutThreshold(face.alphaMode())
+      RenderMaterial.defaultAlphaCutoutThreshold(face.alphaMode())
     );
   }
 
@@ -466,12 +460,7 @@ public class WorldMeshCollector {
       new RenderVertex((float) (face.x()[1] + offsetX), (float) (face.y()[1] + offsetY), (float) (face.z()[1] + offsetZ), face.uv()[2], face.uv()[3]),
       new RenderVertex((float) (face.x()[2] + offsetX), (float) (face.y()[2] + offsetY), (float) (face.z()[2] + offsetZ), face.uv()[4], face.uv()[5]),
       new RenderVertex((float) (face.x()[3] + offsetX), (float) (face.y()[3] + offsetY), (float) (face.z()[3] + offsetZ), face.uv()[6], face.uv()[7]),
-      face.texture(),
-      face.alphaMode(),
-      color,
-      doubleSided,
-      depthBias,
-      alphaCutoutThreshold
+      new RenderMaterial(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold)
     );
   }
 }

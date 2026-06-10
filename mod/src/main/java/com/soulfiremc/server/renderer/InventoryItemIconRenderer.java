@@ -527,7 +527,7 @@ public final class InventoryItemIconRenderer {
   ) {
     var projectedTriangles = new ArrayList<ProjectedTriangle>();
     for (var quad : quads) {
-      if (quad.alphaMode() != alphaMode) {
+      if (quad.material().alphaMode() != alphaMode) {
         continue;
       }
       emitProjectedTriangles(quad, projectedTriangles, buffers.image().getWidth(), buffers.image().getHeight());
@@ -548,10 +548,10 @@ public final class InventoryItemIconRenderer {
 
   private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out, int width, int height) {
     var projected = new ProjectedVertex[]{
-      projectVertex(quad.v0(), quad.depthBias(), width, height),
-      projectVertex(quad.v1(), quad.depthBias(), width, height),
-      projectVertex(quad.v2(), quad.depthBias(), width, height),
-      projectVertex(quad.v3(), quad.depthBias(), width, height)
+      projectVertex(quad.v0(), quad.material().depthBias(), width, height),
+      projectVertex(quad.v1(), quad.material().depthBias(), width, height),
+      projectVertex(quad.v2(), quad.material().depthBias(), width, height),
+      projectVertex(quad.v3(), quad.material().depthBias(), width, height)
     };
     var sortDepth =
       (projected[0].depth() + projected[1].depth() + projected[2].depth() + projected[3].depth()) / 4.0F;
@@ -559,20 +559,14 @@ public final class InventoryItemIconRenderer {
       projected[0],
       projected[1],
       projected[2],
-      quad.texture(),
-      quad.alphaMode(),
-      quad.color(),
-      quad.doubleSided(),
+      quad.material(),
       sortDepth
     ));
     out.add(new ProjectedTriangle(
       projected[0],
       projected[2],
       projected[3],
-      quad.texture(),
-      quad.alphaMode(),
-      quad.color(),
-      quad.doubleSided(),
+      quad.material(),
       sortDepth
     ));
   }
@@ -602,11 +596,12 @@ public final class InventoryItemIconRenderer {
     var v0 = triangle.v0();
     var v1 = triangle.v1();
     var v2 = triangle.v2();
+    var material = triangle.material();
     var area = edge(v0.x(), v0.y(), v1.x(), v1.y(), v2.x(), v2.y());
     if (Math.abs(area) < 1.0E-5F) {
       return;
     }
-    if (!triangle.doubleSided() && area <= 0.0F) {
+    if (!material.doubleSided() && area <= 0.0F) {
       return;
     }
 
@@ -642,24 +637,24 @@ public final class InventoryItemIconRenderer {
         var normalizedW2 = w2 / area;
         var depth = normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth();
         var rasterIndex = y * width + x;
-        if (depth >= depthBuffer[rasterIndex]) {
+        if (!(depth <= depthBuffer[rasterIndex])) {
           continue;
         }
 
-        var inverseDepth = normalizedW0 * v0.inverseDepth() + normalizedW1 * v1.inverseDepth() + normalizedW2 * v2.inverseDepth();
-        var u = (normalizedW0 * v0.uOverDepth() + normalizedW1 * v1.uOverDepth() + normalizedW2 * v2.uOverDepth()) / inverseDepth;
-        var v = (normalizedW0 * v0.vOverDepth() + normalizedW1 * v1.vOverDepth() + normalizedW2 * v2.vOverDepth()) / inverseDepth;
-        var sampled = triangle.texture().sample(u, v, animationTick);
-        var color = modulate(sampled, triangle.color());
+        var inverseW = normalizedW0 * v0.inverseW() + normalizedW1 * v1.inverseW() + normalizedW2 * v2.inverseW();
+        var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
+        var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
+        var sampled = material.texture().sample(u, v, animationTick);
+        var color = modulate(sampled, material.color());
         var alpha = (color >>> 24) & 0xFF;
         if (alpha == 0) {
           continue;
         }
-        if (triangle.alphaMode() == RendererAssets.AlphaMode.CUTOUT && alpha < 51) {
+        if (material.alphaCutoutThreshold() > 0 && alpha < material.alphaCutoutThreshold()) {
           continue;
         }
 
-        if (triangle.alphaMode() == RendererAssets.AlphaMode.OPAQUE) {
+        if (material.alphaMode() == RendererAssets.AlphaMode.OPAQUE) {
           if (writeDepth) {
             depthBuffer[rasterIndex] = depth;
           }
@@ -667,7 +662,7 @@ public final class InventoryItemIconRenderer {
           continue;
         }
 
-        if (triangle.alphaMode() == RendererAssets.AlphaMode.CUTOUT) {
+        if (material.alphaMode() == RendererAssets.AlphaMode.CUTOUT) {
           if (writeDepth) {
             depthBuffer[rasterIndex] = depth;
           }
@@ -988,19 +983,16 @@ public final class InventoryItemIconRenderer {
     float x,
     float y,
     float depth,
-    float inverseDepth,
-    float uOverDepth,
-    float vOverDepth
+    float inverseW,
+    float uOverW,
+    float vOverW
   ) {}
 
   private record ProjectedTriangle(
     ProjectedVertex v0,
     ProjectedVertex v1,
     ProjectedVertex v2,
-    RendererAssets.TextureImage texture,
-    RendererAssets.AlphaMode alphaMode,
-    int color,
-    boolean doubleSided,
+    RenderMaterial material,
     float sortDepth
   ) {}
 
