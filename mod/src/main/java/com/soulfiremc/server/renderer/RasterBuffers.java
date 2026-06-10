@@ -38,7 +38,7 @@ public final class RasterBuffers {
   }
 
   public void clearDepth() {
-    Arrays.fill(depthBuffer, Float.POSITIVE_INFINITY);
+    Arrays.fill(depthBuffer, 1.0F);
   }
 
   public BufferedImage image() {

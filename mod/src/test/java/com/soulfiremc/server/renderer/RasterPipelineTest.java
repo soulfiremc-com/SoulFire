@@ -39,6 +39,42 @@ class RasterPipelineTest {
   private static final int HEIGHT = 64;
 
   @Test
+  void depthBufferClearsToOpenGlFarPlane() {
+    var buffers = new RasterBuffers(4, 3);
+    var depth = buffers.depthBuffer();
+    for (var i = 0; i < depth.length; i++) {
+      depth[i] = 0.25F;
+    }
+
+    buffers.clearDepth();
+
+    for (var value : depth) {
+      assertEquals(1.0F, value, 0.0F);
+    }
+  }
+
+  @Test
+  void nonFiniteProjectedGeometryIsDropped() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(Float.NaN, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      solidTexture(0xFFFF0000),
+      RendererAssets.AlphaMode.OPAQUE,
+      0xFFFFFFFF
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF000000, 3);
+  }
+
+  @Test
   void nearerOpaqueQuadWinsDepthTest() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);

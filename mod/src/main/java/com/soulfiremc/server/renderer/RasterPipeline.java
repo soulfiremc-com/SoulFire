@@ -131,6 +131,12 @@ public final class RasterPipeline {
       toClipVertex(viewProjection, quad.v2()),
       toClipVertex(viewProjection, quad.v3())
     };
+    for (var vertex : viewVertices) {
+      if (!isFinite(vertex)) {
+        return;
+      }
+    }
+
     var sortDepth = sortDepth(camera, quad);
     var clipped = clipQuadToViewFrustum(viewVertices);
     if (clipped.length < 3) {
@@ -140,6 +146,9 @@ public final class RasterPipeline {
     var projected = new ProjectedVertex[clipped.length];
     for (var i = 0; i < clipped.length; i++) {
       projected[i] = projectVertex(camera, clipped[i]);
+      if (!isFinite(projected[i])) {
+        return;
+      }
     }
     for (var i = 1; i < projected.length - 1; i++) {
       out.add(new ProjectedTriangle(
@@ -253,6 +262,32 @@ public final class RasterPipeline {
     );
   }
 
+  private boolean isFinite(ClipVertex vertex) {
+    return Float.isFinite(vertex.x())
+      && Float.isFinite(vertex.y())
+      && Float.isFinite(vertex.z())
+      && Float.isFinite(vertex.w())
+      && Float.isFinite(vertex.u())
+      && Float.isFinite(vertex.v())
+      && Float.isFinite(vertex.a())
+      && Float.isFinite(vertex.r())
+      && Float.isFinite(vertex.g())
+      && Float.isFinite(vertex.b());
+  }
+
+  private boolean isFinite(ProjectedVertex vertex) {
+    return Float.isFinite(vertex.x())
+      && Float.isFinite(vertex.y())
+      && Float.isFinite(vertex.depth())
+      && Float.isFinite(vertex.inverseW())
+      && Float.isFinite(vertex.uOverW())
+      && Float.isFinite(vertex.vOverW())
+      && Float.isFinite(vertex.aOverW())
+      && Float.isFinite(vertex.rOverW())
+      && Float.isFinite(vertex.gOverW())
+      && Float.isFinite(vertex.bOverW());
+  }
+
   private float sortDepth(Camera camera, RenderQuad quad) {
     var x = (quad.v0().x() + quad.v1().x() + quad.v2().x() + quad.v3().x()) * 0.25F - (float) camera.eyeX();
     var y = (quad.v0().y() + quad.v1().y() + quad.v2().y() + quad.v3().y()) * 0.25F - (float) camera.eyeY();
@@ -316,14 +351,26 @@ public final class RasterPipeline {
           0.0F,
           1.0F
         );
+        if (!Float.isFinite(depth)) {
+          continue;
+        }
+
         var rasterIndex = y * width + x;
         if (!material.depthTest().passes(depth, depthBuffer[rasterIndex])) {
           continue;
         }
 
         var inverseW = normalizedW0 * v0.inverseW() + normalizedW1 * v1.inverseW() + normalizedW2 * v2.inverseW();
+        if (!Float.isFinite(inverseW) || Math.abs(inverseW) < 1.0E-8F) {
+          continue;
+        }
+
         var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
         var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
+        if (!Float.isFinite(u) || !Float.isFinite(v)) {
+          continue;
+        }
+
         var sampled = material.texture().sample(
           material.uvTransform().u(u, v, animationTick),
           material.uvTransform().v(u, v, animationTick),

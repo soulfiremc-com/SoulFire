@@ -1202,7 +1202,7 @@ public final class InventoryItemIconRenderer {
         return;
       }
 
-      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(poseStack.last().pose()), renderType.mode(), texture, alphaModeForTexture(texture));
+      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(), renderType.mode(), texture, alphaModeForTexture(texture));
       renderer.render(poseStack.last(), consumer);
       consumer.flush(quads, textures);
     }
