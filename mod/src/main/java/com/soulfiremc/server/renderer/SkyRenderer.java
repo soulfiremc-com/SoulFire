@@ -326,6 +326,8 @@ public final class SkyRenderer {
       color,
       true,
       0.0F,
+      0.0F,
+      0.0F,
       alphaCutoutThreshold,
       RenderMaterial.DepthTest.ALWAYS_PASS,
       false,

@@ -29,10 +29,10 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VanillaSubmitCollectorTextTest {
@@ -128,6 +128,25 @@ class VanillaSubmitCollectorTextTest {
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFE9D89A, 3);
   }
 
+  @Test
+  void orderedCollectorsMergeSamePassGeometryByVanillaOrder() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var highOrderConsumer = newTextConsumer((VanillaSubmitCollector) collector.order(10), texture);
+    var lowOrderConsumer = newTextConsumer((VanillaSubmitCollector) collector.order(-10), texture);
+
+    addTextQuad(highOrderConsumer, 0x80FF0000);
+    flush(highOrderConsumer);
+    addTextQuad(lowOrderConsumer, 0x8000FF00);
+    flush(lowOrderConsumer);
+
+    var scene = sceneData(collector);
+    assertEquals(2, scene.translucent().length);
+    assertEquals(0x8000FF00, scene.translucent()[0].v0().color());
+    assertEquals(0x80FF0000, scene.translucent()[1].v0().color());
+  }
+
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture) throws Exception {
     return newTextConsumer(collector, texture, RenderTypes.textIntensity(Identifier.withDefaultNamespace("font/test")));
   }
@@ -163,6 +182,13 @@ class VanillaSubmitCollectorTextTest {
 
   private static void addGlyphVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int light) {
     addVertex(consumer, x, y, z, u, v, 0xFFE9D89A, light);
+  }
+
+  private static void addTextQuad(VertexConsumer consumer, int color) {
+    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, color);
+    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, color);
+    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, color);
+    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, color);
   }
 
   private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color) {
@@ -206,9 +232,9 @@ class VanillaSubmitCollectorTextTest {
   }
 
   private static SceneData sceneData(VanillaSubmitCollector collector) throws Exception {
-    Field field = VanillaSubmitCollector.class.getDeclaredField("builder");
-    field.setAccessible(true);
-    return ((SceneData.Builder) field.get(collector)).build();
+    Method method = VanillaSubmitCollector.class.getDeclaredMethod("buildScene");
+    method.setAccessible(true);
+    return (SceneData) method.invoke(collector);
   }
 
   private static void renderSynthetic(RasterPipeline pipeline, Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, int clearColor) {

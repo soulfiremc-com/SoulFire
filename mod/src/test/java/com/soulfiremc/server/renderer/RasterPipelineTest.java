@@ -19,6 +19,8 @@ package com.soulfiremc.server.renderer;
 
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -198,6 +200,8 @@ class RasterPipelineTest {
         RendererAssets.AlphaMode.OPAQUE,
         0xFFFFFFFF,
         false,
+        0.0F,
+        0.0F,
         0.0F,
         0,
         RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
@@ -420,7 +424,7 @@ class RasterPipelineTest {
       vertex(-0.8F, 0.2F, 4.0F, 0.0F, 0.0F),
       vertex(0.8F, 0.2F, 4.0F, 1.0F, 0.0F),
       vertex(0.8F, -0.2F, 4.0F, 1.0F, 1.0F),
-      RenderMaterial.create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, -0.11F)
+      polygonOffsetTextMaterial()
     ));
 
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
@@ -440,7 +444,7 @@ class RasterPipelineTest {
       vertex(-0.8F, 0.2F, 4.004F, 0.0F, 0.0F),
       vertex(0.8F, 0.2F, 4.004F, 1.0F, 0.0F),
       vertex(0.8F, -0.2F, 4.004F, 1.0F, 1.0F),
-      RenderMaterial.create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, -0.11F)
+      polygonOffsetTextMaterial()
     ));
 
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
@@ -579,6 +583,8 @@ class RasterPipelineTest {
       0x80FFFFFF,
       false,
       0.0F,
+      0.0F,
+      0.0F,
       0,
       RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
       depthWrite,
@@ -595,6 +601,8 @@ class RasterPipelineTest {
       material.color(),
       material.doubleSided(),
       material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
       depthTest,
       depthWrite,
@@ -604,6 +612,12 @@ class RasterPipelineTest {
     );
   }
 
+  private static RenderMaterial polygonOffsetTextMaterial() {
+    return RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, 0.0F)
+      .withDepthState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0F, -10.0F));
+  }
+
   private static RenderMaterial materialWithBlendState(RenderMaterial material, RenderMaterial.BlendState blendState) {
     return new RenderMaterial(
       material.texture(),
@@ -611,6 +625,8 @@ class RasterPipelineTest {
       material.color(),
       material.doubleSided(),
       material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
       material.depthTest(),
       material.depthWrite(),
@@ -627,6 +643,8 @@ class RasterPipelineTest {
       material.color(),
       material.doubleSided(),
       material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
       material.depthTest(),
       material.depthWrite(),

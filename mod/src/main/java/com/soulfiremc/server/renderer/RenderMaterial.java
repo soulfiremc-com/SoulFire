@@ -34,6 +34,8 @@ public record RenderMaterial(
   int color,
   boolean doubleSided,
   float depthBias,
+  float polygonOffsetFactor,
+  float polygonOffsetUnits,
   int alphaCutoutThreshold,
   DepthTest depthTest,
   boolean depthWrite,
@@ -65,6 +67,8 @@ public record RenderMaterial(
       color,
       doubleSided,
       depthBias,
+      0.0F,
+      0.0F,
       alphaCutoutThreshold,
       DepthTest.LESS_THAN_OR_EQUAL,
       defaultDepthWrite(alphaMode),
@@ -80,7 +84,9 @@ public record RenderMaterial(
       alphaMode,
       color,
       doubleSided,
-      depthBias + depthBias(depthStencilState),
+      depthBias,
+      polygonOffsetFactor + depthBiasScaleFactor(depthStencilState),
+      polygonOffsetUnits + depthBiasConstant(depthStencilState),
       alphaCutoutThreshold,
       depthTest(depthStencilState),
       depthWrite(depthStencilState),
@@ -98,7 +104,9 @@ public record RenderMaterial(
       alphaMode,
       color,
       doubleSided || !pipeline.isCull(),
-      depthBias + depthBias(pipeline.getDepthStencilState()),
+      depthBias,
+      polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
+      polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
       alphaCutoutThreshold,
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
@@ -132,12 +140,20 @@ public record RenderMaterial(
     return depthStencilState != null && depthStencilState.writeDepth();
   }
 
-  private static float depthBias(@Nullable DepthStencilState depthStencilState) {
+  private static float depthBiasScaleFactor(@Nullable DepthStencilState depthStencilState) {
     if (depthStencilState == null) {
       return 0.0F;
     }
 
-    return (depthStencilState.depthBiasScaleFactor() + depthStencilState.depthBiasConstant()) * 0.01F;
+    return depthStencilState.depthBiasScaleFactor();
+  }
+
+  private static float depthBiasConstant(@Nullable DepthStencilState depthStencilState) {
+    if (depthStencilState == null) {
+      return 0.0F;
+    }
+
+    return depthStencilState.depthBiasConstant();
   }
 
   public enum DepthTest {

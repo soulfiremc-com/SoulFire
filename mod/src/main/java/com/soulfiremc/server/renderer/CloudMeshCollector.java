@@ -295,6 +295,8 @@ public final class CloudMeshCollector {
       0xFFFFFFFF,
       !fancyClouds,
       0.0F,
+      0.0F,
+      0.0F,
       0,
       RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
       true,

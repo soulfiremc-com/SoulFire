@@ -30,7 +30,7 @@ import java.util.stream.IntStream;
 /// Projects and rasterizes scene geometry into the target buffers.
 public final class RasterPipeline {
   private static final int TILE_SIZE = 32;
-  private static final float DEPTH_BIAS_SCALE = 1.0E-3F;
+  private static final float POLYGON_OFFSET_UNIT_DEPTH = 1.0E-5F;
 
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     renderSky(ctx, buffers);
@@ -139,7 +139,7 @@ public final class RasterPipeline {
 
     var projected = new ProjectedVertex[clipped.length];
     for (var i = 0; i < clipped.length; i++) {
-      projected[i] = projectVertex(camera, clipped[i], quad.material().depthBias());
+      projected[i] = projectVertex(camera, clipped[i]);
     }
     for (var i = 1; i < projected.length - 1; i++) {
       out.add(new ProjectedTriangle(
@@ -231,18 +231,18 @@ public final class RasterPipeline {
     );
   }
 
-  private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, float depthBias) {
+  private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex) {
     var inverseW = 1.0F / vertex.w();
     var ndcX = vertex.x() * inverseW;
     var ndcY = vertex.y() * inverseW;
     var ndcZ = vertex.z() * inverseW;
     var screenX = (ndcX * 0.5F + 0.5F) * camera.width();
     var screenY = (0.5F - ndcY * 0.5F) * camera.height();
-    var biasedDepth = Math.clamp(ndcZ * 0.5F + 0.5F + depthBias * DEPTH_BIAS_SCALE, 0.0F, 1.0F);
+    var depth = Math.clamp(ndcZ * 0.5F + 0.5F, 0.0F, 1.0F);
     return new ProjectedVertex(
       screenX,
       screenY,
-      biasedDepth,
+      depth,
       inverseW,
       vertex.u() * inverseW,
       vertex.v() * inverseW,
@@ -281,6 +281,7 @@ public final class RasterPipeline {
     if (!material.doubleSided() && area <= 0.0F) {
       return;
     }
+    var fragmentDepthBias = fragmentDepthBias(triangle, material);
     var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());
     var topLeft1 = isTopLeft(v2.x(), v2.y(), v0.x(), v0.y());
     var topLeft2 = isTopLeft(v0.x(), v0.y(), v1.x(), v1.y());
@@ -310,7 +311,11 @@ public final class RasterPipeline {
         var normalizedW0 = w0 / area;
         var normalizedW1 = w1 / area;
         var normalizedW2 = w2 / area;
-        var depth = normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth();
+        var depth = Math.clamp(
+          normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth() + fragmentDepthBias,
+          0.0F,
+          1.0F
+        );
         var rasterIndex = y * width + x;
         if (!material.depthTest().passes(depth, depthBuffer[rasterIndex])) {
           continue;
@@ -348,6 +353,32 @@ public final class RasterPipeline {
         }
       }
     }
+  }
+
+  private float fragmentDepthBias(ProjectedTriangle triangle, RenderMaterial material) {
+    var bias = material.depthBias() + material.polygonOffsetUnits() * POLYGON_OFFSET_UNIT_DEPTH;
+    var factor = material.polygonOffsetFactor();
+    if (factor == 0.0F) {
+      return bias;
+    }
+
+    var v0 = triangle.v0();
+    var v1 = triangle.v1();
+    var v2 = triangle.v2();
+    var x1 = v1.x() - v0.x();
+    var y1 = v1.y() - v0.y();
+    var z1 = v1.depth() - v0.depth();
+    var x2 = v2.x() - v0.x();
+    var y2 = v2.y() - v0.y();
+    var z2 = v2.depth() - v0.depth();
+    var denominator = x1 * y2 - x2 * y1;
+    if (Math.abs(denominator) < 1.0E-5F) {
+      return bias;
+    }
+
+    var dzDx = (z1 * y2 - z2 * y1) / denominator;
+    var dzDy = (x1 * z2 - x2 * z1) / denominator;
+    return bias + Math.max(Math.abs(dzDx), Math.abs(dzDy)) * factor;
   }
 
   private int interpolatedColor(
