@@ -56,9 +56,20 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
-  void keepsBinaryAlphaBlendedRenderTypesOnTranslucentPath() {
+  void classifiesBinaryAlphaEntityTranslucentSkinsAsCutout() {
     var texture = textureWithAlpha(0);
     var renderType = RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("skins/test"));
+
+    assertEquals(
+      RendererAssets.AlphaMode.CUTOUT,
+      VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF)
+    );
+  }
+
+  @Test
+  void keepsBinaryAlphaOtherBlendedRenderTypesOnTranslucentPath() {
+    var texture = textureWithAlpha(0);
+    var renderType = RenderTypes.entityShadow(Identifier.withDefaultNamespace("textures/misc/shadow.png"));
 
     assertEquals(
       RendererAssets.AlphaMode.TRANSLUCENT,
@@ -137,6 +148,28 @@ class RendererAssetsRuntimeTextureTest {
       var image = mirrored.toBufferedImage();
       assertEquals(0xFF112233, image.getRGB(8, 8));
       assertEquals(0x40223344, image.getRGB(40, 8));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
+  void mirrorsInitialDynamicTexturePixelsOnRegistration() {
+    var location = Identifier.withDefaultNamespace("test/runtime-mirror-initial");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 1);
+
+    try {
+      try (var source = new NativeImage(2, 1, true)) {
+        source.setPixel(0, 0, 0xFF112233);
+        source.setPixel(1, 0, 0x80445566);
+        RendererRuntimeTextureMirror.register(location, gpuTexture, source);
+      }
+
+      var mirrored = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(mirrored);
+      var image = mirrored.toBufferedImage();
+      assertEquals(0xFF112233, image.getRGB(0, 0));
+      assertEquals(0x80445566, image.getRGB(1, 0));
     } finally {
       RendererRuntimeTextureMirror.unregister(location);
     }

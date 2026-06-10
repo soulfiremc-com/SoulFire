@@ -21,7 +21,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.math.Quadrant;
+import com.soulfiremc.mod.access.IMinecraft;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -30,6 +32,7 @@ import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockStateModelWrapper;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
@@ -61,6 +64,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -74,6 +79,9 @@ import java.util.concurrent.ConcurrentMap;
 public final class RendererAssets {
   private static final RendererAssets INSTANCE = new RendererAssets();
   private static final TextureImage MISSING_TEXTURE = TextureImage.missing();
+  private static final String SKIN_TEXTURE_PREFIX = "skins/";
+  private static final String CAPE_TEXTURE_PREFIX = "capes/";
+  private static final String ELYTRA_TEXTURE_PREFIX = "elytra/";
   private static final Identifier GRASS_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/grass.png");
   private static final Identifier FOLIAGE_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/foliage.png");
   private static final Identifier DRY_FOLIAGE_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/dry_foliage.png");
@@ -683,11 +691,24 @@ public final class RendererAssets {
       return mirroredTexture;
     }
 
+    var cachedPlayerTexture = cachedPlayerTexture(textureLocation);
+    if (cachedPlayerTexture != null) {
+      return cachedPlayerTexture;
+    }
+
     try {
       var texture = Minecraft.getInstance().getTextureManager().getTexture(textureLocation);
       if (texture instanceof DynamicTexture dynamicTexture) {
         var pixels = dynamicTexture.getPixels();
-        return pixels != null ? TextureImage.from(nativeImageToBufferedImage(pixels), null) : null;
+        if (pixels == null) {
+          return null;
+        }
+
+        var textureImage = TextureImage.from(nativeImageToBufferedImage(pixels), null);
+        if (isPlayerTexture(textureLocation) && textureImage.isFullyTransparent()) {
+          return null;
+        }
+        return textureImage;
       }
       if (texture instanceof TextureAtlas atlas) {
         return textureCache.computeIfAbsent("atlas-texture:" + textureLocation, _ -> loadAtlasTexture(atlas));
@@ -696,6 +717,91 @@ public final class RendererAssets {
       log.debug("Failed to resolve runtime renderer texture {}", textureLocation, t);
     }
 
+    return null;
+  }
+
+  @Nullable
+  private TextureImage cachedPlayerTexture(Identifier textureLocation) {
+    var prefix = playerTexturePrefix(textureLocation);
+    if (prefix == null) {
+      return null;
+    }
+
+    var cacheKey = "player-texture-cache:" + textureLocation;
+    var cached = textureCache.get(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
+    var loaded = loadCachedPlayerTexture(textureLocation, prefix);
+    if (loaded == null) {
+      return null;
+    }
+
+    var existing = textureCache.putIfAbsent(cacheKey, loaded);
+    return existing != null ? existing : loaded;
+  }
+
+  @Nullable
+  private TextureImage loadCachedPlayerTexture(Identifier textureLocation, String prefix) {
+    var hash = textureLocation.getPath().substring(prefix.length());
+    if (hash.isBlank() || hash.contains("/")) {
+      return null;
+    }
+
+    var texturePath = playerTextureCacheDirectory().resolve(hash.substring(0, Math.min(2, hash.length()))).resolve(hash);
+    if (!Files.isRegularFile(texturePath)) {
+      return null;
+    }
+
+    NativeImage image = null;
+    NativeImage normalized = null;
+    try {
+      image = NativeImage.read(Files.readAllBytes(texturePath));
+      if (prefix.equals(SKIN_TEXTURE_PREFIX)) {
+        normalized = SkinTextureDownloader.processLegacySkin(image, textureLocation.toString());
+        image = null;
+        return TextureImage.from(nativeImageToBufferedImage(normalized), null);
+      }
+
+      return TextureImage.from(nativeImageToBufferedImage(image), null);
+    } catch (Throwable t) {
+      log.debug("Failed to load cached renderer player texture {}", texturePath, t);
+      return null;
+    } finally {
+      if (normalized != null) {
+        normalized.close();
+      }
+      if (image != null) {
+        image.close();
+      }
+    }
+  }
+
+  private Path playerTextureCacheDirectory() {
+    return ((IMinecraft) Minecraft.getInstance()).soulfire$getGameConfig().location.assetDirectory.toPath().resolve("skins");
+  }
+
+  private static boolean isPlayerTexture(Identifier textureLocation) {
+    return playerTexturePrefix(textureLocation) != null;
+  }
+
+  @Nullable
+  private static String playerTexturePrefix(Identifier textureLocation) {
+    if (!textureLocation.getNamespace().equals("minecraft")) {
+      return null;
+    }
+
+    var path = textureLocation.getPath();
+    if (path.startsWith(SKIN_TEXTURE_PREFIX)) {
+      return SKIN_TEXTURE_PREFIX;
+    }
+    if (path.startsWith(CAPE_TEXTURE_PREFIX)) {
+      return CAPE_TEXTURE_PREFIX;
+    }
+    if (path.startsWith(ELYTRA_TEXTURE_PREFIX)) {
+      return ELYTRA_TEXTURE_PREFIX;
+    }
     return null;
   }
 
@@ -1001,6 +1107,15 @@ public final class RendererAssets {
 
     public boolean hasTranslucentPixels() {
       return hasTranslucentPixels;
+    }
+
+    public boolean isFullyTransparent() {
+      for (var pixel : pixels) {
+        if (((pixel >>> 24) & 0xFF) != 0) {
+          return false;
+        }
+      }
+      return true;
     }
 
     public AlphaCoverage alphaCoverage(float[] uv) {

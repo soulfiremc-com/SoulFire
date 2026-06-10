@@ -121,6 +121,9 @@ public record RenderMaterial(
   public RenderMaterial withRenderType(RenderType renderType, int sortGroup) {
     var pipeline = renderType.pipeline();
     var colorTargetState = pipeline.getColorTargetState();
+    var blendState = alphaMode == RendererAssets.AlphaMode.TRANSLUCENT
+      ? BlendState.from(colorTargetState.blendFunction().orElse(null))
+      : BlendState.REPLACE;
     return new RenderMaterial(
       texture,
       alphaMode,
@@ -133,10 +136,10 @@ public record RenderMaterial(
       alphaCutoutSource(renderType),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
-      BlendState.from(colorTargetState.blendFunction().orElse(null)),
+      blendState,
       colorTargetState.writeMask(),
       UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
-      renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
+      alphaMode == RendererAssets.AlphaMode.TRANSLUCENT && renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
       viewScale(renderType)
     );

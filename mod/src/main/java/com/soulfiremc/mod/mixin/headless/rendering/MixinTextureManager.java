@@ -19,6 +19,7 @@ package com.soulfiremc.mod.mixin.headless.rendering;
 
 import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
 import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,7 +32,11 @@ public class MixinTextureManager {
   @Inject(method = "register", at = @At("TAIL"))
   private void registerTextureHook(Identifier location, AbstractTexture texture, CallbackInfo ci) {
     try {
-      RendererRuntimeTextureMirror.register(location, texture.getTexture());
+      if (texture instanceof DynamicTexture dynamicTexture) {
+        RendererRuntimeTextureMirror.register(location, texture.getTexture(), dynamicTexture.getPixels());
+      } else {
+        RendererRuntimeTextureMirror.register(location, texture.getTexture());
+      }
     } catch (IllegalStateException _) {
       RendererRuntimeTextureMirror.unregister(location);
     }

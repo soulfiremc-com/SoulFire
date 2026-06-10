@@ -1055,6 +1055,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var coverage = uv != null ? texture.alphaCoverage(uv) : new RendererAssets.TextureImage.AlphaCoverage(texture.hasAlpha(), texture.hasTranslucentPixels());
     var alpha = (color >>> 24) & 0xFF;
     if (renderType != null && renderType.hasBlending()) {
+      if (usesBinaryAlpha(renderType, coverage, alpha < 255)) {
+        return coverage.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+      }
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return coverage.hasAlpha() || alpha < 255 ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
@@ -1062,10 +1065,35 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private static RendererAssets.AlphaMode alphaMode(@Nullable RenderType renderType, RendererAssets.TextureImage texture, int[] colors, float[] uv) {
     var coverage = texture.alphaCoverage(uv);
+    var hasNonOpaqueAlpha = hasNonOpaqueAlpha(colors);
     if (renderType != null && renderType.hasBlending()) {
+      if (usesBinaryAlpha(renderType, coverage, hasNonOpaqueAlpha)) {
+        return coverage.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+      }
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
-    return coverage.hasAlpha() || hasNonOpaqueAlpha(colors) ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+    return coverage.hasAlpha() || hasNonOpaqueAlpha ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
+  }
+
+  private static boolean usesBinaryAlpha(RenderType renderType, RendererAssets.TextureImage.AlphaCoverage coverage, boolean hasNonOpaqueColorAlpha) {
+    return isEntityTranslucent(renderType) && !coverage.hasTranslucentPixels() && !hasNonOpaqueColorAlpha;
+  }
+
+  private static boolean isEntityTranslucent(RenderType renderType) {
+    var textureLocation = sampler0Location(renderType);
+    return textureLocation != null
+      && (renderType == RenderTypes.entityTranslucent(textureLocation) || renderType == RenderTypes.entityTranslucent(textureLocation, false));
+  }
+
+  @Nullable
+  private static Identifier sampler0Location(RenderType renderType) {
+    RenderSetup state = renderType.state;
+    if (state == null || state.textures == null || state.textures.isEmpty()) {
+      return null;
+    }
+
+    var sampler0 = state.textures.get("Sampler0");
+    return sampler0 != null ? sampler0.location() : null;
   }
 
   private static boolean hasNonOpaqueAlpha(int[] colors) {
@@ -1185,9 +1213,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return WHITE_TEXTURE;
     }
 
-    var sampler0 = state.textures.get("Sampler0");
-    if (sampler0 != null && sampler0.location() != null) {
-      return assets.renderTexture(sampler0.location());
+    var sampler0Location = sampler0Location(renderType);
+    if (sampler0Location != null) {
+      return assets.renderTexture(sampler0Location);
     }
 
     for (var binding : state.textures.values()) {

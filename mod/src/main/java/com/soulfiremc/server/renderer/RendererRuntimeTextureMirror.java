@@ -39,6 +39,10 @@ public final class RendererRuntimeTextureMirror {
   private RendererRuntimeTextureMirror() {}
 
   public static void register(Identifier location, @Nullable GpuTexture texture) {
+    register(location, texture, null);
+  }
+
+  public static void register(Identifier location, @Nullable GpuTexture texture, @Nullable NativeImage initialPixels) {
     if (texture == null || !texture.getFormat().hasColorAspect()) {
       return;
     }
@@ -46,7 +50,18 @@ public final class RendererRuntimeTextureMirror {
     synchronized (LOCK) {
       TEXTURE_IDS.values().removeIf(location::equals);
       TEXTURE_IDS.put(texture, location);
-      TEXTURES.compute(location, (_, existing) -> existing != null && existing.matches(texture) ? existing : new MirroredTexture(texture));
+      var mirrored = TEXTURES.compute(location, (_, existing) -> existing != null && existing.matches(texture) ? existing : new MirroredTexture(texture));
+      if (initialPixels != null) {
+        mirrored.write(
+          initialPixels,
+          0,
+          0,
+          Math.min(texture.getWidth(0), initialPixels.getWidth()),
+          Math.min(texture.getHeight(0), initialPixels.getHeight()),
+          0,
+          0
+        );
+      }
     }
   }
 
