@@ -1056,7 +1056,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       0.0F,
       0.0F,
       0.0F,
-      0,
+      RenderMaterial.shaderAlphaCutoutThreshold(RenderTypes.entityGlint(), RendererAssets.AlphaMode.TRANSLUCENT),
       RenderMaterial.DepthTest.EQUAL,
       false,
       RenderMaterial.BlendState.from(BlendFunction.GLINT),
@@ -1076,17 +1076,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     if (renderType == null) {
       return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
     }
-
-    var alphaCutout = renderType.pipeline().getShaderDefines().values().get("ALPHA_CUTOUT");
-    if (alphaCutout == null) {
-      return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
-    }
-
-    try {
-      return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
-    } catch (NumberFormatException _) {
-      return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
-    }
+    return RenderMaterial.shaderAlphaCutoutThreshold(renderType, alphaMode);
   }
 
   private int modulateColor(int left, int right) {

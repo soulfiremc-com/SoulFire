@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.test.renderer;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.soulfiremc.server.renderer.InventoryItemIconRenderer;
 import com.soulfiremc.server.renderer.RenderMaterial;
 import com.soulfiremc.server.renderer.RenderQuad;
@@ -24,8 +25,13 @@ import com.soulfiremc.server.renderer.RenderVertex;
 import com.soulfiremc.server.renderer.RendererAssets;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,8 +43,10 @@ import javax.imageio.ImageIO;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.Method;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -165,6 +173,48 @@ class InventoryItemIconRendererTest {
 
     assertRedDominant(image.getRGB(image.getWidth() / 2, image.getHeight() / 2 - 4));
     assertBlueDominant(image.getRGB(image.getWidth() / 2, image.getHeight() / 2 + 4));
+  }
+
+  @Test
+  void modelPartSubmitMarksFoilForSpecialItemParts() throws Exception {
+    var collectorClass = Class.forName("com.soulfiremc.server.renderer.InventoryItemIconRenderer$ItemSubmitCollector");
+    var constructor = collectorClass.getDeclaredConstructor();
+    constructor.setAccessible(true);
+    var collector = constructor.newInstance();
+    var submitModelPart = collectorClass.getDeclaredMethod(
+      "submitModelPart",
+      ModelPart.class,
+      PoseStack.class,
+      net.minecraft.client.renderer.rendertype.RenderType.class,
+      int.class,
+      int.class,
+      TextureAtlasSprite.class,
+      boolean.class,
+      boolean.class,
+      int.class,
+      net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay.class,
+      int.class
+    );
+    submitModelPart.setAccessible(true);
+
+    submitModelPart.invoke(
+      collector,
+      new ModelPart(List.of(), Map.of()),
+      new PoseStack(),
+      RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/chest/normal.png")),
+      LightCoordsUtil.FULL_BRIGHT,
+      0,
+      null,
+      false,
+      true,
+      0xFFFFFFFF,
+      null,
+      0
+    );
+
+    Method hasFoil = collectorClass.getDeclaredMethod("hasFoil");
+    hasFoil.setAccessible(true);
+    assertTrue((boolean) hasFoil.invoke(collector));
   }
 
   private static Rectangle visibleBounds(BufferedImage image) {

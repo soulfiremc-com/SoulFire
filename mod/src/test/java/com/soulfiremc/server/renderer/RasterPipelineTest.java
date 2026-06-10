@@ -24,6 +24,7 @@ import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -475,6 +476,63 @@ class RasterPipelineTest {
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void equalDepthTestRequiresExactStoredDepth() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.001F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.001F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.001F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.001F, 1.0F, 1.0F),
+      materialWithDepthTest(
+        RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F),
+        RenderMaterial.DepthTest.EQUAL,
+        false
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFF0000, 3);
+  }
+
+  @Test
+  void notEqualDepthTestAcceptsAnyDifferentStoredDepth() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.001F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.001F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.001F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.001F, 1.0F, 1.0F),
+      materialWithDepthTest(
+        RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F),
+        RenderMaterial.DepthTest.NOT_EQUAL,
+        false
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void renderTypeRefreshesShaderAlphaCutoutThreshold() {
+    var material = RenderMaterial
+      .create(solidTexture(0x19FFFFFF), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF, false, 0.0F)
+      .withRenderType(RenderTypes.solidMovingBlock());
+
+    assertEquals(26, material.alphaCutoutThreshold());
   }
 
   @Test

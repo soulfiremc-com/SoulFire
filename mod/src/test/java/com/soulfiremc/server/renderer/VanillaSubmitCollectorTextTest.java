@@ -129,6 +129,25 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void textShaderAlphaCutoutDiscardsSubTenthAlphaGlyphs() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newTextConsumer(collector, texture);
+
+    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0x19FFFFFF);
+    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0x19FFFFFF);
+    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0x19FFFFFF);
+    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0x19FFFFFF);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    assertEquals(0, countChangedPixels(buffers, 0xFF000000));
+  }
+
+  @Test
   void orderedCollectorsMergeSamePassGeometryByVanillaOrder() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);

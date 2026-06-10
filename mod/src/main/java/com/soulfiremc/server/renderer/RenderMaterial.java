@@ -50,6 +50,7 @@ public record RenderMaterial(
   float viewScale
 ) {
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
+  private static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
 
   public static RenderMaterial create(
     RendererAssets.TextureImage texture,
@@ -125,7 +126,7 @@ public record RenderMaterial(
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
-      alphaCutoutThreshold,
+      shaderAlphaCutoutThreshold(renderType, alphaMode),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
@@ -142,6 +143,40 @@ public record RenderMaterial(
       case OPAQUE -> 0;
       case CUTOUT -> 128;
       case TRANSLUCENT -> 3;
+    };
+  }
+
+  public static int shaderAlphaCutoutThreshold(RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+    var alphaCutout = renderType.pipeline().getShaderDefines().values().get("ALPHA_CUTOUT");
+    if (alphaCutout != null) {
+      try {
+        return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
+      } catch (NumberFormatException _) {
+        return defaultAlphaCutoutThreshold(alphaMode);
+      }
+    }
+
+    var path = renderType.pipeline().getLocation().getPath();
+    if (usesOneTenthAlphaCutout(path)) {
+      return ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
+    }
+    return defaultAlphaCutoutThreshold(alphaMode);
+  }
+
+  private static boolean usesOneTenthAlphaCutout(String pipelinePath) {
+    return switch (pipelinePath) {
+      case "pipeline/solid_block",
+           "pipeline/text",
+           "pipeline/gui_text",
+           "pipeline/text_background",
+           "pipeline/text_background_see_through",
+           "pipeline/text_intensity",
+           "pipeline/gui_text_intensity",
+           "pipeline/text_intensity_see_through",
+           "pipeline/text_polygon_offset",
+           "pipeline/glint",
+           "pipeline/crumbling" -> true;
+      default -> false;
     };
   }
 
@@ -214,13 +249,13 @@ public record RenderMaterial(
     EQUAL {
       @Override
       public boolean passes(float incoming, float stored) {
-        return Math.abs(incoming - stored) <= 1.0E-5F;
+        return incoming == stored;
       }
     },
     NOT_EQUAL {
       @Override
       public boolean passes(float incoming, float stored) {
-        return Math.abs(incoming - stored) > 1.0E-5F;
+        return incoming != stored;
       }
     },
     GREATER_THAN_OR_EQUAL {

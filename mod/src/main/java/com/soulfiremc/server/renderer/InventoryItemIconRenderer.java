@@ -1069,12 +1069,13 @@ public final class InventoryItemIconRenderer {
       int light,
       int overlay,
       TextureAtlasSprite sprite,
-      boolean invertCull,
-      boolean hasTextureOffset,
+      boolean sheeted,
+      boolean hasFoil,
       int color,
       ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
       int emission
     ) {
+      this.hasFoil |= hasFoil;
       var texture = textureImage(sprite);
       if (texture == null) {
         texture = textureImageFromRenderType(renderType);
