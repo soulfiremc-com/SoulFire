@@ -20,6 +20,7 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
@@ -95,8 +96,12 @@ public final class RendererRuntimeTextureMirror {
   public static RendererAssets.TextureImage texture(Identifier location) {
     synchronized (LOCK) {
       var mirrored = TEXTURES.get(location);
-      return mirrored != null && mirrored.hasUploadData() ? mirrored.toTextureImage() : null;
+      return mirrored != null && mirrored.hasUploadData() ? mirrored.toTextureImage(location) : null;
     }
+  }
+
+  private static boolean isPlayerSkin(Identifier location) {
+    return location.getPath().startsWith("skins/");
   }
 
   @Nullable
@@ -216,8 +221,54 @@ public final class RendererRuntimeTextureMirror {
       return hasUploadData;
     }
 
-    private RendererAssets.TextureImage toTextureImage() {
+    @Nullable
+    private RendererAssets.TextureImage toTextureImage(Identifier location) {
+      if (isPlayerSkin(location)) {
+        return toNormalizedSkinTextureImage(location);
+      }
+
       return RendererAssets.TextureImage.fromArgb(width, height, pixels, null);
+    }
+
+    @Nullable
+    private RendererAssets.TextureImage toNormalizedSkinTextureImage(Identifier location) {
+      NativeImage image = null;
+      NativeImage normalized = null;
+      try {
+        image = toNativeImage();
+        normalized = SkinTextureDownloader.processLegacySkin(image, location.toString());
+        image = null;
+        return textureImage(normalized);
+      } catch (Throwable _) {
+        return null;
+      } finally {
+        if (normalized != null) {
+          normalized.close();
+        }
+        if (image != null) {
+          image.close();
+        }
+      }
+    }
+
+    private NativeImage toNativeImage() {
+      var image = new NativeImage(width, height, false);
+      for (var y = 0; y < height; y++) {
+        for (var x = 0; x < width; x++) {
+          image.setPixel(x, y, pixels[x + y * width]);
+        }
+      }
+      return image;
+    }
+
+    private RendererAssets.TextureImage textureImage(NativeImage image) {
+      var normalizedPixels = new int[image.getWidth() * image.getHeight()];
+      for (var y = 0; y < image.getHeight(); y++) {
+        for (var x = 0; x < image.getWidth(); x++) {
+          normalizedPixels[x + y * image.getWidth()] = image.getPixel(x, y);
+        }
+      }
+      return RendererAssets.TextureImage.fromArgb(image.getWidth(), image.getHeight(), normalizedPixels, null);
     }
   }
 }

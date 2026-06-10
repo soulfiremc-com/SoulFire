@@ -120,6 +120,29 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
+  void normalizesMirroredPlayerSkinAlphaWithVanillaRules() {
+    var location = Identifier.withDefaultNamespace("skins/test-alpha-normalization");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try {
+      try (var source = new NativeImage(64, 64, true)) {
+        source.setPixel(8, 8, 0x40112233);
+        source.setPixel(40, 8, 0x40223344);
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, 0, 0, 64, 64, 0, 0);
+      }
+
+      var mirrored = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(mirrored);
+      var image = mirrored.toBufferedImage();
+      assertEquals(0xFF112233, image.getRGB(8, 8));
+      assertEquals(0x40223344, image.getRGB(40, 8));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
   void ignoresRuntimeTextureMirrorBeforeUploadDataExists() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-empty");
     RendererRuntimeTextureMirror.register(location, new FakeGpuTexture(TextureFormat.RGBA8, 2, 2));

@@ -80,4 +80,5 @@ accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBin
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()I
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getHeight ()I
+accessible method net/minecraft/client/renderer/texture/SkinTextureDownloader processLegacySkin (Lcom/mojang/blaze3d/platform/NativeImage;Ljava/lang/String;)Lcom/mojang/blaze3d/platform/NativeImage;
 accessible field net/minecraft/client/renderer/texture/SpriteContents originalImage Lcom/mojang/blaze3d/platform/NativeImage;
