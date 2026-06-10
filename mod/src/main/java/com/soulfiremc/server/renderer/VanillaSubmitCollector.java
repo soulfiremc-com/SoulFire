@@ -282,15 +282,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     poseStack.scale(0.025F, -0.025F, 0.025F);
     var textColor = seeThrough ? 0xFFFFFFFF : 0xCCFFFFFF;
     var backgroundColor = seeThrough ? 0x40000000 : 0x30000000;
-    addComponentQuad(
+    submitComponentText(
       poseStack,
       name,
       xOffset(name),
       offset,
       textColor,
       backgroundColor,
-      seeThrough ? RenderMaterial.DepthTest.ALWAYS_PASS : RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
-      !seeThrough
+      seeThrough ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL,
+      lightCoords
     );
     poseStack.popPose();
   }
@@ -308,22 +308,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int backgroundColor,
     int outlineColor
   ) {
-    var depthBias = textDepthBias(displayMode);
-    var depthTest = textDepthTest(displayMode);
-    var depthWrite = textDepthWrite(displayMode);
+    var bufferSource = new CapturingBufferSource();
     if (outlineColor != 0) {
-      for (var xo = -1; xo <= 1; xo++) {
-        for (var yo = -1; yo <= 1; yo++) {
-          if (xo != 0 || yo != 0) {
-            addSequenceQuad(poseStack, text, x + xo, y + yo, outlineColor, 0, depthBias, depthTest, depthWrite);
-          }
-        }
-      }
+      font.drawInBatch8xOutline(text, x, y, color, outlineColor, poseStack.last().pose(), bufferSource, light);
+    } else {
+      font.drawInBatch(text, x, y, color, shadow, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
     }
-    if (shadow) {
-      addSequenceQuad(poseStack, text, x + 1.0F, y + 1.0F, shadowColor(color), 0, depthBias, depthTest, depthWrite);
-    }
-    addSequenceQuad(poseStack, text, x, y, color, backgroundColor, depthBias, depthTest, depthWrite);
+    bufferSource.flush();
   }
 
   @Override
@@ -689,78 +680,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return assets.texture(sprite.contents().name());
   }
 
-  private void addComponentQuad(
+  private void submitComponentText(
     PoseStack poseStack,
     Component text,
     float x,
     float y,
     int color,
     int backgroundColor,
-    RenderMaterial.DepthTest depthTest,
-    boolean depthWrite
+    Font.DisplayMode displayMode,
+    int light
   ) {
-    var width = Math.max(1, font.width(text));
-    var texture = assets.textTexture(text, width, color, backgroundColor);
-    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, 0.0F, depthTest, depthWrite);
-  }
-
-  private void addSequenceQuad(
-    PoseStack poseStack,
-    FormattedCharSequence text,
-    float x,
-    float y,
-    int color,
-    int backgroundColor,
-    float depthBias,
-    RenderMaterial.DepthTest depthTest,
-    boolean depthWrite
-  ) {
-    var plain = plainText(text);
-    if (plain.isEmpty()) {
-      return;
-    }
-
-    var width = Math.max(1, font.width(text));
-    var texture = assets.textTexture(Component.literal(plain), width, color, backgroundColor);
-    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, depthBias, depthTest, depthWrite);
-  }
-
-  private int shadowColor(int color) {
-    var a = (color >>> 24) & 0xFF;
-    var r = (int) (((color >>> 16) & 0xFF) * 0.25F);
-    var g = (int) (((color >>> 8) & 0xFF) * 0.25F);
-    var b = (int) ((color & 0xFF) * 0.25F);
-    return (a << 24) | (r << 16) | (g << 8) | b;
-  }
-
-  private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
-    addTexturedQuad(poseStack, width, height, x, y, texture, 0.0F, RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL, true);
-  }
-
-  private void addTexturedQuad(
-    PoseStack poseStack,
-    float width,
-    float height,
-    float x,
-    float y,
-    RendererAssets.TextureImage texture,
-    float depthBias,
-    RenderMaterial.DepthTest depthTest,
-    boolean depthWrite
-  ) {
-    builder.add(withDepthTest(BillboardGeometry.textQuad(poseStack, width, height, x, y, texture, depthBias), depthTest, depthWrite));
-  }
-
-  private float textDepthBias(Font.DisplayMode displayMode) {
-    return displayMode == Font.DisplayMode.POLYGON_OFFSET ? -1.0F : 0.0F;
-  }
-
-  private RenderMaterial.DepthTest textDepthTest(Font.DisplayMode displayMode) {
-    return displayMode == Font.DisplayMode.SEE_THROUGH ? RenderMaterial.DepthTest.ALWAYS_PASS : RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL;
-  }
-
-  private boolean textDepthWrite(Font.DisplayMode displayMode) {
-    return displayMode != Font.DisplayMode.SEE_THROUGH;
+    var bufferSource = new CapturingBufferSource();
+    font.drawInBatch(text, x, y, color, false, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
+    bufferSource.flush();
   }
 
   private void addFace(
@@ -864,10 +796,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return withMaterial(quad, quad.material().withRenderType(renderType));
   }
 
-  private RenderQuad withDepthTest(RenderQuad quad, RenderMaterial.DepthTest depthTest, boolean depthWrite) {
-    return withMaterial(quad, quad.material().withDepthTest(depthTest, depthWrite));
-  }
-
   private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {
     return new RenderQuad(quad.v0(), quad.v1(), quad.v2(), quad.v3(), material);
   }
@@ -919,15 +847,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var g = ((left >>> 8) & 0xFF) * ((right >>> 8) & 0xFF) / 255;
     var b = (left & 0xFF) * (right & 0xFF) / 255;
     return (a << 24) | (r << 16) | (g << 8) | b;
-  }
-
-  private String plainText(FormattedCharSequence sequence) {
-    var builder = new StringBuilder();
-    sequence.accept((_, _, codePoint) -> {
-      builder.appendCodePoint(codePoint);
-      return true;
-    });
-    return builder.toString();
   }
 
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {

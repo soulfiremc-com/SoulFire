@@ -19,7 +19,6 @@ package com.soulfiremc.test.renderer;
 
 import com.soulfiremc.server.renderer.RendererAssets;
 import com.soulfiremc.test.utils.TestBootstrap;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Assumptions;
@@ -93,14 +92,6 @@ class RendererAssetsTest {
 
     assertTrue(geometry.faces().stream().anyMatch(face -> face.alphaMode() == RendererAssets.AlphaMode.CUTOUT));
     assertTrue(geometry.faces().stream().anyMatch(face -> face.tintIndex() >= 0));
-  }
-
-  @Test
-  void resolvesTextRenderAssets() {
-    var assets = RendererAssets.instance();
-    var textTexture = assets.textTexture(Component.literal("SoulFire"), 96, 0xFFFFFFFF, 0x66000000);
-    assertTrue(textTexture.width() > 0);
-    assertEquals(9, textTexture.height());
   }
 
   @Test

@@ -17,16 +17,23 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.TextureFormat;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.lwjgl.system.MemoryUtil;
 
 import java.awt.image.BufferedImage;
+import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RendererAssetsRuntimeTextureTest {
@@ -93,10 +100,82 @@ class RendererAssetsRuntimeTextureTest {
     );
   }
 
+  @Test
+  void mirrorsLuminanceRuntimeTextureUploads() {
+    var location = Identifier.withDefaultNamespace("test/runtime-mirror-luminance");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RED8, 4, 4);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try (var source = new NativeImage(NativeImage.Format.LUMINANCE, 2, 1, false)) {
+      MemoryUtil.memPutByte(source.getPointer(), (byte) 0x40);
+      MemoryUtil.memPutByte(source.getPointer() + 1, (byte) 0xE0);
+      RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, 1, 2, 2, 1, 0, 0);
+    }
+
+    var mirrored = RendererRuntimeTextureMirror.texture(location);
+    assertNotNull(mirrored);
+    var image = mirrored.toBufferedImage();
+    assertEquals(0x40FFFFFF, image.getRGB(1, 2));
+    assertEquals(0xE0FFFFFF, image.getRGB(2, 2));
+    assertEquals(0x00000000, image.getRGB(0, 0));
+  }
+
+  @Test
+  void ignoresRuntimeTextureMirrorBeforeUploadDataExists() {
+    var location = Identifier.withDefaultNamespace("test/runtime-mirror-empty");
+    RendererRuntimeTextureMirror.register(location, new FakeGpuTexture(TextureFormat.RGBA8, 2, 2));
+
+    assertNull(RendererRuntimeTextureMirror.texture(location));
+  }
+
+  @Test
+  void mirrorsByteBufferRuntimeTextureUploads() {
+    var location = Identifier.withDefaultNamespace("test/runtime-mirror-byte-buffer");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 2);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    var source = ByteBuffer.allocateDirect(8);
+    source.put((byte) 0x10);
+    source.put((byte) 0x20);
+    source.put((byte) 0x30);
+    source.put((byte) 0x40);
+    source.put((byte) 0x50);
+    source.put((byte) 0x60);
+    source.put((byte) 0x70);
+    source.put((byte) 0x80);
+    source.flip();
+    RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, NativeImage.Format.RGBA, 0, 1, 2, 1);
+
+    var mirrored = RendererRuntimeTextureMirror.texture(location);
+    assertNotNull(mirrored);
+    var image = mirrored.toBufferedImage();
+    assertEquals(0x40102030, image.getRGB(0, 1));
+    assertEquals(0x80506070, image.getRGB(1, 1));
+    assertEquals(0x00000000, image.getRGB(0, 0));
+  }
+
   private RendererAssets.TextureImage textureWithAlpha(int alpha) {
     var image = new BufferedImage(2, 1, BufferedImage.TYPE_INT_ARGB);
     image.setRGB(0, 0, 0xFFFFFFFF);
     image.setRGB(1, 0, (alpha << 24) | 0x00FFFFFF);
     return RendererAssets.TextureImage.from(image, null);
+  }
+
+  private static final class FakeGpuTexture extends GpuTexture {
+    private boolean closed;
+
+    private FakeGpuTexture(TextureFormat format, int width, int height) {
+      super(GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, "test runtime texture", format, width, height, 1, 1);
+    }
+
+    @Override
+    public void close() {
+      closed = true;
+    }
+
+    @Override
+    public boolean isClosed() {
+      return closed;
+    }
   }
 }

@@ -46,7 +46,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.ClientAsset;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.FluidTags;
@@ -74,7 +73,6 @@ import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
@@ -88,13 +86,10 @@ import java.util.concurrent.ConcurrentMap;
 public final class RendererAssets {
   private static final RendererAssets INSTANCE = new RendererAssets();
   private static final TextureImage MISSING_TEXTURE = TextureImage.missing();
-  private static final Font DISPLAY_FONT = new Font("SansSerif", Font.PLAIN, 9);
-  private static final int TEXT_LINE_HEIGHT = 9;
   private final ConcurrentMap<BlockState, BlockGeometry> blockGeometryCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, BlockStateDefinition> blockStateCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, ResolvedModel> modelCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, TextureImage> textureCache = new ConcurrentHashMap<>();
-  private final ConcurrentMap<TextKey, TextureImage> textTextureCache = new ConcurrentHashMap<>();
 
   private RendererAssets() {}
 
@@ -229,11 +224,6 @@ public final class RendererAssets {
         return MISSING_TEXTURE;
       }
     });
-  }
-
-  public TextureImage textTexture(Component component, int width, int textColor, int backgroundColor) {
-    var key = new TextKey(component.getString(), width, textColor, backgroundColor);
-    return textTextureCache.computeIfAbsent(key, this::renderTextTexture);
   }
 
   public int resolveTint(ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
@@ -507,26 +497,6 @@ public final class RendererAssets {
         texture, AlphaMode.CUTOUT, simpleUvSet(), transform, true);
     }
     return faces;
-  }
-
-  private TextureImage renderTextTexture(TextKey key) {
-    var width = Math.max(1, key.width());
-    var height = TEXT_LINE_HEIGHT;
-
-    var image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-    var graphics = image.createGraphics();
-    graphics.setFont(DISPLAY_FONT);
-    graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-    graphics.setColor(new Color(key.backgroundColor(), true));
-    graphics.fillRect(0, 0, width, height);
-    graphics.setColor(new Color(key.textColor(), true));
-    var textWidth = Math.max(1, graphics.getFontMetrics().stringWidth(key.text()));
-    if (textWidth > width) {
-      graphics.scale(width / (double) textWidth, 1.0);
-    }
-    graphics.drawString(key.text(), 0, Math.max(1, height - 2));
-    graphics.dispose();
-    return TextureImage.from(image, null);
   }
 
   private BlockGeometry buildBlockGeometry(BlockState state) {
@@ -1200,6 +1170,11 @@ public final class RendererAssets {
 
   @Nullable
   private TextureImage runtimeTexture(Identifier textureLocation) {
+    var mirroredTexture = RendererRuntimeTextureMirror.texture(textureLocation);
+    if (mirroredTexture != null) {
+      return mirroredTexture;
+    }
+
     try {
       var texture = Minecraft.getInstance().getTextureManager().getTexture(textureLocation);
       if (texture instanceof DynamicTexture dynamicTexture) {
@@ -1420,6 +1395,17 @@ public final class RendererAssets {
       var width = image.getWidth();
       var height = image.getHeight();
       var pixels = image.getRGB(0, 0, width, height, null, 0, width);
+      var textureImage = fromArgb(width, height, pixels, metadata);
+      textureImage.bufferedImage = image;
+      return textureImage;
+    }
+
+    public static TextureImage fromArgb(int width, int height, int[] pixels, @Nullable JsonObject metadata) {
+      if (width <= 0 || height <= 0 || pixels.length < width * height) {
+        return missing();
+      }
+
+      pixels = Arrays.copyOf(pixels, width * height);
       var animation = metadata != null && metadata.has("animation") ? metadata.getAsJsonObject("animation") : null;
       var frameHeight = animation != null && animation.has("height") ? animation.get("height").getAsInt() : Math.min(width, height);
       frameHeight = frameHeight <= 0 || frameHeight > height ? Math.min(width, height) : frameHeight;
@@ -1453,7 +1439,6 @@ public final class RendererAssets {
         }
       }
       var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels, hasAlpha, hasTranslucentPixels);
-      textureImage.bufferedImage = image;
       return textureImage;
     }
 
@@ -1684,8 +1669,6 @@ public final class RendererAssets {
       return new BlockRenderContext(Blocks.AIR.defaultBlockState(), itemStack);
     }
   }
-
-  private record TextKey(String text, int width, int textColor, int backgroundColor) {}
 
   private static final class EmptyBlockGetterProxy implements BlockGetter {
     private static final EmptyBlockGetterProxy INSTANCE = new EmptyBlockGetterProxy();
