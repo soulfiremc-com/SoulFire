@@ -56,6 +56,9 @@ import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.DryFoliageColor;
+import net.minecraft.world.level.FoliageColor;
+import net.minecraft.world.level.GrassColor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HalfTransparentBlock;
@@ -86,10 +89,16 @@ import java.util.concurrent.ConcurrentMap;
 public final class RendererAssets {
   private static final RendererAssets INSTANCE = new RendererAssets();
   private static final TextureImage MISSING_TEXTURE = TextureImage.missing();
+  private static final Identifier GRASS_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/grass.png");
+  private static final Identifier FOLIAGE_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/foliage.png");
+  private static final Identifier DRY_FOLIAGE_COLOR_MAP = Identifier.withDefaultNamespace("textures/colormap/dry_foliage.png");
   private final ConcurrentMap<BlockState, BlockGeometry> blockGeometryCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, BlockStateDefinition> blockStateCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, ResolvedModel> modelCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, TextureImage> textureCache = new ConcurrentHashMap<>();
+  private final Object vanillaColorMapLoadLock = new Object();
+  private volatile boolean vanillaColorMapsLoaded;
+  private volatile boolean vanillaColorMapLoadFailureLogged;
 
   private RendererAssets() {}
 
@@ -231,12 +240,79 @@ public final class RendererAssets {
       return 0xFFFFFFFF;
     }
 
+    var colorMapsWereLoaded = vanillaColorMapsLoaded;
+    var colorMapsReady = ensureVanillaColorMapsLoaded();
+    if (!colorMapsWereLoaded && colorMapsReady) {
+      level.clearTintCaches();
+    }
+
     var tintSource = Minecraft.getInstance().getBlockColors().getTintSource(state, tintIndex);
     if (tintSource == null) {
       return 0xFFFFFFFF;
     }
 
     var tint = tintSource.colorInWorld(state, level, pos);
+    if (!colorMapsReady && isTransparentBlack(tint)) {
+      tint = tintSource.color(state);
+      if (isTransparentBlack(tint)) {
+        return 0xFFFFFFFF;
+      }
+    }
+
+    return opaqueTint(tint);
+  }
+
+  boolean ensureVanillaColorMapsLoaded() {
+    if (vanillaColorMapsLoaded) {
+      return true;
+    }
+
+    synchronized (vanillaColorMapLoadLock) {
+      if (vanillaColorMapsLoaded) {
+        return true;
+      }
+
+      try {
+        var grass = loadColorMap(GRASS_COLOR_MAP);
+        var foliage = loadColorMap(FOLIAGE_COLOR_MAP);
+        var dryFoliage = loadColorMap(DRY_FOLIAGE_COLOR_MAP);
+        GrassColor.init(grass);
+        FoliageColor.init(foliage);
+        DryFoliageColor.init(dryFoliage);
+        vanillaColorMapsLoaded = true;
+      } catch (Throwable t) {
+        if (!vanillaColorMapLoadFailureLogged) {
+          vanillaColorMapLoadFailureLogged = true;
+          log.debug("Failed to load vanilla renderer color maps", t);
+        }
+      }
+
+      return vanillaColorMapsLoaded;
+    }
+  }
+
+  private int[] loadColorMap(Identifier location) throws IOException {
+    try (var stream = openResourceStream(location)) {
+      if (stream == null) {
+        throw new IOException("Missing color map resource: " + location);
+      }
+
+      var image = ImageIO.read(stream);
+      if (image == null) {
+        throw new IOException("Invalid color map image: " + location);
+      }
+
+      var pixels = new int[image.getWidth() * image.getHeight()];
+      image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
+      return pixels;
+    }
+  }
+
+  private boolean isTransparentBlack(int color) {
+    return color == 0;
+  }
+
+  private int opaqueTint(int tint) {
     return (tint >>> 24) == 0 ? 0xFF000000 | tint : tint;
   }
 
