@@ -22,6 +22,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
@@ -129,6 +130,31 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void entityRenderTypesCaptureUv1OverlayCoordinates() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFF0000FF}, null);
+    var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
+    var consumer = newTextConsumer(collector, texture, renderType);
+    var overlay = OverlayTexture.pack(0.0F, true);
+
+    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT, overlay);
+    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT, overlay);
+    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT, overlay);
+    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT, overlay);
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.opaque().length);
+    assertEquals(0xB2FF0000, scene.opaque()[0].v0().overlayColor());
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF4D00B2, 3);
+  }
+
+  @Test
   void textShaderAlphaCutoutDiscardsSubTenthAlphaGlyphs() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -223,6 +249,15 @@ class VanillaSubmitCollectorTextTest {
       .setColor(color)
       .setUv(u, v)
       .setLight(light);
+  }
+
+  private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color, int light, int overlay) {
+    consumer
+      .addVertex(x, y, z)
+      .setColor(color)
+      .setUv(u, v)
+      .setLight(light)
+      .setOverlay(overlay);
   }
 
   private static void flush(VertexConsumer consumer) throws Exception {

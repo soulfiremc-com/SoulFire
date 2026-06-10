@@ -75,6 +75,7 @@ accessible field net/minecraft/client/renderer/rendertype/RenderSetup textures L
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup textureTransform Lnet/minecraft/client/renderer/rendertype/TextureTransform;
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup layeringTransform Lnet/minecraft/client/renderer/rendertype/LayeringTransform;
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup useLightmap Z
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup useOverlay Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location Lnet/minecraft/resources/Identifier;
 
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;

@@ -40,6 +40,7 @@ public record RenderMaterial(
   float polygonOffsetFactor,
   float polygonOffsetUnits,
   int alphaCutoutThreshold,
+  AlphaCutoutSource alphaCutoutSource,
   DepthTest depthTest,
   boolean depthWrite,
   BlendState blendState,
@@ -79,6 +80,7 @@ public record RenderMaterial(
       0.0F,
       0.0F,
       alphaCutoutThreshold,
+      AlphaCutoutSource.FINAL_COLOR,
       DepthTest.LESS_THAN_OR_EQUAL,
       defaultDepthWrite(alphaMode),
       defaultBlendState(alphaMode),
@@ -100,6 +102,7 @@ public record RenderMaterial(
       polygonOffsetFactor + depthBiasScaleFactor(depthStencilState),
       polygonOffsetUnits + depthBiasConstant(depthStencilState),
       alphaCutoutThreshold,
+      alphaCutoutSource,
       depthTest(depthStencilState),
       depthWrite(depthStencilState),
       blendState,
@@ -127,6 +130,7 @@ public record RenderMaterial(
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
       shaderAlphaCutoutThreshold(renderType, alphaMode),
+      alphaCutoutSource(renderType),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
@@ -161,6 +165,14 @@ public record RenderMaterial(
       return ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
     }
     return defaultAlphaCutoutThreshold(alphaMode);
+  }
+
+  private static AlphaCutoutSource alphaCutoutSource(RenderType renderType) {
+    var fragmentShader = renderType.pipeline().getFragmentShader().getPath();
+    return switch (fragmentShader) {
+      case "core/entity", "core/item" -> AlphaCutoutSource.TEXTURE;
+      default -> AlphaCutoutSource.FINAL_COLOR;
+    };
   }
 
   private static boolean usesOneTenthAlphaCutout(String pipelinePath) {
@@ -291,6 +303,11 @@ public record RenderMaterial(
         case NEVER_PASS -> NEVER_PASS;
       };
     }
+  }
+
+  public enum AlphaCutoutSource {
+    TEXTURE,
+    FINAL_COLOR
   }
 
   public record BlendState(SourceFactor sourceColor, DestFactor destColor, SourceFactor sourceAlpha, DestFactor destAlpha) {

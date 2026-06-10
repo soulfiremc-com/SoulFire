@@ -25,6 +25,7 @@ import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -176,6 +177,25 @@ class RasterPipelineTest {
   }
 
   @Test
+  void entityOverlayColorMixesAfterTextureAndVertexColor() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(new RenderQuad(
+      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
+      RenderMaterial.create(solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF4D00B2, 3);
+  }
+
+  @Test
   void depthTestCanBeDisabledForSeeThroughGeometry() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -243,6 +263,7 @@ class RasterPipelineTest {
         0.0F,
         0.0F,
         0,
+        RenderMaterial.AlphaCutoutSource.FINAL_COLOR,
         RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
         true,
         RenderMaterial.BlendState.REPLACE,
@@ -533,6 +554,28 @@ class RasterPipelineTest {
       .withRenderType(RenderTypes.solidMovingBlock());
 
     assertEquals(26, material.alphaCutoutThreshold());
+  }
+
+  @Test
+  void entityCutoutTestsTextureAlphaBeforeTintAlpha() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    var material = RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.CUTOUT, 0x19FFFFFF, false, 0.0F)
+      .withRenderType(RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test")));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      material
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFFFFFF, 3);
   }
 
   @Test
@@ -837,6 +880,7 @@ class RasterPipelineTest {
       0.0F,
       0.0F,
       0,
+      RenderMaterial.AlphaCutoutSource.FINAL_COLOR,
       RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
       depthWrite,
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),
@@ -858,6 +902,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       depthTest,
       depthWrite,
       material.blendState(),
@@ -884,6 +929,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       depthTest,
       depthWrite,
       material.blendState(),
@@ -911,6 +957,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       material.depthTest(),
       material.depthWrite(),
       blendState,
@@ -932,6 +979,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       material.depthTest(),
       material.depthWrite(),
       material.blendState(),
@@ -953,6 +1001,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       material.depthTest(),
       material.depthWrite(),
       material.blendState(),
@@ -974,6 +1023,7 @@ class RasterPipelineTest {
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
       material.alphaCutoutThreshold(),
+      material.alphaCutoutSource(),
       material.depthTest(),
       material.depthWrite(),
       material.blendState(),

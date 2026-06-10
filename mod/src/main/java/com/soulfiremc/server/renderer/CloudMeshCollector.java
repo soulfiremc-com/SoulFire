@@ -298,6 +298,7 @@ public final class CloudMeshCollector {
       0.0F,
       0.0F,
       0,
+      RenderMaterial.AlphaCutoutSource.FINAL_COLOR,
       RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
       true,
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),

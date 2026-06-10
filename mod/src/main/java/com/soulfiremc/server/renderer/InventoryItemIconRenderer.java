@@ -609,9 +609,10 @@ public final class InventoryItemIconRenderer {
       return;
     }
 
-    var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());
-    var topLeft1 = isTopLeft(v2.x(), v2.y(), v0.x(), v0.y());
-    var topLeft2 = isTopLeft(v0.x(), v0.y(), v1.x(), v1.y());
+    var positiveArea = area > 0.0F;
+    var topLeft0 = positiveArea ? isTopLeft(v1.x(), v1.y(), v2.x(), v2.y()) : isTopLeft(v2.x(), v2.y(), v1.x(), v1.y());
+    var topLeft1 = positiveArea ? isTopLeft(v2.x(), v2.y(), v0.x(), v0.y()) : isTopLeft(v0.x(), v0.y(), v2.x(), v2.y());
+    var topLeft2 = positiveArea ? isTopLeft(v0.x(), v0.y(), v1.x(), v1.y()) : isTopLeft(v1.x(), v1.y(), v0.x(), v0.y());
     var width = buffers.image().getWidth();
     var height = buffers.image().getHeight();
     var colorBuffer = buffers.colorBuffer();
@@ -632,7 +633,7 @@ public final class InventoryItemIconRenderer {
         var w0 = edge(v1.x(), v1.y(), v2.x(), v2.y(), sampleX, sampleY);
         var w1 = edge(v2.x(), v2.y(), v0.x(), v0.y(), sampleX, sampleY);
         var w2 = edge(v0.x(), v0.y(), v1.x(), v1.y(), sampleX, sampleY);
-        if (!isInside(area, w0, w1, w2, topLeft0, topLeft1, topLeft2)) {
+        if (!isInside(positiveArea, w0, w1, w2, topLeft0, topLeft1, topLeft2)) {
           continue;
         }
 
@@ -937,9 +938,9 @@ public final class InventoryItemIconRenderer {
     return (outAlpha << 24) | (outR << 16) | (outG << 8) | outB;
   }
 
-  private static boolean isInside(float area, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
+  private static boolean isInside(boolean positiveArea, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
     var epsilon = 1.0E-5F;
-    if (area > 0.0F) {
+    if (positiveArea) {
       return edgeInclusive(w0, topLeft0, epsilon) && edgeInclusive(w1, topLeft1, epsilon) && edgeInclusive(w2, topLeft2, epsilon);
     }
     return edgeInclusive(-w0, topLeft0, epsilon) && edgeInclusive(-w1, topLeft1, epsilon) && edgeInclusive(-w2, topLeft2, epsilon);

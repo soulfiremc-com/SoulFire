@@ -241,7 +241,11 @@ public final class RasterPipeline {
       current.a() + (next.a() - current.a()) * t,
       current.r() + (next.r() - current.r()) * t,
       current.g() + (next.g() - current.g()) * t,
-      current.b() + (next.b() - current.b()) * t
+      current.b() + (next.b() - current.b()) * t,
+      current.overlayA() + (next.overlayA() - current.overlayA()) * t,
+      current.overlayR() + (next.overlayR() - current.overlayR()) * t,
+      current.overlayG() + (next.overlayG() - current.overlayG()) * t,
+      current.overlayB() + (next.overlayB() - current.overlayB()) * t
     );
   }
 
@@ -257,6 +261,7 @@ public final class RasterPipeline {
     }
     var clip = projection.transform(view);
     var color = vertex.color();
+    var overlayColor = vertex.overlayColor();
     return new ClipVertex(
       clip.x,
       clip.y,
@@ -267,7 +272,11 @@ public final class RasterPipeline {
       (color >>> 24) & 0xFF,
       (color >>> 16) & 0xFF,
       (color >>> 8) & 0xFF,
-      color & 0xFF
+      color & 0xFF,
+      (overlayColor >>> 24) & 0xFF,
+      (overlayColor >>> 16) & 0xFF,
+      (overlayColor >>> 8) & 0xFF,
+      overlayColor & 0xFF
     );
   }
 
@@ -289,7 +298,11 @@ public final class RasterPipeline {
       vertex.a() * inverseW,
       vertex.r() * inverseW,
       vertex.g() * inverseW,
-      vertex.b() * inverseW
+      vertex.b() * inverseW,
+      vertex.overlayA() * inverseW,
+      vertex.overlayR() * inverseW,
+      vertex.overlayG() * inverseW,
+      vertex.overlayB() * inverseW
     );
   }
 
@@ -303,7 +316,11 @@ public final class RasterPipeline {
       && Float.isFinite(vertex.a())
       && Float.isFinite(vertex.r())
       && Float.isFinite(vertex.g())
-      && Float.isFinite(vertex.b());
+      && Float.isFinite(vertex.b())
+      && Float.isFinite(vertex.overlayA())
+      && Float.isFinite(vertex.overlayR())
+      && Float.isFinite(vertex.overlayG())
+      && Float.isFinite(vertex.overlayB());
   }
 
   private boolean isFinite(ProjectedVertex vertex) {
@@ -316,7 +333,11 @@ public final class RasterPipeline {
       && Float.isFinite(vertex.aOverW())
       && Float.isFinite(vertex.rOverW())
       && Float.isFinite(vertex.gOverW())
-      && Float.isFinite(vertex.bOverW());
+      && Float.isFinite(vertex.bOverW())
+      && Float.isFinite(vertex.overlayAOverW())
+      && Float.isFinite(vertex.overlayROverW())
+      && Float.isFinite(vertex.overlayGOverW())
+      && Float.isFinite(vertex.overlayBOverW());
   }
 
   private float sortDepth(Camera camera, RenderQuad quad) {
@@ -348,9 +369,10 @@ public final class RasterPipeline {
       return;
     }
     var fragmentDepthBias = fragmentDepthBias(triangle, material);
-    var topLeft0 = isTopLeft(v1.x(), v1.y(), v2.x(), v2.y());
-    var topLeft1 = isTopLeft(v2.x(), v2.y(), v0.x(), v0.y());
-    var topLeft2 = isTopLeft(v0.x(), v0.y(), v1.x(), v1.y());
+    var positiveArea = area > 0.0F;
+    var topLeft0 = positiveArea ? isTopLeft(v1.x(), v1.y(), v2.x(), v2.y()) : isTopLeft(v2.x(), v2.y(), v1.x(), v1.y());
+    var topLeft1 = positiveArea ? isTopLeft(v2.x(), v2.y(), v0.x(), v0.y()) : isTopLeft(v0.x(), v0.y(), v2.x(), v2.y());
+    var topLeft2 = positiveArea ? isTopLeft(v0.x(), v0.y(), v1.x(), v1.y()) : isTopLeft(v1.x(), v1.y(), v0.x(), v0.y());
 
     var width = camera.width();
     var colorBuffer = buffers.colorBuffer();
@@ -370,7 +392,7 @@ public final class RasterPipeline {
         var w0 = edge(v1.x(), v1.y(), v2.x(), v2.y(), sampleX, sampleY);
         var w1 = edge(v2.x(), v2.y(), v0.x(), v0.y(), sampleX, sampleY);
         var w2 = edge(v0.x(), v0.y(), v1.x(), v1.y(), sampleX, sampleY);
-        if (!isInside(area, w0, w1, w2, topLeft0, topLeft1, topLeft2)) {
+        if (!isInside(positiveArea, w0, w1, w2, topLeft0, topLeft1, topLeft2)) {
           continue;
         }
 
@@ -408,12 +430,16 @@ public final class RasterPipeline {
           animationTick
         );
         var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
-        var color = modulate(modulate(sampled, vertexColor), material.color());
+        var color = applyOverlay(
+          modulate(modulate(sampled, vertexColor), material.color()),
+          interpolatedOverlayColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
+        );
         var alpha = (color >>> 24) & 0xFF;
         if (alpha == 0) {
           continue;
         }
-        if (material.alphaCutoutThreshold() > 0 && alpha < material.alphaCutoutThreshold()) {
+        var alphaCutoutValue = material.alphaCutoutSource() == RenderMaterial.AlphaCutoutSource.TEXTURE ? (sampled >>> 24) & 0xFF : alpha;
+        if (material.alphaCutoutThreshold() > 0 && alphaCutoutValue < material.alphaCutoutThreshold()) {
           continue;
         }
 
@@ -479,9 +505,39 @@ public final class RasterPipeline {
     return Math.clamp(Math.round(value), 0, 255);
   }
 
-  private boolean isInside(float area, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
+  private int interpolatedOverlayColor(
+    float weight0,
+    float weight1,
+    float weight2,
+    float inverseW,
+    ProjectedVertex v0,
+    ProjectedVertex v1,
+    ProjectedVertex v2
+  ) {
+    var a = colorChannel((weight0 * v0.overlayAOverW() + weight1 * v1.overlayAOverW() + weight2 * v2.overlayAOverW()) / inverseW);
+    var r = colorChannel((weight0 * v0.overlayROverW() + weight1 * v1.overlayROverW() + weight2 * v2.overlayROverW()) / inverseW);
+    var g = colorChannel((weight0 * v0.overlayGOverW() + weight1 * v1.overlayGOverW() + weight2 * v2.overlayGOverW()) / inverseW);
+    var b = colorChannel((weight0 * v0.overlayBOverW() + weight1 * v1.overlayBOverW() + weight2 * v2.overlayBOverW()) / inverseW);
+    return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private int applyOverlay(int color, int overlayColor) {
+    var overlayAlpha = (overlayColor >>> 24) & 0xFF;
+    if (overlayAlpha == 255) {
+      return color;
+    }
+
+    var baseWeight = overlayAlpha / 255.0F;
+    var overlayWeight = 1.0F - baseWeight;
+    var r = colorChannel(((overlayColor >> 16) & 0xFF) * overlayWeight + ((color >> 16) & 0xFF) * baseWeight);
+    var g = colorChannel(((overlayColor >> 8) & 0xFF) * overlayWeight + ((color >> 8) & 0xFF) * baseWeight);
+    var b = colorChannel((overlayColor & 0xFF) * overlayWeight + (color & 0xFF) * baseWeight);
+    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+  }
+
+  private boolean isInside(boolean positiveArea, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
     var epsilon = 1.0E-5F;
-    if (area > 0.0F) {
+    if (positiveArea) {
       return edgeInclusive(w0, topLeft0, epsilon) && edgeInclusive(w1, topLeft1, epsilon) && edgeInclusive(w2, topLeft2, epsilon);
     }
     return edgeInclusive(-w0, topLeft0, epsilon) && edgeInclusive(-w1, topLeft1, epsilon) && edgeInclusive(-w2, topLeft2, epsilon);
@@ -633,5 +689,20 @@ public final class RasterPipeline {
     UNTRACKED
   }
 
-  private record ClipVertex(float x, float y, float z, float w, float u, float v, float a, float r, float g, float b) {}
+  private record ClipVertex(
+    float x,
+    float y,
+    float z,
+    float w,
+    float u,
+    float v,
+    float a,
+    float r,
+    float g,
+    float b,
+    float overlayA,
+    float overlayR,
+    float overlayG,
+    float overlayB
+  ) {}
 }
