@@ -20,12 +20,14 @@ package com.soulfiremc.server.bot;
 import com.google.common.collect.Queues;
 import com.google.gson.JsonElement;
 import com.mojang.authlib.minecraft.UserApiService;
+import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import com.soulfiremc.mod.access.IMinecraft;
 import com.soulfiremc.mod.util.SFConstants;
 import com.soulfiremc.mod.util.SFModHelpers;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.SoulFireScheduler;
 import com.soulfiremc.server.account.MinecraftAccount;
+import com.soulfiremc.server.account.MinecraftAuthUserApiService;
 import com.soulfiremc.server.account.service.BedrockData;
 import com.soulfiremc.server.account.service.OfflineJavaData;
 import com.soulfiremc.server.account.service.OnlineChainJavaData;
@@ -165,7 +167,13 @@ public final class BotConnection {
   @SneakyThrows
   private Minecraft createMinecraftCopy(MinecraftAccount minecraftAccount) {
     var newInstance = SFModHelpers.deepCopy(SFConstants.BASE_MC_INSTANCE);
-    var userApiService = UserApiService.OFFLINE;
+    var javaProxy = proxy != null
+      ? new Proxy(
+      proxy.type() == ProxyType.HTTP ? Proxy.Type.HTTP : Proxy.Type.SOCKS,
+      proxy.address())
+      : Proxy.NO_PROXY;
+    var authSession = createAuthSession(minecraftAccount, javaProxy);
+    var userApiService = authSession.userApiService();
 
     //noinspection DataFlowIssue
     newInstance.packetProcessor = new PacketProcessor(null); // Null until we spawn game thread
@@ -176,13 +184,7 @@ public final class BotConnection {
     newInstance.user = new User(
       minecraftAccount.lastKnownName(),
       minecraftAccount.profileId(),
-      switch (minecraftAccount.accountData()) {
-        case BedrockData ignored -> "bedrock";
-        case OfflineJavaData ignored -> "offline";
-        case OnlineChainJavaData onlineChainJavaData -> onlineChainJavaData.getJavaAuthManager(proxy).getMinecraftToken().getUpToDateUnchecked().getToken();
-        case OnlineSimpleJavaData onlineSimpleJavaData -> onlineSimpleJavaData.accessToken();
-        case TheAlteningJavaData theAlteningJavaData -> theAlteningJavaData.accessToken();
-      },
+      authSession.accessToken(),
       Optional.empty(),
       Optional.empty()
     );
@@ -194,11 +196,6 @@ public final class BotConnection {
     newInstance.reportingContext = ReportingContext.create(ReportEnvironment.local(), userApiService);
     newInstance.deltaTracker = new DeltaTracker.Timer(20.0F, 0L, newInstance::getTickTargetMillis);
     newInstance.reloadStateTracker = new ResourceLoadStateTracker();
-    var javaProxy = proxy != null
-      ? new Proxy(
-      proxy.type() == ProxyType.HTTP ? Proxy.Type.HTTP : Proxy.Type.SOCKS,
-      proxy.address())
-      : Proxy.NO_PROXY;
     var userData = new GameConfig.UserData(newInstance.user, javaProxy);
     newInstance.downloadedPackSource = new DownloadedPackSource(
       newInstance,
@@ -210,6 +207,25 @@ public final class BotConnection {
 
     return newInstance;
   }
+
+  private AuthSession createAuthSession(MinecraftAccount minecraftAccount, Proxy javaProxy) {
+    return switch (minecraftAccount.accountData()) {
+      case BedrockData ignored -> new AuthSession(UserApiService.OFFLINE, "bedrock");
+      case OfflineJavaData ignored -> new AuthSession(UserApiService.OFFLINE, "offline");
+      case OnlineChainJavaData onlineChainJavaData -> {
+        var authManager = onlineChainJavaData.getJavaAuthManager(proxy);
+        yield new AuthSession(
+          new MinecraftAuthUserApiService(authManager),
+          authManager.getMinecraftToken().getUpToDateUnchecked().getToken());
+      }
+      case OnlineSimpleJavaData onlineSimpleJavaData -> new AuthSession(
+        new YggdrasilAuthenticationService(javaProxy).createUserApiService(onlineSimpleJavaData.accessToken()),
+        onlineSimpleJavaData.accessToken());
+      case TheAlteningJavaData theAlteningJavaData -> new AuthSession(UserApiService.OFFLINE, theAlteningJavaData.accessToken());
+    };
+  }
+
+  private record AuthSession(UserApiService userApiService, String accessToken) {}
 
   public CompletableFuture<?> connect() {
     return scheduler.runAsync(
