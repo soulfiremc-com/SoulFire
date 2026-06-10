@@ -56,12 +56,12 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
-  void keepsBinaryAlphaBlendedTexturesOnCutoutPath() {
+  void keepsBinaryAlphaBlendedRenderTypesOnTranslucentPath() {
     var texture = textureWithAlpha(0);
     var renderType = RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("skins/test"));
 
     assertEquals(
-      RendererAssets.AlphaMode.CUTOUT,
+      RendererAssets.AlphaMode.TRANSLUCENT,
       VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF)
     );
   }
@@ -86,17 +86,16 @@ class RendererAssetsRuntimeTextureTest {
       }
     }
     var texture = RendererAssets.TextureImage.from(image, null);
-    var renderType = RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("skins/test"));
     var opaqueUv = new float[]{0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.5F, 0.0F, 0.5F};
     var translucentUv = new float[]{0.0F, 0.5F, 1.0F, 0.5F, 1.0F, 1.0F, 0.0F, 1.0F};
 
     assertEquals(
       RendererAssets.AlphaMode.OPAQUE,
-      VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF, opaqueUv)
+      VanillaSubmitCollector.alphaMode(null, texture, 0xFFFFFFFF, opaqueUv)
     );
     assertEquals(
-      RendererAssets.AlphaMode.TRANSLUCENT,
-      VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF, translucentUv)
+      RendererAssets.AlphaMode.CUTOUT,
+      VanillaSubmitCollector.alphaMode(null, texture, 0xFFFFFFFF, translucentUv)
     );
   }
 

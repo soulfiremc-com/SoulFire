@@ -21,6 +21,8 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.blaze3d.platform.DestFactor;
+import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -244,7 +246,10 @@ class RasterPipelineTest {
         true,
         RenderMaterial.BlendState.REPLACE,
         ColorTargetState.WRITE_NONE,
-        RenderMaterial.UvTransform.IDENTITY
+        RenderMaterial.UvTransform.IDENTITY,
+        false,
+        0,
+        1.0F
       )
     ));
     scene.add(quad(-1.0F, -1.0F, 8.0F, 1.0F, 1.0F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
@@ -277,6 +282,79 @@ class RasterPipelineTest {
     var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
     assertChannelNear((color >> 16) & 0xFF, 128, 3);
     assertChannelNear(color & 0xFF, 64, 3);
+  }
+
+  @Test
+  void sourceAlphaSaturateUsesOpaqueAlphaScaleForAlphaChannel() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithBlendState(
+        RenderMaterial.create(solidTexture(0x80FF0000), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F),
+        new RenderMaterial.BlendState(SourceFactor.SRC_ALPHA_SATURATE, DestFactor.ZERO, SourceFactor.SRC_ALPHA_SATURATE, DestFactor.ZERO)
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0x00000000);
+
+    var alpha = (buffers.image().getRGB(WIDTH / 2, HEIGHT / 2) >>> 24) & 0xFF;
+    assertChannelNear(alpha, 128, 3);
+  }
+
+  @Test
+  void oneMinusConstantBlendFactorsUseDefaultZeroBlendColor() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithBlendState(
+        RenderMaterial.create(solidTexture(0x80A04020), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F),
+        new RenderMaterial.BlendState(
+          SourceFactor.ONE_MINUS_CONSTANT_COLOR,
+          DestFactor.ZERO,
+          SourceFactor.ONE_MINUS_CONSTANT_ALPHA,
+          DestFactor.ZERO
+        )
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0x00000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0x80A04020, 3);
+  }
+
+  @Test
+  void opaqueAlphaMaterialStillUsesBlendFunction() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.2F, -1.2F, 6.0F, 1.2F, 1.2F, solidTexture(0xFF000020), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithBlendState(
+        RenderMaterial.create(solidTexture(0xFF101000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F),
+        RenderMaterial.BlendState.from(BlendFunction.ADDITIVE)
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF101020, 3);
   }
 
   @Test
@@ -329,6 +407,60 @@ class RasterPipelineTest {
 
     var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
     assertTrue(((color >> 8) & 0xFF) > ((color >> 16) & 0xFF));
+  }
+
+  @Test
+  void orderedTranslucentMaterialsPreserveSubmissionOrder() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithSortOnUpload(translucentMaterial(solidTexture(0xFFFF0000), false), false)
+    ));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 8.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 8.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 8.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 8.0F, 1.0F, 1.0F),
+      materialWithSortOnUpload(translucentMaterial(solidTexture(0xFF0000FF), false), false)
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertTrue((color & 0xFF) > ((color >> 16) & 0xFF), () -> "expected later blue quad to remain on top but was 0x" + Integer.toHexString(color));
+  }
+
+  @Test
+  void sortableTranslucentMaterialsDoNotSortAcrossUploadGroups() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithSortGroup(translucentMaterial(solidTexture(0xFFFF0000), false), 1)
+    ));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 8.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 8.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 8.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 8.0F, 1.0F, 1.0F),
+      materialWithSortGroup(translucentMaterial(solidTexture(0xFF0000FF), false), 2)
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertTrue((color & 0xFF) > ((color >> 16) & 0xFF), () -> "expected second upload group to stay later but was 0x" + Integer.toHexString(color));
   }
 
   @Test
@@ -489,6 +621,31 @@ class RasterPipelineTest {
   }
 
   @Test
+  void viewLayeringScaleMovesGeometryTowardCameraBeforeProjection() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      materialWithDepthTestAndViewScale(
+        RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F),
+        RenderMaterial.DepthTest.LESS_THAN,
+        true,
+        1.0F - 1.0F / 4096.0F
+      )
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
   void cameraFacingBillboardKeepsTextureOrientationFacingCamera() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -626,7 +783,10 @@ class RasterPipelineTest {
       depthWrite,
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),
       ColorTargetState.WRITE_ALL,
-      RenderMaterial.UvTransform.IDENTITY
+      RenderMaterial.UvTransform.IDENTITY,
+      true,
+      0,
+      1.0F
     );
   }
 
@@ -644,7 +804,36 @@ class RasterPipelineTest {
       depthWrite,
       material.blendState(),
       material.colorWriteMask(),
-      material.uvTransform()
+      material.uvTransform(),
+      material.sortOnUpload(),
+      material.sortGroup(),
+      material.viewScale()
+    );
+  }
+
+  private static RenderMaterial materialWithDepthTestAndViewScale(
+    RenderMaterial material,
+    RenderMaterial.DepthTest depthTest,
+    boolean depthWrite,
+    float viewScale
+  ) {
+    return new RenderMaterial(
+      material.texture(),
+      material.alphaMode(),
+      material.color(),
+      material.doubleSided(),
+      material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
+      material.alphaCutoutThreshold(),
+      depthTest,
+      depthWrite,
+      material.blendState(),
+      material.colorWriteMask(),
+      material.uvTransform(),
+      material.sortOnUpload(),
+      material.sortGroup(),
+      viewScale
     );
   }
 
@@ -668,7 +857,52 @@ class RasterPipelineTest {
       material.depthWrite(),
       blendState,
       material.colorWriteMask(),
-      material.uvTransform()
+      material.uvTransform(),
+      material.sortOnUpload(),
+      material.sortGroup(),
+      material.viewScale()
+    );
+  }
+
+  private static RenderMaterial materialWithSortOnUpload(RenderMaterial material, boolean sortOnUpload) {
+    return new RenderMaterial(
+      material.texture(),
+      material.alphaMode(),
+      material.color(),
+      material.doubleSided(),
+      material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
+      material.alphaCutoutThreshold(),
+      material.depthTest(),
+      material.depthWrite(),
+      material.blendState(),
+      material.colorWriteMask(),
+      material.uvTransform(),
+      sortOnUpload,
+      material.sortGroup(),
+      material.viewScale()
+    );
+  }
+
+  private static RenderMaterial materialWithSortGroup(RenderMaterial material, int sortGroup) {
+    return new RenderMaterial(
+      material.texture(),
+      material.alphaMode(),
+      material.color(),
+      material.doubleSided(),
+      material.depthBias(),
+      material.polygonOffsetFactor(),
+      material.polygonOffsetUnits(),
+      material.alphaCutoutThreshold(),
+      material.depthTest(),
+      material.depthWrite(),
+      material.blendState(),
+      material.colorWriteMask(),
+      material.uvTransform(),
+      material.sortOnUpload(),
+      sortGroup,
+      material.viewScale()
     );
   }
 
@@ -686,7 +920,10 @@ class RasterPipelineTest {
       material.depthWrite(),
       material.blendState(),
       material.colorWriteMask(),
-      uvTransform
+      uvTransform,
+      material.sortOnUpload(),
+      material.sortGroup(),
+      material.viewScale()
     );
   }
 

@@ -302,7 +302,10 @@ public final class CloudMeshCollector {
       true,
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),
       ColorTargetState.WRITE_ALL,
-      RenderMaterial.UvTransform.IDENTITY
+      RenderMaterial.UvTransform.IDENTITY,
+      false,
+      0,
+      1.0F
     );
   }
 
@@ -334,9 +337,9 @@ public final class CloudMeshCollector {
         }
 
         var north = isCellEmpty(image.getRGB(x, Math.floorMod(z - 1, height)));
-        var east = isCellEmpty(image.getRGB(Math.floorMod(x + 1, height), z));
+        var east = isCellEmpty(image.getRGB(Math.floorMod(x + 1, width), z));
         var south = isCellEmpty(image.getRGB(x, Math.floorMod(z + 1, height)));
-        var west = isCellEmpty(image.getRGB(Math.floorMod(x - 1, height), z));
+        var west = isCellEmpty(image.getRGB(Math.floorMod(x - 1, width), z));
         cells[x + z * width] = packCellData(color, north, east, south, west);
       }
     }

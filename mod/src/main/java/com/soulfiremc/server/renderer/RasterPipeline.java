@@ -69,7 +69,7 @@ public final class RasterPipeline {
       return;
     }
     if (sortBackToFront) {
-      triangles.sort(Comparator.comparing(ProjectedTriangle::sortDepth).reversed());
+      sortSortableTranslucentRuns(triangles);
     }
 
     var width = camera.width();
@@ -124,12 +124,14 @@ public final class RasterPipeline {
   }
 
   private void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
-    var viewProjection = camera.viewProjectionMatrix();
+    var viewRotation = camera.viewRotationMatrix();
+    var projection = camera.projectionMatrix();
+    var material = quad.material();
     var viewVertices = new ClipVertex[]{
-      toClipVertex(viewProjection, quad.v0()),
-      toClipVertex(viewProjection, quad.v1()),
-      toClipVertex(viewProjection, quad.v2()),
-      toClipVertex(viewProjection, quad.v3())
+      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v0()),
+      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v1()),
+      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v2()),
+      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v3())
     };
     for (var vertex : viewVertices) {
       if (!isFinite(vertex)) {
@@ -155,9 +157,29 @@ public final class RasterPipeline {
         projected[0],
         projected[i],
         projected[i + 1],
-        quad.material(),
+        material,
         sortDepth
       ));
+    }
+  }
+
+  private void sortSortableTranslucentRuns(ArrayList<ProjectedTriangle> triangles) {
+    var runStart = -1;
+    var sortGroup = 0;
+    for (var i = 0; i <= triangles.size(); i++) {
+      var sortable = i < triangles.size() && triangles.get(i).material().sortOnUpload();
+      var sameGroup = sortable && (runStart < 0 || triangles.get(i).material().sortGroup() == sortGroup);
+      if (sortable && runStart < 0) {
+        runStart = i;
+        sortGroup = triangles.get(i).material().sortGroup();
+      } else if (sortable && !sameGroup) {
+        triangles.subList(runStart, i).sort(Comparator.comparing(ProjectedTriangle::sortDepth).reversed());
+        runStart = i;
+        sortGroup = triangles.get(i).material().sortGroup();
+      } else if (!sortable && runStart >= 0) {
+        triangles.subList(runStart, i).sort(Comparator.comparing(ProjectedTriangle::sortDepth).reversed());
+        runStart = -1;
+      }
     }
   }
 
@@ -223,8 +245,17 @@ public final class RasterPipeline {
     );
   }
 
-  private ClipVertex toClipVertex(Matrix4f viewProjection, RenderVertex vertex) {
-    var clip = viewProjection.transform(new Vector4f(vertex.x(), vertex.y(), vertex.z(), 1.0F));
+  private ClipVertex toClipVertex(Camera camera, Matrix4f viewRotation, Matrix4f projection, float viewScale, RenderVertex vertex) {
+    var view = viewRotation.transform(new Vector4f(
+      (float) (vertex.x() - camera.eyeX()),
+      (float) (vertex.y() - camera.eyeY()),
+      (float) (vertex.z() - camera.eyeZ()),
+      1.0F
+    ));
+    if (viewScale != 1.0F) {
+      view.mul(viewScale, viewScale, viewScale, 1.0F);
+    }
+    var clip = projection.transform(view);
     var color = vertex.color();
     return new ClipVertex(
       clip.x,
@@ -289,10 +320,10 @@ public final class RasterPipeline {
   }
 
   private float sortDepth(Camera camera, RenderQuad quad) {
-    var x = (quad.v0().x() + quad.v1().x() + quad.v2().x() + quad.v3().x()) * 0.25F - (float) camera.eyeX();
-    var y = (quad.v0().y() + quad.v1().y() + quad.v2().y() + quad.v3().y()) * 0.25F - (float) camera.eyeY();
-    var z = (quad.v0().z() + quad.v1().z() + quad.v2().z() + quad.v3().z()) * 0.25F - (float) camera.eyeZ();
-    return x * x + y * y + z * z;
+    var x = (quad.v0().x() + quad.v2().x()) * 0.5 - camera.eyeX();
+    var y = (quad.v0().y() + quad.v2().y()) * 0.5 - camera.eyeY();
+    var z = (quad.v0().z() + quad.v2().z()) * 0.5 - camera.eyeZ();
+    return (float) Math.min(x * x + y * y + z * z, Float.MAX_VALUE);
   }
 
   private void rasterizeTriangle(
@@ -386,7 +417,7 @@ public final class RasterPipeline {
           continue;
         }
 
-        if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT) {
+        if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT && !material.blendState().blends()) {
           if (material.depthWrite()) {
             depthBuffer[rasterIndex] = depth;
           }
@@ -518,10 +549,10 @@ public final class RasterPipeline {
     var srcR = (srcColor >> 16) & 0xFF;
     var srcG = (srcColor >> 8) & 0xFF;
     var srcB = srcColor & 0xFF;
-    var outR = blendChannel(srcR, dstR, srcR, dstR, srcA, dstA, blendState.sourceColor(), blendState.destColor());
-    var outG = blendChannel(srcG, dstG, srcG, dstG, srcA, dstA, blendState.sourceColor(), blendState.destColor());
-    var outB = blendChannel(srcB, dstB, srcB, dstB, srcA, dstA, blendState.sourceColor(), blendState.destColor());
-    var outA = blendChannel(srcA, dstA, srcA, dstA, srcA, dstA, blendState.sourceAlpha(), blendState.destAlpha());
+    var outR = blendChannel(srcR, dstR, srcR, dstR, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
+    var outG = blendChannel(srcG, dstG, srcG, dstG, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
+    var outB = blendChannel(srcB, dstB, srcB, dstB, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
+    var outA = blendChannel(srcA, dstA, srcA, dstA, srcA, dstA, blendState.sourceAlpha(), blendState.destAlpha(), true);
     return (outA << 24) | (outR << 16) | (outG << 8) | outB;
   }
 
@@ -533,14 +564,15 @@ public final class RasterPipeline {
     int srcAlpha,
     int dstAlpha,
     SourceFactor sourceFactor,
-    DestFactor destFactor
+    DestFactor destFactor,
+    boolean alphaChannel
   ) {
-    var srcScale = sourceFactor(sourceFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha);
+    var srcScale = sourceFactor(sourceFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha, alphaChannel);
     var dstScale = destFactor(destFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha);
     return Math.clamp(Math.round(srcChannel * srcScale + dstChannel * dstScale), 0, 255);
   }
 
-  private float sourceFactor(SourceFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha) {
+  private float sourceFactor(SourceFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha, boolean alphaChannel) {
     return switch (factor) {
       case ZERO -> 0.0F;
       case ONE -> 1.0F;
@@ -552,8 +584,9 @@ public final class RasterPipeline {
       case ONE_MINUS_SRC_ALPHA -> 1.0F - srcAlpha / 255.0F;
       case DST_ALPHA -> dstAlpha / 255.0F;
       case ONE_MINUS_DST_ALPHA -> 1.0F - dstAlpha / 255.0F;
-      case SRC_ALPHA_SATURATE -> Math.min(srcAlpha / 255.0F, 1.0F - dstAlpha / 255.0F);
-      case CONSTANT_COLOR, ONE_MINUS_CONSTANT_COLOR, CONSTANT_ALPHA, ONE_MINUS_CONSTANT_ALPHA -> 0.0F;
+      case SRC_ALPHA_SATURATE -> alphaChannel ? 1.0F : Math.min(srcAlpha / 255.0F, 1.0F - dstAlpha / 255.0F);
+      case CONSTANT_COLOR, CONSTANT_ALPHA -> 0.0F;
+      case ONE_MINUS_CONSTANT_COLOR, ONE_MINUS_CONSTANT_ALPHA -> 1.0F;
     };
   }
 
@@ -569,7 +602,8 @@ public final class RasterPipeline {
       case ONE_MINUS_SRC_ALPHA -> 1.0F - srcAlpha / 255.0F;
       case DST_ALPHA -> dstAlpha / 255.0F;
       case ONE_MINUS_DST_ALPHA -> 1.0F - dstAlpha / 255.0F;
-      case CONSTANT_COLOR, ONE_MINUS_CONSTANT_COLOR, CONSTANT_ALPHA, ONE_MINUS_CONSTANT_ALPHA -> 0.0F;
+      case CONSTANT_COLOR, CONSTANT_ALPHA -> 0.0F;
+      case ONE_MINUS_CONSTANT_COLOR, ONE_MINUS_CONSTANT_ALPHA -> 1.0F;
     };
   }
 

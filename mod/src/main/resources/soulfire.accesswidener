@@ -72,6 +72,9 @@ accessible field net/minecraft/client/renderer/block/BlockModelRenderState model
 accessible class net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding
 accessible field net/minecraft/client/renderer/rendertype/RenderType state Lnet/minecraft/client/renderer/rendertype/RenderSetup;
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup textures Ljava/util/Map;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup textureTransform Lnet/minecraft/client/renderer/rendertype/TextureTransform;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup layeringTransform Lnet/minecraft/client/renderer/rendertype/LayeringTransform;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup useLightmap Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location Lnet/minecraft/resources/Identifier;
 
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;

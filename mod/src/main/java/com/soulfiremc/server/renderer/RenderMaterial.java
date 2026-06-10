@@ -23,9 +23,12 @@ import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.client.renderer.rendertype.RenderType;
 
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4fc;
 
 /// Raster state shared by all triangles emitted from one source primitive.
 public record RenderMaterial(
@@ -41,8 +44,13 @@ public record RenderMaterial(
   boolean depthWrite,
   BlendState blendState,
   int colorWriteMask,
-  UvTransform uvTransform
+  UvTransform uvTransform,
+  boolean sortOnUpload,
+  int sortGroup,
+  float viewScale
 ) {
+  private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
+
   public static RenderMaterial create(
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
@@ -74,7 +82,10 @@ public record RenderMaterial(
       defaultDepthWrite(alphaMode),
       defaultBlendState(alphaMode),
       ColorTargetState.WRITE_ALL,
-      UvTransform.IDENTITY
+      UvTransform.IDENTITY,
+      defaultSortOnUpload(alphaMode),
+      0,
+      1.0F
     );
   }
 
@@ -92,11 +103,18 @@ public record RenderMaterial(
       depthWrite(depthStencilState),
       blendState,
       colorWriteMask,
-      uvTransform
+      uvTransform,
+      sortOnUpload,
+      sortGroup,
+      viewScale
     );
   }
 
   public RenderMaterial withRenderType(RenderType renderType) {
+    return withRenderType(renderType, System.identityHashCode(renderType));
+  }
+
+  public RenderMaterial withRenderType(RenderType renderType, int sortGroup) {
     var pipeline = renderType.pipeline();
     var colorTargetState = pipeline.getColorTargetState();
     return new RenderMaterial(
@@ -112,7 +130,10 @@ public record RenderMaterial(
       depthWrite(pipeline.getDepthStencilState()),
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
       colorTargetState.writeMask(),
-      uvTransform
+      UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
+      renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
+      sortGroup,
+      viewScale(renderType)
     );
   }
 
@@ -130,6 +151,21 @@ public record RenderMaterial(
 
   public static BlendState defaultBlendState(RendererAssets.AlphaMode alphaMode) {
     return alphaMode == RendererAssets.AlphaMode.TRANSLUCENT ? BlendState.from(BlendFunction.TRANSLUCENT) : BlendState.REPLACE;
+  }
+
+  public static boolean defaultSortOnUpload(RendererAssets.AlphaMode alphaMode) {
+    return alphaMode == RendererAssets.AlphaMode.TRANSLUCENT;
+  }
+
+  private static float viewScale(RenderType renderType) {
+    var layering = renderType.state.layeringTransform;
+    if (layering == LayeringTransform.VIEW_OFFSET_Z_LAYERING) {
+      return 1.0F - PERSPECTIVE_LAYERING_UNIT;
+    }
+    if (layering == LayeringTransform.VIEW_OFFSET_Z_LAYERING_FORWARD) {
+      return 1.0F + PERSPECTIVE_LAYERING_UNIT;
+    }
+    return 1.0F;
   }
 
   private static DepthTest depthTest(@Nullable DepthStencilState depthStencilState) {
@@ -269,20 +305,33 @@ public record RenderMaterial(
       );
     }
 
+    public static UvTransform fromMatrix(Matrix4fc matrix) {
+      return new UvTransform(
+        matrix.m00(),
+        matrix.m10(),
+        matrix.m01(),
+        matrix.m11(),
+        matrix.m30(),
+        matrix.m31(),
+        0L,
+        0L
+      );
+    }
+
     public float u(float u, float v, long animationTick) {
-      return u * uFromU + v * uFromV + uOffsetScale * offset(animationTick, uPeriodTicks);
+      return u * uFromU + v * uFromV + animatedOffset(uOffsetScale, animationTick, uPeriodTicks);
     }
 
     public float v(float u, float v, long animationTick) {
-      return u * vFromU + v * vFromV + vOffsetScale * offset(animationTick, vPeriodTicks);
+      return u * vFromU + v * vFromV + animatedOffset(vOffsetScale, animationTick, vPeriodTicks);
     }
 
-    private static float offset(long animationTick, long periodTicks) {
+    private static float animatedOffset(float offsetScale, long animationTick, long periodTicks) {
       if (periodTicks <= 0L) {
-        return 0.0F;
+        return offsetScale;
       }
 
-      return Math.floorMod(animationTick, periodTicks) / (float) periodTicks;
+      return offsetScale * Math.floorMod(animationTick, periodTicks) / (float) periodTicks;
     }
   }
 }

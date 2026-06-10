@@ -333,7 +333,10 @@ public final class SkyRenderer {
       false,
       blendState,
       ColorTargetState.WRITE_ALL,
-      RenderMaterial.UvTransform.IDENTITY
+      RenderMaterial.UvTransform.IDENTITY,
+      false,
+      0,
+      1.0F
     );
   }
 

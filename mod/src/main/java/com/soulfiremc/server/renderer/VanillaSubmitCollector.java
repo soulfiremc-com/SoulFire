@@ -86,6 +86,7 @@ import org.joml.Vector3fc;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,16 +105,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private final RenderContext ctx;
   private final RendererAssets assets;
   private final NavigableMap<Integer, SceneData.Builder> builders;
+  private final SortGroupRegistry sortGroups;
   private final SceneData.Builder builder;
 
   private VanillaSubmitCollector(RenderContext ctx) {
-    this(ctx, new TreeMap<>(), 0);
+    this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0);
   }
 
-  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, SceneData.Builder> builders, int order) {
+  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, SceneData.Builder> builders, SortGroupRegistry sortGroups, int order) {
     this.ctx = ctx;
     this.assets = RendererAssets.instance();
     this.builders = builders;
+    this.sortGroups = sortGroups;
     this.builder = builders.computeIfAbsent(order, _ -> SceneData.builder());
   }
 
@@ -280,7 +283,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public OrderedSubmitNodeCollector order(int order) {
-    return builder == builders.get(order) ? this : new VanillaSubmitCollector(ctx, builders, order);
+    return builder == builders.get(order) ? this : new VanillaSubmitCollector(ctx, builders, sortGroups, order);
   }
 
   @Override
@@ -1005,7 +1008,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   static RendererAssets.AlphaMode alphaMode(@Nullable RenderType renderType, RendererAssets.TextureImage texture, int color, @Nullable float[] uv) {
     var coverage = uv != null ? texture.alphaCoverage(uv) : new RendererAssets.TextureImage.AlphaCoverage(texture.hasAlpha(), texture.hasTranslucentPixels());
     var alpha = (color >>> 24) & 0xFF;
-    if (renderType != null && renderType.hasBlending() && (coverage.hasTranslucentPixels() || isTranslucentAlpha(alpha))) {
+    if (renderType != null && renderType.hasBlending()) {
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return coverage.hasAlpha() || alpha < 255 ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
@@ -1013,21 +1016,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private static RendererAssets.AlphaMode alphaMode(@Nullable RenderType renderType, RendererAssets.TextureImage texture, int[] colors, float[] uv) {
     var coverage = texture.alphaCoverage(uv);
-    if (renderType != null && renderType.hasBlending() && (coverage.hasTranslucentPixels() || canInterpolateTranslucentAlpha(colors))) {
+    if (renderType != null && renderType.hasBlending()) {
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return coverage.hasAlpha() || hasNonOpaqueAlpha(colors) ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
-  }
-
-  private static boolean canInterpolateTranslucentAlpha(int[] colors) {
-    var minAlpha = 255;
-    var maxAlpha = 0;
-    for (var color : colors) {
-      var alpha = (color >>> 24) & 0xFF;
-      minAlpha = Math.min(minAlpha, alpha);
-      maxAlpha = Math.max(maxAlpha, alpha);
-    }
-    return isTranslucentAlpha(minAlpha) || isTranslucentAlpha(maxAlpha) || (minAlpha == 0 && maxAlpha == 255);
   }
 
   private static boolean hasNonOpaqueAlpha(int[] colors) {
@@ -1039,16 +1031,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return false;
   }
 
-  private static boolean isTranslucentAlpha(int alpha) {
-    return alpha > 0 && alpha < 255;
-  }
-
   private RenderQuad withRenderState(RenderQuad quad, @Nullable RenderType renderType) {
     if (renderType == null) {
       return quad;
     }
 
-    return withMaterial(quad, quad.material().withRenderType(renderType));
+    return withMaterial(quad, quad.material().withRenderType(renderType, sortGroups.group(renderType)));
   }
 
   private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {
@@ -1073,7 +1061,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       false,
       RenderMaterial.BlendState.from(BlendFunction.GLINT),
       ColorTargetState.WRITE_ALL,
-      RenderMaterial.UvTransform.glint(sheeted ? 8.0F : 0.5F)
+      RenderMaterial.UvTransform.glint(sheeted ? 8.0F : 0.5F),
+      false,
+      0,
+      1.0F
     );
   }
 
@@ -1125,7 +1116,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
-    return renderType == null || renderType.state.toString().contains("useLightmap=true");
+    return renderType == null || renderType.state.useLightmap;
   }
 
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {
@@ -1138,8 +1129,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return WHITE_TEXTURE;
     }
 
+    var sampler0 = state.textures.get("Sampler0");
+    if (sampler0 != null && sampler0.location() != null) {
+      return assets.renderTexture(sampler0.location());
+    }
+
     for (var binding : state.textures.values()) {
-      var location = binding.location;
+      var location = binding.location();
       if (location == null) {
         continue;
       }
@@ -1320,7 +1316,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         ? materialOverride
         : RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, isTextRenderType(renderType), 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
       if (materialOverride == null && renderType != null) {
-        material = material.withRenderType(renderType);
+        material = material.withRenderType(renderType, sortGroups.group(renderType));
       }
       builder.add(new RenderQuad(
         renderVertex(positions[0], uv[0], uv[1], colors[0], lights[0]),
@@ -1527,6 +1523,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     private CapturedVertex withLight(int light) {
       return new CapturedVertex(position, color, u, v, light);
+    }
+  }
+
+  private static final class SortGroupRegistry {
+    private final IdentityHashMap<RenderType, Integer> groups = new IdentityHashMap<>();
+    private int nextGroup = 1;
+
+    private int group(RenderType renderType) {
+      return groups.computeIfAbsent(renderType, _ -> nextGroup++);
     }
   }
 }

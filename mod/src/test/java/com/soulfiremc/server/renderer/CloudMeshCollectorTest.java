@@ -45,16 +45,19 @@ class CloudMeshCollectorTest {
   }
 
   @Test
-  void cloudTextureDataKeepsVanillaHorizontalWrapQuirk() {
+  void cloudTextureDataWrapsHorizontalNeighborsByTextureWidth() {
     var image = new BufferedImage(4, 2, BufferedImage.TYPE_INT_ARGB);
     image.setRGB(1, 0, 0x0AFFFFFF);
     image.setRGB(2, 0, 0x0AFFFFFF);
 
     var textureData = CloudMeshCollector.buildTextureData(RendererAssets.TextureImage.from(image, null));
 
-    assertTrue(textureData.cells()[2] != 0L);
-    var cellData = textureData.cells()[1];
-    assertTrue(((cellData >> 2) & 1L) != 0L);
+    var leftCellData = textureData.cells()[1];
+    var rightCellData = textureData.cells()[2];
+    assertTrue(leftCellData != 0L);
+    assertTrue(rightCellData != 0L);
+    assertEquals(0L, (leftCellData >> 2) & 1L);
+    assertEquals(0L, rightCellData & 1L);
   }
 
   @Test
