@@ -88,7 +88,8 @@ import java.util.concurrent.ConcurrentMap;
 public final class RendererAssets {
   private static final RendererAssets INSTANCE = new RendererAssets();
   private static final TextureImage MISSING_TEXTURE = TextureImage.missing();
-  private static final Font DISPLAY_FONT = new Font("SansSerif", Font.BOLD, 18);
+  private static final Font DISPLAY_FONT = new Font("SansSerif", Font.PLAIN, 9);
+  private static final int TEXT_LINE_HEIGHT = 9;
   private final ConcurrentMap<BlockState, BlockGeometry> blockGeometryCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, BlockStateDefinition> blockStateCache = new ConcurrentHashMap<>();
   private final ConcurrentMap<Identifier, ResolvedModel> modelCache = new ConcurrentHashMap<>();
@@ -239,19 +240,13 @@ public final class RendererAssets {
       return 0xFFFFFFFF;
     }
 
-    var biome = level.getBiome(pos).value();
-    var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
-    if (blockId.contains("water")) {
-      return 0xFF000000 | biome.getWaterColor();
-    }
-    if (blockId.contains("leaves") || blockId.contains("vine")) {
-      return 0xFF000000 | biome.getFoliageColor();
-    }
-    if (blockId.contains("grass") || blockId.contains("fern")) {
-      return 0xFF000000 | biome.getGrassColor(pos.getX(), pos.getZ());
+    var tintSource = Minecraft.getInstance().getBlockColors().getTintSource(state, tintIndex);
+    if (tintSource == null) {
+      return 0xFFFFFFFF;
     }
 
-    return 0xFFFFFFFF;
+    var tint = tintSource.colorInWorld(state, level, pos);
+    return (tint >>> 24) == 0 ? 0xFF000000 | tint : tint;
   }
 
   public Matrix4f itemDisplayTransform(ItemDisplayContext itemDisplayContext) {
@@ -514,56 +509,23 @@ public final class RendererAssets {
   }
 
   private TextureImage renderTextTexture(TextKey key) {
-    var probe = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
-    var probeGraphics = probe.createGraphics();
-    probeGraphics.setFont(DISPLAY_FONT);
-    var metrics = probeGraphics.getFontMetrics();
-    var lines = wrapText(key.text(), metrics, Math.max(32, key.width()));
-    var height = Math.max(metrics.getHeight() * Math.max(1, lines.size()) + 8, 16);
-    var width = Math.max(8 + lines.stream().mapToInt(metrics::stringWidth).max().orElse(0), 16);
-    probeGraphics.dispose();
+    var width = Math.max(1, key.width());
+    var height = TEXT_LINE_HEIGHT;
 
     var image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
     var graphics = image.createGraphics();
     graphics.setFont(DISPLAY_FONT);
-    graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+    graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
     graphics.setColor(new Color(key.backgroundColor(), true));
-    graphics.fillRoundRect(0, 0, width, height, 6, 6);
+    graphics.fillRect(0, 0, width, height);
     graphics.setColor(new Color(key.textColor(), true));
-    var y = 4 + graphics.getFontMetrics().getAscent();
-    for (var line : lines) {
-      graphics.drawString(line, 4, y);
-      y += graphics.getFontMetrics().getHeight();
+    var textWidth = Math.max(1, graphics.getFontMetrics().stringWidth(key.text()));
+    if (textWidth > width) {
+      graphics.scale(width / (double) textWidth, 1.0);
     }
+    graphics.drawString(key.text(), 0, Math.max(1, height - 2));
     graphics.dispose();
     return TextureImage.from(image, null);
-  }
-
-  private List<String> wrapText(String text, FontMetrics metrics, int maxWidth) {
-    if (text.isBlank()) {
-      return List.of(" ");
-    }
-
-    var lines = new ArrayList<String>();
-    var current = new StringBuilder();
-    for (var part : text.split("\\s+")) {
-      if (current.isEmpty()) {
-        current.append(part);
-        continue;
-      }
-
-      var candidate = current + " " + part;
-      if (metrics.stringWidth(candidate) <= maxWidth) {
-        current.append(" ").append(part);
-      } else {
-        lines.add(current.toString());
-        current = new StringBuilder(part);
-      }
-    }
-    if (!current.isEmpty()) {
-      lines.add(current.toString());
-    }
-    return lines;
   }
 
   private BlockGeometry buildBlockGeometry(BlockState state) {

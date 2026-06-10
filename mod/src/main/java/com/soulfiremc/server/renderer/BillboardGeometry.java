@@ -77,14 +77,14 @@ public class BillboardGeometry {
 
   public static RenderQuad textQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture, float depthBias) {
     var vertices = new Vector3f[]{
-      poseStack.last().pose().transformPosition(new Vector3f(x, y - height, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y - height, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x + width, y, 0.0F)),
-      poseStack.last().pose().transformPosition(new Vector3f(x, y, 0.0F))
+      poseStack.last().pose().transformPosition(new Vector3f(x, y, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x, y + height, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x + width, y + height, 0.0F)),
+      poseStack.last().pose().transformPosition(new Vector3f(x + width, y, 0.0F))
     };
     var face = RendererAssets.GeometryFace.of(
       vertices,
-      new float[]{0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F, 0.0F, 0.0F},
+      new float[]{0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 0.0F},
       texture,
       RendererAssets.AlphaMode.TRANSLUCENT,
       null,

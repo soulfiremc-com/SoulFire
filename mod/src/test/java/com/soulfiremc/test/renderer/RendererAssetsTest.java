@@ -84,11 +84,23 @@ class RendererAssetsTest {
   }
 
   @Test
+  void vanillaLeafGeometryKeepsCutoutTintMetadata() {
+    var geometry = RendererAssets.instance().blockGeometry(Blocks.OAK_LEAVES.defaultBlockState());
+    Assumptions.assumeFalse(
+      geometry.faces().isEmpty(),
+      "Live vanilla model geometry required to verify foliage tint extraction"
+    );
+
+    assertTrue(geometry.faces().stream().anyMatch(face -> face.alphaMode() == RendererAssets.AlphaMode.CUTOUT));
+    assertTrue(geometry.faces().stream().anyMatch(face -> face.tintIndex() >= 0));
+  }
+
+  @Test
   void resolvesTextRenderAssets() {
     var assets = RendererAssets.instance();
     var textTexture = assets.textTexture(Component.literal("SoulFire"), 96, 0xFFFFFFFF, 0x66000000);
     assertTrue(textTexture.width() > 0);
-    assertTrue(textTexture.height() > 0);
+    assertEquals(9, textTexture.height());
   }
 
   @Test

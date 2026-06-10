@@ -370,7 +370,7 @@ class RasterPipelineTest {
     poseStack.mulPose(camera.orientation());
     poseStack.scale(1.0F, -1.0F, 1.0F);
     var scene = SceneData.builder();
-    scene.add(BillboardGeometry.textQuad(poseStack, 2.0F, 2.0F, -1.0F, 1.0F, splitTexture(0xFFFF0000, 0xFF00FF00)));
+    scene.add(BillboardGeometry.textQuad(poseStack, 2.0F, 2.0F, -1.0F, -1.0F, splitTexture(0xFFFF0000, 0xFF00FF00)));
 
     pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
 

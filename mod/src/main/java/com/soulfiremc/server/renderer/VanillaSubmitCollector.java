@@ -308,7 +308,22 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int backgroundColor,
     int outlineColor
   ) {
-    addSequenceQuad(poseStack, text, x, y, color, backgroundColor, textDepthBias(displayMode), textDepthTest(displayMode), textDepthWrite(displayMode));
+    var depthBias = textDepthBias(displayMode);
+    var depthTest = textDepthTest(displayMode);
+    var depthWrite = textDepthWrite(displayMode);
+    if (outlineColor != 0) {
+      for (var xo = -1; xo <= 1; xo++) {
+        for (var yo = -1; yo <= 1; yo++) {
+          if (xo != 0 || yo != 0) {
+            addSequenceQuad(poseStack, text, x + xo, y + yo, outlineColor, 0, depthBias, depthTest, depthWrite);
+          }
+        }
+      }
+    }
+    if (shadow) {
+      addSequenceQuad(poseStack, text, x + 1.0F, y + 1.0F, shadowColor(color), 0, depthBias, depthTest, depthWrite);
+    }
+    addSequenceQuad(poseStack, text, x, y, color, backgroundColor, depthBias, depthTest, depthWrite);
   }
 
   @Override
@@ -682,7 +697,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     RenderMaterial.DepthTest depthTest,
     boolean depthWrite
   ) {
-    var width = Math.max(16, font.width(text) + 4);
+    var width = Math.max(1, font.width(text));
     var texture = assets.textTexture(text, width, color, backgroundColor);
     addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, 0.0F, depthTest, depthWrite);
   }
@@ -703,9 +718,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    var width = Math.max(16, font.width(text) + 4);
+    var width = Math.max(1, font.width(text));
     var texture = assets.textTexture(Component.literal(plain), width, color, backgroundColor);
     addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture, depthBias, depthTest, depthWrite);
+  }
+
+  private int shadowColor(int color) {
+    var a = (color >>> 24) & 0xFF;
+    var r = (int) (((color >>> 16) & 0xFF) * 0.25F);
+    var g = (int) (((color >>> 8) & 0xFF) * 0.25F);
+    var b = (int) ((color & 0xFF) * 0.25F);
+    return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
   private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
