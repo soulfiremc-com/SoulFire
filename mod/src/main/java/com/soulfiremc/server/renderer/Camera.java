@@ -20,6 +20,7 @@ package com.soulfiremc.server.renderer;
 import net.minecraft.world.phys.Vec3;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 /// Camera state shared between scene building, culling, and rasterization.
 public final class Camera {
@@ -30,6 +31,8 @@ public final class Camera {
   private final double eyeX;
   private final double eyeY;
   private final double eyeZ;
+  private final float yRot;
+  private final float xRot;
   private final double forwardX;
   private final double forwardY;
   private final double forwardZ;
@@ -52,6 +55,7 @@ public final class Camera {
   private final Matrix4f projectionMatrix;
   private final Matrix4f viewRotationProjectionMatrix;
   private final Matrix4f viewProjectionMatrix;
+  private final Quaternionf orientation;
   private final FrustumIntersection frustumIntersection;
 
   public Camera(Vec3 eyePos, float yRot, float xRot, int width, int height, double fov, float farPlane) {
@@ -60,6 +64,8 @@ public final class Camera {
     this.eyeX = eyePos.x;
     this.eyeY = eyePos.y;
     this.eyeZ = eyePos.z;
+    this.yRot = yRot;
+    this.xRot = xRot;
     this.nearPlane = DEFAULT_NEAR_PLANE;
     this.farPlane = farPlane;
 
@@ -91,17 +97,8 @@ public final class Camera {
     this.screenXOffset = tanHalfFovX;
     this.screenYOffset = tanHalfFovY;
 
-    this.viewRotationMatrix = new Matrix4f().lookAt(
-      0.0F,
-      0.0F,
-      0.0F,
-      (float) forwardX,
-      (float) forwardY,
-      (float) forwardZ,
-      (float) upX,
-      (float) upY,
-      (float) upZ
-    );
+    this.orientation = new Quaternionf().rotationYXZ((float) Math.PI - (float) yRotRad, -(float) xRotRad, 0.0F);
+    this.viewRotationMatrix = new Matrix4f().rotation(new Quaternionf(orientation).conjugate());
     this.viewMatrix = new Matrix4f(viewRotationMatrix).translate((float) -eyeX, (float) -eyeY, (float) -eyeZ);
     this.projectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, nearPlane, farPlane);
     this.viewRotationProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewRotationMatrix);
@@ -191,6 +188,14 @@ public final class Camera {
     return eyeZ;
   }
 
+  public float yRot() {
+    return yRot;
+  }
+
+  public float xRot() {
+    return xRot;
+  }
+
   public double forwardX() {
     return forwardX;
   }
@@ -261,5 +266,9 @@ public final class Camera {
 
   public Matrix4f viewProjectionMatrix() {
     return new Matrix4f(viewProjectionMatrix);
+  }
+
+  public Quaternionf orientation() {
+    return new Quaternionf(orientation);
   }
 }

@@ -55,6 +55,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
@@ -104,7 +105,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     preparedCamera.setLevel(ctx.level());
     preparedCamera.setEntity(activeCameraEntity);
     preparedCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
-    preparedCamera.setRotation(activeCameraEntity.getViewYRot(1.0F), activeCameraEntity.getViewXRot(1.0F));
+    preparedCamera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
     dispatcher.prepare(preparedCamera, activeCameraEntity);
   }
 
@@ -175,23 +176,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   static SceneData collectParticles(RenderContext ctx) {
     var minecraft = Minecraft.getInstance();
-    var vanillaCamera = minecraft.gameRenderer.getMainCamera();
-    if (vanillaCamera == null || !vanillaCamera.isInitialized()) {
-      return SceneData.EMPTY;
+    var particleCamera = new net.minecraft.client.Camera();
+    particleCamera.setLevel(ctx.level());
+    if (minecraft.player != null) {
+      particleCamera.setEntity(minecraft.player);
     }
-
-    var frustum = vanillaCamera.getCullFrustum();
-    if (frustum == null) {
-      frustum = new Frustum(
-        vanillaCamera.getViewRotationProjectionMatrix(new Matrix4f()),
-        vanillaCamera.getViewRotationMatrix(new Matrix4f())
-      );
-      var position = vanillaCamera.position();
-      frustum.prepare(position.x, position.y, position.z);
-    }
+    particleCamera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
+    particleCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
 
     var particlesState = new ParticlesRenderState();
-    minecraft.particleEngine.extract(particlesState, frustum, vanillaCamera, 1.0F);
+    minecraft.particleEngine.extract(particlesState, createFrustum(ctx), particleCamera, 1.0F);
     if (particlesState.particles.isEmpty()) {
       return SceneData.EMPTY;
     }
@@ -207,9 +201,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return collector.builder.build();
   }
 
+  private static Frustum createFrustum(RenderContext ctx) {
+    var frustum = new Frustum(ctx.camera().viewRotationMatrix(), ctx.camera().projectionMatrix());
+    frustum.prepare(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    return frustum;
+  }
+
   static SceneData collectFluid(RenderContext ctx, FluidRenderer fluidRenderer, BlockPos blockPos, BlockState blockState, FluidState fluidState) {
     var collector = new VanillaSubmitCollector(ctx);
-    var output = collector.new FluidOutput();
+    var output = collector.new FluidOutput(blockPos);
     fluidRenderer.tesselate(ctx.level(), blockPos, output, blockState, fluidState);
     output.flush();
     return collector.builder.build();
@@ -219,8 +219,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var cameraState = new CameraRenderState();
     cameraState.blockPos = BlockPos.containing(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
     cameraState.pos = new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    cameraState.xRot = ctx.camera().xRot();
+    cameraState.yRot = ctx.camera().yRot();
     cameraState.initialized = true;
-    cameraState.orientation = new Quaternionf();
+    cameraState.orientation = ctx.camera().orientation();
+    cameraState.cullFrustum = createFrustum(ctx);
     cameraState.projectionMatrix = new Matrix4f(ctx.camera().projectionMatrix());
     cameraState.viewRotationMatrix = new Matrix4f(ctx.camera().viewRotationMatrix());
     cameraState.depthFar = ctx.camera().farPlane();
@@ -254,19 +257,26 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   @Override
   public void submitNameTag(
     PoseStack poseStack,
-    Vec3 position,
-    int color,
-    Component text,
-    boolean outline,
-    int backgroundColor,
-    double distance,
+    Vec3 nameTagAttachment,
+    int offset,
+    Component name,
+    boolean seeThrough,
+    int lightCoords,
+    double distanceToCameraSq,
     CameraRenderState cameraRenderState
   ) {
-    if (outline) {
-      addComponentQuad(poseStack, text, xOffset(text), 0.0F, color, backgroundColor);
-    } else {
-      addComponentQuad(poseStack, text, xOffset(text), 0.0F, color, backgroundColor);
+    if (nameTagAttachment == null) {
+      return;
     }
+
+    poseStack.pushPose();
+    poseStack.translate(nameTagAttachment.x, nameTagAttachment.y + 0.5, nameTagAttachment.z);
+    poseStack.mulPose(cameraRenderState.orientation);
+    poseStack.scale(0.025F, -0.025F, 0.025F);
+    var textColor = seeThrough ? 0xFFFFFFFF : 0xCCFFFFFF;
+    var backgroundColor = seeThrough ? 0x40000000 : 0x30000000;
+    addComponentQuad(poseStack, name, xOffset(name), offset, textColor, backgroundColor);
+    poseStack.popPose();
   }
 
   @Override
@@ -277,10 +287,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     FormattedCharSequence text,
     boolean shadow,
     Font.DisplayMode displayMode,
+    int light,
     int color,
     int backgroundColor,
-    int light,
-    int offset
+    int outlineColor
   ) {
     addSequenceQuad(poseStack, text, x, y, color, backgroundColor);
   }
@@ -477,11 +487,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
       storage.soulfire$forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, _) -> {
         var rotation = new Quaternionf(qx, qy, qz, qw);
+        var worldX = x + (float) ctx.camera().eyeX();
+        var worldY = y + (float) ctx.camera().eyeY();
+        var worldZ = z + (float) ctx.camera().eyeZ();
         var vertices = new Vector3f[]{
-          rotateParticleVertex(rotation, x, y, z, size, 1.0F, -1.0F),
-          rotateParticleVertex(rotation, x, y, z, size, 1.0F, 1.0F),
-          rotateParticleVertex(rotation, x, y, z, size, -1.0F, 1.0F),
-          rotateParticleVertex(rotation, x, y, z, size, -1.0F, -1.0F)
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, -1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, 1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, 1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, -1.0F)
         };
         addFace(vertices, texture, alphaMode, color, 0, true, new float[]{u1, v1, u1, v0, u0, v0, u0, v1});
       });
@@ -584,8 +597,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private void addComponentQuad(PoseStack poseStack, Component text, float x, float y, int color, int backgroundColor) {
     var width = Math.max(16, font.width(text) + 4);
-    var texture = assets.textTexture(text, width, forceOpaque(color), backgroundColor);
-    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
+    var texture = assets.textTexture(text, width, color, backgroundColor);
+    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture);
   }
 
   private void addSequenceQuad(PoseStack poseStack, FormattedCharSequence text, float x, float y, int color, int backgroundColor) {
@@ -595,8 +608,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     var width = Math.max(16, font.width(text) + 4);
-    var texture = assets.textTexture(Component.literal(plain), width, forceOpaque(color), backgroundColor);
-    addTexturedQuad(poseStack, width, font.lineHeight, x, y, texture);
+    var texture = assets.textTexture(Component.literal(plain), width, color, backgroundColor);
+    addTexturedQuad(poseStack, texture.width(), texture.height(), x, y, texture);
   }
 
   private void addTexturedQuad(PoseStack poseStack, float width, float height, float x, float y, RendererAssets.TextureImage texture) {
@@ -709,10 +722,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
-  private int forceOpaque(int color) {
-    return (color & 0x00FFFFFF) | 0xFF000000;
-  }
-
   private String plainText(FormattedCharSequence sequence) {
     var builder = new StringBuilder();
     sequence.accept((_, _, codePoint) -> {
@@ -756,6 +765,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final RendererAssets.AlphaMode alphaMode;
     private final int alphaCutoutThreshold;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
+    private float lineWidth = 1.0F;
     private CapturedVertex current;
 
     private CapturingVertexConsumer(
@@ -784,13 +794,23 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
             emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
           }
         }
-        case TRIANGLE_STRIP, TRIANGLE_FAN -> {
+        case TRIANGLE_STRIP -> {
           for (var i = 0; i + 2 < vertices.size(); i++) {
-            emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+            if ((i & 1) == 0) {
+              emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+            } else {
+              emitTriangle(vertices.get(i + 1), vertices.get(i), vertices.get(i + 2));
+            }
+          }
+        }
+        case TRIANGLE_FAN -> {
+          for (var i = 1; i + 1 < vertices.size(); i++) {
+            emitTriangle(vertices.getFirst(), vertices.get(i), vertices.get(i + 1));
           }
         }
         case LINES, DEBUG_LINES, DEBUG_LINE_STRIP -> {
-          for (var i = 0; i + 1 < vertices.size(); i += 2) {
+          var stride = mode == VertexFormat.Mode.DEBUG_LINE_STRIP ? 1 : 2;
+          for (var i = 0; i + 1 < vertices.size(); i += stride) {
             emitLine(vertices.get(i), vertices.get(i + 1));
           }
         }
@@ -816,11 +836,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         return;
       }
       direction.normalize();
-      var side = new Vector3f(direction.z, 0.0F, -direction.x);
+      var cameraForward = new Vector3f((float) ctx.camera().forwardX(), (float) ctx.camera().forwardY(), (float) ctx.camera().forwardZ());
+      var side = new Vector3f(direction).cross(cameraForward);
       if (side.lengthSquared() < 1.0E-6F) {
-        side.set(1.0F, 0.0F, 0.0F);
+        side = new Vector3f(direction).cross((float) ctx.camera().upX(), (float) ctx.camera().upY(), (float) ctx.camera().upZ());
       }
-      side.normalize(0.01F);
+      if (side.lengthSquared() < 1.0E-6F) {
+        side.set((float) ctx.camera().rightX(), (float) ctx.camera().rightY(), (float) ctx.camera().rightZ());
+      }
+      side.normalize(Math.max(0.005F, lineWidth * 0.005F));
       addFace(
         new Vector3f[]{
           new Vector3f(a.position()).sub(side),
@@ -840,12 +864,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     private void emitPoint(CapturedVertex vertex) {
       var size = 0.03F;
+      var right = new Vector3f((float) ctx.camera().rightX(), (float) ctx.camera().rightY(), (float) ctx.camera().rightZ()).normalize(size);
+      var up = new Vector3f((float) ctx.camera().upX(), (float) ctx.camera().upY(), (float) ctx.camera().upZ()).normalize(size);
       addFace(
         new Vector3f[]{
-          new Vector3f(vertex.position()).add(-size, -size, 0.0F),
-          new Vector3f(vertex.position()).add(-size, size, 0.0F),
-          new Vector3f(vertex.position()).add(size, size, 0.0F),
-          new Vector3f(vertex.position()).add(size, -size, 0.0F)
+          new Vector3f(vertex.position()).sub(right).sub(up),
+          new Vector3f(vertex.position()).sub(right).add(up),
+          new Vector3f(vertex.position()).add(right).add(up),
+          new Vector3f(vertex.position()).add(right).sub(up)
         },
         texture,
         alphaMode,
@@ -890,7 +916,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     @Override public VertexConsumer setUv1(int u, int v) { return this; }
     @Override public VertexConsumer setUv2(int u, int v) { return this; }
     @Override public VertexConsumer setNormal(float x, float y, float z) { return this; }
-    @Override public VertexConsumer setLineWidth(float width) { return this; }
+    @Override public VertexConsumer setLineWidth(float width) {
+      this.lineWidth = Math.max(1.0F, width);
+      return this;
+    }
   }
 
   private final class CapturingBufferSource implements MultiBufferSource {
@@ -914,13 +943,22 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private final class FluidOutput implements FluidRenderer.Output {
     private final LinkedHashMap<ChunkSectionLayer, CapturingVertexConsumer> consumers = new LinkedHashMap<>();
     private final RendererAssets.TextureImage texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
+    private final Matrix4f sectionOrigin;
+
+    private FluidOutput(BlockPos blockPos) {
+      this.sectionOrigin = new Matrix4f().translation(
+        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getX())),
+        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getY())),
+        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getZ()))
+      );
+    }
 
     @Override
     public VertexConsumer getBuilder(ChunkSectionLayer layer) {
       return consumers.computeIfAbsent(
         layer,
         currentLayer -> new CapturingVertexConsumer(
-          new Matrix4f(),
+          sectionOrigin,
           VertexFormat.Mode.QUADS,
           texture,
           currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,

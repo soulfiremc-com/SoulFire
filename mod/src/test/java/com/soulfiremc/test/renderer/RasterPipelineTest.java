@@ -19,6 +19,8 @@ package com.soulfiremc.test.renderer;
 
 import com.soulfiremc.server.renderer.*;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
@@ -165,6 +167,43 @@ class RasterPipelineTest {
   }
 
   @Test
+  void cameraOrientationMatchesBlaze3dRotationConvention() {
+    var yRot = 35.0F;
+    var xRot = -12.0F;
+    var camera = new Camera(new Vec3(10.0, 65.0, -4.0), yRot, xRot, WIDTH, HEIGHT, 70.0, 64.0F);
+    var expectedOrientation = new Quaternionf().rotationYXZ(
+      (float) Math.PI - (float) Math.toRadians(yRot),
+      -(float) Math.toRadians(xRot),
+      0.0F
+    );
+    var expectedViewRotation = new Matrix4f().rotation(new Quaternionf(expectedOrientation).conjugate());
+
+    assertQuaternionNear(camera.orientation(), expectedOrientation);
+    assertMatrixNear(camera.viewRotationMatrix(), expectedViewRotation);
+  }
+
+  @Test
+  void quadCrossingNearPlaneIsClippedInsteadOfDropped() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      new RenderVertex(-0.4F, -0.4F, 0.01F, 0.0F, 1.0F),
+      new RenderVertex(-0.4F, 0.4F, 0.01F, 0.0F, 0.0F),
+      new RenderVertex(0.4F, 0.4F, 1.0F, 1.0F, 0.0F),
+      new RenderVertex(0.4F, -0.4F, 1.0F, 1.0F, 1.0F),
+      solidTexture(0xFFFF0000),
+      RendererAssets.AlphaMode.OPAQUE,
+      0xFFFFFFFF
+    ));
+
+    pipeline.renderSynthetic(camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFF0000, 3);
+  }
+
+  @Test
   void manualProjectionMatchesJomlViewRotationProjectionMatrix() {
     var camera = new Camera(new Vec3(10.0, 65.0, -4.0), 35.0F, -12.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var worldX = camera.eyeX() + camera.forwardX() * 10.0 + camera.rightX() * 1.5 + camera.upX() * 0.75;
@@ -251,5 +290,20 @@ class RasterPipelineTest {
 
   private static void assertChannelNear(int actual, int expected, int tolerance) {
     assertTrue(Math.abs(actual - expected) <= tolerance, () -> "expected " + expected + " +/- " + tolerance + " but was " + actual);
+  }
+
+  private static void assertQuaternionNear(Quaternionf actual, Quaternionf expected) {
+    assertEquals(expected.x, actual.x, 1.0E-5F);
+    assertEquals(expected.y, actual.y, 1.0E-5F);
+    assertEquals(expected.z, actual.z, 1.0E-5F);
+    assertEquals(expected.w, actual.w, 1.0E-5F);
+  }
+
+  private static void assertMatrixNear(Matrix4f actual, Matrix4f expected) {
+    for (var column = 0; column < 4; column++) {
+      for (var row = 0; row < 4; row++) {
+        assertEquals(expected.get(column, row), actual.get(column, row), 1.0E-5F);
+      }
+    }
   }
 }
