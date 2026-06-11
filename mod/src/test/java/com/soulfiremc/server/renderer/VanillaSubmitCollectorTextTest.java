@@ -20,8 +20,10 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
@@ -259,6 +261,39 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void capturedVertexConsumerFlushConsumesPendingVertices() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newTextConsumer(collector, texture);
+
+    addTextQuad(consumer, 0x80FFFFFF);
+    flush(consumer);
+    flush(consumer);
+
+    assertEquals(1, sceneData(collector).translucent().length);
+  }
+
+  @Test
+  void submittedParticlesUseParticleShaderThresholdAndPipelineState() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var particles = new QuadParticleRenderState();
+
+    addParticle(particles, SingleQuadParticle.Layer.OPAQUE, 4.0F, 0x40FFFFFF, LightCoordsUtil.FULL_BRIGHT);
+    addParticle(particles, SingleQuadParticle.Layer.TRANSLUCENT, 5.0F, 0xFFFFFFFF, LightCoordsUtil.pack(0, 0));
+    collector.submitParticleGroup(particles);
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.cutout().length);
+    assertEquals(1, scene.translucent().length);
+    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.cutout()[0].material().alphaCutoutThreshold());
+    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.translucent()[0].material().alphaCutoutThreshold());
+    assertTrue(scene.translucent()[0].material().depthWrite());
+    assertTrue(((scene.translucent()[0].material().color() >> 16) & 0xFF) < 255);
+  }
+
+  @Test
   void capturedLinesUseScreenSpaceLineWidth() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
@@ -404,6 +439,26 @@ class VanillaSubmitCollectorTextTest {
       .setColor(0xFFFFFFFF)
       .setNormal(nx, ny, nz)
       .setLineWidth(lineWidth);
+  }
+
+  private static void addParticle(QuadParticleRenderState particles, SingleQuadParticle.Layer layer, float z, int color, int lightCoords) {
+    particles.add(
+      layer,
+      0.0F,
+      0.0F,
+      z,
+      0.0F,
+      0.0F,
+      0.0F,
+      1.0F,
+      1.0F,
+      0.0F,
+      1.0F,
+      0.0F,
+      1.0F,
+      color,
+      lightCoords
+    );
   }
 
   private static void flush(VertexConsumer consumer) throws Exception {

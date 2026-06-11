@@ -20,6 +20,7 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
@@ -52,7 +53,7 @@ public record RenderMaterial(
   float viewScale
 ) {
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
-  private static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
+  static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
 
   public static RenderMaterial create(
     RendererAssets.TextureImage texture,
@@ -147,9 +148,6 @@ public record RenderMaterial(
   public RenderMaterial withRenderType(RenderType renderType, int sortGroup) {
     var pipeline = renderType.pipeline();
     var colorTargetState = pipeline.getColorTargetState();
-    var blendState = alphaMode == RendererAssets.AlphaMode.TRANSLUCENT
-      ? BlendState.from(colorTargetState.blendFunction().orElse(null))
-      : BlendState.REPLACE;
     return new RenderMaterial(
       texture,
       alphaMode,
@@ -162,13 +160,37 @@ public record RenderMaterial(
       alphaCutoutSource(renderType),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
-      blendState,
+      BlendState.from(colorTargetState.blendFunction().orElse(null)),
       colorTargetState.writeMask(),
       UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
       textureSampleMode(renderType),
-      alphaMode == RendererAssets.AlphaMode.TRANSLUCENT && renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
+      renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
       viewScale(renderType)
+    );
+  }
+
+  public RenderMaterial withPipelineState(RenderPipeline pipeline) {
+    var colorTargetState = pipeline.getColorTargetState();
+    return new RenderMaterial(
+      texture,
+      alphaMode,
+      color,
+      doubleSided || !pipeline.isCull(),
+      depthBias,
+      polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
+      polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
+      alphaCutoutThreshold,
+      alphaCutoutSource,
+      depthTest(pipeline.getDepthStencilState()),
+      depthWrite(pipeline.getDepthStencilState()),
+      BlendState.from(colorTargetState.blendFunction().orElse(null)),
+      colorTargetState.writeMask(),
+      uvTransform,
+      textureSampleMode,
+      sortOnUpload,
+      sortGroup,
+      viewScale
     );
   }
 

@@ -667,7 +667,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var storage = entry.getValue();
       var texture = assets.textureAtlas(layer.textureAtlasLocation());
       var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
-      storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, _) -> {
+      storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, lightCoords) -> {
         var rotation = new Quaternionf(qx, qy, qz, qw);
         var worldX = x + (float) ctx.camera().eyeX();
         var worldY = y + (float) ctx.camera().eyeY();
@@ -678,7 +678,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, 1.0F),
           rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, -1.0F)
         };
-        addFace(vertices, texture, alphaMode, color, 0, true, new float[]{u1, v1, u1, v0, u0, v0, u0, v1});
+        var material = RenderMaterial
+          .create(
+            texture,
+            alphaMode,
+            modulateColor(color, lightColor(lightCoords, 0, null)),
+            true,
+            0.0F,
+            RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD
+          )
+          .withPipelineState(layer.pipeline());
+        addFace(vertices, new float[]{u1, v1, u1, v0, u0, v0, u0, v1}, material);
       });
     }
   }
@@ -1021,6 +1031,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     builder.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, doubleSided, 0.0F, alphaCutoutThreshold));
   }
 
+  private void addFace(Vector3f[] vertices, float[] uv, RenderMaterial material) {
+    builder.add(new RenderQuad(
+      new RenderVertex(vertices[0].x(), vertices[0].y(), vertices[0].z(), uv[0], uv[1], 0xFFFFFFFF),
+      new RenderVertex(vertices[1].x(), vertices[1].y(), vertices[1].z(), uv[2], uv[3], 0xFFFFFFFF),
+      new RenderVertex(vertices[2].x(), vertices[2].y(), vertices[2].z(), uv[4], uv[5], 0xFFFFFFFF),
+      new RenderVertex(vertices[3].x(), vertices[3].y(), vertices[3].z(), uv[6], uv[7], 0xFFFFFFFF),
+      material
+    ));
+  }
+
   private Vector3f transform(PoseStack poseStack, float x, float y, float z) {
     return poseStack.last().pose().transformPosition(new Vector3f(x, y, z));
   }
@@ -1333,42 +1353,47 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     void flush() {
-      switch (mode) {
-        case QUADS -> {
-          for (var i = 0; i + 3 < vertices.size(); i += 4) {
-            emitQuad(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2), vertices.get(i + 3));
+      try {
+        switch (mode) {
+          case QUADS -> {
+            for (var i = 0; i + 3 < vertices.size(); i += 4) {
+              emitQuad(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2), vertices.get(i + 3));
+            }
           }
-        }
-        case TRIANGLES -> {
-          for (var i = 0; i + 2 < vertices.size(); i += 3) {
-            emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
-          }
-        }
-        case TRIANGLE_STRIP -> {
-          for (var i = 0; i + 2 < vertices.size(); i++) {
-            if ((i & 1) == 0) {
+          case TRIANGLES -> {
+            for (var i = 0; i + 2 < vertices.size(); i += 3) {
               emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
-            } else {
-              emitTriangle(vertices.get(i + 1), vertices.get(i), vertices.get(i + 2));
+            }
+          }
+          case TRIANGLE_STRIP -> {
+            for (var i = 0; i + 2 < vertices.size(); i++) {
+              if ((i & 1) == 0) {
+                emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
+              } else {
+                emitTriangle(vertices.get(i + 1), vertices.get(i), vertices.get(i + 2));
+              }
+            }
+          }
+          case TRIANGLE_FAN -> {
+            for (var i = 1; i + 1 < vertices.size(); i++) {
+              emitTriangle(vertices.getFirst(), vertices.get(i), vertices.get(i + 1));
+            }
+          }
+          case LINES, DEBUG_LINES, DEBUG_LINE_STRIP -> {
+            var stride = mode == VertexFormat.Mode.DEBUG_LINE_STRIP ? 1 : 2;
+            for (var i = 0; i + 1 < vertices.size(); i += stride) {
+              emitLine(vertices.get(i), vertices.get(i + 1));
+            }
+          }
+          case POINTS -> {
+            for (var vertex : vertices) {
+              emitPoint(vertex);
             }
           }
         }
-        case TRIANGLE_FAN -> {
-          for (var i = 1; i + 1 < vertices.size(); i++) {
-            emitTriangle(vertices.getFirst(), vertices.get(i), vertices.get(i + 1));
-          }
-        }
-        case LINES, DEBUG_LINES, DEBUG_LINE_STRIP -> {
-          var stride = mode == VertexFormat.Mode.DEBUG_LINE_STRIP ? 1 : 2;
-          for (var i = 0; i + 1 < vertices.size(); i += stride) {
-            emitLine(vertices.get(i), vertices.get(i + 1));
-          }
-        }
-        case POINTS -> {
-          for (var vertex : vertices) {
-            emitPoint(vertex);
-          }
-        }
+      } finally {
+        vertices.clear();
+        current = null;
       }
     }
 
@@ -1732,7 +1757,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return this;
     }
     @Override public VertexConsumer setLineWidth(float width) {
-      this.lineWidth = Float.isFinite(width) ? width : 1.0F;
+      this.lineWidth = Float.isFinite(width) ? Math.max(0.0F, width) : 1.0F;
       if (current != null) {
         current = current.withLineWidth(this.lineWidth);
         vertices.set(vertices.size() - 1, current);

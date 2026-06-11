@@ -558,6 +558,16 @@ class RasterPipelineTest {
   }
 
   @Test
+  void renderTypeKeepsBlendAndSortStateForOpaqueCoverageBucket() {
+    var material = RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+      .withRenderType(RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("textures/entity/test")));
+
+    assertEquals(RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), material.blendState());
+    assertTrue(material.sortOnUpload());
+  }
+
+  @Test
   void entityCutoutTestsTextureAlphaBeforeTintAlpha() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
