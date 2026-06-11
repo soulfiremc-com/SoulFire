@@ -268,6 +268,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private SceneData buildScene() {
     for (var orderedBuckets : bucketsByOrder.values()) {
       orderedBuckets.flushNameTags(this);
+      orderedBuckets.flushSortedModelDraws();
     }
 
     var sceneData = SceneData.EMPTY;
@@ -293,6 +294,26 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     } finally {
       activeBuilder = previous;
     }
+  }
+
+  private SceneData captureScene(Runnable action) {
+    var previous = activeBuilder;
+    var captureBuilder = SceneData.builder();
+    activeBuilder = captureBuilder;
+    try {
+      action.run();
+    } finally {
+      activeBuilder = previous;
+    }
+    return captureBuilder.build();
+  }
+
+  private double poseOriginDistanceSq(Matrix4fc pose) {
+    var position = pose.transformPosition(new Vector3f());
+    var dx = position.x() - ctx.camera().eyeX();
+    var dy = position.y() - ctx.camera().eyeY();
+    var dz = position.z() - ctx.camera().eyeZ();
+    return dx * dx + dy * dy + dz * dz;
   }
 
   private FeatureStage stageForRenderType(@Nullable RenderType renderType, FeatureStage solidStage, FeatureStage translucentStage) {
@@ -583,15 +604,58 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int outlineColor,
     ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
   ) {
-    withStage(stageForRenderType(renderType, FeatureStage.SOLID_MODEL, FeatureStage.TRANSLUCENT_MODEL), () -> {
-      var texture = textureFromRenderType(renderType);
-      var alphaMode = alphaMode(renderType, texture, color);
-      model.setupAnim(state);
-      Consumer<VertexConsumer> renderer = consumer -> model.renderToBuffer(poseStack, consumer, light, overlay, color);
-      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), sprite, null, renderer);
-      captureOutlineGeometry(renderType, texture, outlineColor, sprite, renderer);
-      captureCrumblingGeometry(renderType.affectsCrumbling(), crumblingOverlay, renderer);
-    });
+    if (renderType.hasBlending()) {
+      var scene = captureScene(() -> captureModelSubmit(
+        model,
+        state,
+        poseStack,
+        renderType,
+        light,
+        overlay,
+        color,
+        sprite,
+        outlineColor,
+        crumblingOverlay
+      ));
+      if (scene.totalQuadCount() > 0) {
+        buckets.translucentModelDraws.add(new SortedScene(poseOriginDistanceSq(poseStack.last().pose()), scene));
+      }
+      return;
+    }
+
+    withStage(FeatureStage.SOLID_MODEL, () -> captureModelSubmit(
+      model,
+      state,
+      poseStack,
+      renderType,
+      light,
+      overlay,
+      color,
+      sprite,
+      outlineColor,
+      crumblingOverlay
+    ));
+  }
+
+  private <S> void captureModelSubmit(
+    Model<? super S> model,
+    S state,
+    PoseStack poseStack,
+    RenderType renderType,
+    int light,
+    int overlay,
+    int color,
+    TextureAtlasSprite sprite,
+    int outlineColor,
+    ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
+  ) {
+    var texture = textureFromRenderType(renderType);
+    var alphaMode = alphaMode(renderType, texture, color);
+    model.setupAnim(state);
+    Consumer<VertexConsumer> renderer = consumer -> model.renderToBuffer(poseStack, consumer, light, overlay, color);
+    captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), sprite, null, renderer);
+    captureOutlineGeometry(renderType, texture, outlineColor, sprite, renderer);
+    captureCrumblingGeometry(renderType.affectsCrumbling(), crumblingOverlay, renderer);
   }
 
   @Override
@@ -2448,6 +2512,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     double distanceToCameraSq
   ) {}
 
+  private record SortedScene(double distanceSq, SceneData scene) {}
+
   private enum FaceLighting {
     FRONT,
     BACK
@@ -2486,6 +2552,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final EnumMap<FeatureStage, SceneData.Builder> builders = new EnumMap<>(FeatureStage.class);
     private final ArrayList<NameTagDraw> nameTagSeeThrough = new ArrayList<>();
     private final ArrayList<NameTagDraw> nameTagNormal = new ArrayList<>();
+    private final ArrayList<SortedScene> translucentModelDraws = new ArrayList<>();
 
     private SceneData.Builder builder(FeatureStage stage) {
       return builders.computeIfAbsent(stage, _ -> SceneData.builder());
@@ -2512,6 +2579,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
       nameTagSeeThrough.clear();
       nameTagNormal.clear();
+    }
+
+    private void flushSortedModelDraws() {
+      if (translucentModelDraws.isEmpty()) {
+        return;
+      }
+
+      translucentModelDraws.sort(Comparator.comparingDouble(SortedScene::distanceSq).reversed());
+      var target = builder(FeatureStage.TRANSLUCENT_MODEL);
+      for (var draw : translucentModelDraws) {
+        target.addAll(draw.scene());
+      }
+      translucentModelDraws.clear();
     }
   }
 

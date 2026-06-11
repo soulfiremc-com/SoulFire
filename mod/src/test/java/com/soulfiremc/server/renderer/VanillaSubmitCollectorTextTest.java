@@ -22,6 +22,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -34,6 +35,7 @@ import net.minecraft.client.resources.metadata.animation.FrameSize;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.util.Unit;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -335,6 +337,51 @@ class VanillaSubmitCollectorTextTest {
     assertEquals(2, scene.translucent().length);
     assertEquals(0x8000FF00, scene.translucent()[0].v0().color());
     assertEquals(0x80FF0000, scene.translucent()[1].v0().color());
+  }
+
+  @Test
+  void translucentModelSubmitsSortFarToNearLikeVanillaFeatureRenderer() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var renderType = RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("textures/entity/test"));
+    var model = singleQuadModel(renderType);
+
+    var nearPose = new PoseStack();
+    nearPose.translate(0.0F, 0.0F, 4.0F);
+    collector.submitModel(
+      model,
+      Unit.INSTANCE,
+      nearPose,
+      renderType,
+      LightCoordsUtil.FULL_BRIGHT,
+      OverlayTexture.NO_OVERLAY,
+      0x80FF0000,
+      null,
+      0,
+      null
+    );
+
+    var farPose = new PoseStack();
+    farPose.translate(0.0F, 0.0F, 8.0F);
+    collector.submitModel(
+      model,
+      Unit.INSTANCE,
+      farPose,
+      renderType,
+      LightCoordsUtil.FULL_BRIGHT,
+      OverlayTexture.NO_OVERLAY,
+      0x800000FF,
+      null,
+      0,
+      null
+    );
+
+    var scene = sceneData(collector);
+    assertEquals(4, scene.translucent().length);
+    assertQuadZ(scene.translucent()[0], 8.25F);
+    assertQuadZ(scene.translucent()[1], 8.25F);
+    assertQuadZ(scene.translucent()[2], 4.25F);
+    assertQuadZ(scene.translucent()[3], 4.25F);
   }
 
   @Test
@@ -655,6 +702,32 @@ class VanillaSubmitCollectorTextTest {
       renderType,
       null,
       materialOverride
+    );
+  }
+
+  private static Model.Simple singleQuadModel(RenderType renderType) {
+    return new Model.Simple(
+      new ModelPart(
+        List.of(new ModelPart.Cube(
+          0,
+          0,
+          -8.0F,
+          -8.0F,
+          4.0F,
+          16.0F,
+          16.0F,
+          1.0F,
+          0.0F,
+          0.0F,
+          0.0F,
+          false,
+          64.0F,
+          64.0F,
+          Set.of(Direction.NORTH)
+        )),
+        Map.of()
+      ),
+      _ -> renderType
     );
   }
 
