@@ -21,27 +21,38 @@ import lombok.experimental.UtilityClass;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.Lightmap;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.WeatherEffectRenderer;
+import net.minecraft.client.renderer.state.level.WeatherRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 
-import java.awt.image.BufferedImage;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 
 /// Collects dynamic scene primitives that are not part of the chunk-section world mesh.
 @UtilityClass
 public class SceneCollector {
-  private static final RendererAssets.TextureImage RAIN_TEXTURE = createRainTexture();
+  private static final Identifier RAIN_LOCATION = Identifier.withDefaultNamespace("textures/environment/rain.png");
+  private static final Identifier SNOW_LOCATION = Identifier.withDefaultNamespace("textures/environment/snow.png");
+  private static final int RAIN_TABLE_SIZE = 32;
+  private static final int HALF_RAIN_TABLE_SIZE = 16;
+  private static final WeatherEffectRenderer VANILLA_WEATHER = new WeatherEffectRenderer();
+  private static final float[] WEATHER_COLUMN_SIZE_X = weatherColumnSizes(true);
+  private static final float[] WEATHER_COLUMN_SIZE_Z = weatherColumnSizes(false);
 
   public static SceneData collectEntitiesAndWeather(RenderContext ctx, LocalPlayer localPlayer) {
     var level = ctx.level();
     var builder = SceneData.builder();
-    var billboardBuckets = new HashMap<Long, Integer>();
     var trace = RenderDebugTrace.current();
     var options = Minecraft.getInstance().options;
     Entity.setViewScale(Mth.clamp(options.getEffectiveRenderDistance() / 8.0, 1.0, 2.5) * options.entityDistanceScaling().get());
@@ -75,7 +86,7 @@ public class SceneCollector {
     }
 
     builder.addAll(VanillaSubmitCollector.collectParticles(ctx));
-    collectWeather(level, ctx, builder, billboardBuckets);
+    collectWeather(level, ctx, builder);
     return builder.build();
   }
 
@@ -165,97 +176,120 @@ public class SceneCollector {
     return level.getGloballyRenderedBlockEntities().contains(blockEntity);
   }
 
-  private static void collectWeather(
-    ClientLevel level,
-    RenderContext ctx,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets
-  ) {
-    var rain = level.getRainLevel(1.0F);
-    if (rain <= 0.05F) {
+  private static void collectWeather(ClientLevel level, RenderContext ctx, SceneData.Builder builder) {
+    var renderState = new WeatherRenderState();
+    var camera = ctx.camera();
+    VANILLA_WEATHER.extractRenderState(
+      level,
+      Math.toIntExact(Math.floorMod(ctx.animationTick(), Integer.MAX_VALUE)),
+      1.0F,
+      new Vec3(camera.eyeX(), camera.eyeY(), camera.eyeZ()),
+      renderState
+    );
+    if (renderState.intensity <= 0.0F) {
       return;
     }
 
-    var particleCount = Math.max(8, (int) (24 * rain));
-    var baseSeed = Double.doubleToLongBits(ctx.camera().eyeX() * 13.0 + ctx.camera().eyeY() * 7.0 + ctx.camera().eyeZ() * 17.0) ^ level.getOverworldClockTime();
-    for (var i = 0; i < particleCount; i++) {
-      var seed = mix(baseSeed + i * 1_664_525L);
-      var px = ctx.camera().eyeX() + ((seed & 0xFF) / 255.0 - 0.5) * 12.0;
-      var py = ctx.camera().eyeY() + (((seed >> 8) & 0xFF) / 255.0 - 0.35) * 6.0;
-      var pz = ctx.camera().eyeZ() + (((seed >> 16) & 0xFF) / 255.0 - 0.5) * 12.0;
-      addBillboard(
-        ctx,
-        builder,
-        billboardBuckets,
-        BillboardGeometry.cameraFacingQuad(
-          ctx.camera(),
-          px,
-          py,
-          pz,
-          0.06F,
-          0.45F,
-          RAIN_TEXTURE,
-          RendererAssets.AlphaMode.TRANSLUCENT,
-          0x99D8F6FF,
-          0.001F
-        ),
-        1,
-        true
-      );
+    var assets = RendererAssets.instance();
+    collectWeatherColumns(ctx, builder, renderState, renderState.rainColumns, assets.texture(RAIN_LOCATION), 1.0F);
+    collectWeatherColumns(ctx, builder, renderState, renderState.snowColumns, assets.texture(SNOW_LOCATION), 0.8F);
+  }
+
+  private static void collectWeatherColumns(
+    RenderContext ctx,
+    SceneData.Builder builder,
+    WeatherRenderState renderState,
+    List<WeatherEffectRenderer.ColumnInstance> columns,
+    RendererAssets.TextureImage texture,
+    float maxAlpha
+  ) {
+    if (columns.isEmpty()) {
+      return;
+    }
+
+    var camera = ctx.camera();
+    var cameraBlockX = Mth.floor(camera.eyeX());
+    var cameraBlockZ = Mth.floor(camera.eyeZ());
+    var radiusSq = (float) renderState.radius * renderState.radius;
+    if (radiusSq <= 0.0F) {
+      return;
+    }
+
+    var minecraft = Minecraft.getInstance();
+    var pipeline = minecraft != null && Minecraft.useShaderTransparency() ? RenderPipelines.WEATHER_DEPTH_WRITE : RenderPipelines.WEATHER_NO_DEPTH_WRITE;
+    for (var column : columns) {
+      var relativeX = (float) (column.x() + 0.5 - camera.eyeX());
+      var relativeZ = (float) (column.z() + 0.5 - camera.eyeZ());
+      var distanceSq = (float) Mth.lengthSquared(relativeX, relativeZ);
+      var alpha = Mth.lerp(Math.min(distanceSq / radiusSq, 1.0F), maxAlpha, 0.5F) * renderState.intensity;
+      if (alpha <= 0.0F) {
+        continue;
+      }
+
+      var tableIndex = (column.z() - cameraBlockZ + HALF_RAIN_TABLE_SIZE) * RAIN_TABLE_SIZE + column.x() - cameraBlockX + HALF_RAIN_TABLE_SIZE;
+      if (tableIndex < 0 || tableIndex >= WEATHER_COLUMN_SIZE_X.length) {
+        continue;
+      }
+
+      var halfSizeX = WEATHER_COLUMN_SIZE_X[tableIndex] / 2.0F;
+      var halfSizeZ = WEATHER_COLUMN_SIZE_Z[tableIndex] / 2.0F;
+      var x0 = column.x() + 0.5F - halfSizeX;
+      var x1 = column.x() + 0.5F + halfSizeX;
+      var y0 = (float) column.bottomY();
+      var y1 = (float) column.topY();
+      var z0 = column.z() + 0.5F - halfSizeZ;
+      var z1 = column.z() + 0.5F + halfSizeZ;
+      var u0 = column.uOffset();
+      var u1 = column.uOffset() + 1.0F;
+      var v0 = column.bottomY() * 0.25F + column.vOffset();
+      var v1 = column.topY() * 0.25F + column.vOffset();
+      var color = modulateColor(ARGB.white(alpha), lightColor(ctx, column.lightCoords()));
+      var material = RenderMaterial
+        .create(texture, RendererAssets.AlphaMode.TRANSLUCENT, color, true, 0.0F, RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD)
+        .withPipelineState(pipeline);
+      builder.addWeather(new RenderQuad(
+        new RenderVertex(x0, y1, z0, u0, v0, 0xFFFFFFFF),
+        new RenderVertex(x1, y1, z1, u1, v0, 0xFFFFFFFF),
+        new RenderVertex(x1, y0, z1, u1, v1, 0xFFFFFFFF),
+        new RenderVertex(x0, y0, z0, u0, v1, 0xFFFFFFFF),
+        material
+      ));
       RenderDebugTrace.current().weatherBillboard();
     }
   }
 
-  private static void addBillboard(
-    RenderContext ctx,
-    SceneData.Builder builder,
-    Map<Long, Integer> billboardBuckets,
-    RenderQuad billboard,
-    int priority,
-    boolean limitDensity
-  ) {
-    if (limitDensity) {
-      var centerX = (billboard.v0().x() + billboard.v1().x() + billboard.v2().x() + billboard.v3().x()) * 0.25;
-      var centerY = (billboard.v0().y() + billboard.v1().y() + billboard.v2().y() + billboard.v3().y()) * 0.25;
-      var centerZ = (billboard.v0().z() + billboard.v1().z() + billboard.v2().z() + billboard.v3().z()) * 0.25;
-      var bucketKey = (((long) Math.floor(centerX / 3.0)) & 0xFFFFFFL) << 40
-        | ((((long) Math.floor(centerY / 3.0)) & 0xFFFFL) << 24)
-        | (((long) Math.floor(centerZ / 3.0)) & 0xFFFFFFL);
-      var count = billboardBuckets.getOrDefault(bucketKey, 0);
-      var limit = priority >= 8 ? 4 : priority >= 5 ? 3 : 2;
-      if (count >= limit) {
-        return;
+  private static float[] weatherColumnSizes(boolean xAxis) {
+    var sizes = new float[RAIN_TABLE_SIZE * RAIN_TABLE_SIZE];
+    for (var z = 0; z < RAIN_TABLE_SIZE; z++) {
+      for (var x = 0; x < RAIN_TABLE_SIZE; x++) {
+        var deltaX = x - HALF_RAIN_TABLE_SIZE;
+        var deltaZ = z - HALF_RAIN_TABLE_SIZE;
+        var distance = Mth.length(deltaX, deltaZ);
+        sizes[z * RAIN_TABLE_SIZE + x] = distance == 0.0F ? 0.0F : xAxis ? -deltaZ / distance : deltaX / distance;
       }
-      billboardBuckets.put(bucketKey, count + 1);
     }
-
-    if (priority == 1) {
-      builder.addWeather(billboard);
-    } else {
-      builder.add(billboard);
-    }
-    RenderDebugTrace.current().billboard();
+    return sizes;
   }
 
-  private static RendererAssets.TextureImage createRainTexture() {
-    var image = new BufferedImage(4, 16, BufferedImage.TYPE_INT_ARGB);
-    for (var y = 0; y < 16; y++) {
-      var alpha = (int) (255 * (1.0 - y / 15.0) * 0.7);
-      var color = (alpha << 24) | 0xA8ECFF;
-      image.setRGB(1, y, color);
-      image.setRGB(2, y, color);
+  private static int lightColor(RenderContext ctx, int lightCoords) {
+    if (lightCoords == LightCoordsUtil.FULL_BRIGHT) {
+      return 0xFFFFFFFF;
     }
-    return RendererAssets.TextureImage.from(image, null);
+
+    var blockLight = LightCoordsUtil.block(lightCoords) / 15.0F;
+    var skyLevel = LightCoordsUtil.sky(lightCoords);
+    var skyLight = Lightmap.getBrightness(ctx.level().dimensionType(), skyLevel);
+    var factor = Math.clamp(Math.max(blockLight, skyLight), 0.18F, 1.0F);
+    var channel = Math.clamp(Math.round(factor * 255.0F), 0, 255);
+    return 0xFF000000 | (channel << 16) | (channel << 8) | channel;
   }
 
-  private static long mix(long input) {
-    var x = input;
-    x ^= x >>> 33;
-    x *= 0xff51afd7ed558ccdL;
-    x ^= x >>> 33;
-    x *= 0xc4ceb9fe1a85ec53L;
-    x ^= x >>> 33;
-    return x;
+  private static int modulateColor(int left, int right) {
+    var a = ((left >>> 24) & 0xFF) * ((right >>> 24) & 0xFF) / 255;
+    var r = ((left >>> 16) & 0xFF) * ((right >>> 16) & 0xFF) / 255;
+    var g = ((left >>> 8) & 0xFF) * ((right >>> 8) & 0xFF) / 255;
+    var b = (left & 0xFF) * (right & 0xFF) / 255;
+    return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
 }

@@ -36,8 +36,9 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -242,15 +243,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return SceneData.EMPTY;
     }
 
-    var storage = new SubmitNodeStorage();
     var collector = new VanillaSubmitCollector(ctx);
-    particlesState.submit(storage, collector.cameraRenderState());
-    for (var entry : storage.getSubmitsPerOrder().int2ObjectEntrySet()) {
-      var orderedCollector = collector.order(entry.getIntKey());
-      var collection = entry.getValue();
-      for (var particleGroupRenderer : collection.getParticleGroupRenderers()) {
-        orderedCollector.submitParticleGroup(particleGroupRenderer);
-      }
+    var cameraState = collector.cameraRenderState();
+    for (var particle : particlesState.particles) {
+      particle.submit(collector, cameraState);
     }
     return collector.buildScene();
   }
@@ -637,11 +633,36 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
-    for (var face : assets.blockGeometry(movingBlockRenderState.blockState).faces()) {
-      var color = LightingCalculator.faceColor(ctx, face, movingBlockRenderState.blockState, movingBlockRenderState.blockPos);
-      var stage = face.alphaMode() == RendererAssets.AlphaMode.TRANSLUCENT ? FeatureStage.TRANSLUCENT_BLOCK : FeatureStage.SOLID_BLOCK;
-      withStage(stage, () -> builder().add(WorldMeshCollector.toRenderQuad(face.transformed(poseStack.last().pose()), 0.0, 0.0, 0.0, color, false, 0.0F)));
-    }
+    var minecraft = Minecraft.getInstance();
+    var blockState = movingBlockRenderState.blockState;
+    var model = minecraft.getModelManager().getBlockStateModelSet().get(blockState);
+    var optionsState = minecraft.gameRenderer.getGameRenderState().optionsRenderState;
+    var stage = model.hasMaterialFlag(1) ? FeatureStage.TRANSLUCENT_BLOCK : FeatureStage.SOLID_BLOCK;
+    withStage(stage, () -> {
+      var basePose = poseStack.last().copy();
+      var consumers = new EnumMap<ChunkSectionLayer, CapturingVertexConsumer>(ChunkSectionLayer.class);
+      BlockQuadOutput output = (x, y, z, quad, instance) -> {
+        var materialInfo = quad.materialInfo();
+        var layer = materialInfo != null ? materialInfo.layer() : ChunkSectionLayer.SOLID;
+        putMovingBlockQuad(basePose, consumers, x, y, z, quad, instance, layer);
+      };
+      BlockQuadOutput solidOutput = (x, y, z, quad, instance) -> putMovingBlockQuad(basePose, consumers, x, y, z, quad, instance, ChunkSectionLayer.SOLID);
+      var blockOutput = ModelBlockRenderer.forceOpaque(optionsState.cutoutLeaves, blockState) ? solidOutput : output;
+      var blockRenderer = new ModelBlockRenderer(optionsState.ambientOcclusion, false, minecraft.getBlockColors());
+      var seed = blockState.getSeed(movingBlockRenderState.randomSeedPos);
+      blockRenderer.tesselateBlock(
+        blockOutput,
+        0.0F,
+        0.0F,
+        0.0F,
+        movingBlockRenderState,
+        movingBlockRenderState.blockPos,
+        blockState,
+        model,
+        seed
+      );
+      consumers.values().forEach(CapturingVertexConsumer::flush);
+    });
   }
 
   @Override
@@ -857,6 +878,50 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     for (var quad : part.getQuads(null)) {
       putQuad(pose, quad, instance, consumer);
     }
+  }
+
+  private void putMovingBlockQuad(
+    PoseStack.Pose basePose,
+    EnumMap<ChunkSectionLayer, CapturingVertexConsumer> consumers,
+    float x,
+    float y,
+    float z,
+    BakedQuad quad,
+    QuadInstance instance,
+    ChunkSectionLayer layer
+  ) {
+    var pose = basePose.copy();
+    pose.translate(x, y, z);
+    putQuad(pose, quad, instance, movingBlockConsumer(consumers, layer));
+  }
+
+  private CapturingVertexConsumer movingBlockConsumer(EnumMap<ChunkSectionLayer, CapturingVertexConsumer> consumers, ChunkSectionLayer layer) {
+    return consumers.computeIfAbsent(layer, currentLayer -> {
+      var renderType = movingBlockRenderType(currentLayer);
+      var texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
+      var alphaMode = switch (currentLayer) {
+        case SOLID -> RendererAssets.AlphaMode.OPAQUE;
+        case CUTOUT -> RendererAssets.AlphaMode.CUTOUT;
+        case TRANSLUCENT -> RendererAssets.AlphaMode.TRANSLUCENT;
+      };
+      return new CapturingVertexConsumer(
+        new Matrix4f(),
+        renderType.mode(),
+        texture,
+        alphaMode,
+        alphaCutoutThreshold(renderType, alphaMode),
+        renderType,
+        null
+      );
+    });
+  }
+
+  private static RenderType movingBlockRenderType(ChunkSectionLayer layer) {
+    return switch (layer) {
+      case SOLID -> RenderTypes.solidMovingBlock();
+      case CUTOUT -> RenderTypes.cutoutMovingBlock();
+      case TRANSLUCENT -> RenderTypes.translucentMovingBlock();
+    };
   }
 
   private static void putQuad(PoseStack.Pose pose, BakedQuad quad, QuadInstance instance, VertexConsumer consumer) {
