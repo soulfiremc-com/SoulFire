@@ -154,6 +154,21 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
+  void ignoresBlankMirroredPlayerSkinUploads() {
+    var location = Identifier.withDefaultNamespace("skins/test-blank-upload");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try (var source = new NativeImage(64, 64, true)) {
+      RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, 0, 0, 64, 64, 0, 0);
+
+      assertNull(RendererRuntimeTextureMirror.texture(location));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
   void mirrorsInitialDynamicTexturePixelsOnRegistration() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-initial");
     var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 1);

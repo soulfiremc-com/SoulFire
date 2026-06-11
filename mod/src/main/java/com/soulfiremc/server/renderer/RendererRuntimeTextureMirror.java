@@ -113,7 +113,7 @@ public final class RendererRuntimeTextureMirror {
   public static RendererAssets.TextureImage texture(Identifier location) {
     synchronized (LOCK) {
       var mirrored = TEXTURES.get(location);
-      return mirrored != null && mirrored.hasUploadData() ? mirrored.toTextureImage(location) : null;
+      return mirrored != null ? textureImage(location, mirrored) : null;
     }
   }
 
@@ -128,7 +128,7 @@ public final class RendererRuntimeTextureMirror {
           mirrored.height,
           mirrored.format.toString(),
           mirrored.hasUploadData(),
-          mirrored.hasUploadData() ? mirrored.toTextureImage(entry.getKey()) : null
+          textureImage(entry.getKey(), mirrored)
         ));
       }
       return snapshots;
@@ -146,6 +146,25 @@ public final class RendererRuntimeTextureMirror {
 
   private static boolean isPlayerSkin(Identifier location) {
     return location.getPath().startsWith("skins/");
+  }
+
+  private static boolean isPlayerTexture(Identifier location) {
+    var path = location.getPath();
+    return path.startsWith("skins/")
+      || path.startsWith("capes/")
+      || path.startsWith("elytra/");
+  }
+
+  @Nullable
+  private static RendererAssets.TextureImage textureImage(Identifier location, MirroredTexture mirrored) {
+    if (!mirrored.hasUploadData()) {
+      return null;
+    }
+    if (isPlayerTexture(location) && mirrored.isBlank()) {
+      return null;
+    }
+
+    return mirrored.toTextureImage(location);
   }
 
   @Nullable
@@ -263,6 +282,15 @@ public final class RendererRuntimeTextureMirror {
 
     private boolean hasUploadData() {
       return hasUploadData;
+    }
+
+    private boolean isBlank() {
+      for (var pixel : pixels) {
+        if (pixel != 0) {
+          return false;
+        }
+      }
+      return true;
     }
 
     @Nullable
