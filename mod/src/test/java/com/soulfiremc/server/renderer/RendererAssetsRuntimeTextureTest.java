@@ -169,6 +169,46 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
+  void ignoresTransparentMirroredPlayerSkinUploads() {
+    var location = Identifier.withDefaultNamespace("skins/test-transparent-upload");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try (var source = new NativeImage(64, 64, true)) {
+      source.fillRect(0, 0, 64, 64, 0x00FFFFFF);
+      RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, 0, 0, 64, 64, 0, 0);
+
+      assertNull(RendererRuntimeTextureMirror.texture(location));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
+  void keepsMirroredPlayerSkinWhenBlankUploadFollowsLoadedPixels() {
+    var location = Identifier.withDefaultNamespace("skins/test-blank-overwrite");
+    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try {
+      try (var loaded = new NativeImage(64, 64, true)) {
+        loaded.setPixel(8, 8, 0xFF112233);
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, loaded, 0, 0, 64, 64, 0, 0);
+      }
+
+      try (var blank = new NativeImage(64, 64, true)) {
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, blank, 0, 0, 64, 64, 0, 0);
+      }
+
+      var mirrored = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(mirrored);
+      assertEquals(0xFF112233, mirrored.toBufferedImage().getRGB(8, 8));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
   void mirrorsInitialDynamicTexturePixelsOnRegistration() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-initial");
     var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 1);
