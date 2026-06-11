@@ -1154,13 +1154,13 @@ public final class InventoryItemIconRenderer {
     ) {
       var tintList = new it.unimi.dsi.fastutil.ints.IntArrayList(tints);
       for (var part : parts) {
-        for (var quad : part.getQuads(null)) {
-          addVanillaQuad(quads, textures, quad, new Matrix4f(poseStack.last().pose()), tintList);
-        }
         for (var direction : net.minecraft.core.Direction.values()) {
           for (var quad : part.getQuads(direction)) {
             addVanillaQuad(quads, textures, quad, new Matrix4f(poseStack.last().pose()), tintList);
           }
+        }
+        for (var quad : part.getQuads(null)) {
+          addVanillaQuad(quads, textures, quad, new Matrix4f(poseStack.last().pose()), tintList);
         }
       }
     }

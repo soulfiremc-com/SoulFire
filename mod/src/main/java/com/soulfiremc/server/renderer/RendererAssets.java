@@ -142,7 +142,8 @@ public final class RendererAssets {
 
   public TextureImage renderTexture(Identifier textureLocation) {
     var runtimeTexture = runtimeTexture(textureLocation);
-    return runtimeTexture != null ? runtimeTexture : texture(textureLocation);
+    var texture = runtimeTexture != null ? runtimeTexture : texture(textureLocation);
+    return isAtlasTextureLocation(textureLocation) ? texture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE) : texture;
   }
 
   public int resolveTint(ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
@@ -262,13 +263,13 @@ public final class RendererAssets {
         if (part == null) {
           throw new NullPointerException("block model part is null");
         }
-        for (var quad : part.getQuads(null)) {
-          faces.add(vanillaQuadToFace(quad, null, state));
-        }
         for (var direction : Direction.values()) {
           for (var quad : part.getQuads(direction)) {
             faces.add(vanillaQuadToFace(quad, direction, state));
           }
+        }
+        for (var quad : part.getQuads(null)) {
+          faces.add(vanillaQuadToFace(quad, null, state));
         }
       }
       if (!faces.isEmpty()) {
@@ -805,17 +806,21 @@ public final class RendererAssets {
     return null;
   }
 
+  private static boolean isAtlasTextureLocation(Identifier textureLocation) {
+    return textureLocation.getPath().startsWith("textures/atlas/");
+  }
+
   private TextureImage loadAtlasTexture(Identifier atlasLocation) {
     var runtimeTexture = runtimeTexture(atlasLocation);
     if (runtimeTexture != null) {
-      return runtimeTexture;
+      return runtimeTexture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE);
     }
 
     try {
       return loadAtlasTexture(Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(atlasLocation));
     } catch (Throwable t) {
       log.debug("Failed to reconstruct atlas texture {}", atlasLocation, t);
-      return MISSING_TEXTURE;
+      return MISSING_TEXTURE.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE);
     }
   }
 
@@ -829,10 +834,10 @@ public final class RendererAssets {
 
         drawAtlasSprite(image, sprite);
       }
-      return TextureImage.from(image, null);
+      return TextureImage.from(image, null).withAddressMode(TextureAddressMode.CLAMP_TO_EDGE);
     } catch (Throwable t) {
       log.debug("Failed to reconstruct atlas texture {}", atlas.location(), t);
-      return MISSING_TEXTURE;
+      return MISSING_TEXTURE.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE);
     }
   }
 
@@ -907,6 +912,23 @@ public final class RendererAssets {
     TRANSLUCENT
   }
 
+  public enum TextureAddressMode {
+    REPEAT {
+      @Override
+      float map(float coordinate) {
+        return coordinate - (float) Math.floor(coordinate);
+      }
+    },
+    CLAMP_TO_EDGE {
+      @Override
+      float map(float coordinate) {
+        return Math.clamp(coordinate, 0.0F, 1.0F);
+      }
+    };
+
+    abstract float map(float coordinate);
+  }
+
   public record BillboardTexture(TextureImage texture, AlphaMode alphaMode) {}
 
   public record ItemRenderModel(BlockGeometry geometry, @Nullable BillboardTexture billboard) {
@@ -973,6 +995,7 @@ public final class RendererAssets {
     private final int[] pixels;
     private final boolean hasAlpha;
     private final boolean hasTranslucentPixels;
+    private final TextureAddressMode addressMode;
     @Nullable
     private BufferedImage bufferedImage;
 
@@ -985,7 +1008,8 @@ public final class RendererAssets {
       int[] frameOrder,
       int[] pixels,
       boolean hasAlpha,
-      boolean hasTranslucentPixels) {
+      boolean hasTranslucentPixels,
+      TextureAddressMode addressMode) {
       this.width = width;
       this.height = height;
       this.frameHeight = frameHeight;
@@ -995,6 +1019,7 @@ public final class RendererAssets {
       this.pixels = pixels;
       this.hasAlpha = hasAlpha;
       this.hasTranslucentPixels = hasTranslucentPixels;
+      this.addressMode = addressMode;
     }
 
     public static TextureImage from(@Nullable BufferedImage image, @Nullable JsonObject metadata) {
@@ -1058,7 +1083,18 @@ public final class RendererAssets {
           }
         }
       }
-      var textureImage = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels, hasAlpha, hasTranslucentPixels);
+      var textureImage = new TextureImage(
+        width,
+        height,
+        frameHeight,
+        frameCount,
+        frameTime,
+        frameOrder,
+        pixels,
+        hasAlpha,
+        hasTranslucentPixels,
+        TextureAddressMode.REPEAT
+      );
       return textureImage;
     }
 
@@ -1078,17 +1114,43 @@ public final class RendererAssets {
         return 0;
       }
 
-      var wrappedU = u - (float) Math.floor(u);
-      var wrappedV = v - (float) Math.floor(v);
+      var sampledU = addressMode.map(u);
+      var sampledV = addressMode.map(v);
       var availableHeight = Math.max(1, pixels.length / width);
       var clampedFrameHeight = Math.clamp(frameHeight, 1, availableHeight);
       var availableFrameCount = Math.max(1, availableHeight / clampedFrameHeight);
       var frameOrderIndex = (int) ((tick / frameTime) % frameOrder.length);
       var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
       var yOffset = frameIndex * clampedFrameHeight;
-      var x = Math.clamp((int) (wrappedU * width), 0, width - 1);
-      var y = Math.clamp((int) (wrappedV * clampedFrameHeight), 0, clampedFrameHeight - 1) + yOffset;
+      var x = Math.clamp((int) (sampledU * width), 0, width - 1);
+      var y = Math.clamp((int) (sampledV * clampedFrameHeight), 0, clampedFrameHeight - 1) + yOffset;
       return pixels[x + y * width];
+    }
+
+    public TextureImage withAddressMode(TextureAddressMode addressMode) {
+      var requiredAddressMode = java.util.Objects.requireNonNull(addressMode, "addressMode");
+      if (this.addressMode == requiredAddressMode) {
+        return this;
+      }
+
+      var textureImage = new TextureImage(
+        width,
+        height,
+        frameHeight,
+        frameCount,
+        frameTime,
+        frameOrder,
+        pixels,
+        hasAlpha,
+        hasTranslucentPixels,
+        requiredAddressMode
+      );
+      textureImage.bufferedImage = bufferedImage;
+      return textureImage;
+    }
+
+    public TextureAddressMode addressMode() {
+      return addressMode;
     }
 
     public int width() {
