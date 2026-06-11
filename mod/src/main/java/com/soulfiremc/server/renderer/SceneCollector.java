@@ -43,6 +43,8 @@ public class SceneCollector {
     var builder = SceneData.builder();
     var billboardBuckets = new HashMap<Long, Integer>();
     var trace = RenderDebugTrace.current();
+    var options = Minecraft.getInstance().options;
+    Entity.setViewScale(Mth.clamp(options.getEffectiveRenderDistance() / 8.0, 1.0, 2.5) * options.entityDistanceScaling().get());
 
     VanillaSubmitCollector.prepareEntityDispatcher(ctx, localPlayer);
     try {
@@ -60,7 +62,8 @@ public class SceneCollector {
           continue;
         }
 
-        if (!VanillaSubmitCollector.shouldRenderEntity(ctx, entity)) {
+        if (!VanillaSubmitCollector.shouldRenderEntity(ctx, entity)
+          && (localPlayer == null || !entity.hasIndirectPassenger(localPlayer))) {
           continue;
         }
         trace.entityVisible();
@@ -131,7 +134,7 @@ public class SceneCollector {
       return;
     }
 
-    if (!shouldConsiderBlockEntity(ctx, blockEntity)) {
+    if (!shouldConsiderBlockEntity(blockEntity)) {
       return;
     }
 
@@ -154,26 +157,8 @@ public class SceneCollector {
     }
   }
 
-  private static boolean shouldConsiderBlockEntity(RenderContext ctx, BlockEntity blockEntity) {
-    var renderer = Minecraft.getInstance().getBlockEntityRenderDispatcher().getRenderer(blockEntity);
-    if (renderer == null) {
-      return false;
-    }
-
-    if (renderer.shouldRenderOffScreen()) {
-      return isGlobalBlockEntity(ctx.level(), blockEntity);
-    }
-
-    var viewDistance = renderer.getViewDistance();
-    var pos = blockEntity.getBlockPos();
-    var centerX = pos.getX() + 0.5;
-    var centerY = pos.getY() + 0.5;
-    var centerZ = pos.getZ() + 0.5;
-    var dx = centerX - ctx.camera().eyeX();
-    var dy = centerY - ctx.camera().eyeY();
-    var dz = centerZ - ctx.camera().eyeZ();
-    var maxDistance = Math.min(ctx.maxDistance(), viewDistance);
-    return dx * dx + dy * dy + dz * dz <= (double) maxDistance * maxDistance;
+  private static boolean shouldConsiderBlockEntity(BlockEntity blockEntity) {
+    return Minecraft.getInstance().getBlockEntityRenderDispatcher().getRenderer(blockEntity) != null;
   }
 
   private static boolean isGlobalBlockEntity(ClientLevel level, BlockEntity blockEntity) {

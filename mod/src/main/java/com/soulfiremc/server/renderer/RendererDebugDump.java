@@ -205,6 +205,7 @@ public final class RendererDebugDump {
       passes.add("cutout", quadsJson(sceneData.cutout(), "cutout"));
       passes.add("translucent", quadsJson(sceneData.translucent(), "translucent"));
       passes.add("terrainTranslucent", quadsJson(sceneData.terrainTranslucent(), "terrainTranslucent"));
+      passes.add("translucentParticles", quadsJson(sceneData.translucentParticles(), "translucentParticles"));
       passes.add("clouds", quadsJson(sceneData.clouds(), "clouds"));
       passes.add("weather", quadsJson(sceneData.weather(), "weather"));
       root.add("passes", passes);
@@ -295,6 +296,7 @@ public final class RendererDebugDump {
       json.addProperty("cutout", sceneData.cutout().length);
       json.addProperty("translucent", sceneData.translucent().length);
       json.addProperty("terrainTranslucent", sceneData.terrainTranslucent().length);
+      json.addProperty("translucentParticles", sceneData.translucentParticles().length);
       json.addProperty("clouds", sceneData.clouds().length);
       json.addProperty("weather", sceneData.weather().length);
       json.addProperty("total", sceneData.totalQuadCount());

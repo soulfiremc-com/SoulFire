@@ -232,7 +232,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     particleCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
 
     var particlesState = new ParticlesRenderState();
-    minecraft.particleEngine.extract(particlesState, createFrustum(ctx), particleCamera, 1.0F);
+    minecraft.particleEngine.extract(particlesState, createFrustum(ctx).offset(-3.0F), particleCamera, 1.0F);
     if (particlesState.particles.isEmpty()) {
       return SceneData.EMPTY;
     }
@@ -736,7 +736,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
               RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD
             )
             .withPipelineState(layer.pipeline());
-          addFace(vertices, new float[]{u1, v1, u1, v0, u0, v0, u0, v1}, material);
+          var quad = face(vertices, new float[]{u1, v1, u1, v0, u0, v0, u0, v1}, material);
+          if (layer.translucent()) {
+            builder().addTranslucentParticle(quad);
+          } else {
+            builder().add(quad);
+          }
         });
       });
     }
@@ -1097,13 +1102,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private void addFace(Vector3f[] vertices, float[] uv, RenderMaterial material) {
-    builder().add(new RenderQuad(
+    builder().add(face(vertices, uv, material));
+  }
+
+  private RenderQuad face(Vector3f[] vertices, float[] uv, RenderMaterial material) {
+    return new RenderQuad(
       new RenderVertex(vertices[0].x(), vertices[0].y(), vertices[0].z(), uv[0], uv[1], 0xFFFFFFFF),
       new RenderVertex(vertices[1].x(), vertices[1].y(), vertices[1].z(), uv[2], uv[3], 0xFFFFFFFF),
       new RenderVertex(vertices[2].x(), vertices[2].y(), vertices[2].z(), uv[4], uv[5], 0xFFFFFFFF),
       new RenderVertex(vertices[3].x(), vertices[3].y(), vertices[3].z(), uv[6], uv[7], 0xFFFFFFFF),
       material
-    ));
+    );
   }
 
   private Vector3f transform(PoseStack poseStack, float x, float y, float z) {

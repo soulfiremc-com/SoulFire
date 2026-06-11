@@ -283,7 +283,7 @@ public final class RenderDebugTrace {
       return;
     }
     log.info(
-      "renderer-debug#{} size={}x{} dist={} yaw={} pitch={} scene[opaque={},cutout={},translucent={},terrainTranslucent={},clouds={},weather={}] world[chunks={},loaded={},sections={},meshed={},cacheHit={},cacheMiss={}] quads[block={},billboard={},weather={}] entities[seen={},visible={}] vanilla[blockHit={},blockFallback={}] raster[opaqueTris={},cutoutTris={},translucentTris={}] timeMs[world={},dynamic={},raster={},total={}]",
+      "renderer-debug#{} size={}x{} dist={} yaw={} pitch={} scene[opaque={},cutout={},translucent={},terrainTranslucent={},translucentParticles={},clouds={},weather={}] world[chunks={},loaded={},sections={},meshed={},cacheHit={},cacheMiss={}] quads[block={},billboard={},weather={}] entities[seen={},visible={}] vanilla[blockHit={},blockFallback={}] raster[opaqueTris={},cutoutTris={},translucentTris={}] timeMs[world={},dynamic={},raster={},total={}]",
       renderId,
       width,
       height,
@@ -294,6 +294,7 @@ public final class RenderDebugTrace {
       sceneData.cutout().length,
       sceneData.translucent().length,
       sceneData.terrainTranslucent().length,
+      sceneData.translucentParticles().length,
       sceneData.clouds().length,
       sceneData.weather().length,
       chunksConsidered.sum(),

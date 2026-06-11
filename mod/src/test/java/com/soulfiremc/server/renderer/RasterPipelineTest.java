@@ -539,6 +539,33 @@ class RasterPipelineTest {
   }
 
   @Test
+  void translucentParticlePassRendersAfterTerrainTranslucency() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.addTerrain(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      translucentMaterial(solidTexture(0xFF00FF00), false)
+    ));
+    scene.addTranslucentParticle(customQuad(
+      vertex(-1.0F, -1.0F, 8.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 8.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 8.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 8.0F, 1.0F, 1.0F),
+      translucentMaterial(solidTexture(0xFF0000FF), false)
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertTrue((color & 0xFF) > ((color >> 8) & 0xFF), () -> "expected particle pass to render after terrain but was 0x" + Integer.toHexString(color));
+  }
+
+  @Test
   void orderedTranslucentMaterialsPreserveSubmissionOrder() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);

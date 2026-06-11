@@ -332,11 +332,12 @@ class VanillaSubmitCollectorTextTest {
 
     var scene = sceneData(collector);
     assertEquals(1, scene.cutout().length);
-    assertEquals(1, scene.translucent().length);
+    assertEquals(0, scene.translucent().length);
+    assertEquals(1, scene.translucentParticles().length);
     assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.cutout()[0].material().alphaCutoutThreshold());
-    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.translucent()[0].material().alphaCutoutThreshold());
-    assertTrue(scene.translucent()[0].material().depthWrite());
-    assertTrue(((scene.translucent()[0].material().color() >> 16) & 0xFF) < 255);
+    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.translucentParticles()[0].material().alphaCutoutThreshold());
+    assertTrue(scene.translucentParticles()[0].material().depthWrite());
+    assertTrue(((scene.translucentParticles()[0].material().color() >> 16) & 0xFF) < 255);
   }
 
   @Test

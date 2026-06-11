@@ -43,7 +43,9 @@ public class RendererRasterBenchmark {
 
   @Benchmark
   public int rasterizeSyntheticScene() {
-    pipeline.renderSynthetic(camera, sceneData, buffers, 0L, 0xFF87CEEB);
+    buffers.clearColor(0xFF87CEEB);
+    buffers.clearDepth();
+    pipeline.renderScene(camera, sceneData, buffers, 0L);
     return buffers.colorBuffer()[buffers.colorBuffer().length / 2];
   }
 
@@ -78,10 +80,10 @@ public class RendererRasterBenchmark {
     int color
   ) {
     return new RenderQuad(
-      new RenderVertex(centerX - halfSize, centerY - halfSize, z, 0.0F, 1.0F),
-      new RenderVertex(centerX - halfSize, centerY + halfSize, z, 0.0F, 0.0F),
-      new RenderVertex(centerX + halfSize, centerY + halfSize, z, 1.0F, 0.0F),
-      new RenderVertex(centerX + halfSize, centerY - halfSize, z, 1.0F, 1.0F),
+      new RenderVertex(centerX - halfSize, centerY - halfSize, z, 0.0F, 1.0F, 0xFFFFFFFF),
+      new RenderVertex(centerX - halfSize, centerY + halfSize, z, 0.0F, 0.0F, 0xFFFFFFFF),
+      new RenderVertex(centerX + halfSize, centerY + halfSize, z, 1.0F, 0.0F, 0xFFFFFFFF),
+      new RenderVertex(centerX + halfSize, centerY - halfSize, z, 1.0F, 1.0F, 0xFFFFFFFF),
       RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
