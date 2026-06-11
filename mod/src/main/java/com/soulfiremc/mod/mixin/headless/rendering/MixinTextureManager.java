@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
+import com.soulfiremc.server.renderer.RendererDownloadedTextureStore;
 import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -44,6 +45,7 @@ public class MixinTextureManager {
 
   @Inject(method = "release", at = @At("HEAD"))
   private void releaseTextureHook(Identifier location, CallbackInfo ci) {
+    RendererDownloadedTextureStore.unregister(location);
     RendererRuntimeTextureMirror.unregister(location);
   }
 }

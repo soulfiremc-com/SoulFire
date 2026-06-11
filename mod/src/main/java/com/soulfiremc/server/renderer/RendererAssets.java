@@ -25,7 +25,6 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.math.Quadrant;
-import com.soulfiremc.mod.access.IMinecraft;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -35,9 +34,9 @@ import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockStateModelWrapper;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.ClientAsset;
@@ -67,8 +66,6 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -146,7 +143,9 @@ public final class RendererAssets {
 
   public TextureImage renderTexture(Identifier textureLocation) {
     var runtimeTexture = runtimeTexture(textureLocation);
-    var texture = runtimeTexture != null ? runtimeTexture : texture(textureLocation);
+    var texture = runtimeTexture != null
+      ? runtimeTexture
+      : isRuntimeClientTexturePath(textureLocation) ? runtimeTextureFallback(textureLocation) : texture(textureLocation);
     return isAtlasTextureLocation(textureLocation) ? texture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE) : texture;
   }
 
@@ -736,14 +735,18 @@ public final class RendererAssets {
 
   @Nullable
   private TextureImage runtimeTexture(Identifier textureLocation) {
+    var downloadedTexture = RendererDownloadedTextureStore.texture(textureLocation);
+    if (downloadedTexture != null) {
+      return downloadedTexture;
+    }
+
     var mirroredTexture = RendererRuntimeTextureMirror.texture(textureLocation);
     if (mirroredTexture != null) {
       return mirroredTexture;
     }
 
-    var cachedPlayerTexture = cachedPlayerTexture(textureLocation);
-    if (cachedPlayerTexture != null) {
-      return cachedPlayerTexture;
+    if (isRuntimeClientTexturePath(textureLocation)) {
+      return null;
     }
 
     try {
@@ -770,66 +773,10 @@ public final class RendererAssets {
     return null;
   }
 
-  @Nullable
-  private TextureImage cachedPlayerTexture(Identifier textureLocation) {
-    var prefix = playerTexturePrefix(textureLocation);
-    if (prefix == null) {
-      return null;
-    }
-
-    var cacheKey = "player-texture-cache:" + textureLocation;
-    var cached = textureCache.get(cacheKey);
-    if (cached != null) {
-      return cached;
-    }
-
-    var loaded = loadCachedPlayerTexture(textureLocation, prefix);
-    if (loaded == null) {
-      return null;
-    }
-
-    var existing = textureCache.putIfAbsent(cacheKey, loaded);
-    return existing != null ? existing : loaded;
-  }
-
-  @Nullable
-  private TextureImage loadCachedPlayerTexture(Identifier textureLocation, String prefix) {
-    var hash = textureLocation.getPath().substring(prefix.length());
-    if (hash.isBlank() || hash.contains("/")) {
-      return null;
-    }
-
-    var texturePath = playerTextureCacheDirectory().resolve(hash.substring(0, Math.min(2, hash.length()))).resolve(hash);
-    if (!Files.isRegularFile(texturePath)) {
-      return null;
-    }
-
-    NativeImage image = null;
-    NativeImage normalized = null;
-    try {
-      image = NativeImage.read(Files.readAllBytes(texturePath));
-      if (prefix.equals(SKIN_TEXTURE_PREFIX)) {
-        normalized = SkinTextureDownloader.processLegacySkin(image, textureLocation.toString());
-        image = null;
-        return TextureImage.from(nativeImageToBufferedImage(normalized), null);
-      }
-
-      return TextureImage.from(nativeImageToBufferedImage(image), null);
-    } catch (Throwable t) {
-      log.debug("Failed to load cached renderer player texture {}", texturePath, t);
-      return null;
-    } finally {
-      if (normalized != null) {
-        normalized.close();
-      }
-      if (image != null) {
-        image.close();
-      }
-    }
-  }
-
-  private Path playerTextureCacheDirectory() {
-    return ((IMinecraft) Minecraft.getInstance()).soulfire$getGameConfig().location.assetDirectory.toPath().resolve("skins");
+  private TextureImage runtimeTextureFallback(Identifier textureLocation) {
+    return textureLocation.getPath().startsWith(SKIN_TEXTURE_PREFIX)
+      ? texture(DefaultPlayerSkin.getDefaultTexture())
+      : MISSING_TEXTURE;
   }
 
   private static boolean isPlayerTexture(Identifier textureLocation) {
