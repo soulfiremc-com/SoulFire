@@ -41,6 +41,7 @@ public final class RasterPipeline {
     rasterPass(camera, animationTick, sceneData.opaque(), buffers, false, RasterPassKind.OPAQUE);
     rasterPass(camera, animationTick, sceneData.cutout(), buffers, false, RasterPassKind.CUTOUT);
     rasterPass(camera, animationTick, sceneData.translucent(), buffers, true, RasterPassKind.TRANSLUCENT);
+    rasterPass(camera, animationTick, sceneData.terrainTranslucent(), buffers, true, RasterPassKind.TRANSLUCENT);
     rasterPass(camera, animationTick, sceneData.clouds(), buffers, false, RasterPassKind.TRANSLUCENT);
     rasterPass(camera, animationTick, sceneData.weather(), buffers, false, RasterPassKind.TRANSLUCENT);
   }

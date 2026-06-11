@@ -512,6 +512,33 @@ class RasterPipelineTest {
   }
 
   @Test
+  void terrainTranslucentPassRendersAfterFeatureTranslucency() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      translucentMaterial(solidTexture(0xFFFF0000), false)
+    ));
+    scene.addTerrain(customQuad(
+      vertex(-1.0F, -1.0F, 8.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 8.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 8.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 8.0F, 1.0F, 1.0F),
+      translucentMaterial(solidTexture(0xFF00FF00), false)
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertTrue(((color >> 8) & 0xFF) > ((color >> 16) & 0xFF), () -> "expected terrain pass to render later but was 0x" + Integer.toHexString(color));
+  }
+
+  @Test
   void orderedTranslucentMaterialsPreserveSubmissionOrder() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -628,16 +655,34 @@ class RasterPipelineTest {
   }
 
   @Test
-  void renderTypeRefreshesShaderAlphaCutoutThreshold() {
+  void solidBlockRenderTypeDoesNotAddShaderAlphaCutout() {
     var material = RenderMaterial
       .create(solidTexture(0x19FFFFFF), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF, false, 0.0F)
       .withRenderType(RenderTypes.solidMovingBlock());
 
-    assertEquals(26, material.alphaCutoutThreshold());
+    assertEquals(0, material.alphaCutoutThreshold());
   }
 
   @Test
-  void renderTypeKeepsBlendAndSortStateForOpaqueCoverageBucket() {
+  void cutoutBlockRenderTypeUsesShaderAlphaCutoutDefine() {
+    var material = RenderMaterial
+      .create(solidTexture(0x7FFFFFFF), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF, false, 0.0F)
+      .withRenderType(RenderTypes.cutoutMovingBlock());
+
+    assertEquals(128, material.alphaCutoutThreshold());
+  }
+
+  @Test
+  void entityShadowRenderTypeDoesNotApplySyntheticAlphaCutout() {
+    var material = RenderMaterial
+      .create(solidTexture(0x01FFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, true, 0.0F)
+      .withRenderType(RenderTypes.entityShadow(Identifier.withDefaultNamespace("textures/misc/shadow.png")));
+
+    assertEquals(0, material.alphaCutoutThreshold());
+  }
+
+  @Test
+  void renderTypeKeepsBlendAndSortStateWhenInitiallyOpaque() {
     var material = RenderMaterial
       .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
       .withRenderType(RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("textures/entity/test")));

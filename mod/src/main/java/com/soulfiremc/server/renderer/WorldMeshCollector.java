@@ -115,7 +115,7 @@ public class WorldMeshCollector {
               if (!shouldEmitBlockFace(level, blockState, blockPos, face)) {
                 continue;
               }
-              builder.add(
+              builder.addTerrain(
                 toRenderQuad(
                   face,
                   originX + localX,
@@ -131,7 +131,7 @@ public class WorldMeshCollector {
           }
 
           if (!fluidState.isEmpty()) {
-            builder.addAll(VanillaSubmitCollector.collectFluid(ctx, fluidRenderer, blockPos.immutable(), blockState, fluidState));
+            builder.addTerrainAll(VanillaSubmitCollector.collectFluid(ctx, fluidRenderer, blockPos.immutable(), blockState, fluidState));
           }
         }
       }

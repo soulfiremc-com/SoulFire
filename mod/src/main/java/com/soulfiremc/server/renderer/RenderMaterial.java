@@ -242,11 +242,19 @@ public record RenderMaterial(
       }
     }
 
-    var path = renderType.pipeline().getLocation().getPath();
-    if (usesOneTenthAlphaCutout(path)) {
-      return ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
-    }
-    return defaultAlphaCutoutThreshold(alphaMode);
+    return switch (renderType.pipeline().getFragmentShader().getPath()) {
+      case "core/glint",
+           "core/particle",
+           "core/rendertype_crumbling",
+           "core/rendertype_text",
+           "core/rendertype_text_background",
+           "core/rendertype_text_background_see_through",
+           "core/rendertype_text_intensity",
+           "core/rendertype_text_intensity_see_through",
+           "core/rendertype_text_see_through" -> ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
+      case "core/position_color" -> 1;
+      default -> 0;
+    };
   }
 
   private static AlphaCutoutSource alphaCutoutSource(RenderType renderType) {
@@ -262,23 +270,6 @@ public record RenderMaterial(
     return switch (fragmentShader) {
       case "core/rendertype_text_intensity", "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
       default -> TextureSampleMode.COLOR;
-    };
-  }
-
-  private static boolean usesOneTenthAlphaCutout(String pipelinePath) {
-    return switch (pipelinePath) {
-      case "pipeline/solid_block",
-           "pipeline/text",
-           "pipeline/gui_text",
-           "pipeline/text_background",
-           "pipeline/text_background_see_through",
-           "pipeline/text_intensity",
-           "pipeline/gui_text_intensity",
-           "pipeline/text_intensity_see_through",
-           "pipeline/text_polygon_offset",
-           "pipeline/glint",
-           "pipeline/crumbling" -> true;
-      default -> false;
     };
   }
 

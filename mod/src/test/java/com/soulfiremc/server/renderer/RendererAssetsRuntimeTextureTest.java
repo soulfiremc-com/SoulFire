@@ -56,12 +56,12 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
-  void classifiesBinaryAlphaEntityTranslucentSkinsAsCutout() {
+  void keepsBinaryAlphaEntityTranslucentSkinsOnTranslucentPath() {
     var texture = textureWithAlpha(0);
     var renderType = RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("skins/test"));
 
     assertEquals(
-      RendererAssets.AlphaMode.CUTOUT,
+      RendererAssets.AlphaMode.TRANSLUCENT,
       VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF)
     );
   }

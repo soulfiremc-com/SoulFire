@@ -1127,9 +1127,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var coverage = uv != null ? texture.alphaCoverage(uv) : new RendererAssets.TextureImage.AlphaCoverage(texture.hasAlpha(), texture.hasTranslucentPixels());
     var alpha = (color >>> 24) & 0xFF;
     if (renderType != null && renderType.hasBlending()) {
-      if (usesBinaryAlpha(renderType, coverage, alpha < 255)) {
-        return coverage.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
-      }
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return coverage.hasAlpha() || alpha < 255 ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
@@ -1139,22 +1136,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var coverage = texture.alphaCoverage(uv);
     var hasNonOpaqueAlpha = hasNonOpaqueAlpha(colors);
     if (renderType != null && renderType.hasBlending()) {
-      if (usesBinaryAlpha(renderType, coverage, hasNonOpaqueAlpha)) {
-        return coverage.hasAlpha() ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
-      }
       return RendererAssets.AlphaMode.TRANSLUCENT;
     }
     return coverage.hasAlpha() || hasNonOpaqueAlpha ? RendererAssets.AlphaMode.CUTOUT : RendererAssets.AlphaMode.OPAQUE;
-  }
-
-  private static boolean usesBinaryAlpha(RenderType renderType, RendererAssets.TextureImage.AlphaCoverage coverage, boolean hasNonOpaqueColorAlpha) {
-    return isEntityTranslucent(renderType) && !coverage.hasTranslucentPixels() && !hasNonOpaqueColorAlpha;
-  }
-
-  private static boolean isEntityTranslucent(RenderType renderType) {
-    var textureLocation = sampler0Location(renderType);
-    return textureLocation != null
-      && (renderType == RenderTypes.entityTranslucent(textureLocation) || renderType == RenderTypes.entityTranslucent(textureLocation, false));
   }
 
   @Nullable
