@@ -102,6 +102,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private static final int LEASH_RENDER_STEPS = 24;
   private static final float LEASH_WIDTH = 0.05F;
   private static final float LINE_SHADER_VIEW_SCALE = 1.0F - 1.0F / 256.0F;
+  private static final Vector3f LEVEL_LIGHT_0 = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
+  private static final Vector3f LEVEL_LIGHT_1 = new Vector3f(-0.2F, 1.0F, 0.7F).normalize();
   private static final Direction[] DIRECTIONS = Direction.values();
   private static final RendererAssets.TextureImage WHITE_TEXTURE = createSolidTexture(0xFFFFFFFF);
   private final RenderContext ctx;
@@ -1158,6 +1160,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       RenderMaterial.BlendState.from(BlendFunction.GLINT),
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.glint(sheeted ? 8.0F : 0.5F),
+      RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
       1.0F
@@ -1199,6 +1202,47 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var factor = Math.clamp(Math.max(blockLight, skyLight), 0.18F, 1.0F);
     var channel = Math.clamp(Math.round(factor * 255.0F), 0, 255);
     return 0xFF000000 | (channel << 16) | (channel << 8) | channel;
+  }
+
+  private int directionalLightColor(int color, Vector3f normal, @Nullable RenderType renderType, FaceLighting faceLighting) {
+    if (!usesDirectionalLighting(renderType) || normal.lengthSquared() <= 1.0E-8F) {
+      return color;
+    }
+
+    var unitNormal = new Vector3f(normal).normalize();
+    if (faceLighting == FaceLighting.BACK) {
+      unitNormal.negate();
+    }
+    var light0 = Math.max(0.0F, LEVEL_LIGHT_0.dot(unitNormal));
+    var light1 = Math.max(0.0F, LEVEL_LIGHT_1.dot(unitNormal));
+    var light = Math.min(1.0F, (light0 + light1) * 0.6F + 0.4F);
+    var r = Math.clamp(Math.round(((color >>> 16) & 0xFF) * light), 0, 255);
+    var g = Math.clamp(Math.round(((color >>> 8) & 0xFF) * light), 0, 255);
+    var b = Math.clamp(Math.round((color & 0xFF) * light), 0, 255);
+    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+  }
+
+  private boolean usesDirectionalLighting(@Nullable RenderType renderType) {
+    if (renderType == null) {
+      return false;
+    }
+
+    var pipeline = renderType.pipeline();
+    var shaderDefines = pipeline.getShaderDefines().flags();
+    if (!shaderDefines.contains("PER_FACE_LIGHTING") && shaderDefines.contains("NO_CARDINAL_LIGHTING")) {
+      return false;
+    }
+
+    var fragmentShader = pipeline.getFragmentShader().getPath();
+    return fragmentShader.equals("core/entity") || fragmentShader.equals("core/item");
+  }
+
+  private boolean usesPerFaceLighting(@Nullable RenderType renderType) {
+    if (renderType == null) {
+      return false;
+    }
+
+    return renderType.pipeline().getShaderDefines().flags().contains("PER_FACE_LIGHTING");
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
@@ -1335,6 +1379,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private void addCapturedQuad(CapturedVertex a, CapturedVertex b, CapturedVertex c, CapturedVertex d) {
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), d.position()},
+        new Vector3f[]{a.normal(), b.normal(), c.normal(), d.normal()},
         new int[]{a.color(), b.color(), c.color(), d.color()},
         new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), d.u(), d.v()},
         new int[]{a.light(), b.light(), c.light(), d.light()},
@@ -1345,6 +1390,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private void emitTriangle(CapturedVertex a, CapturedVertex b, CapturedVertex c) {
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), c.position()},
+        new Vector3f[]{a.normal(), b.normal(), c.normal(), c.normal()},
         new int[]{a.color(), b.color(), c.color(), c.color()},
         new float[]{a.u(), a.v(), b.u(), b.v(), c.u(), c.v(), c.u(), c.v()},
         new int[]{a.light(), b.light(), c.light(), c.light()},
@@ -1382,6 +1428,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
       addCapturedFace(
         positions,
+        zeroNormals(),
         new int[]{a.color(), a.color(), b.color(), b.color()},
         new float[]{a.u(), a.v(), a.u(), a.v(), b.u(), b.v(), b.u(), b.v()},
         new int[]{a.light(), a.light(), b.light(), b.light()},
@@ -1396,7 +1443,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         new float[]{vertex.u(), vertex.v(), vertex.u(), vertex.v(), vertex.u(), vertex.v(), vertex.u(), vertex.v()}
       );
       var clip = clipPosition(vertex.position(), material.viewScale());
-      if (!isUsableClip(clip)) {
+      if (!isInsideClipVolume(clip)) {
         return;
       }
 
@@ -1417,6 +1464,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
       addCapturedFace(
         positions,
+        zeroNormals(),
         new int[]{vertex.color(), vertex.color(), vertex.color(), vertex.color()},
         new float[]{vertex.u(), vertex.v(), vertex.u(), vertex.v(), vertex.u(), vertex.v(), vertex.u(), vertex.v()},
         new int[]{vertex.light(), vertex.light(), vertex.light(), vertex.light()},
@@ -1425,12 +1473,24 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       );
     }
 
-    private void addCapturedFace(Vector3f[] positions, int[] colors, float[] uv, int[] lights, int[] overlayColors) {
-      addCapturedFace(positions, colors, uv, lights, overlayColors, materialForFace(colors, uv));
+    private Vector3f[] zeroNormals() {
+      return new Vector3f[]{new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f()};
     }
 
     private void addCapturedFace(
       Vector3f[] positions,
+      Vector3f[] normals,
+      int[] colors,
+      float[] uv,
+      int[] lights,
+      int[] overlayColors
+    ) {
+      addCapturedFace(positions, normals, colors, uv, lights, overlayColors, materialForFace(colors, uv));
+    }
+
+    private void addCapturedFace(
+      Vector3f[] positions,
+      Vector3f[] normals,
       int[] colors,
       float[] uv,
       int[] lights,
@@ -1438,13 +1498,38 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       RenderMaterial material
     ) {
       var applyOverlay = materialOverride == null && usesOverlay(renderType);
-      builder.add(new RenderQuad(
-        renderVertex(positions[0], uv[0], uv[1], colors[0], lights[0], overlayColors[0], applyOverlay),
-        renderVertex(positions[1], uv[2], uv[3], colors[1], lights[1], overlayColors[1], applyOverlay),
-        renderVertex(positions[2], uv[4], uv[5], colors[2], lights[2], overlayColors[2], applyOverlay),
-        renderVertex(positions[3], uv[6], uv[7], colors[3], lights[3], overlayColors[3], applyOverlay),
+      if (usesPerFaceLighting(renderType) && material.doubleSided()) {
+        var oneSidedMaterial = material.withDoubleSided(false);
+        builder.add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.FRONT, 0, 1, 2, 3));
+        builder.add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.BACK, 3, 2, 1, 0));
+        return;
+      }
+
+      builder.add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, material, FaceLighting.FRONT, 0, 1, 2, 3));
+    }
+
+    private RenderQuad renderQuad(
+      Vector3f[] positions,
+      Vector3f[] normals,
+      int[] colors,
+      float[] uv,
+      int[] lights,
+      int[] overlayColors,
+      boolean applyOverlay,
+      RenderMaterial material,
+      FaceLighting faceLighting,
+      int i0,
+      int i1,
+      int i2,
+      int i3
+    ) {
+      return new RenderQuad(
+        renderVertex(positions[i0], normals[i0], uv[i0 * 2], uv[i0 * 2 + 1], colors[i0], lights[i0], overlayColors[i0], applyOverlay, faceLighting),
+        renderVertex(positions[i1], normals[i1], uv[i1 * 2], uv[i1 * 2 + 1], colors[i1], lights[i1], overlayColors[i1], applyOverlay, faceLighting),
+        renderVertex(positions[i2], normals[i2], uv[i2 * 2], uv[i2 * 2 + 1], colors[i2], lights[i2], overlayColors[i2], applyOverlay, faceLighting),
+        renderVertex(positions[i3], normals[i3], uv[i3 * 2], uv[i3 * 2 + 1], colors[i3], lights[i3], overlayColors[i3], applyOverlay, faceLighting),
         material
-      ));
+      );
     }
 
     private RenderMaterial materialForFace(int[] colors, float[] uv) {
@@ -1487,6 +1572,20 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         && Float.isFinite(clip.z)
         && Float.isFinite(clip.w)
         && Math.abs(clip.w) > 1.0E-6F;
+    }
+
+    private boolean isInsideClipVolume(Vector4f clip) {
+      if (!isUsableClip(clip)) {
+        return false;
+      }
+
+      var epsilon = 1.0E-6F * Math.abs(clip.w);
+      return clip.x >= -clip.w - epsilon
+        && clip.x <= clip.w + epsilon
+        && clip.y >= -clip.w - epsilon
+        && clip.y <= clip.w + epsilon
+        && clip.z >= -clip.w - epsilon
+        && clip.z <= clip.w + epsilon;
     }
 
     private ScreenOffset lineOffset(CapturedVertex vertex, Vector4f clip, float shaderScale, ScreenOffset fallback) {
@@ -1539,14 +1638,24 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return new Vector3f(world.x / world.w, world.y / world.w, world.z / world.w);
     }
 
-    private RenderVertex renderVertex(Vector3f position, float u, float v, int color, int light, int overlayColor, boolean applyOverlay) {
+    private RenderVertex renderVertex(
+      Vector3f position,
+      Vector3f normal,
+      float u,
+      float v,
+      int color,
+      int light,
+      int overlayColor,
+      boolean applyOverlay,
+      FaceLighting faceLighting
+    ) {
       return new RenderVertex(
         position.x(),
         position.y(),
         position.z(),
         u,
         v,
-        modulateColor(color, lightColor(light, 0, renderType)),
+        modulateColor(directionalLightColor(color, normal, renderType, faceLighting), lightColor(light, 0, renderType)),
         applyOverlay ? overlayColor : RenderVertex.NO_OVERLAY_COLOR
       );
     }
@@ -1814,6 +1923,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private record ScreenOffset(float x, float y, boolean usable) {
     private static final ScreenOffset UNUSABLE = new ScreenOffset(0.0F, 0.0F, false);
+  }
+
+  private enum FaceLighting {
+    FRONT,
+    BACK
   }
 
   private static final class SortGroupRegistry {

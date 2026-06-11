@@ -130,6 +130,31 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void textIntensitySamplesRedChannelAsGlyphCoverage() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFF40FF00}, null);
+    var consumer = newTextConsumer(collector, texture);
+
+    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    var red = (color >> 16) & 0xFF;
+    var green = (color >> 8) & 0xFF;
+    var blue = color & 0xFF;
+    assertTrue(red > 0, () -> "expected visible glyph coverage but was 0x" + Integer.toHexString(color));
+    assertChannelNear(green, red, 3);
+    assertChannelNear(blue, red, 3);
+  }
+
+  @Test
   void entityRenderTypesCaptureUv1OverlayCoordinates() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -145,13 +170,54 @@ class VanillaSubmitCollectorTextTest {
     flush(consumer);
 
     var scene = sceneData(collector);
-    assertEquals(1, scene.opaque().length);
+    assertEquals(2, scene.opaque().length);
     assertEquals(0xB2FF0000, scene.opaque()[0].v0().overlayColor());
+    assertEquals(0xB2FF0000, scene.opaque()[1].v0().overlayColor());
 
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF4D00B2, 3);
+  }
+
+  @Test
+  void entityVerticesApplyVanillaDirectionalLightingFromNormals() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
+    var consumer = newTextConsumer(collector, texture, renderType);
+
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF666666, 3);
+  }
+
+  @Test
+  void entityBackFacesUseOppositePerFaceLighting() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
+    var consumer = newTextConsumer(collector, texture, renderType);
+
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFFFFFF, 3);
   }
 
   @Test
@@ -219,6 +285,22 @@ class VanillaSubmitCollectorTextTest {
 
     var width = changedRunWidth(buffers, WIDTH / 2, HEIGHT / 2, 0xFF000000);
     assertTrue(width >= 8, () -> "expected point to use submitted size but was " + width + " px wide");
+  }
+
+  @Test
+  void pointsOutsideClipVolumeAreDiscardedBeforeExpansion() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newConsumer(collector, texture, RenderTypes.debugPoint(), VertexFormat.Mode.POINTS);
+
+    consumer.addVertex(4.4F, 0.0F, 6.0F).setColor(0xFFFFFFFF).setLineWidth(24.0F);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    assertEquals(0, countChangedPixels(buffers, 0xFF000000));
   }
 
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture) throws Exception {
@@ -296,6 +378,15 @@ class VanillaSubmitCollectorTextTest {
       .setUv(u, v)
       .setLight(light)
       .setOverlay(overlay);
+  }
+
+  private static void addEntityVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, float nx, float ny, float nz) {
+    consumer
+      .addVertex(x, y, z)
+      .setColor(0xFFFFFFFF)
+      .setUv(u, v)
+      .setLight(LightCoordsUtil.FULL_BRIGHT)
+      .setNormal(nx, ny, nz);
   }
 
   private static void addLineVertex(

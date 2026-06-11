@@ -335,6 +335,7 @@ public final class SkyRenderer {
       blendState,
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.IDENTITY,
+      RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
       1.0F

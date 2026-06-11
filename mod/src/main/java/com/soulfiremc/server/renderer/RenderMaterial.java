@@ -46,6 +46,7 @@ public record RenderMaterial(
   BlendState blendState,
   int colorWriteMask,
   UvTransform uvTransform,
+  TextureSampleMode textureSampleMode,
   boolean sortOnUpload,
   int sortGroup,
   float viewScale
@@ -86,6 +87,7 @@ public record RenderMaterial(
       defaultBlendState(alphaMode),
       ColorTargetState.WRITE_ALL,
       UvTransform.IDENTITY,
+      TextureSampleMode.COLOR,
       defaultSortOnUpload(alphaMode),
       0,
       1.0F
@@ -108,6 +110,30 @@ public record RenderMaterial(
       blendState,
       colorWriteMask,
       uvTransform,
+      textureSampleMode,
+      sortOnUpload,
+      sortGroup,
+      viewScale
+    );
+  }
+
+  public RenderMaterial withDoubleSided(boolean doubleSided) {
+    return new RenderMaterial(
+      texture,
+      alphaMode,
+      color,
+      doubleSided,
+      depthBias,
+      polygonOffsetFactor,
+      polygonOffsetUnits,
+      alphaCutoutThreshold,
+      alphaCutoutSource,
+      depthTest,
+      depthWrite,
+      blendState,
+      colorWriteMask,
+      uvTransform,
+      textureSampleMode,
       sortOnUpload,
       sortGroup,
       viewScale
@@ -139,6 +165,7 @@ public record RenderMaterial(
       blendState,
       colorTargetState.writeMask(),
       UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
+      textureSampleMode(renderType),
       alphaMode == RendererAssets.AlphaMode.TRANSLUCENT && renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
       viewScale(renderType)
@@ -175,6 +202,14 @@ public record RenderMaterial(
     return switch (fragmentShader) {
       case "core/entity", "core/item" -> AlphaCutoutSource.TEXTURE;
       default -> AlphaCutoutSource.FINAL_COLOR;
+    };
+  }
+
+  private static TextureSampleMode textureSampleMode(RenderType renderType) {
+    var fragmentShader = renderType.pipeline().getFragmentShader().getPath();
+    return switch (fragmentShader) {
+      case "core/rendertype_text_intensity", "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
+      default -> TextureSampleMode.COLOR;
     };
   }
 
@@ -311,6 +346,11 @@ public record RenderMaterial(
   public enum AlphaCutoutSource {
     TEXTURE,
     FINAL_COLOR
+  }
+
+  public enum TextureSampleMode {
+    COLOR,
+    INTENSITY
   }
 
   public record BlendState(SourceFactor sourceColor, DestFactor destColor, SourceFactor sourceAlpha, DestFactor destAlpha) {

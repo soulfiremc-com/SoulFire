@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.test.renderer;
 
+import com.google.gson.JsonParser;
 import com.soulfiremc.server.renderer.RendererAssets;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.resources.Identifier;
@@ -104,6 +105,30 @@ class RendererAssetsTest {
     var texture = RendererAssets.TextureImage.from(image, null);
     assertDoesNotThrow(() -> texture.sample(0.25F, 0.75F, 0L));
     assertEquals(0xFF000002, texture.sample(0.25F, 0.75F, 0L));
+  }
+
+  @Test
+  void animatedTextureHonorsPerFrameDurations() {
+    var image = new BufferedImage(1, 2, BufferedImage.TYPE_INT_ARGB);
+    image.setRGB(0, 0, 0xFFFF0000);
+    image.setRGB(0, 1, 0xFF0000FF);
+    var metadata = JsonParser.parseString("""
+      {
+        "animation": {
+          "frames": [
+            { "index": 0, "time": 2 },
+            { "index": 1, "time": 1 }
+          ]
+        }
+      }
+      """).getAsJsonObject();
+
+    var texture = RendererAssets.TextureImage.from(image, metadata);
+
+    assertEquals(0xFFFF0000, texture.sample(0.5F, 0.5F, 0L));
+    assertEquals(0xFFFF0000, texture.sample(0.5F, 0.5F, 1L));
+    assertEquals(0xFF0000FF, texture.sample(0.5F, 0.5F, 2L));
+    assertEquals(0xFFFF0000, texture.sample(0.5F, 0.5F, 3L));
   }
 
   private float uvRange(float[] uv, int axis) {

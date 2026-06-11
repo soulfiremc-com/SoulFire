@@ -365,7 +365,7 @@ public final class RasterPipeline {
       return;
     }
     var material = triangle.material();
-    if (!material.doubleSided() && area <= 0.0F) {
+    if (!material.doubleSided() && area >= 0.0F) {
       return;
     }
     var fragmentDepthBias = fragmentDepthBias(triangle, material);
@@ -424,7 +424,8 @@ public final class RasterPipeline {
           continue;
         }
 
-        var sampled = material.texture().sample(
+        var sampled = sampleTexture(
+          material,
           material.uvTransform().u(u, v, animationTick),
           material.uvTransform().v(u, v, animationTick),
           animationTick
@@ -563,6 +564,17 @@ public final class RasterPipeline {
     var g = ((sample >> 8) & 0xFF) * ((multiplier >> 8) & 0xFF) / 255;
     var b = (sample & 0xFF) * (multiplier & 0xFF) / 255;
     return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private int sampleTexture(RenderMaterial material, float u, float v, long animationTick) {
+    var sample = material.texture().sample(u, v, animationTick);
+    return switch (material.textureSampleMode()) {
+      case COLOR -> sample;
+      case INTENSITY -> {
+        var intensity = (sample >> 16) & 0xFF;
+        yield (intensity << 24) | (intensity << 16) | (intensity << 8) | intensity;
+      }
+    };
   }
 
   private int forceOpaque(int color) {

@@ -155,10 +155,10 @@ class RasterPipelineTest {
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     var scene = SceneData.builder();
     scene.add(new RenderQuad(
-      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFF0000),
-      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFF0000),
-      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFF00FF00),
       new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xFF00FF00),
+      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFF00FF00),
+      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFF0000),
+      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFF0000),
       RenderMaterial.create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
     ));
 
@@ -183,10 +183,10 @@ class RasterPipelineTest {
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     var scene = SceneData.builder();
     scene.add(new RenderQuad(
-      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
-      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
-      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
       new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
+      new RenderVertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
       RenderMaterial.create(solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
     ));
 
@@ -269,6 +269,7 @@ class RasterPipelineTest {
         RenderMaterial.BlendState.REPLACE,
         ColorTargetState.WRITE_NONE,
         RenderMaterial.UvTransform.IDENTITY,
+        RenderMaterial.TextureSampleMode.COLOR,
         false,
         0,
         1.0F
@@ -811,10 +812,10 @@ class RasterPipelineTest {
     int color
   ) {
     return new RenderQuad(
-      vertex(minX, minY, z, 0.0F, 1.0F),
-      vertex(minX, maxY, z, 0.0F, 0.0F),
-      vertex(maxX, maxY, z, 1.0F, 0.0F),
       vertex(maxX, minY, z, 1.0F, 1.0F),
+      vertex(maxX, maxY, z, 1.0F, 0.0F),
+      vertex(minX, maxY, z, 0.0F, 0.0F),
+      vertex(minX, minY, z, 0.0F, 1.0F),
       RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
@@ -829,10 +830,10 @@ class RasterPipelineTest {
     int color
   ) {
     return new RenderQuad(
-      v0,
-      v1,
-      v2,
       v3,
+      v2,
+      v1,
+      v0,
       RenderMaterial.create(texture, alphaMode, color, false, 0.0F)
     );
   }
@@ -844,7 +845,7 @@ class RasterPipelineTest {
     RenderVertex v3,
     RenderMaterial material
   ) {
-    return new RenderQuad(v0, v1, v2, v3, material);
+    return new RenderQuad(v3, v2, v1, v0, material);
   }
 
   private static RenderVertex vertex(float x, float y, float z, float u, float v) {
@@ -886,6 +887,7 @@ class RasterPipelineTest {
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.IDENTITY,
+      RenderMaterial.TextureSampleMode.COLOR,
       true,
       0,
       1.0F
@@ -908,6 +910,7 @@ class RasterPipelineTest {
       material.blendState(),
       material.colorWriteMask(),
       material.uvTransform(),
+      material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale()
@@ -935,6 +938,7 @@ class RasterPipelineTest {
       material.blendState(),
       material.colorWriteMask(),
       material.uvTransform(),
+      material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       viewScale
@@ -963,6 +967,7 @@ class RasterPipelineTest {
       blendState,
       material.colorWriteMask(),
       material.uvTransform(),
+      material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale()
@@ -985,6 +990,7 @@ class RasterPipelineTest {
       material.blendState(),
       material.colorWriteMask(),
       material.uvTransform(),
+      material.textureSampleMode(),
       sortOnUpload,
       material.sortGroup(),
       material.viewScale()
@@ -1007,6 +1013,7 @@ class RasterPipelineTest {
       material.blendState(),
       material.colorWriteMask(),
       material.uvTransform(),
+      material.textureSampleMode(),
       material.sortOnUpload(),
       sortGroup,
       material.viewScale()
@@ -1029,6 +1036,7 @@ class RasterPipelineTest {
       material.blendState(),
       material.colorWriteMask(),
       uvTransform,
+      material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale()

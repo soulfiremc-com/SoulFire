@@ -605,7 +605,7 @@ public final class InventoryItemIconRenderer {
     if (Math.abs(area) < 1.0E-5F) {
       return;
     }
-    if (!material.doubleSided() && area <= 0.0F) {
+    if (!material.doubleSided() && area >= 0.0F) {
       return;
     }
 

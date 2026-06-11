@@ -1021,18 +1021,28 @@ public final class RendererAssets {
       frameHeight = frameHeight <= 0 || frameHeight > height ? Math.min(width, height) : frameHeight;
       frameHeight = Math.max(1, frameHeight);
       var frameCount = Math.max(1, height / frameHeight);
-      var frameTime = animation != null && animation.has("frametime") ? Math.max(1, animation.get("frametime").getAsInt()) : 1;
-      var interpolate = animation != null && animation.has("interpolate") && animation.get("interpolate").getAsBoolean();
+      var defaultFrameTime = animation != null && animation.has("frametime") ? Math.max(1, animation.get("frametime").getAsInt()) : 1;
+      var frameTime = defaultFrameTime;
       var frameOrder = new int[frameCount];
       for (var i = 0; i < frameCount; i++) {
         frameOrder[i] = i;
       }
       if (animation != null && animation.has("frames")) {
         var frames = animation.getAsJsonArray("frames");
-        frameOrder = new int[Math.max(1, frames.size())];
-        for (var i = 0; i < frameOrder.length; i++) {
+        var expandedFrameOrder = new ArrayList<Integer>(Math.max(1, frames.size()));
+        for (var i = 0; i < frames.size(); i++) {
           var frame = frames.get(i);
-          frameOrder[i] = frame.isJsonObject() ? frame.getAsJsonObject().get("index").getAsInt() : frame.getAsInt();
+          var frameIndex = frame.isJsonObject() ? frame.getAsJsonObject().get("index").getAsInt() : frame.getAsInt();
+          var frameDuration = frame.isJsonObject() && frame.getAsJsonObject().has("time")
+            ? Math.max(1, frame.getAsJsonObject().get("time").getAsInt())
+            : defaultFrameTime;
+          for (var duration = 0; duration < frameDuration; duration++) {
+            expandedFrameOrder.add(frameIndex);
+          }
+        }
+        if (!expandedFrameOrder.isEmpty()) {
+          frameOrder = expandedFrameOrder.stream().mapToInt(Integer::intValue).toArray();
+          frameTime = 1;
         }
       }
 

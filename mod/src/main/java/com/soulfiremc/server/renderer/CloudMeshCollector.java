@@ -304,6 +304,7 @@ public final class CloudMeshCollector {
       RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT),
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.IDENTITY,
+      RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
       1.0F
