@@ -19,17 +19,37 @@ package com.soulfiremc.server.renderer;
 
 import net.minecraft.client.renderer.WeatherEffectRenderer;
 import net.minecraft.client.renderer.state.level.WeatherRenderState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SceneCollectorTest {
+  @Test
+  void blockDestroyProgressUsesHighestVanillaProgressEntry() throws Exception {
+    var method = SceneCollector.class.getDeclaredMethod("lastDestroyProgress", java.util.SortedSet.class);
+    method.setAccessible(true);
+
+    var lowProgress = new BlockDestructionProgress(1, BlockPos.ZERO);
+    lowProgress.setProgress(2);
+    var highProgress = new BlockDestructionProgress(2, BlockPos.ZERO);
+    highProgress.setProgress(7);
+    var progresses = new TreeSet<BlockDestructionProgress>();
+    progresses.add(highProgress);
+    progresses.add(lowProgress);
+
+    assertEquals(7, method.invoke(null, progresses));
+    assertEquals(-1, method.invoke(null, new TreeSet<BlockDestructionProgress>()));
+  }
+
   @Test
   void weatherColumnSizeTableDoesNotExposeCenterNaNs() throws Exception {
     var xMethod = SceneCollector.class.getDeclaredMethod("weatherColumnSizes", boolean.class);
@@ -65,6 +85,7 @@ class SceneCollectorTest {
     var ctx = new RenderContext(
       null,
       null,
+      false,
       camera,
       null,
       64,

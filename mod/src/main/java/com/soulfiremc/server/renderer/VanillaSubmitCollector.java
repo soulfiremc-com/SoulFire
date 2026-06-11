@@ -107,6 +107,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private static final int LEASH_RENDER_STEPS = 24;
   private static final float LEASH_WIDTH = 0.05F;
   private static final float LINE_SHADER_VIEW_SCALE = 1.0F - 1.0F / 256.0F;
+  private static final float PACKED_NORMAL_SCALE = 127.0F;
   private static final Vector3f LEVEL_LIGHT_0 = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
   private static final Vector3f LEVEL_LIGHT_1 = new Vector3f(-0.2F, 1.0F, 0.7F).normalize();
   private static final Vector3f NETHER_LEVEL_LIGHT_0 = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
@@ -212,18 +213,31 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   static SceneData collectBlockEntity(RenderContext ctx, BlockEntity blockEntity) {
+    return collectBlockEntity(ctx, blockEntity, null);
+  }
+
+  static SceneData collectBlockEntity(RenderContext ctx, BlockEntity blockEntity, @Nullable Integer crumblingProgress) {
     var collector = new VanillaSubmitCollector(ctx);
     var dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
     dispatcher.prepare(new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ()));
-    var renderState = dispatcher.tryExtractRenderState(blockEntity, 1.0F, null);
+    var poseStack = new PoseStack();
+    var blockPos = blockEntity.getBlockPos();
+    poseStack.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
+    var crumblingOverlay = crumblingProgress != null ? new ModelFeatureRenderer.CrumblingOverlay(crumblingProgress, poseStack.last()) : null;
+    var renderState = dispatcher.tryExtractRenderState(blockEntity, 1.0F, crumblingOverlay);
     if (renderState == null) {
       return SceneData.EMPTY;
     }
 
-    var poseStack = new PoseStack();
-    var blockPos = blockEntity.getBlockPos();
-    poseStack.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
     dispatcher.submit(renderState, poseStack, collector, collector.cameraRenderState());
+    return collector.buildScene();
+  }
+
+  static SceneData collectBreakingBlockModel(RenderContext ctx, BlockPos pos, BlockStateModel blockStateModel, long seed, int progress) {
+    var collector = new VanillaSubmitCollector(ctx);
+    var poseStack = new PoseStack();
+    poseStack.translate(pos.getX(), pos.getY(), pos.getZ());
+    collector.submitBreakingBlockModel(poseStack, blockStateModel, seed, progress);
     return collector.buildScene();
   }
 
@@ -2265,14 +2279,23 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private VertexConsumer setCapturedNormal(Vector3f normal) {
       if (current != null) {
         current = current.withNormal(new Vector3f(
-          Math.clamp(normal.x(), -1.0F, 1.0F),
-          Math.clamp(normal.y(), -1.0F, 1.0F),
-          Math.clamp(normal.z(), -1.0F, 1.0F)
+          unpackPackedNormalComponent(normal.x()),
+          unpackPackedNormalComponent(normal.y()),
+          unpackPackedNormalComponent(normal.z())
         ));
         vertices.set(vertices.size() - 1, current);
       }
       return this;
     }
+
+    private float unpackPackedNormalComponent(float component) {
+      return packedNormalComponent(component) / PACKED_NORMAL_SCALE;
+    }
+
+    private byte packedNormalComponent(float component) {
+      return (byte) ((int) (Mth.clamp(component, -1.0F, 1.0F) * PACKED_NORMAL_SCALE) & 0xFF);
+    }
+
     @Override public VertexConsumer setLineWidth(float width) {
       this.lineWidth = Float.isFinite(width) ? Math.max(0.0F, width) : 1.0F;
       if (current != null) {

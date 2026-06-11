@@ -77,6 +77,7 @@ accessible field net/minecraft/client/renderer/rendertype/RenderSetup layeringTr
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup useLightmap Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup useOverlay Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location Lnet/minecraft/resources/Identifier;
+accessible field net/minecraft/client/renderer/LevelRenderer destructionProgress Lit/unimi/dsi/fastutil/longs/Long2ObjectMap;
 
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()I

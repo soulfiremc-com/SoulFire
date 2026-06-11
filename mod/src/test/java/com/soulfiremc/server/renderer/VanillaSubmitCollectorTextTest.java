@@ -240,6 +240,27 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void entityNormalsUseBlaze3dSignedBytePrecisionBeforeLighting() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
+    var consumer = newTextConsumer(collector, texture, renderType);
+    var subByteNormal = 0.003F;
+
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, subByteNormal, 0.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, subByteNormal, 0.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, subByteNormal, 0.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, subByteNormal, 0.0F, 0.0F);
+    flush(consumer);
+
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
+
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFFFFFF, 3);
+  }
+
+  @Test
   void entityDissolveRenderTypesCaptureMaskSampler() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -864,6 +885,7 @@ class VanillaSubmitCollectorTextTest {
     return constructor.newInstance(new RenderContext(
       null,
       null,
+      false,
       camera,
       null,
       64,

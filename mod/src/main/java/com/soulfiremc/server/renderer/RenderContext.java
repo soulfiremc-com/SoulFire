@@ -19,6 +19,7 @@ package com.soulfiremc.server.renderer;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.attribute.EnvironmentAttributeProbe;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,6 +30,7 @@ import java.util.concurrent.ConcurrentMap;
 public record RenderContext(
   ClientLevel level,
   LocalPlayer localPlayer,
+  boolean cameraDetached,
   Camera camera,
   EnvironmentAttributeProbe environmentProbe,
   int maxDistance,
@@ -46,6 +48,7 @@ public record RenderContext(
     return new RenderContext(
       level,
       localPlayer,
+      cameraDetached(localPlayer, camera),
       camera,
       environmentProbe,
       maxDistance,
@@ -57,5 +60,16 @@ public record RenderContext(
       new ConcurrentHashMap<>(),
       SectionMeshCache.forLevel(level)
     );
+  }
+
+  private static boolean cameraDetached(LocalPlayer localPlayer, Camera camera) {
+    if (localPlayer == null) {
+      return false;
+    }
+
+    var playerEye = localPlayer.getEyePosition();
+    return playerEye.distanceToSqr(camera.eyeX(), camera.eyeY(), camera.eyeZ()) > 1.0E-6
+      || Mth.degreesDifferenceAbs(localPlayer.getYRot(), camera.yRot()) > 1.0E-4F
+      || Mth.degreesDifferenceAbs(localPlayer.getXRot(), camera.xRot()) > 1.0E-4F;
   }
 }

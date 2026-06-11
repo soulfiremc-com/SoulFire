@@ -28,16 +28,20 @@ import net.minecraft.client.renderer.state.level.WeatherRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.SortedSet;
 
 /// Collects dynamic scene primitives that are not part of the chunk-section world mesh.
 @UtilityClass
@@ -60,7 +64,7 @@ public class SceneCollector {
     VanillaSubmitCollector.prepareEntityDispatcher(ctx, localPlayer);
     try {
       for (var entity : level.entitiesForRendering()) {
-        if (entity == localPlayer) {
+        if (shouldSkipCameraEntity(ctx, localPlayer, entity)) {
           continue;
         }
         trace.entityConsidered();
@@ -86,8 +90,13 @@ public class SceneCollector {
     }
 
     builder.addAll(VanillaSubmitCollector.collectParticles(ctx));
+    collectBlockDestroyAnimations(ctx, builder);
     collectWeather(level, ctx, builder);
     return builder.build();
+  }
+
+  private static boolean shouldSkipCameraEntity(RenderContext ctx, LocalPlayer localPlayer, Entity entity) {
+    return entity == localPlayer && !ctx.cameraDetached() && !localPlayer.isSleeping();
   }
 
   private static void collectGenericEntity(RenderContext ctx, Entity entity, SceneData.Builder builder) {
@@ -161,7 +170,8 @@ public class SceneCollector {
       }
     }
 
-    var scene = VanillaSubmitCollector.collectBlockEntity(ctx, blockEntity);
+    var progress = blockDestroyProgress(pos);
+    var scene = VanillaSubmitCollector.collectBlockEntity(ctx, blockEntity, progress >= 0 ? progress : null);
     if (scene.totalQuadCount() > 0) {
       ctx.vanillaRenderedBlockEntities().add(pos.asLong());
       builder.addAll(scene);
@@ -174,6 +184,43 @@ public class SceneCollector {
 
   private static boolean isGlobalBlockEntity(ClientLevel level, BlockEntity blockEntity) {
     return level.getGloballyRenderedBlockEntities().contains(blockEntity);
+  }
+
+  private static void collectBlockDestroyAnimations(RenderContext ctx, SceneData.Builder builder) {
+    var minecraft = Minecraft.getInstance();
+    var levelRenderer = minecraft.levelRenderer;
+    var camera = ctx.camera();
+    for (var entry : levelRenderer.destructionProgress.long2ObjectEntrySet()) {
+      var pos = BlockPos.of(entry.getLongKey());
+      if (pos.distToCenterSqr(camera.eyeX(), camera.eyeY(), camera.eyeZ()) > 1024.0) {
+        continue;
+      }
+
+      var progress = lastDestroyProgress(entry.getValue());
+      if (progress < 0) {
+        continue;
+      }
+
+      var blockState = ctx.level().getBlockState(pos);
+      if (blockState.getRenderShape() != RenderShape.MODEL) {
+        continue;
+      }
+
+      var blockStateModel = minecraft.getModelManager().getBlockStateModelSet().get(blockState);
+      builder.addAll(VanillaSubmitCollector.collectBreakingBlockModel(ctx, pos, blockStateModel, blockState.getSeed(pos), progress));
+    }
+  }
+
+  private static int blockDestroyProgress(BlockPos pos) {
+    return lastDestroyProgress(Minecraft.getInstance().levelRenderer.destructionProgress.get(pos.asLong()));
+  }
+
+  private static int lastDestroyProgress(@Nullable SortedSet<BlockDestructionProgress> progresses) {
+    if (progresses == null || progresses.isEmpty()) {
+      return -1;
+    }
+
+    return progresses.last().getProgress();
   }
 
   private static void collectWeather(ClientLevel level, RenderContext ctx, SceneData.Builder builder) {
