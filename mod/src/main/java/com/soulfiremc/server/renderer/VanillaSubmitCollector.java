@@ -49,6 +49,7 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ItemFeatureRenderer;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.client.renderer.rendertype.OutputTarget;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -288,6 +289,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private FeatureStage stageForRenderType(@Nullable RenderType renderType, FeatureStage solidStage, FeatureStage translucentStage) {
     return renderType != null && renderType.hasBlending() ? translucentStage : solidStage;
+  }
+
+  private void addRenderTypeQuad(RenderQuad quad, @Nullable RenderType renderType) {
+    if (renderType != null && renderType.outputTarget() == OutputTarget.WEATHER_TARGET) {
+      builder().addWeather(quad);
+    } else {
+      builder().add(quad);
+    }
   }
 
   private CameraRenderState cameraRenderState() {
@@ -535,15 +544,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
   ) {
     withStage(stageForRenderType(renderType, FeatureStage.SOLID_MODEL, FeatureStage.TRANSLUCENT_MODEL), () -> {
-      var texture = textureImage(sprite);
-      if (texture == null) {
-        texture = textureFromRenderType(renderType);
-      }
+      var texture = textureFromRenderType(renderType);
       var alphaMode = alphaMode(renderType, texture, color);
       model.setupAnim(state);
       Consumer<VertexConsumer> renderer = consumer -> model.renderToBuffer(poseStack, consumer, light, overlay, color);
-      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), null, renderer);
-      captureOutlineGeometry(renderType, texture, outlineColor, renderer);
+      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), sprite, null, renderer);
+      captureOutlineGeometry(renderType, texture, outlineColor, sprite, renderer);
       captureCrumblingGeometry(renderType.affectsCrumbling(), crumblingOverlay, renderer);
     });
   }
@@ -563,14 +569,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int outlineColor
   ) {
     withStage(stageForRenderType(renderType, FeatureStage.SOLID_MODEL_PART, FeatureStage.TRANSLUCENT_MODEL_PART), () -> {
-      var texture = textureImage(sprite);
-      if (texture == null) {
-        texture = textureFromRenderType(renderType);
-      }
+      var texture = textureFromRenderType(renderType);
       var alphaMode = alphaMode(renderType, texture, color);
       Consumer<VertexConsumer> renderer = consumer -> modelPart.render(poseStack, consumer, light, overlay, color);
-      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), null, renderer);
-      captureOutlineGeometry(renderType, texture, outlineColor, renderer);
+      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), sprite, null, renderer);
+      captureOutlineGeometry(renderType, texture, outlineColor, sprite, renderer);
       captureCrumblingGeometry(true, crumblingOverlay, renderer);
       if (hasFoil) {
         var glintTexture = glintTexture();
@@ -580,6 +583,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           glintTexture,
           RendererAssets.AlphaMode.TRANSLUCENT,
           alphaCutoutThreshold(glintRenderType, RendererAssets.AlphaMode.TRANSLUCENT),
+          null,
           glintMaterial(glintTexture, glintRenderType),
           consumer -> modelPart.render(poseStack, consumer, LightCoordsUtil.FULL_BRIGHT, overlay, 0xFFFFFFFF)
         );
@@ -822,6 +826,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
     int alphaCutoutThreshold,
+    @Nullable TextureAtlasSprite sprite,
     @Nullable RenderMaterial materialOverride,
     Consumer<VertexConsumer> renderer
   ) {
@@ -835,7 +840,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       null,
       materialOverride
     );
-    renderer.accept(consumer);
+    renderer.accept(wrapSprite(consumer, sprite));
     consumer.flush();
   }
 
@@ -843,6 +848,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     RenderType renderType,
     RendererAssets.TextureImage texture,
     int outlineColor,
+    @Nullable TextureAtlasSprite sprite,
     Consumer<VertexConsumer> renderer
   ) {
     if (outlineColor == 0 || (renderType.outline().isEmpty() && !renderType.isOutline())) {
@@ -860,7 +866,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       outlineRenderType,
       null
     );
-    renderer.accept(new OutlineVertexConsumer(consumer, outlineColor));
+    renderer.accept(wrapSprite(new OutlineVertexConsumer(consumer, outlineColor), sprite));
     consumer.flush();
   }
 
@@ -890,6 +896,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     );
     renderer.accept(new SheetedDecalTextureGenerator(consumer, crumblingOverlay.cameraPose(), 1.0F));
     consumer.flush();
+  }
+
+  private VertexConsumer wrapSprite(VertexConsumer consumer, @Nullable TextureAtlasSprite sprite) {
+    return sprite != null ? sprite.wrap(consumer) : consumer;
   }
 
   private void appendBakedQuad(
@@ -937,7 +947,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       0.0F,
       alphaCutoutThreshold(effectiveRenderType, alphaMode)
     );
-    builder().add(withRenderState(withOverlay(renderQuad, effectiveRenderType, overlay), effectiveRenderType));
+    addRenderTypeQuad(withRenderState(withOverlay(renderQuad, effectiveRenderType, overlay), effectiveRenderType), effectiveRenderType);
   }
 
   private void appendBakedQuadOutline(BakedQuad quad, Matrix4fc poseMatrix, @Nullable RenderType renderType, int outlineColor, int overlay) {
@@ -977,7 +987,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       0.0F,
       alphaCutoutThreshold(outlineRenderType, alphaMode)
     );
-    builder().add(withRenderState(withOverlay(renderQuad, outlineRenderType, overlay), outlineRenderType));
+    addRenderTypeQuad(withRenderState(withOverlay(renderQuad, outlineRenderType, overlay), outlineRenderType), outlineRenderType);
   }
 
   private void appendBakedQuadGlint(
@@ -1030,14 +1040,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     return new CapturedBakedQuad(vertices, uv, texture);
-  }
-
-  @Nullable
-  private RendererAssets.TextureImage textureImage(@Nullable TextureAtlasSprite sprite) {
-    if (sprite == null || sprite.contents() == null || sprite.contents().name() == null) {
-      return null;
-    }
-    return assets.texture(sprite.contents().name());
   }
 
   private void submitComponentText(
@@ -1666,12 +1668,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var applyOverlay = materialOverride == null && usesOverlay(renderType);
       if (usesPerFaceLighting(shadingRenderType()) && material.doubleSided()) {
         var oneSidedMaterial = material.withDoubleSided(false);
-        builder().add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.FRONT, 0, 1, 2, 3));
-        builder().add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.BACK, 3, 2, 1, 0));
+        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.FRONT, 0, 1, 2, 3), renderType);
+        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.BACK, 3, 2, 1, 0), renderType);
         return;
       }
 
-      builder().add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, material, FaceLighting.FRONT, 0, 1, 2, 3));
+      addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, material, FaceLighting.FRONT, 0, 1, 2, 3), renderType);
     }
 
     private RenderQuad renderQuad(

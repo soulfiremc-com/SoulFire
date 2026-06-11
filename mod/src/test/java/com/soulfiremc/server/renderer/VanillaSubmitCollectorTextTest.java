@@ -18,14 +18,20 @@
 package com.soulfiremc.server.renderer;
 
 import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.metadata.animation.FrameSize;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -36,6 +42,9 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -307,6 +316,19 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void weatherTargetRenderTypesRouteToWeatherPass() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+
+    collector.submitCustomGeometry(new PoseStack(), RenderTypes.lightning(), (_, consumer) -> addTextQuad(consumer, 0x80FFFFFF));
+
+    var scene = sceneData(collector);
+    assertEquals(0, scene.translucent().length);
+    assertEquals(1, scene.weather().length);
+    assertTrue(scene.weather()[0].material().blendState().blends());
+  }
+
+  @Test
   void capturedVertexConsumerFlushConsumesPendingVertices() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -394,6 +416,41 @@ class VanillaSubmitCollectorTextTest {
     assertTrue(itemGlint.blendState().blends());
     assertEquals(8.0F, uvScale(itemGlint.uvTransform()), 1.0E-5F);
     assertEquals(0.5F, uvScale(entityGlint.uvTransform()), 1.0E-5F);
+  }
+
+  @Test
+  void spriteBackedModelPartsExpandLocalUvsIntoAtlasSpace() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var atlasLocation = Identifier.withDefaultNamespace("textures/atlas/test.png");
+    var sprite = fakeSprite(atlasLocation, 16, 16, 4, 8, 4, 4);
+    var modelPart = new ModelPart(
+      List.of(new ModelPart.Cube(0, 0, -8.0F, -8.0F, 4.0F, 16.0F, 16.0F, 1.0F, 0.0F, 0.0F, 0.0F, false, 64.0F, 64.0F, Set.of(Direction.NORTH))),
+      Map.of()
+    );
+
+    collector.submitModelPart(
+      modelPart,
+      new PoseStack(),
+      RenderTypes.entityCutout(atlasLocation),
+      LightCoordsUtil.FULL_BRIGHT,
+      OverlayTexture.NO_OVERLAY,
+      sprite,
+      false,
+      false,
+      0xFFFFFFFF,
+      null,
+      0
+    );
+
+    var scene = sceneData(collector);
+    assertTrue(scene.opaque().length > 0);
+    for (var quad : scene.opaque()) {
+      assertUvInsideSprite(quad.v0(), sprite);
+      assertUvInsideSprite(quad.v1(), sprite);
+      assertUvInsideSprite(quad.v2(), sprite);
+      assertUvInsideSprite(quad.v3(), sprite);
+    }
   }
 
   @Test
@@ -720,6 +777,43 @@ class VanillaSubmitCollectorTextTest {
 
   private static float transformedX(PoseStack.Pose pose, float x) {
     return pose.pose().transformPosition(new Vector3f(x, 0.0F, 0.0F)).x();
+  }
+
+  private static TextureAtlasSprite fakeSprite(
+    Identifier atlasLocation,
+    int atlasWidth,
+    int atlasHeight,
+    int x,
+    int y,
+    int width,
+    int height
+  ) throws Exception {
+    var image = new NativeImage(width, height, true);
+    for (var py = 0; py < height; py++) {
+      for (var px = 0; px < width; px++) {
+        image.setPixel(px, py, 0xFFFFFFFF);
+      }
+    }
+    var contents = new SpriteContents(Identifier.withDefaultNamespace("test/sprite"), new FrameSize(width, height), image);
+    var constructor = TextureAtlasSprite.class.getDeclaredConstructor(
+      Identifier.class,
+      SpriteContents.class,
+      int.class,
+      int.class,
+      int.class,
+      int.class,
+      int.class
+    );
+    constructor.setAccessible(true);
+    return (TextureAtlasSprite) constructor.newInstance(atlasLocation, contents, atlasWidth, atlasHeight, x, y, 0);
+  }
+
+  private static void assertUvInsideSprite(RenderVertex vertex, TextureAtlasSprite sprite) {
+    var epsilon = 1.0E-6F;
+    assertTrue(vertex.u() >= sprite.getU0() - epsilon, () -> "expected u >= sprite u0 but was " + vertex.u());
+    assertTrue(vertex.u() <= sprite.getU1() + epsilon, () -> "expected u <= sprite u1 but was " + vertex.u());
+    assertTrue(vertex.v() >= sprite.getV0() - epsilon, () -> "expected v >= sprite v0 but was " + vertex.v());
+    assertTrue(vertex.v() <= sprite.getV1() + epsilon, () -> "expected v <= sprite v1 but was " + vertex.v());
   }
 
   private static void assertColorNear(int actual, int expected, int tolerance) {
