@@ -1626,7 +1626,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return null;
     }
 
-    return assets.renderTexture(binding.location());
+    return renderTexture(binding);
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
@@ -1645,15 +1645,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     var sampler0Location = sampler0Location(renderType);
     if (sampler0Location != null) {
-      return assets.renderTexture(sampler0Location);
+      var sampler0 = state.textures.get("Sampler0");
+      return sampler0 != null ? renderTexture(sampler0) : assets.renderTexture(sampler0Location);
     }
 
     for (var binding : state.textures.values()) {
-      var location = binding.location();
-      if (location == null) {
+      if (binding.location() == null) {
         continue;
       }
-      return assets.renderTexture(location);
+      return renderTexture(binding);
     }
 
     return WHITE_TEXTURE;
@@ -1675,7 +1675,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return null;
     }
 
-    return assets.renderTexture(binding.location());
+    return renderTexture(binding);
+  }
+
+  private RendererAssets.TextureImage renderTexture(RenderSetup.TextureBinding binding) {
+    return RendererAssets.withSamplerAddressMode(assets.renderTexture(binding.location()), binding.sampler());
   }
 
   private static RendererAssets.TextureImage createSolidTexture(int argb) {

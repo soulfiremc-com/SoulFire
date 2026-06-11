@@ -24,12 +24,14 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.DestFactor;
 import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.client.renderer.rendertype.RenderType;
-
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4fc;
+
+import java.util.function.Supplier;
 
 /// Raster state shared by all triangles emitted from one source primitive.
 public record RenderMaterial(
@@ -214,7 +216,7 @@ public record RenderMaterial(
     var colorTargetState = pipeline.getColorTargetState();
     var pipelineAlphaMode = alphaMode(colorTargetState, alphaMode);
     return new RenderMaterial(
-      textureWithShaderAddressMode(texture, fragmentShader),
+      textureWithRenderTypeAddressMode(texture, renderType, fragmentShader),
       pipelineAlphaMode,
       color,
       doubleSided || !pipeline.isCull(),
@@ -388,6 +390,29 @@ public record RenderMaterial(
       case "core/rendertype_entity_shadow" -> texture.withAddressMode(RendererAssets.TextureAddressMode.CLAMP_TO_EDGE);
       default -> texture;
     };
+  }
+
+  private static RendererAssets.TextureImage textureWithRenderTypeAddressMode(
+    RendererAssets.TextureImage texture,
+    RenderType renderType,
+    String fragmentShader
+  ) {
+    var sampler = RendererAssets.sampler(samplerSupplier(renderType, "Sampler0"));
+    return sampler != null ? RendererAssets.withSamplerAddressMode(texture, sampler) : textureWithShaderAddressMode(texture, fragmentShader);
+  }
+
+  @Nullable
+  private static Supplier<GpuSampler> samplerSupplier(RenderType renderType, String samplerName) {
+    var state = renderType.state;
+    if (state == null || state.textures == null) {
+      return null;
+    }
+
+    var binding = state.textures.get(samplerName);
+    if (binding == null || binding.sampler() == null) {
+      return null;
+    }
+    return binding.sampler();
   }
 
   private static FogMode fogMode(String fragmentShader) {

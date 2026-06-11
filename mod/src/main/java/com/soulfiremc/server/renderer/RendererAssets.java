@@ -22,6 +22,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.math.Quadrant;
 import com.soulfiremc.mod.access.IMinecraft;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ import net.minecraft.client.renderer.FaceInfo;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockStateModelWrapper;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -74,6 +77,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Supplier;
 
 @Slf4j
 public final class RendererAssets {
@@ -144,6 +148,38 @@ public final class RendererAssets {
     var runtimeTexture = runtimeTexture(textureLocation);
     var texture = runtimeTexture != null ? runtimeTexture : texture(textureLocation);
     return isAtlasTextureLocation(textureLocation) ? texture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE) : texture;
+  }
+
+  static TextureImage withSamplerAddressMode(TextureImage texture, @Nullable GpuSampler sampler) {
+    if (sampler == null) {
+      return texture;
+    }
+
+    return texture.withAddressModes(textureAddressMode(sampler.getAddressModeU()), textureAddressMode(sampler.getAddressModeV()));
+  }
+
+  static TextureImage withSamplerAddressMode(TextureImage texture, @Nullable Supplier<GpuSampler> samplerSupplier) {
+    return withSamplerAddressMode(texture, sampler(samplerSupplier));
+  }
+
+  @Nullable
+  static GpuSampler sampler(@Nullable Supplier<GpuSampler> samplerSupplier) {
+    if (samplerSupplier == null) {
+      return null;
+    }
+
+    try {
+      return samplerSupplier.get();
+    } catch (Throwable _) {
+      return null;
+    }
+  }
+
+  private static TextureAddressMode textureAddressMode(AddressMode addressMode) {
+    return switch (addressMode) {
+      case REPEAT -> TextureAddressMode.REPEAT;
+      case CLAMP_TO_EDGE -> TextureAddressMode.CLAMP_TO_EDGE;
+    };
   }
 
   public int resolveTint(ClientLevel level, BlockPos pos, BlockState state, int tintIndex) {
@@ -265,11 +301,11 @@ public final class RendererAssets {
         }
         for (var direction : Direction.values()) {
           for (var quad : part.getQuads(direction)) {
-            faces.add(vanillaQuadToFace(quad, direction, state));
+            faces.add(vanillaQuadToFace(quad, direction));
           }
         }
         for (var quad : part.getQuads(null)) {
-          faces.add(vanillaQuadToFace(quad, null, state));
+          faces.add(vanillaQuadToFace(quad, null));
         }
       }
       if (!faces.isEmpty()) {
@@ -283,7 +319,7 @@ public final class RendererAssets {
     }
   }
 
-  private GeometryFace vanillaQuadToFace(BakedQuad quad, @Nullable Direction cullDirection, BlockState state) {
+  private GeometryFace vanillaQuadToFace(BakedQuad quad, @Nullable Direction cullDirection) {
     if (quad == null) {
       throw new NullPointerException("vanilla quad is null");
     }
@@ -303,6 +339,10 @@ public final class RendererAssets {
     if (spriteId == null) {
       throw new NullPointerException("quad.materialInfo.sprite.contents.name is null");
     }
+    var layer = materialInfo.layer();
+    if (layer == null) {
+      throw new NullPointerException("quad.materialInfo.layer is null");
+    }
     var vertices = new Vector3f[4];
     var uv = new float[8];
     for (var i = 0; i < 4; i++) {
@@ -316,17 +356,26 @@ public final class RendererAssets {
       uv[i * 2 + 1] = BakedQuadUv.localV(sprite, packedUv);
     }
     var texture = texture(spriteId);
-    var alphaMode = chooseAlphaMode(state, texture, spriteId.getPath(), false);
+    var alphaMode = alphaModeForVanillaLayer(layer);
     return GeometryFace.of(
       vertices,
       uv,
       texture,
       alphaMode,
+      layer,
       cullDirection,
       materialInfo.isTinted() ? materialInfo.tintIndex() : -1,
       materialInfo.lightEmission(),
       materialInfo.shade()
     );
+  }
+
+  static AlphaMode alphaModeForVanillaLayer(ChunkSectionLayer layer) {
+    return switch (layer) {
+      case SOLID -> AlphaMode.OPAQUE;
+      case CUTOUT -> AlphaMode.CUTOUT;
+      case TRANSLUCENT -> AlphaMode.TRANSLUCENT;
+    };
   }
 
   @Nullable
@@ -946,6 +995,7 @@ public final class RendererAssets {
     float[] uv,
     TextureImage texture,
     AlphaMode alphaMode,
+    @Nullable ChunkSectionLayer layer,
     @Nullable Direction cullDirection,
     int tintIndex,
     int emission,
@@ -960,7 +1010,19 @@ public final class RendererAssets {
       int tintIndex,
       int emission,
       boolean shade) {
+      return of(vertices, uv, texture, alphaMode, null, cullDirection, tintIndex, emission, shade);
+    }
 
+    public static GeometryFace of(
+      Vector3f[] vertices,
+      float[] uv,
+      TextureImage texture,
+      AlphaMode alphaMode,
+      @Nullable ChunkSectionLayer layer,
+      @Nullable Direction cullDirection,
+      int tintIndex,
+      int emission,
+      boolean shade) {
       return new GeometryFace(
         new double[]{vertices[0].x, vertices[1].x, vertices[2].x, vertices[3].x},
         new double[]{vertices[0].y, vertices[1].y, vertices[2].y, vertices[3].y},
@@ -968,6 +1030,7 @@ public final class RendererAssets {
         uv,
         texture,
         alphaMode,
+        layer,
         cullDirection,
         tintIndex,
         emission,
@@ -981,7 +1044,7 @@ public final class RendererAssets {
         vertices[i] = matrix.transformPosition(new Vector3f((float) x[i], (float) y[i], (float) z[i]));
       }
 
-      return of(vertices, uv, texture, alphaMode, cullDirection, tintIndex, emission, shade);
+      return of(vertices, uv, texture, alphaMode, layer, cullDirection, tintIndex, emission, shade);
     }
   }
 
@@ -995,7 +1058,8 @@ public final class RendererAssets {
     private final int[] pixels;
     private final boolean hasAlpha;
     private final boolean hasTranslucentPixels;
-    private final TextureAddressMode addressMode;
+    private final TextureAddressMode addressModeU;
+    private final TextureAddressMode addressModeV;
     @Nullable
     private BufferedImage bufferedImage;
 
@@ -1009,7 +1073,8 @@ public final class RendererAssets {
       int[] pixels,
       boolean hasAlpha,
       boolean hasTranslucentPixels,
-      TextureAddressMode addressMode) {
+      TextureAddressMode addressModeU,
+      TextureAddressMode addressModeV) {
       this.width = width;
       this.height = height;
       this.frameHeight = frameHeight;
@@ -1019,7 +1084,8 @@ public final class RendererAssets {
       this.pixels = pixels;
       this.hasAlpha = hasAlpha;
       this.hasTranslucentPixels = hasTranslucentPixels;
-      this.addressMode = addressMode;
+      this.addressModeU = addressModeU;
+      this.addressModeV = addressModeV;
     }
 
     public static TextureImage from(@Nullable BufferedImage image, @Nullable JsonObject metadata) {
@@ -1093,6 +1159,7 @@ public final class RendererAssets {
         pixels,
         hasAlpha,
         hasTranslucentPixels,
+        TextureAddressMode.REPEAT,
         TextureAddressMode.REPEAT
       );
       return textureImage;
@@ -1114,8 +1181,8 @@ public final class RendererAssets {
         return 0;
       }
 
-      var sampledU = addressMode.map(u);
-      var sampledV = addressMode.map(v);
+      var sampledU = addressModeU.map(u);
+      var sampledV = addressModeV.map(v);
       var availableHeight = Math.max(1, pixels.length / width);
       var clampedFrameHeight = Math.clamp(frameHeight, 1, availableHeight);
       var availableFrameCount = Math.max(1, availableHeight / clampedFrameHeight);
@@ -1129,7 +1196,13 @@ public final class RendererAssets {
 
     public TextureImage withAddressMode(TextureAddressMode addressMode) {
       var requiredAddressMode = java.util.Objects.requireNonNull(addressMode, "addressMode");
-      if (this.addressMode == requiredAddressMode) {
+      return withAddressModes(requiredAddressMode, requiredAddressMode);
+    }
+
+    public TextureImage withAddressModes(TextureAddressMode addressModeU, TextureAddressMode addressModeV) {
+      var requiredAddressModeU = java.util.Objects.requireNonNull(addressModeU, "addressModeU");
+      var requiredAddressModeV = java.util.Objects.requireNonNull(addressModeV, "addressModeV");
+      if (this.addressModeU == requiredAddressModeU && this.addressModeV == requiredAddressModeV) {
         return this;
       }
 
@@ -1143,14 +1216,23 @@ public final class RendererAssets {
         pixels,
         hasAlpha,
         hasTranslucentPixels,
-        requiredAddressMode
+        requiredAddressModeU,
+        requiredAddressModeV
       );
       textureImage.bufferedImage = bufferedImage;
       return textureImage;
     }
 
     public TextureAddressMode addressMode() {
-      return addressMode;
+      return addressModeU;
+    }
+
+    public TextureAddressMode addressModeU() {
+      return addressModeU;
+    }
+
+    public TextureAddressMode addressModeV() {
+      return addressModeV;
     }
 
     public int width() {

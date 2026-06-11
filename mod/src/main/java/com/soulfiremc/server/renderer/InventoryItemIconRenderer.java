@@ -245,18 +245,35 @@ public final class InventoryItemIconRenderer {
     }
 
     var shadedColor = applyGuiLighting(tintColor, vertices, materialInfo.shade(), materialInfo.lightEmission());
+    var renderType = materialInfo.itemRenderType();
+    var alphaMode = VanillaSubmitCollector.alphaMode(renderType, texture, shadedColor, uv);
     var face = RendererAssets.GeometryFace.of(
       vertices,
       uv,
       texture,
-      alphaModeForTexture(texture),
+      alphaMode,
       null,
       -1,
       materialInfo.lightEmission(),
       materialInfo.shade()
     );
-    quads.add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, shadedColor, true, 0.0F));
+    var renderQuad = WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, shadedColor, true, 0.0F);
+    quads.add(withRenderType(renderQuad, renderType));
     textures.add(texture);
+  }
+
+  private static RenderQuad withRenderType(RenderQuad quad, @Nullable RenderType renderType) {
+    if (renderType == null) {
+      return quad;
+    }
+
+    return new RenderQuad(
+      quad.v0(),
+      quad.v1(),
+      quad.v2(),
+      quad.v3(),
+      quad.material().withRenderType(renderType)
+    );
   }
 
   private static @Nullable IconScene buildRendererAssetsScene(ItemStack itemStack) {
@@ -1204,7 +1221,8 @@ public final class InventoryItemIconRenderer {
         return;
       }
 
-      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(), renderType.mode(), texture, alphaModeForTexture(texture));
+      var alphaMode = VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF);
+      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(), renderType.mode(), renderType, texture, alphaMode);
       renderer.render(poseStack.last(), consumer);
       consumer.flush(quads, textures);
     }
@@ -1218,6 +1236,7 @@ public final class InventoryItemIconRenderer {
   private static final class ItemCapturingVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
     private final Matrix4fc pose;
     private final com.mojang.blaze3d.vertex.VertexFormat.Mode mode;
+    private final RenderType renderType;
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
@@ -1226,11 +1245,13 @@ public final class InventoryItemIconRenderer {
     private ItemCapturingVertexConsumer(
       Matrix4fc pose,
       com.mojang.blaze3d.vertex.VertexFormat.Mode mode,
+      RenderType renderType,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode
     ) {
       this.pose = pose;
       this.mode = mode;
+      this.renderType = renderType;
       this.texture = texture;
       this.alphaMode = alphaMode;
     }
@@ -1273,6 +1294,7 @@ public final class InventoryItemIconRenderer {
         renderVertex(c),
         renderVertex(d),
         RenderMaterial.create(texture, alphaMode, 0xFFFFFFFF, true, 0.0F)
+          .withRenderType(renderType)
       ));
       textures.add(texture);
     }
@@ -1329,14 +1351,17 @@ public final class InventoryItemIconRenderer {
     }
 
     for (var binding : state.textures.values()) {
-      var location = binding.location;
-      if (location == null) {
+      if (binding.location() == null) {
         continue;
       }
-      return RendererAssets.instance().renderTexture(location);
+      return textureImage(binding);
     }
 
     return null;
+  }
+
+  private static RendererAssets.TextureImage textureImage(RenderSetup.TextureBinding binding) {
+    return RendererAssets.withSamplerAddressMode(RendererAssets.instance().renderTexture(binding.location()), binding.sampler());
   }
 
   private record CapturedVertex(Vector3f position, int color, float u, float v) {

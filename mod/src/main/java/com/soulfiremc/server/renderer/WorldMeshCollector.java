@@ -116,7 +116,7 @@ public class WorldMeshCollector {
                 continue;
               }
               builder.addTerrain(
-                toRenderQuad(
+                toTerrainRenderQuad(
                   face,
                   originX + localX,
                   originY + localY,
@@ -176,7 +176,8 @@ public class WorldMeshCollector {
       color,
       doubleSided,
       depthBias,
-      RenderMaterial.defaultAlphaCutoutThreshold(face.alphaMode())
+      RenderMaterial.defaultAlphaCutoutThreshold(face.alphaMode()),
+      false
     );
   }
 
@@ -190,12 +191,53 @@ public class WorldMeshCollector {
     float depthBias,
     int alphaCutoutThreshold
   ) {
+    return toRenderQuad(face, offsetX, offsetY, offsetZ, color, doubleSided, depthBias, alphaCutoutThreshold, false);
+  }
+
+  static RenderQuad toTerrainRenderQuad(
+    RendererAssets.GeometryFace face,
+    double offsetX,
+    double offsetY,
+    double offsetZ,
+    int color,
+    boolean doubleSided,
+    float depthBias
+  ) {
+    return toRenderQuad(
+      face,
+      offsetX,
+      offsetY,
+      offsetZ,
+      color,
+      doubleSided,
+      depthBias,
+      RenderMaterial.defaultAlphaCutoutThreshold(face.alphaMode()),
+      true
+    );
+  }
+
+  private static RenderQuad toRenderQuad(
+    RendererAssets.GeometryFace face,
+    double offsetX,
+    double offsetY,
+    double offsetZ,
+    int color,
+    boolean doubleSided,
+    float depthBias,
+    int alphaCutoutThreshold,
+    boolean applyLayerState
+  ) {
+    var material = RenderMaterial.create(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold);
+    if (applyLayerState && face.layer() != null) {
+      material = material.withPipelineState(face.layer().pipeline());
+    }
+
     return new RenderQuad(
       vertex((float) (face.x()[0] + offsetX), (float) (face.y()[0] + offsetY), (float) (face.z()[0] + offsetZ), face.uv()[0], face.uv()[1]),
       vertex((float) (face.x()[1] + offsetX), (float) (face.y()[1] + offsetY), (float) (face.z()[1] + offsetZ), face.uv()[2], face.uv()[3]),
       vertex((float) (face.x()[2] + offsetX), (float) (face.y()[2] + offsetY), (float) (face.z()[2] + offsetZ), face.uv()[4], face.uv()[5]),
       vertex((float) (face.x()[3] + offsetX), (float) (face.y()[3] + offsetY), (float) (face.z()[3] + offsetZ), face.uv()[6], face.uv()[7]),
-      RenderMaterial.create(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold)
+      material
     );
   }
 
