@@ -928,8 +928,20 @@ class RasterPipelineTest {
       .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
       .withRenderType(RenderTypes.entityTranslucent(Identifier.withDefaultNamespace("textures/entity/test")));
 
+    assertEquals(RendererAssets.AlphaMode.TRANSLUCENT, material.alphaMode());
     assertEquals(RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), material.blendState());
     assertTrue(material.sortOnUpload());
+  }
+
+  @Test
+  void pipelineStateDerivesBlendClassificationAndShaderCutoutDefines() {
+    var material = RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+      .withPipelineState(RenderPipelines.TRANSLUCENT_BLOCK);
+
+    assertEquals(RendererAssets.AlphaMode.TRANSLUCENT, material.alphaMode());
+    assertEquals(RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), material.blendState());
+    assertEquals(3, material.alphaCutoutThreshold());
   }
 
   @Test

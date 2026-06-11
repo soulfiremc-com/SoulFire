@@ -736,16 +736,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     withStage(stageForRenderType(renderType, FeatureStage.SOLID_CUSTOM, FeatureStage.TRANSLUCENT_CUSTOM), () -> {
       var texture = textureFromRenderType(renderType);
       var alphaMode = alphaMode(renderType, texture, 0xFFFFFFFF);
+      var submittedPose = poseStack.last().copy();
       var consumer = new CapturingVertexConsumer(
-        new Matrix4f(),
+        submittedPose,
         renderType.mode(),
         texture,
         alphaMode,
         alphaCutoutThreshold(renderType, alphaMode),
         renderType,
-        null
+        null,
+        null,
+        true
       );
-      renderer.render(poseStack.last(), consumer);
+      renderer.render(submittedPose, consumer);
       consumer.flush();
     });
   }
@@ -1514,6 +1517,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private final class CapturingVertexConsumer implements VertexConsumer {
     private final Matrix4fc pose;
+    @Nullable
+    private final PoseStack.Pose normalPose;
     private final VertexFormat.Mode mode;
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
@@ -1524,6 +1529,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final RenderType renderType;
     @Nullable
     private final RenderMaterial materialOverride;
+    private final boolean matrixVerticesBypassBasePose;
     private final ArrayList<CapturedVertex> vertices = new ArrayList<>();
     private float lineWidth = 1.0F;
     private CapturedVertex current;
@@ -1541,6 +1547,31 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private CapturingVertexConsumer(
+      PoseStack.Pose pose,
+      VertexFormat.Mode mode,
+      RendererAssets.TextureImage texture,
+      RendererAssets.AlphaMode alphaMode,
+      int alphaCutoutThreshold,
+      @Nullable RenderType renderType,
+      @Nullable DepthStencilState depthStencilState,
+      @Nullable RenderMaterial materialOverride,
+      boolean matrixVerticesBypassBasePose
+    ) {
+      this(
+        pose.pose(),
+        pose,
+        mode,
+        texture,
+        alphaMode,
+        alphaCutoutThreshold,
+        renderType,
+        depthStencilState,
+        materialOverride,
+        matrixVerticesBypassBasePose
+      );
+    }
+
+    private CapturingVertexConsumer(
       Matrix4fc pose,
       VertexFormat.Mode mode,
       RendererAssets.TextureImage texture,
@@ -1550,7 +1581,23 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       @Nullable DepthStencilState depthStencilState,
       @Nullable RenderMaterial materialOverride
     ) {
+      this(pose, null, mode, texture, alphaMode, alphaCutoutThreshold, renderType, depthStencilState, materialOverride, false);
+    }
+
+    private CapturingVertexConsumer(
+      Matrix4fc pose,
+      @Nullable PoseStack.Pose normalPose,
+      VertexFormat.Mode mode,
+      RendererAssets.TextureImage texture,
+      RendererAssets.AlphaMode alphaMode,
+      int alphaCutoutThreshold,
+      @Nullable RenderType renderType,
+      @Nullable DepthStencilState depthStencilState,
+      @Nullable RenderMaterial materialOverride,
+      boolean matrixVerticesBypassBasePose
+    ) {
       this.pose = pose;
+      this.normalPose = normalPose;
       this.mode = mode;
       this.texture = texture;
       this.alphaMode = alphaMode;
@@ -1558,6 +1605,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       this.renderType = renderType;
       this.depthStencilState = depthStencilState;
       this.materialOverride = materialOverride;
+      this.matrixVerticesBypassBasePose = matrixVerticesBypassBasePose;
     }
 
     void flush() {
@@ -1991,8 +2039,26 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     @Override
     public VertexConsumer addVertex(float x, float y, float z) {
+      return addCapturedVertex(pose.transformPosition(new Vector3f(x, y, z)));
+    }
+
+    @Override
+    public VertexConsumer addVertex(Matrix4fc pose, float x, float y, float z) {
+      if (matrixVerticesBypassBasePose) {
+        return addCapturedVertex(pose.transformPosition(x, y, z, new Vector3f()));
+      }
+
+      return VertexConsumer.super.addVertex(pose, x, y, z);
+    }
+
+    @Override
+    public VertexConsumer addVertex(PoseStack.Pose pose, float x, float y, float z) {
+      return addVertex(pose.pose(), x, y, z);
+    }
+
+    private VertexConsumer addCapturedVertex(Vector3f position) {
       current = new CapturedVertex(
-        pose.transformPosition(new Vector3f(x, y, z)),
+        position,
         0xFFFFFFFF,
         0.0F,
         0.0F,
@@ -2042,12 +2108,23 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
       return this;
     }
-    @Override public VertexConsumer setNormal(float x, float y, float z) {
+    @Override
+    public VertexConsumer setNormal(float x, float y, float z) {
+      var normal = normalPose != null ? normalPose.transformNormal(x, y, z, new Vector3f()) : new Vector3f(x, y, z);
+      return setCapturedNormal(normal);
+    }
+
+    @Override
+    public VertexConsumer setNormal(PoseStack.Pose pose, float x, float y, float z) {
+      return setCapturedNormal(pose.transformNormal(x, y, z, new Vector3f()));
+    }
+
+    private VertexConsumer setCapturedNormal(Vector3f normal) {
       if (current != null) {
         current = current.withNormal(new Vector3f(
-          Math.clamp(x, -1.0F, 1.0F),
-          Math.clamp(y, -1.0F, 1.0F),
-          Math.clamp(z, -1.0F, 1.0F)
+          Math.clamp(normal.x(), -1.0F, 1.0F),
+          Math.clamp(normal.y(), -1.0F, 1.0F),
+          Math.clamp(normal.z(), -1.0F, 1.0F)
         ));
         vertices.set(vertices.size() - 1, current);
       }

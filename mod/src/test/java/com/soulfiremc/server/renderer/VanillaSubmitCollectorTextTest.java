@@ -351,6 +351,34 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void customGeometryAppliesSubmittedPoseToRawVertices() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var poseStack = new PoseStack();
+    poseStack.translate(0.0F, 0.0F, 4.0F);
+
+    collector.submitCustomGeometry(poseStack, RenderTypes.textBackground(), (_, consumer) -> addLocalTextQuad(consumer, 0.0F));
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.translucent().length);
+    assertQuadZ(scene.translucent()[0], 4.0F);
+  }
+
+  @Test
+  void customGeometryDoesNotDoubleApplyPoseHelperVertices() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var poseStack = new PoseStack();
+    poseStack.translate(0.0F, 0.0F, 4.0F);
+
+    collector.submitCustomGeometry(poseStack, RenderTypes.textBackground(), VanillaSubmitCollectorTextTest::addLocalTextQuad);
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.translucent().length);
+    assertQuadZ(scene.translucent()[0], 4.0F);
+  }
+
+  @Test
   void capturedVertexConsumerFlushConsumesPendingVertices() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -620,10 +648,31 @@ class VanillaSubmitCollectorTextTest {
     addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, color);
   }
 
+  private static void addLocalTextQuad(VertexConsumer consumer, float z) {
+    addVertex(consumer, -0.75F, 0.4F, z, 0.0F, 0.0F, 0x80FFFFFF);
+    addVertex(consumer, -0.75F, -0.4F, z, 0.0F, 1.0F, 0x80FFFFFF);
+    addVertex(consumer, 0.75F, -0.4F, z, 1.0F, 1.0F, 0x80FFFFFF);
+    addVertex(consumer, 0.75F, 0.4F, z, 1.0F, 0.0F, 0x80FFFFFF);
+  }
+
+  private static void addLocalTextQuad(PoseStack.Pose pose, VertexConsumer consumer) {
+    addVertex(pose, consumer, -0.75F, 0.4F, 0.0F, 0.0F, 0.0F);
+    addVertex(pose, consumer, -0.75F, -0.4F, 0.0F, 0.0F, 1.0F);
+    addVertex(pose, consumer, 0.75F, -0.4F, 0.0F, 1.0F, 1.0F);
+    addVertex(pose, consumer, 0.75F, 0.4F, 0.0F, 1.0F, 0.0F);
+  }
+
   private static void addVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, int color) {
     consumer
       .addVertex(x, y, z)
       .setColor(color)
+      .setUv(u, v);
+  }
+
+  private static void addVertex(PoseStack.Pose pose, VertexConsumer consumer, float x, float y, float z, float u, float v) {
+    consumer
+      .addVertex(pose, x, y, z)
+      .setColor(0x80FFFFFF)
       .setUv(u, v);
   }
 
@@ -869,5 +918,12 @@ class VanillaSubmitCollectorTextTest {
 
   private static void assertChannelNear(int actual, int expected, int tolerance) {
     assertTrue(Math.abs(actual - expected) <= tolerance, () -> "expected " + expected + " +/- " + tolerance + " but was " + actual);
+  }
+
+  private static void assertQuadZ(RenderQuad quad, float expected) {
+    assertEquals(expected, quad.v0().z(), 1.0E-6F);
+    assertEquals(expected, quad.v1().z(), 1.0E-6F);
+    assertEquals(expected, quad.v2().z(), 1.0E-6F);
+    assertEquals(expected, quad.v3().z(), 1.0E-6F);
   }
 }

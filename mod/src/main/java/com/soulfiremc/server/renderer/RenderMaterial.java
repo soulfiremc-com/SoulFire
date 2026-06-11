@@ -157,15 +157,16 @@ public record RenderMaterial(
     var pipeline = renderType.pipeline();
     var fragmentShader = pipeline.getFragmentShader().getPath();
     var colorTargetState = pipeline.getColorTargetState();
+    var pipelineAlphaMode = alphaMode(colorTargetState, alphaMode);
     return new RenderMaterial(
       textureWithShaderAddressMode(texture, fragmentShader),
-      alphaMode,
+      pipelineAlphaMode,
       color,
       doubleSided || !pipeline.isCull(),
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
-      shaderAlphaCutoutThreshold(renderType, alphaMode),
+      shaderAlphaCutoutThreshold(pipeline, pipelineAlphaMode),
       alphaCutoutSource(renderType),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
@@ -184,16 +185,17 @@ public record RenderMaterial(
   public RenderMaterial withPipelineState(RenderPipeline pipeline) {
     var fragmentShader = pipeline.getFragmentShader().getPath();
     var colorTargetState = pipeline.getColorTargetState();
+    var pipelineAlphaMode = alphaMode(colorTargetState, alphaMode);
     return new RenderMaterial(
       textureWithShaderAddressMode(texture, fragmentShader),
-      alphaMode,
+      pipelineAlphaMode,
       color,
       doubleSided || !pipeline.isCull(),
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
-      alphaCutoutThreshold,
-      alphaCutoutSource,
+      shaderAlphaCutoutThreshold(pipeline, pipelineAlphaMode),
+      alphaCutoutSource(fragmentShader),
       depthTest(pipeline.getDepthStencilState()),
       depthWrite(pipeline.getDepthStencilState()),
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
@@ -242,7 +244,11 @@ public record RenderMaterial(
   }
 
   public static int shaderAlphaCutoutThreshold(RenderType renderType, RendererAssets.AlphaMode alphaMode) {
-    var alphaCutout = renderType.pipeline().getShaderDefines().values().get("ALPHA_CUTOUT");
+    return shaderAlphaCutoutThreshold(renderType.pipeline(), alphaMode);
+  }
+
+  public static int shaderAlphaCutoutThreshold(RenderPipeline pipeline, RendererAssets.AlphaMode alphaMode) {
+    var alphaCutout = pipeline.getShaderDefines().values().get("ALPHA_CUTOUT");
     if (alphaCutout != null) {
       try {
         return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
@@ -251,7 +257,7 @@ public record RenderMaterial(
       }
     }
 
-    return switch (renderType.pipeline().getFragmentShader().getPath()) {
+    return switch (pipeline.getFragmentShader().getPath()) {
       case "core/glint",
            "core/particle",
            "core/rendertype_crumbling",
@@ -267,7 +273,10 @@ public record RenderMaterial(
   }
 
   private static AlphaCutoutSource alphaCutoutSource(RenderType renderType) {
-    var fragmentShader = renderType.pipeline().getFragmentShader().getPath();
+    return alphaCutoutSource(renderType.pipeline().getFragmentShader().getPath());
+  }
+
+  private static AlphaCutoutSource alphaCutoutSource(String fragmentShader) {
     return switch (fragmentShader) {
       case "core/entity", "core/item" -> AlphaCutoutSource.TEXTURE;
       default -> AlphaCutoutSource.FINAL_COLOR;
@@ -326,6 +335,10 @@ public record RenderMaterial(
 
   public static boolean defaultSortOnUpload(RendererAssets.AlphaMode alphaMode) {
     return alphaMode == RendererAssets.AlphaMode.TRANSLUCENT;
+  }
+
+  private static RendererAssets.AlphaMode alphaMode(ColorTargetState colorTargetState, RendererAssets.AlphaMode fallback) {
+    return colorTargetState.blendFunction().isPresent() ? RendererAssets.AlphaMode.TRANSLUCENT : fallback;
   }
 
   private static float viewScale(RenderType renderType) {
