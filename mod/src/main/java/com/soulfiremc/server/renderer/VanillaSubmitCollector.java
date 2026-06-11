@@ -1194,7 +1194,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return quad;
     }
 
-    return withMaterial(quad, quad.material().withRenderType(renderType, sortGroups.group(renderType)));
+    return withMaterial(quad, applyExtendedRenderState(quad.material().withRenderType(renderType, sortGroups.group(renderType)), renderType));
   }
 
   private RenderQuad withOverlay(RenderQuad quad, @Nullable RenderType renderType, int overlay) {
@@ -1243,7 +1243,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
-      1.0F
+      1.0F,
+      null
     );
   }
 
@@ -1323,6 +1324,30 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     return renderType.pipeline().getShaderDefines().flags().contains("PER_FACE_LIGHTING");
+  }
+
+  private RenderMaterial applyExtendedRenderState(RenderMaterial material, @Nullable RenderType renderType) {
+    var dissolveMaskTexture = dissolveMaskTexture(renderType);
+    return dissolveMaskTexture != null ? material.withDissolveMaskTexture(dissolveMaskTexture) : material;
+  }
+
+  @Nullable
+  private RendererAssets.TextureImage dissolveMaskTexture(@Nullable RenderType renderType) {
+    if (renderType == null || !renderType.pipeline().getShaderDefines().flags().contains("DISSOLVE")) {
+      return null;
+    }
+
+    RenderSetup state = renderType.state;
+    if (state == null || state.textures == null) {
+      return null;
+    }
+
+    var binding = state.textures.get("DissolveMaskSampler");
+    if (binding == null || binding.location() == null) {
+      return null;
+    }
+
+    return assets.renderTexture(binding.location());
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
@@ -1583,7 +1608,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       RenderMaterial material
     ) {
       var applyOverlay = materialOverride == null && usesOverlay(renderType);
-      if (usesPerFaceLighting(renderType) && material.doubleSided()) {
+      if (usesPerFaceLighting(shadingRenderType()) && material.doubleSided()) {
         var oneSidedMaterial = material.withDoubleSided(false);
         builder().add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.FRONT, 0, 1, 2, 3));
         builder().add(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.BACK, 3, 2, 1, 0));
@@ -1624,9 +1649,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         ? materialOverride
         : RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, isTextRenderType(renderType), 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
       if (materialOverride == null && renderType != null) {
-        material = material.withRenderType(renderType, sortGroups.group(renderType));
+        material = applyExtendedRenderState(material.withRenderType(renderType, sortGroups.group(renderType)), renderType);
       }
       return material;
+    }
+
+    @Nullable
+    private RenderType shadingRenderType() {
+      return materialOverride == null ? renderType : null;
     }
 
     private Vector4f clipPosition(Vector3f position, float viewScale) {
@@ -1734,13 +1764,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       boolean applyOverlay,
       FaceLighting faceLighting
     ) {
+      var shadingRenderType = shadingRenderType();
+      var shadedColor = directionalLightColor(color, normal, shadingRenderType, faceLighting);
+      if (materialOverride == null) {
+        shadedColor = modulateColor(shadedColor, lightColor(light, 0, shadingRenderType));
+      }
       return new RenderVertex(
         position.x(),
         position.y(),
         position.z(),
         u,
         v,
-        modulateColor(directionalLightColor(color, normal, renderType, faceLighting), lightColor(light, 0, renderType)),
+        shadedColor,
         applyOverlay ? overlayColor : RenderVertex.NO_OVERLAY_COLOR
       );
     }

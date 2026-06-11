@@ -50,7 +50,8 @@ public record RenderMaterial(
   TextureSampleMode textureSampleMode,
   boolean sortOnUpload,
   int sortGroup,
-  float viewScale
+  float viewScale,
+  @Nullable RendererAssets.TextureImage dissolveMaskTexture
 ) {
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
   static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
@@ -91,7 +92,8 @@ public record RenderMaterial(
       TextureSampleMode.COLOR,
       defaultSortOnUpload(alphaMode),
       0,
-      1.0F
+      1.0F,
+      null
     );
   }
 
@@ -114,7 +116,8 @@ public record RenderMaterial(
       textureSampleMode,
       sortOnUpload,
       sortGroup,
-      viewScale
+      viewScale,
+      dissolveMaskTexture
     );
   }
 
@@ -137,7 +140,8 @@ public record RenderMaterial(
       textureSampleMode,
       sortOnUpload,
       sortGroup,
-      viewScale
+      viewScale,
+      dissolveMaskTexture
     );
   }
 
@@ -166,7 +170,8 @@ public record RenderMaterial(
       textureSampleMode(renderType),
       renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
-      viewScale(renderType)
+      viewScale(renderType),
+      dissolveMaskTexture
     );
   }
 
@@ -190,7 +195,32 @@ public record RenderMaterial(
       textureSampleMode,
       sortOnUpload,
       sortGroup,
-      viewScale
+      viewScale,
+      dissolveMaskTexture
+    );
+  }
+
+  public RenderMaterial withDissolveMaskTexture(@Nullable RendererAssets.TextureImage dissolveMaskTexture) {
+    return new RenderMaterial(
+      texture,
+      alphaMode,
+      color,
+      doubleSided,
+      depthBias,
+      polygonOffsetFactor,
+      polygonOffsetUnits,
+      alphaCutoutThreshold,
+      alphaCutoutSource,
+      depthTest,
+      depthWrite,
+      blendState,
+      colorWriteMask,
+      uvTransform,
+      textureSampleMode,
+      sortOnUpload,
+      sortGroup,
+      viewScale,
+      dissolveMaskTexture
     );
   }
 

@@ -424,13 +424,19 @@ public final class RasterPipeline {
           continue;
         }
 
-        var sampled = sampleTexture(
-          material,
-          material.uvTransform().u(u, v, animationTick),
-          material.uvTransform().v(u, v, animationTick),
-          animationTick
-        );
+        var sampleU = material.uvTransform().u(u, v, animationTick);
+        var sampleV = material.uvTransform().v(u, v, animationTick);
+        var sampled = sampleTexture(material, sampleU, sampleV, animationTick);
         var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
+        var dissolveMaskTexture = material.dissolveMaskTexture();
+        if (dissolveMaskTexture != null) {
+          var vertexAlpha = (vertexColor >>> 24) & 0xFF;
+          var dissolveMaskAlpha = (dissolveMaskTexture.sample(sampleU, sampleV, animationTick) >>> 24) & 0xFF;
+          if (vertexAlpha < dissolveMaskAlpha) {
+            continue;
+          }
+          vertexColor = forceOpaque(vertexColor);
+        }
         var color = applyOverlay(
           modulate(modulate(sampled, vertexColor), material.color()),
           interpolatedOverlayColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)

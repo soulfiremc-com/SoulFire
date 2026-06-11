@@ -385,6 +385,10 @@ public final class RendererDebugDump {
       json.addProperty("sortOnUpload", material.sortOnUpload());
       json.addProperty("sortGroup", material.sortGroup());
       json.addProperty("viewScale", material.viewScale());
+      var dissolveMaskTexture = material.dissolveMaskTexture();
+      if (dissolveMaskTexture != null) {
+        json.addProperty("dissolveMaskTexture", textureId(dissolveMaskTexture));
+      }
       return json;
     }
 
@@ -395,6 +399,7 @@ public final class RendererDebugDump {
       json.addProperty("textureHasAlpha", texture.hasAlpha());
       json.addProperty("textureHasTranslucentPixels", texture.hasTranslucentPixels());
       json.addProperty("textureAlphaCanAffectCutout", material.alphaCutoutSource() == RenderMaterial.AlphaCutoutSource.TEXTURE);
+      json.addProperty("usesDissolveMask", material.dissolveMaskTexture() != null);
       json.addProperty("writesAlpha", (material.colorWriteMask() & ColorTargetState.WRITE_ALPHA) != 0);
       json.addProperty(
         "writesColor",

@@ -107,6 +107,40 @@ class RasterPipelineTest {
   }
 
   @Test
+  void dissolveMaskComparesVertexAlphaBeforeForcingOpaqueOutput() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var material = RenderMaterial
+      .create(solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+      .withDissolveMaskTexture(solidTexture(0x80FFFFFF));
+
+    var rejectedBuffers = new RasterBuffers(WIDTH, HEIGHT);
+    var rejectedScene = SceneData.builder();
+    rejectedScene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0x40FFFFFF),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0x40FFFFFF),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0x40FFFFFF),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0x40FFFFFF),
+      material
+    ));
+    renderSynthetic(pipeline, camera, rejectedScene.build(), rejectedBuffers, 0L, 0xFF000000);
+
+    var acceptedBuffers = new RasterBuffers(WIDTH, HEIGHT);
+    var acceptedScene = SceneData.builder();
+    acceptedScene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F, 0xC0FFFFFF),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xC0FFFFFF),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xC0FFFFFF),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xC0FFFFFF),
+      material
+    ));
+    renderSynthetic(pipeline, camera, acceptedScene.build(), acceptedBuffers, 0L, 0xFF000000);
+
+    assertColorNear(rejectedBuffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF000000, 3);
+    assertColorNear(acceptedBuffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFF0000, 3);
+  }
+
+  @Test
   void translucentQuadBlendsOverOpaqueBackground() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -272,7 +306,8 @@ class RasterPipelineTest {
         RenderMaterial.TextureSampleMode.COLOR,
         false,
         0,
-        1.0F
+        1.0F,
+        null
       )
     ));
     scene.add(quad(-1.0F, -1.0F, 8.0F, 1.0F, 1.0F, solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
@@ -906,6 +941,10 @@ class RasterPipelineTest {
     return new RenderVertex(x, y, z, u, v, 0xFFFFFFFF);
   }
 
+  private static RenderVertex vertex(float x, float y, float z, float u, float v, int color) {
+    return new RenderVertex(x, y, z, u, v, color);
+  }
+
   private static RendererAssets.TextureImage solidTexture(int argb) {
     var image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
     image.setRGB(0, 0, argb);
@@ -944,7 +983,8 @@ class RasterPipelineTest {
       RenderMaterial.TextureSampleMode.COLOR,
       true,
       0,
-      1.0F
+      1.0F,
+      null
     );
   }
 
@@ -967,7 +1007,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
-      material.viewScale()
+      material.viewScale(),
+      material.dissolveMaskTexture()
     );
   }
 
@@ -995,7 +1036,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
-      viewScale
+      viewScale,
+      material.dissolveMaskTexture()
     );
   }
 
@@ -1024,7 +1066,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
-      material.viewScale()
+      material.viewScale(),
+      material.dissolveMaskTexture()
     );
   }
 
@@ -1047,7 +1090,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       sortOnUpload,
       material.sortGroup(),
-      material.viewScale()
+      material.viewScale(),
+      material.dissolveMaskTexture()
     );
   }
 
@@ -1070,7 +1114,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       material.sortOnUpload(),
       sortGroup,
-      material.viewScale()
+      material.viewScale(),
+      material.dissolveMaskTexture()
     );
   }
 
@@ -1093,7 +1138,8 @@ class RasterPipelineTest {
       material.textureSampleMode(),
       material.sortOnUpload(),
       material.sortGroup(),
-      material.viewScale()
+      material.viewScale(),
+      material.dissolveMaskTexture()
     );
   }
 

@@ -203,6 +203,28 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void entityDissolveRenderTypesCaptureMaskSampler() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.entityCutoutDissolve(
+      Identifier.withDefaultNamespace("textures/entity/test"),
+      Identifier.withDefaultNamespace("textures/entity/test_dissolve")
+    );
+    var consumer = newTextConsumer(collector, texture, renderType);
+
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertTrue(scene.opaque().length > 0);
+    assertTrue(scene.opaque()[0].material().dissolveMaskTexture() != null);
+  }
+
+  @Test
   void entityBackFacesUseOppositePerFaceLighting() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -220,6 +242,26 @@ class VanillaSubmitCollectorTextTest {
     renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFFFFFF, 3);
+  }
+
+  @Test
+  void materialOverrideDoesNotInheritSourceEntityLighting() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
+    var materialOverride = RenderMaterial.create(texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, true, 0.0F);
+    var consumer = newOverrideConsumer(collector, texture, renderType, materialOverride);
+
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F, LightCoordsUtil.pack(0, 0));
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.translucent().length);
+    assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().color());
   }
 
   @Test
@@ -346,11 +388,30 @@ class VanillaSubmitCollectorTextTest {
     return newConsumer(collector, texture, renderType, VertexFormat.Mode.QUADS);
   }
 
+  private static VertexConsumer newOverrideConsumer(
+    VanillaSubmitCollector collector,
+    RendererAssets.TextureImage texture,
+    RenderType renderType,
+    RenderMaterial materialOverride
+  ) throws Exception {
+    return newConsumer(collector, texture, renderType, VertexFormat.Mode.QUADS, materialOverride);
+  }
+
   private static VertexConsumer newConsumer(
     VanillaSubmitCollector collector,
     RendererAssets.TextureImage texture,
     RenderType renderType,
     VertexFormat.Mode mode
+  ) throws Exception {
+    return newConsumer(collector, texture, renderType, mode, null);
+  }
+
+  private static VertexConsumer newConsumer(
+    VanillaSubmitCollector collector,
+    RendererAssets.TextureImage texture,
+    RenderType renderType,
+    VertexFormat.Mode mode,
+    RenderMaterial materialOverride
   ) throws Exception {
     var consumerClass = Class.forName("com.soulfiremc.server.renderer.VanillaSubmitCollector$CapturingVertexConsumer");
     var constructor = consumerClass.getDeclaredConstructor(
@@ -361,7 +422,8 @@ class VanillaSubmitCollectorTextTest {
       RendererAssets.AlphaMode.class,
       int.class,
       RenderType.class,
-      DepthStencilState.class
+      DepthStencilState.class,
+      RenderMaterial.class
     );
     constructor.setAccessible(true);
     return (VertexConsumer) constructor.newInstance(
@@ -372,7 +434,8 @@ class VanillaSubmitCollectorTextTest {
       RendererAssets.AlphaMode.TRANSLUCENT,
       0,
       renderType,
-      null
+      null,
+      materialOverride
     );
   }
 
@@ -416,11 +479,26 @@ class VanillaSubmitCollectorTextTest {
   }
 
   private static void addEntityVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, float nx, float ny, float nz) {
+    addEntityVertex(consumer, x, y, z, u, v, nx, ny, nz, LightCoordsUtil.FULL_BRIGHT);
+  }
+
+  private static void addEntityVertex(
+    VertexConsumer consumer,
+    float x,
+    float y,
+    float z,
+    float u,
+    float v,
+    float nx,
+    float ny,
+    float nz,
+    int light
+  ) {
     consumer
       .addVertex(x, y, z)
       .setColor(0xFFFFFFFF)
       .setUv(u, v)
-      .setLight(LightCoordsUtil.FULL_BRIGHT)
+      .setLight(light)
       .setNormal(nx, ny, nz);
   }
 

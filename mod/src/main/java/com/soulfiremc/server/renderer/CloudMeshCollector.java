@@ -307,7 +307,8 @@ public final class CloudMeshCollector {
       RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
-      1.0F
+      1.0F,
+      null
     );
   }
 

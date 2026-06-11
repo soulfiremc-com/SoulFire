@@ -338,7 +338,8 @@ public final class SkyRenderer {
       RenderMaterial.TextureSampleMode.COLOR,
       false,
       0,
-      1.0F
+      1.0F,
+      null
     );
   }
 
