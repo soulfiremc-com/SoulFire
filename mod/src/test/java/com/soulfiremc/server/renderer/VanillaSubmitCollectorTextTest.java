@@ -24,7 +24,10 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.builders.UVPair;
 import net.minecraft.client.particle.SingleQuadParticle;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
@@ -32,6 +35,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
@@ -344,6 +348,28 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void entityShaderDefinesDisableLightmapAndOverlayCapture() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.energySwirl(Identifier.withDefaultNamespace("textures/entity/test"), 0.0F, 0.0F);
+    var consumer = newTextConsumer(collector, texture, renderType);
+    var darkLight = LightCoordsUtil.pack(0, 0);
+    var hurtOverlay = OverlayTexture.pack(0.0F, true);
+
+    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+    flush(consumer);
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.translucent().length);
+    assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().color());
+    assertEquals(RenderVertex.NO_OVERLAY_COLOR, scene.translucent()[0].v0().overlayColor());
+  }
+
+  @Test
   void textShaderAlphaCutoutDiscardsSubTenthAlphaGlyphs() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -638,6 +664,49 @@ class VanillaSubmitCollectorTextTest {
       assertUvInsideSprite(quad.v2(), sprite);
       assertUvInsideSprite(quad.v3(), sprite);
     }
+  }
+
+  @Test
+  void bakedItemQuadsApplyVanillaDirectionalLighting() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var atlasLocation = Identifier.withDefaultNamespace("textures/atlas/test.png");
+    var sprite = fakeSprite(atlasLocation, 16, 16, 0, 0, 16, 16);
+    var materialInfo = new BakedQuad.MaterialInfo(
+      sprite,
+      ChunkSectionLayer.CUTOUT,
+      RenderTypes.itemCutout(atlasLocation),
+      -1,
+      true,
+      0
+    );
+    var quad = new BakedQuad(
+      new Vector3f(-0.5F, -0.5F, 4.0F),
+      new Vector3f(0.5F, -0.5F, 4.0F),
+      new Vector3f(0.5F, 0.5F, 4.0F),
+      new Vector3f(-0.5F, 0.5F, 4.0F),
+      UVPair.pack(0.0F, 0.0F),
+      UVPair.pack(1.0F, 0.0F),
+      UVPair.pack(1.0F, 1.0F),
+      UVPair.pack(0.0F, 1.0F),
+      Direction.NORTH,
+      materialInfo
+    );
+
+    collector.submitItem(
+      new PoseStack(),
+      ItemDisplayContext.NONE,
+      LightCoordsUtil.FULL_BRIGHT,
+      OverlayTexture.NO_OVERLAY,
+      0,
+      null,
+      List.of(quad),
+      ItemStackRenderState.FoilType.NONE
+    );
+
+    var scene = sceneData(collector);
+    assertEquals(1, scene.opaque().length);
+    assertEquals(0xFFBDBDBD, scene.opaque()[0].material().color());
   }
 
   @Test

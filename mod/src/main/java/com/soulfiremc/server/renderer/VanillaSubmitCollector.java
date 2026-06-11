@@ -97,6 +97,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 
@@ -757,13 +758,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       for (var part : parts) {
         for (var direction : Direction.values()) {
           for (var quad : part.getQuads(direction)) {
-            appendBakedQuad(quad, poseStack.last().pose(), renderType, 0xFFFFFFFF, tints, light, overlay);
-            appendBakedQuadOutline(quad, poseStack.last().pose(), renderType, outlineColor, overlay);
+            appendBakedQuad(quad, poseStack.last(), renderType, 0xFFFFFFFF, tints, light, overlay);
+            appendBakedQuadOutline(quad, poseStack.last(), renderType, outlineColor, overlay);
           }
         }
         for (var quad : part.getQuads(null)) {
-          appendBakedQuad(quad, poseStack.last().pose(), renderType, 0xFFFFFFFF, tints, light, overlay);
-          appendBakedQuadOutline(quad, poseStack.last().pose(), renderType, outlineColor, overlay);
+          appendBakedQuad(quad, poseStack.last(), renderType, 0xFFFFFFFF, tints, light, overlay);
+          appendBakedQuadOutline(quad, poseStack.last(), renderType, outlineColor, overlay);
         }
       }
     });
@@ -821,8 +822,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     withStage(stage, () -> {
       for (var quad : quads) {
         var itemRenderType = quad.materialInfo() != null ? quad.materialInfo().itemRenderType() : null;
-        appendBakedQuad(quad, poseStack.last().pose(), itemRenderType, 0xFFFFFFFF, tints, light, overlay);
-        appendBakedQuadOutline(quad, poseStack.last().pose(), itemRenderType, outlineColor, overlay);
+        appendBakedQuad(quad, poseStack.last(), itemRenderType, 0xFFFFFFFF, tints, light, overlay);
+        appendBakedQuadOutline(quad, poseStack.last(), itemRenderType, outlineColor, overlay);
         if (foilType != ItemStackRenderState.FoilType.NONE) {
           appendBakedQuadGlint(quad, poseStack.last(), itemRenderType, displayContext, foilType);
         }
@@ -1094,14 +1095,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private void appendBakedQuad(
     BakedQuad quad,
-    Matrix4fc poseMatrix,
+    PoseStack.Pose pose,
     @Nullable RenderType renderType,
     int baseColor,
     @Nullable int[] tints,
     int light,
     int overlay
   ) {
-    var captured = captureBakedQuad(quad, poseMatrix);
+    var captured = captureBakedQuad(quad, pose);
     if (captured == null) {
       return;
     }
@@ -1115,6 +1116,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
     }
     var effectiveRenderType = renderType != null ? renderType : materialInfo.itemRenderType();
+    color = directionalLightColor(color, captured.normal(), effectiveRenderType, FaceLighting.FRONT);
     color = modulateColor(color, lightColor(light, materialInfo.lightEmission(), effectiveRenderType));
     var alphaMode = alphaMode(effectiveRenderType, captured.texture(), color, captured.uv());
     var face = RendererAssets.GeometryFace.of(
@@ -1140,12 +1142,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     addRenderTypeQuad(withRenderState(withOverlay(renderQuad, effectiveRenderType, overlay), effectiveRenderType), effectiveRenderType);
   }
 
-  private void appendBakedQuadOutline(BakedQuad quad, Matrix4fc poseMatrix, @Nullable RenderType renderType, int outlineColor, int overlay) {
+  private void appendBakedQuadOutline(BakedQuad quad, PoseStack.Pose pose, @Nullable RenderType renderType, int outlineColor, int overlay) {
     if (outlineColor == 0) {
       return;
     }
 
-    var captured = captureBakedQuad(quad, poseMatrix);
+    var captured = captureBakedQuad(quad, pose);
     if (captured == null) {
       return;
     }
@@ -1212,7 +1214,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   @Nullable
-  private CapturedBakedQuad captureBakedQuad(BakedQuad quad, Matrix4fc poseMatrix) {
+  private CapturedBakedQuad captureBakedQuad(BakedQuad quad, PoseStack.Pose pose) {
     if (quad == null || quad.materialInfo() == null || quad.materialInfo().sprite() == null || quad.materialInfo().sprite().contents() == null) {
       return null;
     }
@@ -1221,6 +1223,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var texture = assets.texture(sprite.contents().name());
     var vertices = new Vector3f[4];
     var uv = new float[8];
+    var poseMatrix = pose.pose();
     for (var i = 0; i < 4; i++) {
       Vector3fc position = quad.position(i);
       vertices[i] = poseMatrix.transformPosition(new Vector3f(position));
@@ -1229,7 +1232,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       uv[i * 2 + 1] = BakedQuadUv.localV(sprite, packedUv);
     }
 
-    return new CapturedBakedQuad(vertices, uv, texture);
+    return new CapturedBakedQuad(vertices, uv, texture, pose.transformNormal(quad.direction().getUnitVec3f(), new Vector3f()));
   }
 
   private void submitComponentText(
@@ -1627,7 +1630,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
-    return renderType == null || renderType.state.useLightmap;
+    return renderType == null || renderType.state.useLightmap && !shaderDefines(renderType).contains("EMISSIVE");
   }
 
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {
@@ -1681,7 +1684,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return RendererAssets.TextureImage.from(image, null);
   }
 
-  private record CapturedBakedQuad(Vector3f[] vertices, float[] uv, RendererAssets.TextureImage texture) {
+  private record CapturedBakedQuad(Vector3f[] vertices, float[] uv, RendererAssets.TextureImage texture, Vector3f normal) {
   }
 
   private final class CapturingVertexConsumer implements VertexConsumer {
@@ -2333,7 +2336,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private boolean usesOverlay(@Nullable RenderType renderType) {
-    return renderType != null && renderType.state.useOverlay;
+    return renderType != null && renderType.state.useOverlay && !shaderDefines(renderType).contains("NO_OVERLAY");
+  }
+
+  private static Set<String> shaderDefines(RenderType renderType) {
+    return renderType.pipeline().getShaderDefines().flags();
   }
 
   private static int overlayColor(int u, int v) {
