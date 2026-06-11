@@ -2,3 +2,4 @@ audit the pov renderer in this app. it's a rasterization renderer. could you ana
 blaze3d rendering pipeline. ofc also look at mc code. also fix most visual/unimplemented regressions. e.g. submit collector missing mc edge cases. all about the edge cases. you should idiomatically, thoroughly and without backwards support rewrite and redesign pov renderer code
 where necessary.
 commit and push once done
+do not use context7 to lookup docs, always search the web and documentation directly
