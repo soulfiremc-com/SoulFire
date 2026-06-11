@@ -310,8 +310,96 @@ class RasterPipelineTest {
       new RasterPipeline.FogState(true, 0xFF204060, 0.0F, 4.0F, 64.0F, 64.0F)
     );
 
-    assertFalse(material.fog());
+    assertEquals(RenderMaterial.FogMode.NONE, material.fogMode());
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFF0000, 3);
+  }
+
+  @Test
+  void lightningFogFadesSourceAlphaInsteadOfMixingFogColor() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var lightningMaterial = RenderMaterial
+      .create(solidTexture(0x80FF0000), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F)
+      .withRenderType(RenderTypes.lightning());
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      lightningMaterial
+    ));
+
+    renderSynthetic(
+      pipeline,
+      camera,
+      scene.build(),
+      buffers,
+      0L,
+      0xFF000040,
+      new RasterPipeline.FogState(true, 0xFFFFC000, 0.0F, 4.0F, 64.0F, 64.0F)
+    );
+
+    assertEquals(RenderMaterial.FogMode.ALPHA_FADE, lightningMaterial.fogMode());
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF000040, 3);
+  }
+
+  @Test
+  void glintFogFadesRgbWithoutChangingAlpha() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      new RenderMaterial(
+        solidTexture(0x80A04020),
+        RendererAssets.AlphaMode.TRANSLUCENT,
+        0xFFFFFFFF,
+        false,
+        0.0F,
+        0.0F,
+        0.0F,
+        0,
+        RenderMaterial.AlphaCutoutSource.FINAL_COLOR,
+        RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL,
+        false,
+        RenderMaterial.BlendState.REPLACE,
+        ColorTargetState.WRITE_ALL,
+        RenderMaterial.UvTransform.IDENTITY,
+        RenderMaterial.TextureSampleMode.COLOR,
+        RenderMaterial.FogMode.RGB_FADE,
+        false,
+        0,
+        1.0F,
+        null
+      )
+    ));
+
+    renderSynthetic(
+      pipeline,
+      camera,
+      scene.build(),
+      buffers,
+      0L,
+      0x00000000,
+      new RasterPipeline.FogState(true, 0xFFFFFFFF, 0.0F, 4.0F, 64.0F, 64.0F)
+    );
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertColorNear(color, 0x80000000, 3);
+    assertChannelNear((color >>> 24) & 0xFF, 128, 3);
+    assertEquals(
+      RenderMaterial.FogMode.RGB_FADE,
+      RenderMaterial
+        .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F)
+        .withPipelineState(RenderPipelines.GLINT)
+        .fogMode()
+    );
   }
 
   @Test
@@ -389,7 +477,7 @@ class RasterPipelineTest {
         ColorTargetState.WRITE_NONE,
         RenderMaterial.UvTransform.IDENTITY,
         RenderMaterial.TextureSampleMode.COLOR,
-        true,
+        RenderMaterial.FogMode.COLOR_MIX,
         false,
         0,
         1.0F,
@@ -1191,7 +1279,7 @@ class RasterPipelineTest {
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.IDENTITY,
       RenderMaterial.TextureSampleMode.COLOR,
-      true,
+      RenderMaterial.FogMode.COLOR_MIX,
       true,
       0,
       1.0F,
@@ -1216,7 +1304,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       material.uvTransform(),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale(),
@@ -1246,7 +1334,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       material.uvTransform(),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       viewScale,
@@ -1277,7 +1365,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       material.uvTransform(),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale(),
@@ -1302,7 +1390,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       material.uvTransform(),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       sortOnUpload,
       material.sortGroup(),
       material.viewScale(),
@@ -1327,7 +1415,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       material.uvTransform(),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       material.sortOnUpload(),
       sortGroup,
       material.viewScale(),
@@ -1352,7 +1440,7 @@ class RasterPipelineTest {
       material.colorWriteMask(),
       uvTransform,
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       material.sortOnUpload(),
       material.sortGroup(),
       material.viewScale(),

@@ -48,7 +48,7 @@ public record RenderMaterial(
   int colorWriteMask,
   UvTransform uvTransform,
   TextureSampleMode textureSampleMode,
-  boolean fog,
+  FogMode fogMode,
   boolean sortOnUpload,
   int sortGroup,
   float viewScale,
@@ -91,7 +91,7 @@ public record RenderMaterial(
       ColorTargetState.WRITE_ALL,
       UvTransform.IDENTITY,
       TextureSampleMode.COLOR,
-      true,
+      FogMode.COLOR_MIX,
       defaultSortOnUpload(alphaMode),
       0,
       1.0F,
@@ -116,7 +116,7 @@ public record RenderMaterial(
       colorWriteMask,
       uvTransform,
       textureSampleMode,
-      fog,
+      fogMode,
       sortOnUpload,
       sortGroup,
       viewScale,
@@ -141,7 +141,7 @@ public record RenderMaterial(
       colorWriteMask,
       uvTransform,
       textureSampleMode,
-      fog,
+      fogMode,
       sortOnUpload,
       sortGroup,
       viewScale,
@@ -173,7 +173,7 @@ public record RenderMaterial(
       colorTargetState.writeMask(),
       UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
       textureSampleMode(renderType),
-      usesWorldFog(fragmentShader),
+      fogMode(fragmentShader),
       renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
       viewScale(renderType),
@@ -200,7 +200,7 @@ public record RenderMaterial(
       colorTargetState.writeMask(),
       uvTransform,
       textureSampleMode(fragmentShader),
-      usesWorldFog(fragmentShader),
+      fogMode(fragmentShader),
       sortOnUpload,
       sortGroup,
       viewScale,
@@ -225,7 +225,7 @@ public record RenderMaterial(
       colorWriteMask,
       uvTransform,
       textureSampleMode,
-      fog,
+      fogMode,
       sortOnUpload,
       sortGroup,
       viewScale,
@@ -292,8 +292,10 @@ public record RenderMaterial(
     };
   }
 
-  private static boolean usesWorldFog(String fragmentShader) {
+  private static FogMode fogMode(String fragmentShader) {
     return switch (fragmentShader) {
+      case "core/glint" -> FogMode.RGB_FADE;
+      case "core/rendertype_lightning" -> FogMode.ALPHA_FADE;
       case "core/block",
            "core/entity",
            "core/item",
@@ -309,8 +311,8 @@ public record RenderMaterial(
            "core/rendertype_text_background",
            "core/rendertype_text_intensity",
            "core/sky",
-           "core/terrain" -> true;
-      default -> false;
+           "core/terrain" -> FogMode.COLOR_MIX;
+      default -> FogMode.NONE;
     };
   }
 
@@ -435,6 +437,13 @@ public record RenderMaterial(
   public enum TextureSampleMode {
     COLOR,
     INTENSITY
+  }
+
+  public enum FogMode {
+    NONE,
+    COLOR_MIX,
+    ALPHA_FADE,
+    RGB_FADE
   }
 
   public record BlendState(SourceFactor sourceColor, DestFactor destColor, SourceFactor sourceAlpha, DestFactor destAlpha) {

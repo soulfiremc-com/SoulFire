@@ -478,12 +478,13 @@ public final class RasterPipeline {
           continue;
         }
 
-        if (material.fog()) {
+        if (material.fogMode() != RenderMaterial.FogMode.NONE) {
           color = applyFog(
             color,
             interpolatedFogDistance(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, true),
             interpolatedFogDistance(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, false),
-            fogState
+            fogState,
+            material.fogMode()
           );
         }
 
@@ -595,16 +596,36 @@ public final class RasterPipeline {
     return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
   }
 
-  private int applyFog(int color, float sphericalFogDistance, float cylindricalFogDistance, FogState fogState) {
+  private int applyFog(
+    int color,
+    float sphericalFogDistance,
+    float cylindricalFogDistance,
+    FogState fogState,
+    RenderMaterial.FogMode fogMode
+  ) {
     if (!fogState.enabled()) {
       return color;
     }
 
-    var fogAmount = Math.max(
+    var rawFogAmount = Math.max(
       linearFogValue(sphericalFogDistance, fogState.environmentalStart(), fogState.environmentalEnd()),
       linearFogValue(cylindricalFogDistance, fogState.renderDistanceStart(), fogState.renderDistanceEnd())
     );
-    fogAmount = Math.clamp(fogAmount * ARGB.alphaFloat(fogState.color()), 0.0F, 1.0F);
+    rawFogAmount = Math.clamp(rawFogAmount, 0.0F, 1.0F);
+    if (rawFogAmount <= 0.0F) {
+      return color;
+    }
+
+    return switch (fogMode) {
+      case NONE -> color;
+      case COLOR_MIX -> applyColorMixFog(color, fogState, rawFogAmount);
+      case ALPHA_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, true);
+      case RGB_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, false);
+    };
+  }
+
+  private int applyColorMixFog(int color, FogState fogState, float rawFogAmount) {
+    var fogAmount = Math.clamp(rawFogAmount * ARGB.alphaFloat(fogState.color()), 0.0F, 1.0F);
     if (fogAmount <= 0.0F) {
       return color;
     }
@@ -613,6 +634,14 @@ public final class RasterPipeline {
     var g = colorChannel(Mth.lerp(fogAmount, (color >> 8) & 0xFF, (fogState.color() >> 8) & 0xFF));
     var b = colorChannel(Mth.lerp(fogAmount, color & 0xFF, fogState.color() & 0xFF));
     return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+  }
+
+  private int multiplyChannels(int color, float factor, boolean includeAlpha) {
+    var a = includeAlpha ? colorChannel(((color >>> 24) & 0xFF) * factor) : (color >>> 24) & 0xFF;
+    var r = colorChannel(((color >> 16) & 0xFF) * factor);
+    var g = colorChannel(((color >> 8) & 0xFF) * factor);
+    var b = colorChannel((color & 0xFF) * factor);
+    return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
   private float linearFogValue(float distance, float start, float end) {

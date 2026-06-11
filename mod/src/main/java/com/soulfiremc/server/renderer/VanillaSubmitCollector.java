@@ -89,6 +89,7 @@ import org.joml.Vector4f;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -269,6 +270,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private SceneData buildScene() {
+    for (var orderedBuckets : bucketsByOrder.values()) {
+      orderedBuckets.flushNameTags(this);
+    }
+
     var sceneData = SceneData.EMPTY;
     for (var orderedBuckets : bucketsByOrder.values()) {
       sceneData = sceneData.merge(orderedBuckets.build());
@@ -281,8 +286,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private void withStage(FeatureStage stage, Runnable action) {
+    withBucketStage(buckets, stage, action);
+  }
+
+  private void withBucketStage(FeatureBuckets target, FeatureStage stage, Runnable action) {
     var previous = activeBuilder;
-    activeBuilder = buckets.builder(stage);
+    activeBuilder = target.builder(stage);
     try {
       action.run();
     } finally {
@@ -378,25 +387,57 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     double distanceToCameraSq,
     CameraRenderState cameraRenderState
   ) {
-    withStage(FeatureStage.TRANSLUCENT_NAME_TAG, () -> {
-      if (nameTagAttachment == null) {
-        return;
-      }
+    if (nameTagAttachment == null) {
+      return;
+    }
 
-      poseStack.pushPose();
+    poseStack.pushPose();
+    try {
       poseStack.translate(nameTagAttachment.x, nameTagAttachment.y + 0.5, nameTagAttachment.z);
       poseStack.mulPose(cameraRenderState.orientation);
       poseStack.scale(0.025F, -0.025F, 0.025F);
+      var pose = new Matrix4f(poseStack.last().pose());
       var x = xOffset(name);
       var backgroundColor = nameTagBackgroundColor();
       if (seeThrough) {
-        submitComponentText(poseStack, name, x, offset, 0x80FFFFFF, backgroundColor, Font.DisplayMode.SEE_THROUGH, lightCoords);
-        submitComponentText(poseStack, name, x, offset, 0xFFFFFFFF, 0, Font.DisplayMode.NORMAL, LightCoordsUtil.lightCoordsWithEmission(lightCoords, 2));
+        buckets.nameTagSeeThrough.add(new NameTagDraw(
+          pose,
+          x,
+          offset,
+          name,
+          Font.DisplayMode.SEE_THROUGH,
+          lightCoords,
+          0x80FFFFFF,
+          backgroundColor,
+          distanceToCameraSq
+        ));
+        buckets.nameTagNormal.add(new NameTagDraw(
+          pose,
+          x,
+          offset,
+          name,
+          Font.DisplayMode.NORMAL,
+          LightCoordsUtil.lightCoordsWithEmission(lightCoords, 2),
+          0xFFFFFFFF,
+          0,
+          distanceToCameraSq
+        ));
       } else {
-        submitComponentText(poseStack, name, x, offset, 0x80FFFFFF, backgroundColor, Font.DisplayMode.NORMAL, lightCoords);
+        buckets.nameTagNormal.add(new NameTagDraw(
+          pose,
+          x,
+          offset,
+          name,
+          Font.DisplayMode.NORMAL,
+          lightCoords,
+          0x80FFFFFF,
+          backgroundColor,
+          distanceToCameraSq
+        ));
       }
+    } finally {
       poseStack.popPose();
-    });
+    }
   }
 
   @Override
@@ -1046,7 +1087,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private void submitComponentText(
-    PoseStack poseStack,
+    Matrix4f pose,
     Component text,
     float x,
     float y,
@@ -1066,8 +1107,21 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       0
     );
     var bufferSource = new CapturingBufferSource();
-    font().drawInBatch(text, x, y, color, false, poseStack.last().pose(), bufferSource, displayMode, backgroundColor, light);
+    font().drawInBatch(text, x, y, color, false, pose, bufferSource, displayMode, backgroundColor, light);
     bufferSource.flush();
+  }
+
+  private void submitNameTagText(FeatureBuckets target, NameTagDraw draw) {
+    withBucketStage(target, FeatureStage.TRANSLUCENT_NAME_TAG, () -> submitComponentText(
+      draw.pose(),
+      draw.text(),
+      draw.x(),
+      draw.y(),
+      draw.color(),
+      draw.backgroundColor(),
+      draw.displayMode(),
+      draw.light()
+    ));
   }
 
   private void addFace(
@@ -1287,7 +1341,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       material.colorWriteMask(),
       RenderMaterial.UvTransform.glint(glintScale(renderType)),
       material.textureSampleMode(),
-      material.fog(),
+      material.fogMode(),
       false,
       sortGroups.group(renderType),
       material.viewScale(),
@@ -2222,6 +2276,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private static final ScreenOffset UNUSABLE = new ScreenOffset(0.0F, 0.0F, false);
   }
 
+  private record NameTagDraw(
+    Matrix4f pose,
+    float x,
+    int y,
+    Component text,
+    Font.DisplayMode displayMode,
+    int light,
+    int color,
+    int backgroundColor,
+    double distanceToCameraSq
+  ) {}
+
   private enum FaceLighting {
     FRONT,
     BACK
@@ -2258,6 +2324,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private static final class FeatureBuckets {
     private final EnumMap<FeatureStage, SceneData.Builder> builders = new EnumMap<>(FeatureStage.class);
+    private final ArrayList<NameTagDraw> nameTagSeeThrough = new ArrayList<>();
+    private final ArrayList<NameTagDraw> nameTagNormal = new ArrayList<>();
 
     private SceneData.Builder builder(FeatureStage stage) {
       return builders.computeIfAbsent(stage, _ -> SceneData.builder());
@@ -2272,6 +2340,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         }
       }
       return sceneData;
+    }
+
+    private void flushNameTags(VanillaSubmitCollector collector) {
+      nameTagSeeThrough.sort(Comparator.comparingDouble(NameTagDraw::distanceToCameraSq).reversed());
+      for (var draw : nameTagSeeThrough) {
+        collector.submitNameTagText(this, draw);
+      }
+      for (var draw : nameTagNormal) {
+        collector.submitNameTagText(this, draw);
+      }
+      nameTagSeeThrough.clear();
+      nameTagNormal.clear();
     }
   }
 

@@ -458,6 +458,7 @@ class VanillaSubmitCollectorTextTest {
     assertEquals(RenderMaterial.DepthTest.EQUAL, itemGlint.depthTest());
     assertFalse(itemGlint.depthWrite());
     assertTrue(itemGlint.blendState().blends());
+    assertEquals(RenderMaterial.FogMode.RGB_FADE, itemGlint.fogMode());
     assertEquals(8.0F, uvScale(itemGlint.uvTransform()), 1.0E-5F);
     assertEquals(0.5F, uvScale(entityGlint.uvTransform()), 1.0E-5F);
   }
