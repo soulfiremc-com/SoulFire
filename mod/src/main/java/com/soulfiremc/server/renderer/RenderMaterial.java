@@ -52,10 +52,61 @@ public record RenderMaterial(
   boolean sortOnUpload,
   int sortGroup,
   float viewScale,
-  @Nullable RendererAssets.TextureImage dissolveMaskTexture
+  @Nullable RendererAssets.TextureImage dissolveMaskTexture,
+  @Nullable RendererAssets.TextureImage secondaryTexture,
+  int portalLayers
 ) {
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
+  private static final int DEFAULT_END_PORTAL_LAYERS = 15;
   static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
+
+  public RenderMaterial(
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    boolean doubleSided,
+    float depthBias,
+    float polygonOffsetFactor,
+    float polygonOffsetUnits,
+    int alphaCutoutThreshold,
+    AlphaCutoutSource alphaCutoutSource,
+    DepthTest depthTest,
+    boolean depthWrite,
+    BlendState blendState,
+    int colorWriteMask,
+    UvTransform uvTransform,
+    TextureSampleMode textureSampleMode,
+    FogMode fogMode,
+    boolean sortOnUpload,
+    int sortGroup,
+    float viewScale,
+    @Nullable RendererAssets.TextureImage dissolveMaskTexture
+  ) {
+    this(
+      texture,
+      alphaMode,
+      color,
+      doubleSided,
+      depthBias,
+      polygonOffsetFactor,
+      polygonOffsetUnits,
+      alphaCutoutThreshold,
+      alphaCutoutSource,
+      depthTest,
+      depthWrite,
+      blendState,
+      colorWriteMask,
+      uvTransform,
+      textureSampleMode,
+      fogMode,
+      sortOnUpload,
+      sortGroup,
+      viewScale,
+      dissolveMaskTexture,
+      null,
+      0
+    );
+  }
 
   public static RenderMaterial create(
     RendererAssets.TextureImage texture,
@@ -120,7 +171,9 @@ public record RenderMaterial(
       sortOnUpload,
       sortGroup,
       viewScale,
-      dissolveMaskTexture
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayers
     );
   }
 
@@ -145,7 +198,9 @@ public record RenderMaterial(
       sortOnUpload,
       sortGroup,
       viewScale,
-      dissolveMaskTexture
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayers
     );
   }
 
@@ -178,7 +233,9 @@ public record RenderMaterial(
       renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
       sortGroup,
       viewScale(renderType),
-      dissolveMaskTexture
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayerCount(pipeline)
     );
   }
 
@@ -206,7 +263,9 @@ public record RenderMaterial(
       sortOnUpload,
       sortGroup,
       viewScale,
-      dissolveMaskTexture
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayerCount(pipeline)
     );
   }
 
@@ -231,7 +290,36 @@ public record RenderMaterial(
       sortOnUpload,
       sortGroup,
       viewScale,
-      dissolveMaskTexture
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayers
+    );
+  }
+
+  public RenderMaterial withSecondaryTexture(@Nullable RendererAssets.TextureImage secondaryTexture) {
+    return new RenderMaterial(
+      texture,
+      alphaMode,
+      color,
+      doubleSided,
+      depthBias,
+      polygonOffsetFactor,
+      polygonOffsetUnits,
+      alphaCutoutThreshold,
+      alphaCutoutSource,
+      depthTest,
+      depthWrite,
+      blendState,
+      colorWriteMask,
+      uvTransform,
+      textureSampleMode,
+      fogMode,
+      sortOnUpload,
+      sortGroup,
+      viewScale,
+      dissolveMaskTexture,
+      secondaryTexture,
+      portalLayers
     );
   }
 
@@ -290,6 +378,7 @@ public record RenderMaterial(
   private static TextureSampleMode textureSampleMode(String fragmentShader) {
     return switch (fragmentShader) {
       case "core/rendertype_text_intensity", "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
+      case "core/rendertype_end_portal" -> TextureSampleMode.END_PORTAL;
       default -> TextureSampleMode.COLOR;
     };
   }
@@ -376,6 +465,23 @@ public record RenderMaterial(
     return depthStencilState.depthBiasConstant();
   }
 
+  private static int portalLayerCount(RenderPipeline pipeline) {
+    if (!pipeline.getFragmentShader().getPath().equals("core/rendertype_end_portal")) {
+      return 0;
+    }
+
+    var layerCount = pipeline.getShaderDefines().values().get("PORTAL_LAYERS");
+    if (layerCount == null) {
+      return DEFAULT_END_PORTAL_LAYERS;
+    }
+
+    try {
+      return Math.clamp(Integer.parseInt(layerCount), 0, DEFAULT_END_PORTAL_LAYERS + 1);
+    } catch (NumberFormatException _) {
+      return DEFAULT_END_PORTAL_LAYERS;
+    }
+  }
+
   public enum DepthTest {
     ALWAYS_PASS {
       @Override
@@ -449,7 +555,8 @@ public record RenderMaterial(
 
   public enum TextureSampleMode {
     COLOR,
-    INTENSITY
+    INTENSITY,
+    END_PORTAL
   }
 
   public enum FogMode {

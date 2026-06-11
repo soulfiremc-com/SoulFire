@@ -951,6 +951,47 @@ class RasterPipelineTest {
   }
 
   @Test
+  void pipelineStateDerivesEndPortalShaderLayerCount() {
+    var portal = RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0.0F)
+      .withPipelineState(RenderPipelines.END_PORTAL);
+    var gateway = RenderMaterial
+      .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0.0F)
+      .withPipelineState(RenderPipelines.END_GATEWAY);
+
+    assertEquals(RenderMaterial.TextureSampleMode.END_PORTAL, portal.textureSampleMode());
+    assertEquals(15, portal.portalLayers());
+    assertEquals(RenderMaterial.TextureSampleMode.END_PORTAL, gateway.textureSampleMode());
+    assertEquals(16, gateway.portalLayers());
+  }
+
+  @Test
+  void endPortalShaderModeSamplesProjectedSecondaryLayers() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var material = RenderMaterial
+      .create(solidTexture(0xFF000000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0.0F)
+      .withPipelineState(RenderPipelines.END_PORTAL)
+      .withSecondaryTexture(solidTexture(0xFFFFFFFF))
+      .withDoubleSided(true);
+    var scene = SceneData.builder();
+    scene.add(customQuad(
+      vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
+      vertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F),
+      vertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F),
+      vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
+      material
+    ));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
+    assertEquals(0xFF, (color >>> 24) & 0xFF);
+    assertTrue((color & 0x00FFFFFF) != 0, () -> "expected secondary portal layers to contribute color but was 0x" + Integer.toHexString(color));
+  }
+
+  @Test
   void pipelineStateDerivesShaderTextureAddressMode() {
     var material = RenderMaterial
       .create(splitTexture(0xFFFF0000, 0xFF00FF00), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, true, 0.0F)

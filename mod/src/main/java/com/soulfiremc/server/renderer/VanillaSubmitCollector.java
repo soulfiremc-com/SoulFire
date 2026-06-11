@@ -1491,7 +1491,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       false,
       sortGroups.group(renderType),
       material.viewScale(),
-      material.dissolveMaskTexture()
+      material.dissolveMaskTexture(),
+      material.secondaryTexture(),
+      material.portalLayers()
     );
   }
 
@@ -1597,7 +1599,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private RenderMaterial applyExtendedRenderState(RenderMaterial material, @Nullable RenderType renderType) {
     var dissolveMaskTexture = dissolveMaskTexture(renderType);
-    return dissolveMaskTexture != null ? material.withDissolveMaskTexture(dissolveMaskTexture) : material;
+    if (dissolveMaskTexture != null) {
+      material = material.withDissolveMaskTexture(dissolveMaskTexture);
+    }
+
+    var secondaryTexture = textureFromSampler(renderType, "Sampler1");
+    return secondaryTexture != null ? material.withSecondaryTexture(secondaryTexture) : material;
   }
 
   @Nullable
@@ -1647,6 +1654,25 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     return WHITE_TEXTURE;
+  }
+
+  @Nullable
+  private RendererAssets.TextureImage textureFromSampler(@Nullable RenderType renderType, String samplerName) {
+    if (renderType == null) {
+      return null;
+    }
+
+    RenderSetup state = renderType.state;
+    if (state == null || state.textures == null) {
+      return null;
+    }
+
+    var binding = state.textures.get(samplerName);
+    if (binding == null || binding.location() == null) {
+      return null;
+    }
+
+    return assets.renderTexture(binding.location());
   }
 
   private static RendererAssets.TextureImage createSolidTexture(int argb) {

@@ -37,6 +37,24 @@ import java.util.stream.IntStream;
 public final class RasterPipeline {
   private static final int TILE_SIZE = 32;
   private static final float POLYGON_OFFSET_UNIT_DEPTH = 1.0E-5F;
+  private static final float[][] END_PORTAL_COLORS = {
+    {0.022087F, 0.098399F, 0.110818F},
+    {0.011892F, 0.095924F, 0.089485F},
+    {0.027636F, 0.101689F, 0.100326F},
+    {0.046564F, 0.109883F, 0.114838F},
+    {0.064901F, 0.117696F, 0.097189F},
+    {0.063761F, 0.086895F, 0.123646F},
+    {0.084817F, 0.111994F, 0.166380F},
+    {0.097489F, 0.154120F, 0.091064F},
+    {0.106152F, 0.131144F, 0.195191F},
+    {0.097721F, 0.110188F, 0.187229F},
+    {0.133516F, 0.138278F, 0.148582F},
+    {0.070006F, 0.243332F, 0.235792F},
+    {0.196766F, 0.142899F, 0.214696F},
+    {0.047281F, 0.315338F, 0.321970F},
+    {0.204675F, 0.390010F, 0.302066F},
+    {0.080955F, 0.314821F, 0.661491F}
+  };
 
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     renderSky(ctx, buffers);
@@ -456,7 +474,7 @@ public final class RasterPipeline {
 
         var sampleU = material.uvTransform().u(u, v, animationTick);
         var sampleV = material.uvTransform().v(u, v, animationTick);
-        var sampled = sampleTexture(material, sampleU, sampleV, animationTick);
+        var sampled = sampleTexture(material, sampleU, sampleV, x, y, camera, animationTick);
         var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
         var dissolveMaskTexture = material.dissolveMaskTexture();
         if (dissolveMaskTexture != null) {
@@ -711,7 +729,7 @@ public final class RasterPipeline {
     return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
-  private int sampleTexture(RenderMaterial material, float u, float v, long animationTick) {
+  private int sampleTexture(RenderMaterial material, float u, float v, int x, int y, Camera camera, long animationTick) {
     var sample = material.texture().sample(u, v, animationTick);
     return switch (material.textureSampleMode()) {
       case COLOR -> sample;
@@ -719,7 +737,52 @@ public final class RasterPipeline {
         var intensity = (sample >> 16) & 0xFF;
         yield (intensity << 24) | (intensity << 16) | (intensity << 8) | intensity;
       }
+      case END_PORTAL -> sampleEndPortal(material, x, y, camera, animationTick);
     };
+  }
+
+  private int sampleEndPortal(RenderMaterial material, int x, int y, Camera camera, long animationTick) {
+    var projectedU = (x + 0.5F) / camera.width();
+    var projectedV = 1.0F - (y + 0.5F) / camera.height();
+    var baseSample = material.texture().sample(projectedU, projectedV, animationTick);
+    var r = textureChannel(baseSample, 16) * END_PORTAL_COLORS[0][0];
+    var g = textureChannel(baseSample, 8) * END_PORTAL_COLORS[0][1];
+    var b = textureChannel(baseSample, 0) * END_PORTAL_COLORS[0][2];
+    var secondaryTexture = material.secondaryTexture();
+    if (secondaryTexture != null) {
+      var gameTime = Math.floorMod(animationTick, 24000L) / 24000.0F;
+      var layerCount = Math.min(material.portalLayers(), END_PORTAL_COLORS.length);
+      for (var layerIndex = 0; layerIndex < layerCount; layerIndex++) {
+        var layerCoord = endPortalLayerCoord(projectedU, projectedV, layerIndex + 1, gameTime);
+        var layerSample = secondaryTexture.sample(layerCoord.u(), layerCoord.v(), animationTick);
+        var layerColor = END_PORTAL_COLORS[layerIndex];
+        r += textureChannel(layerSample, 16) * layerColor[0];
+        g += textureChannel(layerSample, 8) * layerColor[1];
+        b += textureChannel(layerSample, 0) * layerColor[2];
+      }
+    }
+
+    return 0xFF000000
+      | (colorChannel(r * 255.0F) << 16)
+      | (colorChannel(g * 255.0F) << 8)
+      | colorChannel(b * 255.0F);
+  }
+
+  private float textureChannel(int color, int shift) {
+    return ((color >> shift) & 0xFF) / 255.0F;
+  }
+
+  private TextureCoord endPortalLayerCoord(float u, float v, int layer, float gameTime) {
+    var layerFloat = (float) layer;
+    var angle = (float) Math.toRadians((layerFloat * layerFloat * 4321.0F + layerFloat * 9.0F) * 2.0F);
+    var sin = (float) Math.sin(angle);
+    var cos = (float) Math.cos(angle);
+    var scale = (4.5F - layerFloat / 4.0F) * 2.0F;
+    var rotatedU = (u * cos - v * sin) * scale;
+    var rotatedV = (u * sin + v * cos) * scale;
+    var translatedU = rotatedU + 17.0F / layerFloat;
+    var translatedV = rotatedV + (2.0F + layerFloat / 1.5F) * (gameTime * 1.5F);
+    return new TextureCoord(translatedU * 0.5F + 0.25F, translatedV * 0.5F + 0.25F);
   }
 
   private int forceOpaque(int color) {
@@ -847,6 +910,8 @@ public final class RasterPipeline {
   }
 
   private record DepthFogProjection(float m22, float m32) {}
+
+  private record TextureCoord(float u, float v) {}
 
   record FogState(
     boolean enabled,

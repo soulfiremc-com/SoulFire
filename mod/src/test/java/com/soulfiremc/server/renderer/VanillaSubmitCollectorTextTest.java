@@ -283,6 +283,27 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void endPortalRenderTypesCaptureProjectedLayerSampler() throws Exception {
+    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
+    var collector = newCollector(camera);
+    var poseStack = new PoseStack();
+
+    collector.submitCustomGeometry(poseStack, RenderTypes.endPortal(), (pose, buffer) -> {
+      buffer.addVertex(pose, -0.75F, -0.75F, 4.0F);
+      buffer.addVertex(pose, -0.75F, 0.75F, 4.0F);
+      buffer.addVertex(pose, 0.75F, 0.75F, 4.0F);
+      buffer.addVertex(pose, 0.75F, -0.75F, 4.0F);
+    });
+
+    var scene = sceneData(collector);
+    assertTrue(scene.opaque().length > 0);
+    var material = scene.opaque()[0].material();
+    assertEquals(RenderMaterial.TextureSampleMode.END_PORTAL, material.textureSampleMode());
+    assertEquals(15, material.portalLayers());
+    assertTrue(material.secondaryTexture() != null);
+  }
+
+  @Test
   void entityBackFacesUseOppositePerFaceLighting() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
