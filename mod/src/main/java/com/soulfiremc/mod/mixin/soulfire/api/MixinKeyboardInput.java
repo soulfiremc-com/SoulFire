@@ -28,10 +28,10 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(KeyboardInput.class)
 public class MixinKeyboardInput {
   @WrapOperation(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/world/entity/player/Input;"))
-  private Input soulfireUpdatePlayerMoveState(boolean bl, boolean bl2, boolean bl3, boolean bl4, boolean bl5, boolean bl6, boolean bl7, Operation<Input> original) {
+  private Input soulfireUpdatePlayerMoveState(boolean forward, boolean backward, boolean left, boolean right, boolean jump, boolean shift, boolean sprint, Operation<Input> original) {
     var connection = BotConnection.currentOptional().orElse(null);
     if (connection == null) {
-      return original.call(bl, bl2, bl3, bl4, bl5, bl6, bl7);
+      return original.call(forward, backward, left, right, jump, shift, sprint);
     }
 
     var controlState = connection.controlState();
