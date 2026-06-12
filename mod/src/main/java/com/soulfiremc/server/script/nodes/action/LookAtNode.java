@@ -18,7 +18,6 @@
 package com.soulfiremc.server.script.nodes.action;
 
 import com.soulfiremc.server.script.*;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.phys.Vec3;
 import reactor.core.publisher.Mono;
 
@@ -50,12 +49,7 @@ public final class LookAtNode extends AbstractScriptNode {
     var bot = requireBot(inputs);
     var target = getInput(inputs, "target", Vec3.ZERO);
 
-    runOnTickThread(runtime, bot, () -> {
-      var player = bot.minecraft().player;
-      if (player != null) {
-        player.lookAt(EntityAnchorArgument.Anchor.EYES, target);
-      }
-    });
+    runOnTickThread(runtime, bot, () -> bot.rotationControl().lookAt(target));
 
     return completedEmptyMono();
   }

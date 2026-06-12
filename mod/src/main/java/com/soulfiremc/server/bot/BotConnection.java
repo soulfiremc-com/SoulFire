@@ -98,6 +98,7 @@ public final class BotConnection {
   private final MetadataHolder<JsonElement> persistentMetadata;
   private final ControlState controlState = new ControlState();
   private final BotControlAPI botControl = new BotControlAPI();
+  private final BotRotationController rotationControl;
   private final AutomationController automation;
   private final SoulFireScheduler scheduler;
   private final BotConnectionFactory factory;
@@ -150,6 +151,7 @@ public final class BotConnection {
     this.persistentMetadata = fillPersistentMetadata(minecraftAccount);
     this.runnableWrapper = instanceManager.runnableWrapper().with(new BotRunnableWrapper(this));
     this.scheduler = new SoulFireScheduler(runnableWrapper);
+    this.rotationControl = new BotRotationController(this);
     this.automation = new AutomationController(this);
     this.serverAddress = serverAddress;
     this.proxy = proxyData;

@@ -67,8 +67,7 @@ public final class MimicCommand {
                       public void tick() {
                         bot.controlState().resetAll();
 
-                        player.setYRot(entity.get().getYRot());
-                        player.setXRot(entity.get().getXRot());
+                        bot.rotationControl().lookTo(entity.get().getYRot(), entity.get().getXRot());
 
                         var currentPos = player.position();
                         var newPos = entity.get().position().subtract(offset);

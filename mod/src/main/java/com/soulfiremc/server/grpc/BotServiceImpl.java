@@ -1962,10 +1962,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
             .build();
         }
 
-        activeBot.botControl().replace(ControlTask.once(() -> {
-          player.setYRot(finalYaw);
-          player.setXRot(finalPitch);
-        }));
+        activeBot.botControl().replace(ControlTask.once(() -> activeBot.rotationControl().lookTo(finalYaw, finalPitch)));
         return BotSetRotationResponse.newBuilder()
           .setSuccess(true)
           .build();

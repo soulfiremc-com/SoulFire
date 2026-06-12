@@ -23,15 +23,12 @@ import com.soulfiremc.server.util.MathHelper;
 import com.soulfiremc.server.util.VectorHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 
 @Slf4j
 @RequiredArgsConstructor
 public final class GapJumpAction implements WorldAction {
   private final SFVec3i blockPosition;
   private final int gapLength;
-  private boolean didLook;
-  private boolean lockYRot;
   private int noJumpTicks;
 
   @Override
@@ -66,21 +63,7 @@ public final class GapJumpAction implements WorldAction {
     var blockMeta = level.getBlockState(blockPosition.toBlockPos());
     var targetMiddleBlock = VectorHelper.topMiddleOfBlock(blockPosition, blockMeta);
 
-    var previousYRot = clientEntity.getYRot();
-    clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, targetMiddleBlock);
-    clientEntity.setXRot(0);
-    var newYRot = clientEntity.getYRot();
-
-    var yRotDifference = Math.abs(MathHelper.wrapDegrees(newYRot - previousYRot));
-
-    // We should only set the yRot once to the server to prevent the bot looking weird due to
-    // inaccuracy
-    if (!didLook) {
-      didLook = true;
-    } else if (yRotDifference > 5 || lockYRot) {
-      lockYRot = true;
-      clientEntity.yRotLast = newYRot;
-    }
+    connection.rotationControl().lookHorizontallyAt(targetMiddleBlock);
 
     connection.controlState().sprint(true);
     connection.controlState().up(true);

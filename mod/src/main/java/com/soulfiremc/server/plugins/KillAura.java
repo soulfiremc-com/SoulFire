@@ -36,7 +36,6 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -115,7 +114,7 @@ public final class KillAura extends InternalPlugin {
     if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, new KillAuraMarker(target, distance)))) {
       return;
     }
-    localPlayer.lookAt(EntityAnchorArgument.Anchor.EYES, bestVisiblePoint);
+    bot.rotationControl().lookAt(bestVisiblePoint);
   }
 
   @EventHandler
@@ -141,6 +140,14 @@ public final class KillAura extends InternalPlugin {
     var hitRange = bot.settingsSource().get(KillAuraSettings.HIT_RANGE);
     var swingRange = bot.settingsSource().get(KillAuraSettings.SWING_RANGE);
     var swing = marker.distance() <= swingRange;
+    var visiblePoint = getEntityVisiblePoint(bot, marker.attackEntity());
+    if (visiblePoint == null) {
+      visiblePoint = marker.attackEntity().getEyePosition();
+    }
+    if (!bot.rotationControl().isFacing(visiblePoint)) {
+      return;
+    }
+
     if (marker.distance() <= hitRange) {
       bot.minecraft().gameMode.attack(localPlayer, marker.attackEntity());
       localPlayer.swing(InteractionHand.MAIN_HAND);

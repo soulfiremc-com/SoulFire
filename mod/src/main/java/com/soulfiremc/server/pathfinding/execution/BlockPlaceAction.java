@@ -67,11 +67,17 @@ public final class BlockPlaceAction implements WorldAction {
       return;
     }
 
+    var placeTarget = blockPlaceAgainstData.againstPos().toBlockPos().getCenter().add(
+      blockPlaceAgainstData.blockFace().toDirection().getUnitVec3().multiply(0.5, 0.5, 0.5));
+    connection.rotationControl().lookAt(placeTarget);
+    if (!connection.rotationControl().isFacing(placeTarget)) {
+      return;
+    }
+
     var hand = InteractionHand.MAIN_HAND;
     if (connection.minecraft().gameMode.useItemOn(clientEntity, hand, clientEntity.level().clipIncludingBorder(new ClipContext(
       clientEntity.getEyePosition(),
-      blockPlaceAgainstData.againstPos().toBlockPos().getCenter().add(
-        blockPlaceAgainstData.blockFace().toDirection().getUnitVec3().multiply(0.5, 0.5, 0.5)),
+      placeTarget,
       ClipContext.Block.COLLIDER,
       ClipContext.Fluid.NONE,
       clientEntity

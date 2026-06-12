@@ -22,7 +22,6 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.command.brigadier.DoubleAxisArgumentType;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.*;
 
@@ -53,10 +52,7 @@ public final class LookAtCommand {
                             return;
                           }
 
-                          player
-                            .lookAt(
-                              EntityAnchorArgument.Anchor.EYES,
-                              DoubleAxisArgumentType.forXYZAxis(x, y, z, player.position()));
+                          bot.rotationControl().lookAt(DoubleAxisArgumentType.forXYZAxis(x, y, z, player.position()));
                         }));
                         return Command.SINGLE_SUCCESS;
                       });

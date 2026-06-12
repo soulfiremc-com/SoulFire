@@ -17,16 +17,62 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.soulfiremc.mod.access.IMouseHandler;
+import com.soulfiremc.server.bot.BotConnection;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MouseHandler.class)
-public class MixinMouseHandler {
+public class MixinMouseHandler implements IMouseHandler {
+  @Shadow
+  private double accumulatedDX;
+  @Shadow
+  private double accumulatedDY;
+
+  private double soulfire$syntheticDX;
+  private double soulfire$syntheticDY;
+  private boolean soulfire$handlingSyntheticMovement;
+
   @Inject(method = "grabMouse", at = @At("HEAD"), cancellable = true)
   private void grabMouseHook(CallbackInfo ci) {
     ci.cancel();
+  }
+
+  @Override
+  public void soulfire$queueSyntheticMovement(double deltaX, double deltaY) {
+    soulfire$syntheticDX += deltaX;
+    soulfire$syntheticDY += deltaY;
+  }
+
+  @Inject(method = "handleAccumulatedMovement", at = @At("HEAD"))
+  private void soulfire$queueBotRotationMovement(CallbackInfo ci) {
+    soulfire$handlingSyntheticMovement = false;
+    BotConnection.currentOptional()
+      .ifPresent(connection -> connection.rotationControl().queueMouseMovement());
+    if (soulfire$syntheticDX == 0.0D && soulfire$syntheticDY == 0.0D) {
+      return;
+    }
+
+    accumulatedDX += soulfire$syntheticDX;
+    accumulatedDY += soulfire$syntheticDY;
+    soulfire$syntheticDX = 0.0D;
+    soulfire$syntheticDY = 0.0D;
+    soulfire$handlingSyntheticMovement = true;
+  }
+
+  @WrapOperation(method = "handleAccumulatedMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/MouseHandler;isMouseGrabbed()Z"))
+  private boolean soulfire$treatSyntheticMovementAsGrabbed(MouseHandler instance, Operation<Boolean> original) {
+    return soulfire$handlingSyntheticMovement || original.call(instance);
+  }
+
+  @Inject(method = "handleAccumulatedMovement", at = @At("RETURN"))
+  private void soulfire$clearSyntheticMovementState(CallbackInfo ci) {
+    soulfire$handlingSyntheticMovement = false;
   }
 }

@@ -31,7 +31,6 @@ import com.soulfiremc.server.plugins.KillAura;
 import com.soulfiremc.server.settings.instance.AutomationSettings;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -1287,7 +1286,11 @@ public final class AutomationController {
     }
 
     var interactPoint = against.blockFace().getMiddleOfFace(against.againstPos());
-    player.lookAt(EntityAnchorArgument.Anchor.EYES, interactPoint);
+    bot.rotationControl().lookAt(interactPoint);
+    if (!bot.rotationControl().isFacing(interactPoint)) {
+      return true;
+    }
+
     if (gameMode.useItemOn(player, InteractionHand.MAIN_HAND, player.level().clipIncludingBorder(new ClipContext(
       player.getEyePosition(),
       interactPoint,
@@ -1337,7 +1340,11 @@ public final class AutomationController {
     }
 
     var interactPoint = against.get().blockFace().getMiddleOfFace(against.get().againstPos());
-    player.lookAt(EntityAnchorArgument.Anchor.EYES, interactPoint);
+    bot.rotationControl().lookAt(interactPoint);
+    if (!bot.rotationControl().isFacing(interactPoint)) {
+      return true;
+    }
+
     if (gameMode.useItemOn(player, InteractionHand.MAIN_HAND, player.level().clipIncludingBorder(new ClipContext(
       player.getEyePosition(),
       interactPoint,
@@ -2500,7 +2507,12 @@ public final class AutomationController {
         if (finishFuture(future) == ActionResult.FAILED || !AutomationInventory.ensureHolding(bot, AutomationRequirements.GOLD_INGOT)) {
           return ActionResult.FAILED;
         }
-        player.lookAt(EntityAnchorArgument.Anchor.EYES, entity.get().getEyePosition());
+        var interactPoint = entity.get().getEyePosition();
+        bot.rotationControl().lookAt(interactPoint);
+        if (!bot.rotationControl().isFacing(interactPoint)) {
+          return ActionResult.RUNNING;
+        }
+
         if (bot.minecraft().gameMode.interact(player, entity.get(), new EntityHitResult(entity.get()), InteractionHand.MAIN_HAND)
           instanceof InteractionResult.Success success
           && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
@@ -2790,7 +2802,11 @@ public final class AutomationController {
     }
 
     var target = pos.getCenter();
-    player.lookAt(EntityAnchorArgument.Anchor.EYES, target);
+    bot.rotationControl().lookAt(target);
+    if (!bot.rotationControl().isFacing(target)) {
+      return;
+    }
+
     if (gameMode.useItemOn(player, InteractionHand.MAIN_HAND, player.level().clipIncludingBorder(new ClipContext(
       player.getEyePosition(),
       target,
@@ -2890,14 +2906,14 @@ public final class AutomationController {
       }
 
       var visiblePoint = Optional.ofNullable(KillAura.getEntityVisiblePoint(bot, target)).orElse(target.getEyePosition());
-      player.lookAt(EntityAnchorArgument.Anchor.EYES, visiblePoint);
+      bot.rotationControl().lookAt(visiblePoint);
       var distance = visiblePoint.distanceTo(player.getEyePosition());
       if (distance > 5.0) {
         done = true;
         return;
       }
 
-      if (player.getAttackStrengthScale(0) >= 1F && distance <= 3.25) {
+      if (player.getAttackStrengthScale(0) >= 1F && distance <= 3.25 && bot.rotationControl().isFacing(visiblePoint)) {
         gameMode.attack(player, target);
         player.swing(InteractionHand.MAIN_HAND);
       }
@@ -2964,7 +2980,7 @@ public final class AutomationController {
 
       var visiblePoint = Optional.ofNullable(KillAura.getEntityVisiblePoint(bot, target)).orElse(target.getEyePosition());
       var distance = visiblePoint.distanceTo(player.getEyePosition());
-      player.lookAt(EntityAnchorArgument.Anchor.EYES, visiblePoint);
+      bot.rotationControl().lookAt(visiblePoint);
 
       bot.controlState().resetAll();
       if (distance > 18.0) {
@@ -2986,7 +3002,8 @@ public final class AutomationController {
       if (!player.isUsingItem()) {
         gameMode.useItem(player, InteractionHand.MAIN_HAND);
         chargeTicks = 0;
-      } else if (++chargeTicks >= (target.getType() == EntityType.END_CRYSTAL ? 10 : 20)) {
+      } else if (++chargeTicks >= (target.getType() == EntityType.END_CRYSTAL ? 10 : 20)
+        && bot.rotationControl().isFacing(visiblePoint)) {
         player.releaseUsingItem();
         chargeTicks = 0;
       }
@@ -3049,7 +3066,7 @@ public final class AutomationController {
         return;
       }
 
-      player.lookAt(EntityAnchorArgument.Anchor.EYES, target);
+      bot.rotationControl().lookAt(target);
       bot.controlState().resetAll();
       bot.controlState().up(true);
       bot.controlState().sprint(true);

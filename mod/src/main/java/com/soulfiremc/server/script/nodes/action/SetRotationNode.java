@@ -64,13 +64,7 @@ public final class SetRotationNode extends AbstractScriptNode {
     var finalYaw = yaw;
     var finalPitch = pitch;
 
-    runOnTickThread(runtime, bot, () -> {
-      var player = bot.minecraft().player;
-      if (player != null) {
-        player.setYRot(finalYaw);
-        player.setXRot(finalPitch);
-      }
-    });
+    runOnTickThread(runtime, bot, () -> bot.rotationControl().lookTo(finalYaw, finalPitch));
 
     return completedEmptyMono();
   }

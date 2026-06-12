@@ -23,7 +23,6 @@ import com.soulfiremc.server.pathfinding.graph.BlockFace;
 import com.soulfiremc.server.util.SFBlockHelpers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.ClipContext;
@@ -52,7 +51,10 @@ public final class InteractBlockAction implements WorldAction {
     connection.controlState().resetAll();
 
     var interactTarget = interactFace.getMiddleOfFace(blockPosition);
-    clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, interactTarget);
+    connection.rotationControl().lookAt(interactTarget);
+    if (!connection.rotationControl().isFacing(interactTarget)) {
+      return;
+    }
 
     var hand = InteractionHand.MAIN_HAND;
     if (connection.minecraft().gameMode.useItemOn(clientEntity, hand, clientEntity.level().clipIncludingBorder(new ClipContext(

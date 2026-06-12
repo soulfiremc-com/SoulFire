@@ -26,7 +26,6 @@ import com.soulfiremc.server.util.VectorHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -40,8 +39,6 @@ public final class MovementAction implements WorldAction {
   // Corner jumps normally require you to stand closer to the block to jump
   private final boolean walkFewTicksNoJump;
   private final PathConstraint pathConstraint;
-  private boolean didLook;
-  private boolean lockYRot;
   private boolean wasStill;
   private int noJumpTicks;
 
@@ -90,9 +87,6 @@ public final class MovementAction implements WorldAction {
     var blockMeta = level.getBlockState(blockPosition.toBlockPos());
     var targetMiddleBlock = VectorHelper.topMiddleOfBlock(blockPosition, blockMeta);
 
-    var previousYRot = clientEntity.getYRot();
-    clientEntity.lookAt(EntityAnchorArgument.Anchor.EYES, targetMiddleBlock);
-
     var xRot = 0F;
     var yRot = 0F;
 
@@ -105,20 +99,7 @@ public final class MovementAction implements WorldAction {
         ThreadLocalRandom.current().nextFloat((float) pathConstraint.xRotJitter().min(), (float) pathConstraint.xRotJitter().max());
     }
 
-    clientEntity.setYRot(MathHelper.wrapDegrees(clientEntity.getYRot() + yRot));
-    clientEntity.setXRot(clientEntity.getXRot() + xRot);
-    var newYRot = clientEntity.getYRot();
-
-    var yRotDifference = Math.abs(MathHelper.wrapDegrees(newYRot - previousYRot));
-
-    // We should only set the yRot once to the server to prevent the bot looking weird due to
-    // inaccuracy
-    if (!didLook) {
-      didLook = true;
-    } else if (yRotDifference > 5 || lockYRot) {
-      lockYRot = true;
-      clientEntity.yRotLast = newYRot;
-    }
+    connection.rotationControl().lookAt(targetMiddleBlock, yRot, xRot);
 
     var botPosition = clientEntity.position();
     var needsJump = targetMiddleBlock.y - STEP_HEIGHT > botPosition.y;

@@ -53,8 +53,9 @@ public final class JumpAndPlaceBelowAction implements WorldAction {
     var clientEntity = connection.minecraft().player;
     connection.controlState().resetAll();
 
-    // Look down
-    clientEntity.setYRot(90);
+    var placeTarget = blockPlaceAgainstData.againstPos().toBlockPos().getCenter().add(
+      blockPlaceAgainstData.blockFace().toDirection().getUnitVec3().multiply(0.5, 0.5, 0.5));
+    connection.rotationControl().lookAt(placeTarget);
 
     if (!putOnHotbar) {
       if (ItemPlaceHelper.placeBestBlockInHand(connection)) {
@@ -84,10 +85,13 @@ public final class JumpAndPlaceBelowAction implements WorldAction {
     }
 
     var hand = InteractionHand.MAIN_HAND;
+    if (!connection.rotationControl().isFacing(placeTarget)) {
+      return;
+    }
+
     if (connection.minecraft().gameMode.useItemOn(clientEntity, hand, clientEntity.level().clipIncludingBorder(new ClipContext(
       clientEntity.getEyePosition(),
-      blockPlaceAgainstData.againstPos().toBlockPos().getCenter().add(
-        blockPlaceAgainstData.blockFace().toDirection().getUnitVec3().multiply(0.5, 0.5, 0.5)),
+      placeTarget,
       ClipContext.Block.COLLIDER,
       ClipContext.Fluid.NONE,
       clientEntity

@@ -26,7 +26,6 @@ import com.soulfiremc.server.util.SFBlockHelpers;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Blocks;
 
@@ -36,7 +35,6 @@ public final class BlockBreakAction implements WorldAction {
   @Getter
   private final SFVec3i blockPosition;
   private final BlockFace blockBreakSideHint;
-  private boolean didLook;
   private boolean putInHand;
   private int remainingTicks = -1;
   private int totalTicks = -1;
@@ -64,11 +62,10 @@ public final class BlockBreakAction implements WorldAction {
     connection.controlState().resetAll();
 
     var level = connection.minecraft().level;
-    if (!didLook) {
-      didLook = true;
-      clientEntity.lookAt(
-        EntityAnchorArgument.Anchor.EYES,
-        blockBreakSideHint.getMiddleOfFace(blockPosition));
+    var breakTarget = blockBreakSideHint.getMiddleOfFace(blockPosition);
+    connection.rotationControl().lookAt(breakTarget);
+    if (!connection.rotationControl().isFacing(breakTarget)) {
+      return;
     }
 
     if (!putInHand) {
