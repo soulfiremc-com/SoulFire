@@ -73,7 +73,7 @@ jooq-codegen = { module = "org.jooq:jooq-codegen", version.ref = "jooq" }
 jooq-meta-extensions = { module = "org.jooq:jooq-meta-extensions", version.ref = "jooq" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
-hikaricp = "com.zaxxer:HikariCP:7.0.2"
+hikaricp = "com.zaxxer:HikariCP:7.1.0"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.9"
 sqlite = "org.xerial:sqlite-jdbc:3.53.2.0"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
