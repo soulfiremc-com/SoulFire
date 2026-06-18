@@ -4,11 +4,11 @@ grpc = "1.82.0"
 protobuf = "4.35.1"
 reactor-netty = "1.3.6"
 reactor-core = "3.8.6"
-armeria = "1.39.1"
+armeria = "1.40.0"
 classtransform = "1.15.0"
 kyori = "5.1.1"
 jooq = "3.21.6"
-flyway = "12.8.1"
+flyway = "12.9.0"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.0"
