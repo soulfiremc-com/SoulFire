@@ -45,7 +45,7 @@ caffeine = "com.github.ben-manes.caffeine:caffeine:3.2.4"
 jetbrains-annotations = "org.jetbrains:annotations:26.1.0"
 reflect = "net.lenni0451:Reflect:1.6.3"
 lambdaevents = "net.lenni0451:LambdaEvents:2.4.2"
-minecraftauth = "net.raphimc:MinecraftAuth:5.0.1-SNAPSHOT"
+minecraftauth = "net.raphimc:MinecraftAuth:5.0.1"
 grpc-proto = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
 grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
