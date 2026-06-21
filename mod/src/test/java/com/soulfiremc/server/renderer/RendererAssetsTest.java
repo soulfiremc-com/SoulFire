@@ -48,7 +48,7 @@ class RendererAssetsTest {
     assertEquals(RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), quad.material().blendState());
     assertEquals(RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL, quad.material().depthTest());
     assertTrue(quad.material().depthWrite());
-    assertEquals(3, quad.material().alphaCutoutThreshold());
+    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, quad.material().alphaCutoutThreshold());
   }
 
   @Test

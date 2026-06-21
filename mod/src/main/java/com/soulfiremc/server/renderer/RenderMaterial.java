@@ -17,15 +17,14 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.BlendFactor;
 import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.platform.DestFactor;
-import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import org.jetbrains.annotations.Nullable;
@@ -229,10 +228,10 @@ public record RenderMaterial(
       depthWrite(pipeline.getDepthStencilState()),
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
       colorTargetState.writeMask(),
-      UvTransform.fromMatrix(renderType.state.textureTransform.getMatrix()),
-      textureSampleMode(renderType),
+      UvTransform.fromMatrix(renderType.state.textureTransform.createMatrix()),
+      textureSampleMode(pipeline),
       fogMode(fragmentShader),
-      renderType.sortOnUpload() && renderType.mode() == VertexFormat.Mode.QUADS,
+      renderType.sortOnUpload() && renderType.primitiveTopology() == PrimitiveTopology.QUADS,
       sortGroup,
       viewScale(renderType),
       dissolveMaskTexture,
@@ -260,7 +259,7 @@ public record RenderMaterial(
       BlendState.from(colorTargetState.blendFunction().orElse(null)),
       colorTargetState.writeMask(),
       uvTransform,
-      textureSampleMode(fragmentShader),
+      textureSampleMode(pipeline),
       fogMode(fragmentShader),
       sortOnUpload,
       sortGroup,
@@ -350,10 +349,13 @@ public record RenderMaterial(
     return switch (pipeline.getFragmentShader().getPath()) {
       case "core/glint",
            "core/particle",
+           "core/text",
            "core/rendertype_crumbling",
            "core/rendertype_text",
            "core/rendertype_text_background",
            "core/rendertype_text_background_see_through",
+           "core/rendertype_text_grayscale",
+           "core/rendertype_text_grayscale_see_through",
            "core/rendertype_text_intensity",
            "core/rendertype_text_intensity_see_through",
            "core/rendertype_text_see_through" -> ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
@@ -374,12 +376,26 @@ public record RenderMaterial(
   }
 
   private static TextureSampleMode textureSampleMode(RenderType renderType) {
-    return textureSampleMode(renderType.pipeline().getFragmentShader().getPath());
+    return textureSampleMode(renderType.pipeline());
   }
 
-  private static TextureSampleMode textureSampleMode(String fragmentShader) {
+  private static TextureSampleMode textureSampleMode(RenderPipeline pipeline) {
+    return textureSampleMode(pipeline.getLocation().getPath(), pipeline.getFragmentShader().getPath());
+  }
+
+  private static TextureSampleMode textureSampleMode(String pipelinePath, String fragmentShader) {
+    if (pipelinePath.endsWith("text_grayscale")
+      || pipelinePath.endsWith("gui_text_grayscale")
+      || pipelinePath.endsWith("text_grayscale_polygon_offset")
+      || pipelinePath.endsWith("text_grayscale_see_through")) {
+      return TextureSampleMode.INTENSITY;
+    }
+
     return switch (fragmentShader) {
-      case "core/rendertype_text_intensity", "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
+      case "core/rendertype_text_grayscale",
+           "core/rendertype_text_grayscale_see_through",
+           "core/rendertype_text_intensity",
+           "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
       case "core/rendertype_end_portal" -> TextureSampleMode.END_PORTAL;
       default -> TextureSampleMode.COLOR;
     };
@@ -432,6 +448,7 @@ public record RenderMaterial(
            "core/rendertype_lines",
            "core/rendertype_text",
            "core/rendertype_text_background",
+           "core/rendertype_text_grayscale",
            "core/rendertype_text_intensity",
            "core/sky",
            "core/terrain" -> FogMode.COLOR_MIX;
@@ -562,12 +579,12 @@ public record RenderMaterial(
     private static DepthTest fromCompareOp(CompareOp compareOp) {
       return switch (compareOp) {
         case ALWAYS_PASS -> ALWAYS_PASS;
-        case LESS_THAN -> LESS_THAN;
-        case LESS_THAN_OR_EQUAL -> LESS_THAN_OR_EQUAL;
+        case LESS_THAN -> GREATER_THAN;
+        case LESS_THAN_OR_EQUAL -> GREATER_THAN_OR_EQUAL;
         case EQUAL -> EQUAL;
         case NOT_EQUAL -> NOT_EQUAL;
-        case GREATER_THAN_OR_EQUAL -> GREATER_THAN_OR_EQUAL;
-        case GREATER_THAN -> GREATER_THAN;
+        case GREATER_THAN_OR_EQUAL -> LESS_THAN_OR_EQUAL;
+        case GREATER_THAN -> LESS_THAN;
         case NEVER_PASS -> NEVER_PASS;
       };
     }
@@ -592,20 +609,25 @@ public record RenderMaterial(
     RGB_FADE
   }
 
-  public record BlendState(SourceFactor sourceColor, DestFactor destColor, SourceFactor sourceAlpha, DestFactor destAlpha) {
-    public static final BlendState REPLACE = new BlendState(SourceFactor.ONE, DestFactor.ZERO, SourceFactor.ONE, DestFactor.ZERO);
+  public record BlendState(BlendFactor sourceColor, BlendFactor destColor, BlendFactor sourceAlpha, BlendFactor destAlpha) {
+    public static final BlendState REPLACE = new BlendState(BlendFactor.ONE, BlendFactor.ZERO, BlendFactor.ONE, BlendFactor.ZERO);
 
     public static BlendState from(@Nullable BlendFunction blendFunction) {
       return blendFunction == null
         ? REPLACE
-        : new BlendState(blendFunction.sourceColor(), blendFunction.destColor(), blendFunction.sourceAlpha(), blendFunction.destAlpha());
+        : new BlendState(
+          blendFunction.color().sourceFactor(),
+          blendFunction.color().destFactor(),
+          blendFunction.alpha().sourceFactor(),
+          blendFunction.alpha().destFactor()
+        );
     }
 
     public boolean blends() {
-      return sourceColor != SourceFactor.ONE
-        || destColor != DestFactor.ZERO
-        || sourceAlpha != SourceFactor.ONE
-        || destAlpha != DestFactor.ZERO;
+      return sourceColor != BlendFactor.ONE
+        || destColor != BlendFactor.ZERO
+        || sourceAlpha != BlendFactor.ONE
+        || destAlpha != BlendFactor.ZERO;
     }
   }
 

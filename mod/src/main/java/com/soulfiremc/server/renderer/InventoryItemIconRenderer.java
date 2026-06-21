@@ -19,6 +19,7 @@ package com.soulfiremc.server.renderer;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.ints.IntList;
 import lombok.extern.slf4j.Slf4j;
@@ -34,12 +35,14 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
@@ -52,6 +55,7 @@ import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Matrix3x2f;
 import org.joml.Matrix4f;
@@ -1087,13 +1091,10 @@ public final class InventoryItemIconRenderer {
       int light,
       int overlay,
       TextureAtlasSprite sprite,
-      boolean sheeted,
-      boolean hasFoil,
       int color,
       ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
       int emission
     ) {
-      this.hasFoil |= hasFoil;
       var texture = textureImage(sprite);
       if (texture == null) {
         texture = textureImageFromRenderType(renderType);
@@ -1118,7 +1119,6 @@ public final class InventoryItemIconRenderer {
       Component text,
       boolean outline,
       int backgroundColor,
-      double distance,
       CameraRenderState cameraRenderState
     ) {
       unsupported = true;
@@ -1132,10 +1132,10 @@ public final class InventoryItemIconRenderer {
       FormattedCharSequence text,
       boolean shadow,
       Font.DisplayMode displayMode,
+      int light,
       int color,
       int backgroundColor,
-      int light,
-      int offset
+      int outlineColor
     ) {
       unsupported = true;
     }
@@ -1151,10 +1151,10 @@ public final class InventoryItemIconRenderer {
     }
 
     @Override
-    public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState) {
+    public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState, int color) {
       for (var face : RendererAssets.instance().blockGeometry(movingBlockRenderState.blockState).faces()) {
         var transformed = face.transformed(poseStack.last().pose());
-        quads.add(WorldMeshCollector.toRenderQuad(transformed, 0.0, 0.0, 0.0, 0xFFFFFFFF, false, 0.0F));
+        quads.add(WorldMeshCollector.toRenderQuad(transformed, 0.0, 0.0, 0.0, color, false, 0.0F));
         textures.add(transformed.texture());
       }
     }
@@ -1185,13 +1185,15 @@ public final class InventoryItemIconRenderer {
     @Override
     public void submitBreakingBlockModel(
       PoseStack poseStack,
-      BlockStateModel blockStateModel,
-      long seed,
+      List<BlockStateModelPart> parts,
       int color
     ) {
-      var parts = new ArrayList<BlockStateModelPart>();
-      blockStateModel.collectParts(net.minecraft.util.RandomSource.create(seed), parts);
       submitBlockModel(poseStack, null, parts, new int[0], 0, 0, color);
+    }
+
+    @Override
+    public void submitShapeOutline(PoseStack poseStack, VoxelShape shape, RenderType renderType, int color, float lineWidth, boolean expanded) {
+      unsupported = true;
     }
 
     @Override
@@ -1222,20 +1224,25 @@ public final class InventoryItemIconRenderer {
       }
 
       var alphaMode = VanillaSubmitCollector.alphaMode(renderType, texture, 0xFFFFFFFF);
-      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(), renderType.mode(), renderType, texture, alphaMode);
+      var consumer = new ItemCapturingVertexConsumer(new Matrix4f(), renderType.primitiveTopology(), renderType, texture, alphaMode);
       renderer.render(poseStack.last(), consumer);
       consumer.flush(quads, textures);
     }
 
     @Override
-    public void submitParticleGroup(SubmitNodeCollector.ParticleGroupRenderer particleGroupRenderer) {
+    public void submitQuadParticleGroup(QuadParticleRenderState quadParticles) {
+      unsupported = true;
+    }
+
+    @Override
+    public void submitGizmoPrimitives(DrawableGizmoPrimitives.Group group, CameraRenderState cameraRenderState, boolean translucent) {
       unsupported = true;
     }
   }
 
   private static final class ItemCapturingVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
     private final Matrix4fc pose;
-    private final com.mojang.blaze3d.vertex.VertexFormat.Mode mode;
+    private final PrimitiveTopology mode;
     private final RenderType renderType;
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
@@ -1244,7 +1251,7 @@ public final class InventoryItemIconRenderer {
 
     private ItemCapturingVertexConsumer(
       Matrix4fc pose,
-      com.mojang.blaze3d.vertex.VertexFormat.Mode mode,
+      PrimitiveTopology mode,
       RenderType renderType,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode

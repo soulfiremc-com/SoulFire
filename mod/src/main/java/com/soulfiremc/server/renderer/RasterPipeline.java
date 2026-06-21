@@ -18,8 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.platform.DestFactor;
-import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.platform.BlendFactor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
@@ -839,8 +838,8 @@ public final class RasterPipeline {
     int dstColorChannel,
     int srcAlpha,
     int dstAlpha,
-    SourceFactor sourceFactor,
-    DestFactor destFactor,
+    BlendFactor sourceFactor,
+    BlendFactor destFactor,
     boolean alphaChannel
   ) {
     var srcScale = sourceFactor(sourceFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha, alphaChannel);
@@ -848,7 +847,7 @@ public final class RasterPipeline {
     return Math.clamp(Math.round(srcChannel * srcScale + dstChannel * dstScale), 0, 255);
   }
 
-  private float sourceFactor(SourceFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha, boolean alphaChannel) {
+  private float sourceFactor(BlendFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha, boolean alphaChannel) {
     return switch (factor) {
       case ZERO -> 0.0F;
       case ONE -> 1.0F;
@@ -866,7 +865,7 @@ public final class RasterPipeline {
     };
   }
 
-  private float destFactor(DestFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha) {
+  private float destFactor(BlendFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha) {
     return switch (factor) {
       case ZERO -> 0.0F;
       case ONE -> 1.0F;
@@ -878,6 +877,7 @@ public final class RasterPipeline {
       case ONE_MINUS_SRC_ALPHA -> 1.0F - srcAlpha / 255.0F;
       case DST_ALPHA -> dstAlpha / 255.0F;
       case ONE_MINUS_DST_ALPHA -> 1.0F - dstAlpha / 255.0F;
+      case SRC_ALPHA_SATURATE -> Math.min(srcAlpha / 255.0F, 1.0F - dstAlpha / 255.0F);
       case CONSTANT_COLOR, CONSTANT_ALPHA -> 0.0F;
       case ONE_MINUS_CONSTANT_COLOR, ONE_MINUS_CONSTANT_ALPHA -> 1.0F;
     };

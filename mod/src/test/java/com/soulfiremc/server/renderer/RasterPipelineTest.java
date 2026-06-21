@@ -20,9 +20,8 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.BlendFactor;
 import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.platform.DestFactor;
-import com.mojang.blaze3d.platform.SourceFactor;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -598,7 +597,7 @@ class RasterPipelineTest {
       vertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F),
       materialWithBlendState(
         RenderMaterial.create(solidTexture(0x80FF0000), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F),
-        new RenderMaterial.BlendState(SourceFactor.SRC_ALPHA_SATURATE, DestFactor.ZERO, SourceFactor.SRC_ALPHA_SATURATE, DestFactor.ZERO)
+        new RenderMaterial.BlendState(BlendFactor.SRC_ALPHA_SATURATE, BlendFactor.ZERO, BlendFactor.SRC_ALPHA_SATURATE, BlendFactor.ZERO)
       )
     ));
 
@@ -622,10 +621,10 @@ class RasterPipelineTest {
       materialWithBlendState(
         RenderMaterial.create(solidTexture(0x80A04020), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0.0F),
         new RenderMaterial.BlendState(
-          SourceFactor.ONE_MINUS_CONSTANT_COLOR,
-          DestFactor.ZERO,
-          SourceFactor.ONE_MINUS_CONSTANT_ALPHA,
-          DestFactor.ZERO
+          BlendFactor.ONE_MINUS_CONSTANT_COLOR,
+          BlendFactor.ZERO,
+          BlendFactor.ONE_MINUS_CONSTANT_ALPHA,
+          BlendFactor.ZERO
         )
       )
     ));
@@ -977,7 +976,7 @@ class RasterPipelineTest {
   void pipelineStateDerivesShaderTextureSamplingMode() {
     var material = RenderMaterial
       .create(solidTexture(0xFF40FF00), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, true, 0.0F)
-      .withPipelineState(RenderPipelines.TEXT_INTENSITY);
+      .withPipelineState(RenderPipelines.TEXT_GRAYSCALE);
 
     assertEquals(RenderMaterial.TextureSampleMode.INTENSITY, material.textureSampleMode());
   }
@@ -1051,7 +1050,7 @@ class RasterPipelineTest {
 
     assertEquals(RendererAssets.AlphaMode.TRANSLUCENT, material.alphaMode());
     assertEquals(RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), material.blendState());
-    assertEquals(3, material.alphaCutoutThreshold());
+    assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, material.alphaCutoutThreshold());
   }
 
   @Test
@@ -1467,7 +1466,7 @@ class RasterPipelineTest {
   private static RenderMaterial polygonOffsetTextMaterial() {
     return RenderMaterial
       .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, 0.0F)
-      .withDepthState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0F, -10.0F));
+      .withDepthState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true, -1.0F, -10.0F));
   }
 
   private static RenderMaterial materialWithBlendState(RenderMaterial material, RenderMaterial.BlendState blendState) {

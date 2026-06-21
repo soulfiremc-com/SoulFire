@@ -28,6 +28,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.Vec3;
 
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.*;
 
@@ -77,7 +78,7 @@ public final class UseItemOnCommand {
                                     hand,
                                     level.clipIncludingBorder(new ClipContext(
                                       player.getEyePosition(),
-                                      targetBlockPos.getCenter().add(face.getUnitVec3().multiply(0.5, 0.5, 0.5)),
+                                      Vec3.atCenterOf(targetBlockPos).add(face.getUnitVec3().multiply(0.5, 0.5, 0.5)),
                                       ClipContext.Block.COLLIDER,
                                       ClipContext.Fluid.NONE,
                                       player

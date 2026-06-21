@@ -12,9 +12,7 @@ accessible method net/minecraft/client/Camera setPosition (DDD)V
 accessible field net/minecraft/client/Minecraft gameThread Ljava/lang/Thread;
 accessible field net/minecraft/client/Minecraft packetProcessor Lnet/minecraft/network/PacketProcessor;
 accessible field net/minecraft/util/thread/BlockableEventLoop pendingRunnables Ljava/util/Queue;
-accessible field net/minecraft/client/Minecraft toastManager Lnet/minecraft/client/gui/components/toasts/ToastManager;
 accessible field net/minecraft/client/Minecraft gui Lnet/minecraft/client/gui/Gui;
-accessible field net/minecraft/client/Minecraft chatListener Lnet/minecraft/client/multiplayer/chat/ChatListener;
 accessible field net/minecraft/client/Minecraft playerSocialManager Lnet/minecraft/client/gui/screens/social/PlayerSocialManager;
 accessible field net/minecraft/client/Minecraft profileKeyPairManager Lnet/minecraft/client/multiplayer/ProfileKeyPairManager;
 accessible field net/minecraft/client/Minecraft reportingContext Lnet/minecraft/client/multiplayer/chat/report/ReportingContext;
@@ -29,9 +27,7 @@ accessible field net/minecraft/network/PacketProcessor runningThread Ljava/lang/
 
 mutable field net/minecraft/client/Minecraft packetProcessor Lnet/minecraft/network/PacketProcessor;
 mutable field net/minecraft/util/thread/BlockableEventLoop pendingRunnables Ljava/util/Queue;
-mutable field net/minecraft/client/Minecraft toastManager Lnet/minecraft/client/gui/components/toasts/ToastManager;
 mutable field net/minecraft/client/Minecraft gui Lnet/minecraft/client/gui/Gui;
-mutable field net/minecraft/client/Minecraft chatListener Lnet/minecraft/client/multiplayer/chat/ChatListener;
 mutable field net/minecraft/client/Minecraft playerSocialManager Lnet/minecraft/client/gui/screens/social/PlayerSocialManager;
 mutable field net/minecraft/client/Minecraft profileKeyPairManager Lnet/minecraft/client/multiplayer/ProfileKeyPairManager;
 mutable field net/minecraft/client/Minecraft reportingContext Lnet/minecraft/client/multiplayer/chat/report/ReportingContext;
@@ -77,8 +73,6 @@ accessible field net/minecraft/client/renderer/rendertype/RenderSetup layeringTr
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup useLightmap Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup useOverlay Z
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location Lnet/minecraft/resources/Identifier;
-accessible field net/minecraft/client/renderer/LevelRenderer destructionProgress Lit/unimi/dsi/fastutil/longs/Long2ObjectMap;
-
 accessible field net/minecraft/client/renderer/texture/TextureAtlas sprites Ljava/util/List;
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()I
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getHeight ()I

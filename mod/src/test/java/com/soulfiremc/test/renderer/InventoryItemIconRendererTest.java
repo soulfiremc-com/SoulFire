@@ -25,14 +25,12 @@ import com.soulfiremc.server.renderer.RenderVertex;
 import com.soulfiremc.server.renderer.RendererAssets;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Assumptions;
@@ -176,40 +174,34 @@ class InventoryItemIconRendererTest {
   }
 
   @Test
-  void modelPartSubmitMarksFoilForSpecialItemParts() throws Exception {
+  void itemSubmitMarksFoilForFoilItemParts() throws Exception {
     var collectorClass = Class.forName("com.soulfiremc.server.renderer.InventoryItemIconRenderer$ItemSubmitCollector");
     var constructor = collectorClass.getDeclaredConstructor();
     constructor.setAccessible(true);
     var collector = constructor.newInstance();
-    var submitModelPart = collectorClass.getDeclaredMethod(
-      "submitModelPart",
-      ModelPart.class,
+    var submitItem = collectorClass.getDeclaredMethod(
+      "submitItem",
       PoseStack.class,
-      net.minecraft.client.renderer.rendertype.RenderType.class,
+      ItemDisplayContext.class,
       int.class,
       int.class,
-      TextureAtlasSprite.class,
-      boolean.class,
-      boolean.class,
       int.class,
-      net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay.class,
-      int.class
+      int[].class,
+      List.class,
+      ItemStackRenderState.FoilType.class
     );
-    submitModelPart.setAccessible(true);
+    submitItem.setAccessible(true);
 
-    submitModelPart.invoke(
+    submitItem.invoke(
       collector,
-      new ModelPart(List.of(), Map.of()),
       new PoseStack(),
-      RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/chest/normal.png")),
-      LightCoordsUtil.FULL_BRIGHT,
+      ItemDisplayContext.GUI,
       0,
-      null,
-      false,
-      true,
+      0,
       0xFFFFFFFF,
-      null,
-      0
+      new int[0],
+      List.<BakedQuad>of(),
+      ItemStackRenderState.FoilType.STANDARD
     );
 
     Method hasFoil = collectorClass.getDeclaredMethod("hasFoil");

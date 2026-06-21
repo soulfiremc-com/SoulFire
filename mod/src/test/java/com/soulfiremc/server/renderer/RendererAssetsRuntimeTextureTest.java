@@ -17,9 +17,9 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
@@ -113,7 +113,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void mirrorsLuminanceRuntimeTextureUploads() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-luminance");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RED8, 4, 4);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.R8_UNORM, 4, 4);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     try (var source = new NativeImage(NativeImage.Format.LUMINANCE, 2, 1, false)) {
@@ -133,7 +133,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void normalizesMirroredPlayerSkinAlphaWithVanillaRules() {
     var location = Identifier.withDefaultNamespace("skins/test-alpha-normalization");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 64, 64);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     try {
@@ -156,7 +156,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void ignoresBlankMirroredPlayerSkinUploads() {
     var location = Identifier.withDefaultNamespace("skins/test-blank-upload");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 64, 64);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     try (var source = new NativeImage(64, 64, true)) {
@@ -171,7 +171,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void ignoresTransparentMirroredPlayerSkinUploads() {
     var location = Identifier.withDefaultNamespace("skins/test-transparent-upload");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 64, 64);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     try (var source = new NativeImage(64, 64, true)) {
@@ -187,7 +187,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void keepsMirroredPlayerSkinWhenBlankUploadFollowsLoadedPixels() {
     var location = Identifier.withDefaultNamespace("skins/test-blank-overwrite");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 64, 64);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 64, 64);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     try {
@@ -211,7 +211,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void mirrorsInitialDynamicTexturePixelsOnRegistration() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-initial");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 1);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 1);
 
     try {
       try (var source = new NativeImage(2, 1, true)) {
@@ -233,7 +233,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void ignoresRuntimeTextureMirrorBeforeUploadDataExists() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-empty");
-    RendererRuntimeTextureMirror.register(location, new FakeGpuTexture(TextureFormat.RGBA8, 2, 2));
+    RendererRuntimeTextureMirror.register(location, new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2));
 
     assertNull(RendererRuntimeTextureMirror.texture(location));
   }
@@ -241,7 +241,7 @@ class RendererAssetsRuntimeTextureTest {
   @Test
   void mirrorsByteBufferRuntimeTextureUploads() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-byte-buffer");
-    var gpuTexture = new FakeGpuTexture(TextureFormat.RGBA8, 2, 2);
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2);
     RendererRuntimeTextureMirror.register(location, gpuTexture);
 
     var source = ByteBuffer.allocateDirect(8);
@@ -274,7 +274,7 @@ class RendererAssetsRuntimeTextureTest {
   private static final class FakeGpuTexture extends GpuTexture {
     private boolean closed;
 
-    private FakeGpuTexture(TextureFormat format, int width, int height) {
+    private FakeGpuTexture(GpuFormat format, int width, int height) {
       super(GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, "test runtime texture", format, width, height, 1, 1);
     }
 

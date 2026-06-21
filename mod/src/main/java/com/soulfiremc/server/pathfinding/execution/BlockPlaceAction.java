@@ -27,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.Vec3;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -67,7 +68,7 @@ public final class BlockPlaceAction implements WorldAction {
       return;
     }
 
-    var placeTarget = blockPlaceAgainstData.againstPos().toBlockPos().getCenter().add(
+    var placeTarget = Vec3.atCenterOf(blockPlaceAgainstData.againstPos().toBlockPos()).add(
       blockPlaceAgainstData.blockFace().toDirection().getUnitVec3().multiply(0.5, 0.5, 0.5));
     connection.rotationControl().lookAt(placeTarget);
     if (!connection.rotationControl().isFacing(placeTarget)) {

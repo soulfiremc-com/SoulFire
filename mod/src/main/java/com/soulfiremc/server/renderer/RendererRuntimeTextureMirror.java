@@ -17,9 +17,9 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -135,6 +135,14 @@ public final class RendererRuntimeTextureMirror {
     }
   }
 
+  @Nullable
+  public static RendererAssets.TextureImage texture(GpuTexture texture) {
+    synchronized (LOCK) {
+      var location = TEXTURE_IDS.get(texture);
+      return location != null ? texture(location) : null;
+    }
+  }
+
   public record DebugTextureSnapshot(
     Identifier location,
     int width,
@@ -186,7 +194,7 @@ public final class RendererRuntimeTextureMirror {
     private final Identifier location;
     private final int width;
     private final int height;
-    private final TextureFormat format;
+    private final GpuFormat format;
     private final int[] pixels;
     private boolean hasUploadData;
 
@@ -285,7 +293,7 @@ public final class RendererRuntimeTextureMirror {
     }
 
     private int nativeImagePixel(NativeImage source, int x, int y) {
-      if (format == TextureFormat.RED8 || source.format().hasLuminance()) {
+      if (isRedFormat(format) || source.format().hasLuminance()) {
         var alpha = Byte.toUnsignedInt(source.getLuminanceOrAlpha(x, y));
         return (alpha << 24) | 0x00FFFFFF;
       }
@@ -294,7 +302,7 @@ public final class RendererRuntimeTextureMirror {
     }
 
     private int bufferPixel(ByteBuffer source, NativeImage.Format format, int offset) {
-      if (this.format == TextureFormat.RED8 || format.hasLuminance()) {
+      if (isRedFormat(this.format) || format.hasLuminance()) {
         var alpha = channel(source, format, offset, format.luminanceOrAlphaOffset());
         return (alpha << 24) | 0x00FFFFFF;
       }
@@ -304,6 +312,13 @@ public final class RendererRuntimeTextureMirror {
       var blue = channel(source, format, offset, format.luminanceOrBlueOffset());
       var alpha = format.hasLuminanceOrAlpha() ? channel(source, format, offset, format.luminanceOrAlphaOffset()) : 0xFF;
       return (alpha << 24) | (red << 16) | (green << 8) | blue;
+    }
+
+    private static boolean isRedFormat(GpuFormat format) {
+      return format == GpuFormat.R8_UNORM
+        || format == GpuFormat.R8_SNORM
+        || format == GpuFormat.R8_UINT
+        || format == GpuFormat.R8_SINT;
     }
 
     private int channel(ByteBuffer source, NativeImage.Format format, int offset, int bitOffset) {

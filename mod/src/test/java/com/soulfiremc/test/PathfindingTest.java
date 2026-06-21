@@ -308,8 +308,8 @@ final class PathfindingTest {
     var accessor = new TestBlockAccessorBuilder();
     accessor.setBlockAt(0, 0, 0, Blocks.STONE);
     accessor.setBlockAt(1, 0, 0, Blocks.STONE);
-    accessor.setBlockAt(0, 1, 0, Blocks.WHITE_CARPET);
-    accessor.setBlockAt(1, 1, 0, Blocks.WHITE_CARPET);
+    accessor.setBlockAt(0, 1, 0, Blocks.CARPET.white());
+    accessor.setBlockAt(1, 1, 0, Blocks.CARPET.white());
 
     var inventory = new ProjectedInventory(List.of(), TestMiningCostCalculator.INSTANCE, TestPathConstraint.INSTANCE);
     var routeFinder = new RouteFinder(new MinecraftGraph(

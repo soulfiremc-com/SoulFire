@@ -22,6 +22,7 @@ import com.soulfiremc.server.settings.instance.AutomationSettings;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Blaze;
@@ -184,11 +185,11 @@ public final class AutomationWorldMemory {
   }
 
   public Optional<RememberedEntity> findNearestPiglin(BotConnection bot) {
-    return findNearestEntity(bot, entity -> entity.type() == EntityType.PIGLIN);
+    return findNearestEntity(bot, entity -> entity.type() == EntityTypes.PIGLIN);
   }
 
   public Optional<RememberedEntity> findNearestBlaze(BotConnection bot) {
-    return findNearestEntity(bot, entity -> entity.type() == EntityType.BLAZE);
+    return findNearestEntity(bot, entity -> entity.type() == EntityTypes.BLAZE);
   }
 
   public Optional<RememberedEntity> findNearestEntity(BotConnection bot, Predicate<RememberedEntity> predicate) {
@@ -398,14 +399,14 @@ public final class AutomationWorldMemory {
     if (origin == null) {
       return Comparator.comparingLong(RememberedBlock::lastSeenTick).reversed();
     }
-    return Comparator.comparingDouble(block -> block.pos().getCenter().distanceToSqr(origin));
+    return Comparator.comparingDouble(block -> Vec3.atCenterOf(block.pos()).distanceToSqr(origin));
   }
 
   private static Comparator<RememberedContainer> containerComparator(@Nullable Vec3 origin) {
     if (origin == null) {
       return Comparator.comparingLong(RememberedContainer::lastSeenTick).reversed();
     }
-    return Comparator.comparingDouble(container -> container.pos().getCenter().distanceToSqr(origin));
+    return Comparator.comparingDouble(container -> Vec3.atCenterOf(container.pos()).distanceToSqr(origin));
   }
 
   private static Comparator<RememberedEntity> entityComparator(@Nullable Vec3 origin) {
@@ -426,7 +427,7 @@ public final class AutomationWorldMemory {
     if (origin == null) {
       return Comparator.<Map.Entry<Long, Long>>comparingLong(Map.Entry::getValue).reversed();
     }
-    return Comparator.comparingDouble(entry -> BlockPos.of(entry.getKey()).getCenter().distanceToSqr(origin));
+    return Comparator.comparingDouble(entry -> Vec3.atCenterOf(BlockPos.of(entry.getKey())).distanceToSqr(origin));
   }
 
   public record MemorySnapshot(

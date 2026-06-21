@@ -38,7 +38,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.ContainerInput;
@@ -566,8 +566,8 @@ public final class AutomationController {
           return;
         }
 
-        var dragonVisible = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityType.ENDER_DRAGON);
-        var crystalVisible = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityType.END_CRYSTAL);
+        var dragonVisible = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityTypes.ENDER_DRAGON);
+        var crystalVisible = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityTypes.END_CRYSTAL);
         if (dragonVisible.isEmpty() && crystalVisible.isEmpty() && worldMemory.ticks() - lastProgressTick > 400) {
           beatPhase = BeatPhase.COMPLETE;
         }
@@ -600,15 +600,15 @@ public final class AutomationController {
               || state.getBlock() == Blocks.MAGMA_BLOCK
               || state.getBlock() == Blocks.OBSIDIAN);
           if (ruinedPortal.isPresent()) {
-            startAction(new MoveToPositionAction(ruinedPortal.get().pos().getCenter(), "approaching ruined portal"));
+            startAction(new MoveToPositionAction(Vec3.atCenterOf(ruinedPortal.get().pos()), "approaching ruined portal"));
           } else {
             var sharedRuinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
             if (sharedRuinedPortal.isPresent()) {
-              startAction(new MoveToPositionAction(sharedRuinedPortal.get().pos().getCenter(), "approaching ruined portal"));
+              startAction(new MoveToPositionAction(Vec3.atCenterOf(sharedRuinedPortal.get().pos()), "approaching ruined portal"));
             } else {
               var focus = worldMemory.findNearestBlock(bot, state -> state.getBlock() == Blocks.LAVA || state.getBlock() == Blocks.WATER)
                 .map(AutomationWorldMemory.RememberedBlock::pos)
-                .map(BlockPos::getCenter)
+                .map(Vec3::atCenterOf)
                 .orElse(player.position());
               startAction(new ExploreAction("searching for portal site", "nether-entry", focus, 96));
             }
@@ -623,7 +623,7 @@ public final class AutomationController {
         } else {
           var portalHint = team().findNearestPortal(bot, Level.OVERWORLD)
             .map(AutomationTeamCoordinator.SharedBlock::pos)
-            .map(BlockPos::getCenter)
+            .map(Vec3::atCenterOf)
             .orElse(player.position());
           startAction(new ExploreAction("searching for return portal", "return-portal", portalHint, 96));
         }
@@ -675,7 +675,7 @@ public final class AutomationController {
           if (team().shouldEnterEnd(bot)) {
             startAction(new UsePortalAction(Blocks.END_PORTAL, Level.END));
           } else {
-            startAction(new HoldPositionAction(activatedPortal.get().pos().getCenter(), "guarding portal room"));
+            startAction(new HoldPositionAction(Vec3.atCenterOf(activatedPortal.get().pos()), "guarding portal room"));
           }
           return;
         }
@@ -697,7 +697,7 @@ public final class AutomationController {
       }
       case END_FIGHT -> {
         var crystal = worldMemory.rememberedEntities().stream()
-          .filter(entity -> entity.type() == EntityType.END_CRYSTAL)
+          .filter(entity -> entity.type() == EntityTypes.END_CRYSTAL)
           .min(Comparator.comparingDouble(entity ->
             entity.position().distanceToSqr(player.position()) - entity.position().y * 2.0));
         if (crystal.isPresent() && team().claimEntity(bot, "end-crystal", crystal.get().uuid(), 15_000L)) {
@@ -705,7 +705,7 @@ public final class AutomationController {
           return;
         }
 
-        var dragon = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityType.ENDER_DRAGON);
+        var dragon = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityTypes.ENDER_DRAGON);
         if (dragon.isPresent() && team().shouldEnterEnd(bot)) {
           startAction(new KillEntityAction(dragon.get().uuid(), "attacking dragon"));
         } else if (player.position().distanceToSqr(new Vec3(0.0, player.getY(), 0.0)) > 48 * 48) {
@@ -871,12 +871,12 @@ public final class AutomationController {
           || state.getBlock() == Blocks.MAGMA_BLOCK
           || state.getBlock() == Blocks.OBSIDIAN);
       if (ruinedPortal.isPresent()) {
-        return Plan.action(new MoveToPositionAction(ruinedPortal.get().pos().getCenter(), "approaching portal ruins"));
+        return Plan.action(new MoveToPositionAction(Vec3.atCenterOf(ruinedPortal.get().pos()), "approaching portal ruins"));
       }
 
       var sharedRuinedPortal = team().findNearestRuinedPortalHint(bot, level.dimension());
       if (sharedRuinedPortal.isPresent()) {
-        return Plan.action(new MoveToPositionAction(sharedRuinedPortal.get().pos().getCenter(), "approaching portal ruins"));
+        return Plan.action(new MoveToPositionAction(Vec3.atCenterOf(sharedRuinedPortal.get().pos()), "approaching portal ruins"));
       }
 
       return Plan.action(new ExploreAction("searching for lava", "lava-source", playerPosition(), 96));
@@ -946,11 +946,11 @@ public final class AutomationController {
             || state.getBlock() == Blocks.NETHER_BRICK_FENCE
             || state.getBlock() == Blocks.NETHER_BRICK_STAIRS);
         if (fortress.isPresent()) {
-          return Plan.action(new MoveToPositionAction(fortress.get().pos().getCenter(), "approaching fortress"));
+          return Plan.action(new MoveToPositionAction(Vec3.atCenterOf(fortress.get().pos()), "approaching fortress"));
         }
         var sharedFortress = team().findNearestFortressHint(bot);
         if (sharedFortress.isPresent()) {
-          return Plan.action(new MoveToPositionAction(sharedFortress.get().pos().getCenter(), "approaching fortress"));
+          return Plan.action(new MoveToPositionAction(Vec3.atCenterOf(sharedFortress.get().pos()), "approaching fortress"));
         }
         var fortressEstimate = team().fortressEstimate(bot);
         if (fortressEstimate.isPresent()) {
@@ -1093,7 +1093,7 @@ public final class AutomationController {
   }
 
   private Optional<Vec3> findEyeDirectionTarget(LocalPlayer player) {
-    var eyeEntity = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityType.EYE_OF_ENDER);
+    var eyeEntity = worldMemory.findNearestEntity(bot, entity -> entity.type() == EntityTypes.EYE_OF_ENDER);
     if (eyeEntity.isEmpty()) {
       return Optional.empty();
     }
@@ -2579,7 +2579,7 @@ public final class AutomationController {
           return ActionResult.RUNNING;
         }
         bot.botControl().replace(shouldUseRanged(entity.get())
-          ? new RangedAttackTask(entityId, entity.get().getType() == EntityType.ENDER_DRAGON ? 240 : 160)
+          ? new RangedAttackTask(entityId, entity.get().getType() == EntityTypes.ENDER_DRAGON ? 240 : 160)
           : new AttackEntityTask(entityId, 120));
         stage = 2;
         return ActionResult.RUNNING;
@@ -2607,8 +2607,8 @@ public final class AutomationController {
         return false;
       }
 
-      return entity.getType() == EntityType.ENDER_DRAGON
-        || entity.getType() == EntityType.END_CRYSTAL
+      return entity.getType() == EntityTypes.ENDER_DRAGON
+        || entity.getType() == EntityTypes.END_CRYSTAL
         || entity.position().distanceTo(bot.minecraft().player.position()) > 4.0
         || Math.abs(entity.getY() - bot.minecraft().player.getY()) > 2.0;
     }
@@ -2758,7 +2758,7 @@ public final class AutomationController {
         if (finishFuture(future) == ActionResult.FAILED) {
           return ActionResult.FAILED;
         }
-        bot.botControl().replace(new WalkToPointTask(portalPos.getCenter(), 120));
+        bot.botControl().replace(new WalkToPointTask(Vec3.atCenterOf(portalPos), 120));
         stage = 2;
         return ActionResult.RUNNING;
       }
@@ -2801,7 +2801,7 @@ public final class AutomationController {
       return;
     }
 
-    var target = pos.getCenter();
+    var target = Vec3.atCenterOf(pos);
     bot.rotationControl().lookAt(target);
     if (!bot.rotationControl().isFacing(target)) {
       return;
@@ -3002,7 +3002,7 @@ public final class AutomationController {
       if (!player.isUsingItem()) {
         gameMode.useItem(player, InteractionHand.MAIN_HAND);
         chargeTicks = 0;
-      } else if (++chargeTicks >= (target.getType() == EntityType.END_CRYSTAL ? 10 : 20)
+      } else if (++chargeTicks >= (target.getType() == EntityTypes.END_CRYSTAL ? 10 : 20)
         && bot.rotationControl().isFacing(visiblePoint)) {
         player.releaseUsingItem();
         chargeTicks = 0;

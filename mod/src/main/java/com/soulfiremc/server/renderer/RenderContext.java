@@ -78,7 +78,7 @@ public record RenderContext(
     var endFlashState = level.endFlashState();
     if (endFlashState != null && !minecraft.options.hideLightningFlash().get()) {
       var intensity = endFlashState.getIntensity(1.0F);
-      renderState.skyFactor += minecraft.gui.getBossOverlay().shouldCreateWorldFog() ? intensity / 3.0F : intensity;
+      renderState.skyFactor += minecraft.gui.hud.getBossOverlay().shouldCreateWorldFog() ? intensity / 3.0F : intensity;
     }
 
     renderState.skyLightColor = ARGB.vector3fFromRGB24(environmentProbe.getValue(EnvironmentAttributes.SKY_LIGHT_COLOR, 1.0F));
@@ -94,12 +94,12 @@ public record RenderContext(
       ? darknessScale(player.tickCount, darknessEffectBrightnessModifier) * darknessEffectScaleOption
       : 0.0F;
     if (player != null && player.hasEffect(MobEffects.NIGHT_VISION)) {
-      renderState.nightVisionEffectIntensity = GameRenderer.getNightVisionScale(player, 1.0F);
+      renderState.nightVisionEffectIntensity = GameRenderer.nightVisionScale(player, 1.0F);
     } else if (player != null && player.getWaterVision() > 0.0F && player.hasEffect(MobEffects.CONDUIT_POWER)) {
       renderState.nightVisionEffectIntensity = player.getWaterVision();
     }
     renderState.nightVisionColor = ARGB.vector3fFromRGB24(environmentProbe.getValue(EnvironmentAttributes.NIGHT_VISION_COLOR, 1.0F));
-    renderState.bossOverlayWorldDarkening = minecraft.gui.getBossOverlay().shouldDarkenScreen() ? 1.0F : 0.0F;
+    renderState.bossOverlayWorldDarkening = minecraft.gui.hud.getBossOverlay().shouldDarkenScreen() ? 1.0F : 0.0F;
     return renderState;
   }
 

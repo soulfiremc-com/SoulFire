@@ -39,7 +39,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -244,7 +244,7 @@ public final class KillAura extends InternalPlugin {
       }
 
       if (!whitelistedUsers.isEmpty()
-        && entity.getType() == EntityType.PLAYER) {
+        && entity.getType() == EntityTypes.PLAYER) {
         var playerListEntry = connection.minecraft().player.connection.getPlayerInfo(entity.getUUID());
         if (playerListEntry != null && whitelistedUsers.stream()
           .anyMatch(whitelistedUser -> playerListEntry.getProfile().name().equalsIgnoreCase(whitelistedUser))) {

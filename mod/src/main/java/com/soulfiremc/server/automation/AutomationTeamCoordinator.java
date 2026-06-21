@@ -218,7 +218,7 @@ public final class AutomationTeamCoordinator {
                                          ResourceKey<Level> dimension,
                                          BlockPos pos,
                                          long leaseMillis) {
-    return claim(bot.accountProfileId(), "block:%s:%s:%d".formatted(purpose, dimension.identifier(), pos.asLong()), pos.getCenter(), leaseMillis);
+    return claim(bot.accountProfileId(), "block:%s:%s:%d".formatted(purpose, dimension.identifier(), pos.asLong()), Vec3.atCenterOf(pos), leaseMillis);
   }
 
   public synchronized boolean claimEntity(BotConnection bot,

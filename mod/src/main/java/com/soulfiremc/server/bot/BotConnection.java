@@ -20,7 +20,10 @@ package com.soulfiremc.server.bot;
 import com.google.common.collect.Queues;
 import com.google.gson.JsonElement;
 import com.mojang.authlib.minecraft.UserApiService;
+import com.mojang.authlib.yggdrasil.FriendsService;
 import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
+import com.mojang.authlib.yggdrasil.response.FriendData;
+import com.mojang.authlib.yggdrasil.response.PresenceResponse;
 import com.soulfiremc.mod.access.IMinecraft;
 import com.soulfiremc.mod.util.SFConstants;
 import com.soulfiremc.mod.util.SFModHelpers;
@@ -56,23 +59,24 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.ResourceLoadStateTracker;
 import net.minecraft.client.User;
 import net.minecraft.client.gui.Gui;
-import net.minecraft.client.gui.components.toasts.ToastManager;
+import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.social.PlayerSocialManager;
+import net.minecraft.client.gui.screens.social.RemoteFriendListUpdateHandler;
 import net.minecraft.client.main.GameConfig;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ProfileKeyPairManager;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerStatusPinger;
-import net.minecraft.client.multiplayer.chat.ChatListener;
 import net.minecraft.client.multiplayer.chat.report.ReportEnvironment;
 import net.minecraft.client.multiplayer.chat.report.ReportingContext;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.player.LocalPlayerResolver;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.resources.SkinManager;
 import net.minecraft.client.resources.server.DownloadedPackSource;
@@ -184,8 +188,7 @@ public final class BotConnection {
     //noinspection DataFlowIssue
     newInstance.packetProcessor = new PacketProcessor(null); // Null until we spawn game thread
     newInstance.pendingRunnables = Queues.newConcurrentLinkedQueue();
-    newInstance.toastManager = new ToastManager(newInstance, newInstance.options);
-    newInstance.gui = new Gui(newInstance);
+    newInstance.gui = new Gui(newInstance, new Hud(newInstance), new GuiRenderState());
     newInstance.running = true;
     newInstance.user = new User(
       minecraftAccount.lastKnownName(),
@@ -194,11 +197,15 @@ public final class BotConnection {
       Optional.empty(),
       Optional.empty()
     );
-    newInstance.playerSocialManager = new PlayerSocialManager(newInstance, userApiService);
+    var friendsService = authSession.friendsService();
+    newInstance.playerSocialManager = new PlayerSocialManager(
+      newInstance,
+      userApiService,
+      friendsService,
+      new RemoteFriendListUpdateHandler(friendsService, newInstance));
     newInstance.profileKeyPairManager =
       ProfileKeyPairManager.create(userApiService, newInstance.user, newInstance.gameDirectory.toPath());
-    newInstance.chatListener = new ChatListener(newInstance);
-    newInstance.chatListener.setMessageDelay(newInstance.options.chatDelay().get());
+    newInstance.gui.chatListener().setMessageDelay(newInstance.options.chatDelay().get());
     newInstance.reportingContext = ReportingContext.create(ReportEnvironment.local(), userApiService);
     newInstance.deltaTracker = new DeltaTracker.Timer(20.0F, 0L, newInstance::getTickTargetMillis);
     newInstance.reloadStateTracker = new ResourceLoadStateTracker();
@@ -225,22 +232,81 @@ public final class BotConnection {
 
   private AuthSession createAuthSession(MinecraftAccount minecraftAccount, Proxy javaProxy) {
     return switch (minecraftAccount.accountData()) {
-      case BedrockData ignored -> new AuthSession(UserApiService.OFFLINE, "bedrock");
-      case OfflineJavaData ignored -> new AuthSession(UserApiService.OFFLINE, "offline");
+      case BedrockData ignored -> new AuthSession(UserApiService.OFFLINE, OfflineFriendsService.INSTANCE, "bedrock");
+      case OfflineJavaData ignored -> new AuthSession(UserApiService.OFFLINE, OfflineFriendsService.INSTANCE, "offline");
       case OnlineChainJavaData onlineChainJavaData -> {
         var authManager = onlineChainJavaData.getJavaAuthManager(proxy);
         yield new AuthSession(
           new MinecraftAuthUserApiService(authManager),
+          OfflineFriendsService.INSTANCE,
           authManager.getMinecraftToken().getUpToDateUnchecked().getToken());
       }
-      case OnlineSimpleJavaData onlineSimpleJavaData -> new AuthSession(
-        new YggdrasilAuthenticationService(javaProxy).createUserApiService(onlineSimpleJavaData.accessToken()),
-        onlineSimpleJavaData.accessToken());
-      case TheAlteningJavaData theAlteningJavaData -> new AuthSession(UserApiService.OFFLINE, theAlteningJavaData.accessToken());
+      case OnlineSimpleJavaData onlineSimpleJavaData -> {
+        var authService = new YggdrasilAuthenticationService(javaProxy);
+        var accessToken = onlineSimpleJavaData.accessToken();
+        yield new AuthSession(
+          authService.createUserApiService(accessToken),
+          authService.createFriendsService(accessToken),
+          accessToken);
+      }
+      case TheAlteningJavaData theAlteningJavaData -> new AuthSession(
+        UserApiService.OFFLINE,
+        OfflineFriendsService.INSTANCE,
+        theAlteningJavaData.accessToken());
     };
   }
 
-  private record AuthSession(UserApiService userApiService, String accessToken) {}
+  private record AuthSession(UserApiService userApiService, FriendsService friendsService, String accessToken) {}
+
+  private enum OfflineFriendsService implements FriendsService {
+    INSTANCE;
+
+    @Override
+    public ResultCode getFriendData(java.util.function.Consumer<FriendData> friendData) {
+      friendData.accept(FriendData.empty());
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode removeFriend(UUID playerID) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode acceptIncomingFriendRequest(UUID id) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode declineIncomingFriendRequest(UUID id) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode sendFriendRequest(String name) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode sendFriendRequest(UUID playerID) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode revokeOutgoingFriendRequest(UUID id) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public ResultCode updateFriendSettings(boolean enableFriendlist, boolean enableFriendInvites) {
+      return ResultCode.SERVICE_NOT_AVAILABLE;
+    }
+
+    @Override
+    public PresenceResponse presence(String status) {
+      return PresenceResponse.empty();
+    }
+  }
 
   public CompletableFuture<?> connect() {
     return scheduler.runAsync(

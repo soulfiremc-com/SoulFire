@@ -1218,7 +1218,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
     }
 
     // Try to get the title from the screen if available
-    if (minecraft.screen instanceof AbstractContainerScreen<?> containerScreen) {
+    if (minecraft.gui.screen() instanceof AbstractContainerScreen<?> containerScreen) {
       var title = containerScreen.getTitle();
       if (title != null) {
         return title.getString();

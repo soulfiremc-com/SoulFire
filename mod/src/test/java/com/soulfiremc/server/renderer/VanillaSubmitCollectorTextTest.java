@@ -17,11 +17,11 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.UVPair;
@@ -151,7 +151,7 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
-  void textIntensitySamplesRedChannelAsGlyphCoverage() throws Exception {
+  void textGrayscaleSamplesRedChannelAsGlyphCoverage() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFF40FF00}, null);
@@ -515,7 +515,7 @@ class VanillaSubmitCollectorTextTest {
 
     addParticle(particles, SingleQuadParticle.Layer.OPAQUE, 4.0F, 0x40FFFFFF, LightCoordsUtil.FULL_BRIGHT);
     addParticle(particles, SingleQuadParticle.Layer.TRANSLUCENT, 5.0F, 0xFFFFFFFF, LightCoordsUtil.pack(0, 0));
-    collector.submitParticleGroup(particles);
+    collector.submitQuadParticleGroup(particles);
 
     var scene = sceneData(collector);
     assertEquals(1, scene.cutout().length);
@@ -544,7 +544,7 @@ class VanillaSubmitCollectorTextTest {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var consumer = newConsumer(collector, texture, RenderTypes.lines(), VertexFormat.Mode.LINES);
+    var consumer = newConsumer(collector, texture, RenderTypes.lines(), PrimitiveTopology.LINES);
 
     addLineVertex(consumer, 0.0F, -1.0F, 6.0F, 0.0F, 0.0F, 0.0F, 2.0F);
     addLineVertex(consumer, 0.0F, 1.0F, 6.0F, 0.0F, 0.0F, 0.0F, 14.0F);
@@ -570,7 +570,7 @@ class VanillaSubmitCollectorTextTest {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var consumer = newConsumer(collector, texture, RenderTypes.lines(), VertexFormat.Mode.LINES);
+    var consumer = newConsumer(collector, texture, RenderTypes.lines(), PrimitiveTopology.LINES);
 
     addLineVertex(consumer, 0.0F, -0.5F, -1.0F, 0.0F, 1.0F, 0.0F, 10.0F);
     addLineVertex(consumer, 0.0F, 0.5F, 6.0F, 0.0F, 1.0F, 0.0F, 10.0F);
@@ -615,7 +615,7 @@ class VanillaSubmitCollectorTextTest {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var consumer = newConsumer(collector, texture, RenderTypes.leash(), VertexFormat.Mode.TRIANGLE_STRIP);
+    var consumer = newConsumer(collector, texture, RenderTypes.leash(), PrimitiveTopology.TRIANGLE_STRIP);
 
     addVertex(consumer, -0.5F, -0.5F, 4.0F, 0.0F, 0.0F, 0xFFFF0000, LightCoordsUtil.FULL_BRIGHT);
     addVertex(consumer, 0.5F, -0.5F, 4.0F, 0.0F, 0.0F, 0xFF00FF00, LightCoordsUtil.FULL_BRIGHT);
@@ -649,8 +649,6 @@ class VanillaSubmitCollectorTextTest {
       LightCoordsUtil.FULL_BRIGHT,
       OverlayTexture.NO_OVERLAY,
       sprite,
-      false,
-      false,
       0xFFFFFFFF,
       null,
       0
@@ -729,7 +727,7 @@ class VanillaSubmitCollectorTextTest {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var consumer = newConsumer(collector, texture, RenderTypes.debugPoint(), VertexFormat.Mode.POINTS);
+    var consumer = newConsumer(collector, texture, RenderTypes.debugPoint(), PrimitiveTopology.POINTS);
 
     consumer.addVertex(0.0F, 0.0F, 6.0F).setColor(0xFFFFFFFF).setLineWidth(10.0F);
     flush(consumer);
@@ -746,7 +744,7 @@ class VanillaSubmitCollectorTextTest {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var consumer = newConsumer(collector, texture, RenderTypes.debugPoint(), VertexFormat.Mode.POINTS);
+    var consumer = newConsumer(collector, texture, RenderTypes.debugPoint(), PrimitiveTopology.POINTS);
 
     consumer.addVertex(4.4F, 0.0F, 6.0F).setColor(0xFFFFFFFF).setLineWidth(24.0F);
     flush(consumer);
@@ -758,11 +756,11 @@ class VanillaSubmitCollectorTextTest {
   }
 
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture) throws Exception {
-    return newTextConsumer(collector, texture, RenderTypes.textIntensity(Identifier.withDefaultNamespace("font/test")));
+    return newTextConsumer(collector, texture, RenderTypes.textGrayscale(Identifier.withDefaultNamespace("font/test")));
   }
 
   private static VertexConsumer newTextConsumer(VanillaSubmitCollector collector, RendererAssets.TextureImage texture, RenderType renderType) throws Exception {
-    return newConsumer(collector, texture, renderType, VertexFormat.Mode.QUADS);
+    return newConsumer(collector, texture, renderType, PrimitiveTopology.QUADS);
   }
 
   private static VertexConsumer newOverrideConsumer(
@@ -771,14 +769,14 @@ class VanillaSubmitCollectorTextTest {
     RenderType renderType,
     RenderMaterial materialOverride
   ) throws Exception {
-    return newConsumer(collector, texture, renderType, VertexFormat.Mode.QUADS, materialOverride);
+    return newConsumer(collector, texture, renderType, PrimitiveTopology.QUADS, materialOverride);
   }
 
   private static VertexConsumer newConsumer(
     VanillaSubmitCollector collector,
     RendererAssets.TextureImage texture,
     RenderType renderType,
-    VertexFormat.Mode mode
+    PrimitiveTopology mode
   ) throws Exception {
     return newConsumer(collector, texture, renderType, mode, null);
   }
@@ -787,14 +785,14 @@ class VanillaSubmitCollectorTextTest {
     VanillaSubmitCollector collector,
     RendererAssets.TextureImage texture,
     RenderType renderType,
-    VertexFormat.Mode mode,
+    PrimitiveTopology mode,
     RenderMaterial materialOverride
   ) throws Exception {
     var consumerClass = Class.forName("com.soulfiremc.server.renderer.VanillaSubmitCollector$CapturingVertexConsumer");
     var constructor = consumerClass.getDeclaredConstructor(
       VanillaSubmitCollector.class,
       Matrix4fc.class,
-      VertexFormat.Mode.class,
+      PrimitiveTopology.class,
       RendererAssets.TextureImage.class,
       RendererAssets.AlphaMode.class,
       int.class,
@@ -1050,7 +1048,7 @@ class VanillaSubmitCollectorTextTest {
 
   private static int renderedLineWidth(Camera camera, RendererAssets.TextureImage texture, float z, float halfHeight) throws Exception {
     var collector = newCollector(camera);
-    var consumer = newConsumer(collector, texture, RenderTypes.lines(), VertexFormat.Mode.LINES);
+    var consumer = newConsumer(collector, texture, RenderTypes.lines(), PrimitiveTopology.LINES);
     addLineVertex(consumer, 0.0F, -halfHeight, z, 0.0F, 1.0F, 0.0F, 8.0F);
     addLineVertex(consumer, 0.0F, halfHeight, z, 0.0F, 1.0F, 0.0F, 8.0F);
     flush(consumer);

@@ -594,7 +594,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
   }
 
   private static Direction nearestFaceTo(Vec3 eyePos, BlockPos target) {
-    var center = target.getCenter();
+    var center = Vec3.atCenterOf(target);
     var dx = eyePos.x - center.x;
     var dy = eyePos.y - center.y;
     var dz = eyePos.z - center.z;

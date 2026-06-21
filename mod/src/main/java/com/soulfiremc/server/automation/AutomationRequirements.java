@@ -99,24 +99,7 @@ public final class AutomationRequirements {
     Items.BAMBOO_PLANKS
   );
   private static final Set<Item> FUEL_ITEMS = Set.of(Items.COAL, Items.CHARCOAL);
-  private static final Set<Item> BED_ITEMS = Set.of(
-    Items.WHITE_BED,
-    Items.ORANGE_BED,
-    Items.MAGENTA_BED,
-    Items.LIGHT_BLUE_BED,
-    Items.YELLOW_BED,
-    Items.LIME_BED,
-    Items.PINK_BED,
-    Items.GRAY_BED,
-    Items.LIGHT_GRAY_BED,
-    Items.CYAN_BED,
-    Items.PURPLE_BED,
-    Items.BLUE_BED,
-    Items.BROWN_BED,
-    Items.GREEN_BED,
-    Items.RED_BED,
-    Items.BLACK_BED
-  );
+  private static final Set<Item> BED_ITEMS = Set.copyOf(Items.BED.asList());
 
   private AutomationRequirements() {
   }
@@ -154,7 +137,7 @@ public final class AutomationRequirements {
     verifyExactKey(OBSIDIAN, Items.OBSIDIAN);
     verifyExactKey(STRING, Items.STRING);
     verifyExactKey(FEATHER, Items.FEATHER);
-    verifyExactKey(WHITE_WOOL, Items.WHITE_WOOL);
+    verifyExactKey(WHITE_WOOL, Items.WOOL.white());
   }
 
   public static String itemKey(Item item) {

@@ -23,11 +23,11 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.WeatherEffectRenderer;
+import net.minecraft.client.renderer.state.level.BlockBreakingRenderState;
 import net.minecraft.client.renderer.state.level.WeatherRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
@@ -36,11 +36,9 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.SortedSet;
 
 /// Collects dynamic scene primitives that are not part of the chunk-section world mesh.
 @UtilityClass
@@ -187,20 +185,19 @@ public class SceneCollector {
 
   private static void collectBlockDestroyAnimations(RenderContext ctx, SceneData.Builder builder) {
     var minecraft = Minecraft.getInstance();
-    var levelRenderer = minecraft.levelRenderer;
     var camera = ctx.camera();
-    for (var entry : levelRenderer.destructionProgress.long2ObjectEntrySet()) {
-      var pos = BlockPos.of(entry.getLongKey());
+    for (var renderState : blockBreakingRenderStates()) {
+      var pos = renderState.blockPos();
       if (pos.distToCenterSqr(camera.eyeX(), camera.eyeY(), camera.eyeZ()) > 1024.0) {
         continue;
       }
 
-      var progress = lastDestroyProgress(entry.getValue());
+      var progress = renderState.progress();
       if (progress < 0) {
         continue;
       }
 
-      var blockState = ctx.level().getBlockState(pos);
+      var blockState = renderState.blockState();
       if (blockState.getRenderShape() != RenderShape.MODEL) {
         continue;
       }
@@ -211,15 +208,20 @@ public class SceneCollector {
   }
 
   private static int blockDestroyProgress(BlockPos pos) {
-    return lastDestroyProgress(Minecraft.getInstance().levelRenderer.destructionProgress.get(pos.asLong()));
+    return blockDestroyProgress(blockBreakingRenderStates(), pos);
   }
 
-  private static int lastDestroyProgress(@Nullable SortedSet<BlockDestructionProgress> progresses) {
-    if (progresses == null || progresses.isEmpty()) {
-      return -1;
+  private static int blockDestroyProgress(List<BlockBreakingRenderState> renderStates, BlockPos pos) {
+    for (var renderState : renderStates) {
+      if (renderState.blockPos().equals(pos)) {
+        return renderState.progress();
+      }
     }
+    return -1;
+  }
 
-    return progresses.last().getProgress();
+  private static List<BlockBreakingRenderState> blockBreakingRenderStates() {
+    return Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.blockBreakingRenderStates;
   }
 
   private static void collectWeather(ClientLevel level, RenderContext ctx, SceneData.Builder builder) {
@@ -227,7 +229,6 @@ public class SceneCollector {
     var camera = ctx.camera();
     VANILLA_WEATHER.extractRenderState(
       level,
-      Math.toIntExact(Math.floorMod(ctx.animationTick(), Integer.MAX_VALUE)),
       1.0F,
       new Vec3(camera.eyeX(), camera.eyeY(), camera.eyeZ()),
       renderState
@@ -262,7 +263,8 @@ public class SceneCollector {
     }
 
     var minecraft = Minecraft.getInstance();
-    var pipeline = minecraft != null && Minecraft.useShaderTransparency() ? RenderPipelines.WEATHER_DEPTH_WRITE : RenderPipelines.WEATHER_NO_DEPTH_WRITE;
+    var shaderTransparency = minecraft != null && minecraft.gameRenderer.gameRenderState().useShaderTransparency();
+    var pipeline = shaderTransparency ? RenderPipelines.WEATHER_DEPTH_WRITE : RenderPipelines.WEATHER_NO_DEPTH_WRITE;
     for (var column : columns) {
       var relativeX = (float) (column.x() + 0.5 - camera.eyeX());
       var relativeZ = (float) (column.z() + 0.5 - camera.eyeZ());

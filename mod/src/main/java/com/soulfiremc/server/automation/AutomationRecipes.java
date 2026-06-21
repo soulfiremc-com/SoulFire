@@ -18,7 +18,7 @@
 package com.soulfiremc.server.automation;
 
 import net.minecraft.tags.BlockTags;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -278,20 +278,20 @@ public final class AutomationRecipes {
         1
       ));
       case AutomationRequirements.ENDER_PEARL -> Optional.of(new EntitySource(
-        entity -> entity.type() == EntityType.ENDERMAN,
+        entity -> entity.type() == EntityTypes.ENDERMAN,
         1
       ));
       case AutomationRequirements.STRING -> Optional.of(new EntitySource(
-        entity -> entity.type() == EntityType.SPIDER
-          || entity.type() == EntityType.CAVE_SPIDER,
+        entity -> entity.type() == EntityTypes.SPIDER
+          || entity.type() == EntityTypes.CAVE_SPIDER,
         1
       ));
       case AutomationRequirements.FEATHER -> Optional.of(new EntitySource(
-        entity -> entity.type() == EntityType.CHICKEN,
+        entity -> entity.type() == EntityTypes.CHICKEN,
         1
       ));
       case AutomationRequirements.WHITE_WOOL -> Optional.of(new EntitySource(
-        entity -> entity.type() == EntityType.SHEEP,
+        entity -> entity.type() == EntityTypes.SHEEP,
         1
       ));
       default -> Optional.empty();
