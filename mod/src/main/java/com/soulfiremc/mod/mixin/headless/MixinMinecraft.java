@@ -23,8 +23,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.main.GameConfig;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.resources.language.LanguageManager;
+import org.jspecify.annotations.Nullable;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -32,6 +36,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
+  @Shadow
+  @Final
+  public LevelExtractor levelExtractor;
+
   @Inject(method = "fillSystemReport", at = @At("HEAD"), cancellable = true)
   private static void preventFillSystemReport(SystemReport report, Minecraft minecraft, LanguageManager languageManager, String launchVersion, Options options, CallbackInfoReturnable<SystemReport> cir) {
     cir.setReturnValue(report);
@@ -55,7 +63,10 @@ public class MixinMinecraft {
   }
 
   @Inject(method = "updateLevelInEngines(Lnet/minecraft/client/multiplayer/ClientLevel;Z)V", at = @At("HEAD"), cancellable = true)
-  private void updateLevelEngineHook(ClientLevel clientLevel, boolean stopSound, CallbackInfo ci) {
+  private void updateLevelEngineHook(@Nullable ClientLevel clientLevel, boolean stopSound, CallbackInfo ci) {
+    // ClientLevel forwards block and chunk update packets into LevelExtractor.
+    // Keep its level state valid while skipping sound, particles, and renderer setup.
+    this.levelExtractor.setLevel(clientLevel);
     ci.cancel();
   }
 }
