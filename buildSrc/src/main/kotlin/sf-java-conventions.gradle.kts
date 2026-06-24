@@ -32,7 +32,7 @@ dependencies {
   spotbugs("com.github.spotbugs:spotbugs:4.10.2")
 
   rewrite("org.openrewrite.recipe:rewrite-static-analysis:2.37.0")
-  rewrite("org.openrewrite.recipe:rewrite-migrate-java:3.37.0")
+  rewrite("org.openrewrite.recipe:rewrite-migrate-java:3.38.0")
   rewrite("org.openrewrite.recipe:rewrite-rewrite:0.26.1")
 }
 

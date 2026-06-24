@@ -1,6 +1,6 @@
 [versions]
 log4j = "2.26.0"
-grpc = "1.82.0"
+grpc = "1.82.1"
 protobuf = "4.35.1"
 reactor-netty = "1.3.6"
 reactor-core = "3.8.6"
