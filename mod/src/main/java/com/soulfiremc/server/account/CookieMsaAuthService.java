@@ -26,6 +26,8 @@ import net.raphimc.minecraftauth.msa.request.MsaAuthCodeTokenRequest;
 import net.raphimc.minecraftauth.msa.service.MsaAuthService;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /// MsaAuthService implementation that exchanges Microsoft Live browser cookies for an MsaToken.
@@ -54,14 +56,33 @@ public class CookieMsaAuthService extends MsaAuthService {
 
     var response = httpClient.execute(request);
     var location = response.getFirstHeader("Location")
-      .orElseThrow(() -> new IOException("Missing authorize redirect location"));
+      .orElseThrow(() -> new IOException(
+        "Silent sign-in returned no redirect (HTTP " + response.getStatusCode()
+          + "). The cookies are likely invalid or do not belong to login.live.com."));
 
-    var code = URLWrapper.ofURI(location)
-      .wrapQueryParameters()
-      .getFirstValue("code")
-      .orElseThrow(() -> new IOException("Missing authorization code in redirect"));
+    var query = URLWrapper.ofURI(location).wrapQueryParameters();
 
-    return httpClient.executeAndHandle(
-      new MsaAuthCodeTokenRequest(applicationConfig, code));
+    var code = query.getFirstValue("code");
+    if (code.isPresent()) {
+      return httpClient.executeAndHandle(
+        new MsaAuthCodeTokenRequest(applicationConfig, code.get()));
+    }
+
+    var error = query.getFirstValue("error");
+    if (error.isPresent()) {
+      var description = query.getFirstValue("error_description")
+        .map(d -> URLDecoder.decode(d, StandardCharsets.UTF_8).replace('+', ' '))
+        .orElse("no description");
+      throw new IOException("Microsoft rejected the silent sign-in: "
+        + error.get() + " (" + description + "). "
+        + "These cookies cannot get a token without interactive login.");
+    }
+
+    // No code and no error means Microsoft redirected to an interactive page
+    // (login/consent/account picker), so the session cookies are not sufficient.
+    var host = URLWrapper.ofURI(location).getHostOr("?");
+    throw new IOException("Silent sign-in was redirected to an interactive page (" + host
+      + ") instead of returning a token. The login.live.com session cookies are expired, "
+      + "incomplete, or require interactive confirmation.");
   }
 }
