@@ -34,6 +34,8 @@ import java.util.Map;
 /// Uses prompt=none to silently obtain an authorization code from existing session cookies,
 /// then exchanges the code for tokens via the standard MsaAuthCodeTokenRequest.
 public class CookieMsaAuthService extends MsaAuthService {
+  private static final String DESKTOP_REDIRECT_URI = "https://login.live.com/oauth20_desktop.srf";
+
   private final String cookieHeader;
 
   public CookieMsaAuthService(HttpClient httpClient, MsaApplicationConfig applicationConfig, String cookieHeader) {
@@ -43,9 +45,10 @@ public class CookieMsaAuthService extends MsaAuthService {
 
   @Override
   public MsaToken acquireToken() throws IOException {
-    var authorizeUrl = URLWrapper.ofURL(applicationConfig.getEnvironment().getAuthorizeUrl())
+    var cookieApplicationConfig = applicationConfig.withRedirectUri(DESKTOP_REDIRECT_URI);
+    var authorizeUrl = URLWrapper.ofURL(cookieApplicationConfig.getEnvironment().getAuthorizeUrl())
       .wrapQueryParameters()
-      .addParameters(applicationConfig.getAuthCodeParameters())
+      .addParameters(cookieApplicationConfig.getAuthCodeParameters())
       .addParameters(Map.of("prompt", "none"))
       .apply()
       .toURL();
@@ -65,7 +68,7 @@ public class CookieMsaAuthService extends MsaAuthService {
     var code = query.getFirstValue("code");
     if (code.isPresent()) {
       return httpClient.executeAndHandle(
-        new MsaAuthCodeTokenRequest(applicationConfig, code.get()));
+        new MsaAuthCodeTokenRequest(cookieApplicationConfig, code.get()));
     }
 
     var error = query.getFirstValue("error");
