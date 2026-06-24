@@ -17,17 +17,17 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.core.BlockPos;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.mojang.blaze3d.systems.DeviceLimits;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(LevelRenderer.class)
-public class MixinLevelRenderer {
-  @Inject(method = "isSectionCompiledAndVisible", at = @At("HEAD"), cancellable = true)
-  private void isSectionCompiledAndVisibleHook(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-    cir.setReturnValue(true);
+@Mixin(DeviceLimits.class)
+public class MixinDeviceLimits {
+  @ModifyReturnValue(method = "minUniformOffsetAlignment", at = @At("RETURN"))
+  private int ensureNonZeroAlignment(int original) {
+    // The stubbed HeadlessMC GL device reports a uniform offset alignment of 0, which makes
+    // DynamicUniformStorage divide by zero. Clamp it to a valid alignment.
+    return Math.max(1, original);
   }
 }

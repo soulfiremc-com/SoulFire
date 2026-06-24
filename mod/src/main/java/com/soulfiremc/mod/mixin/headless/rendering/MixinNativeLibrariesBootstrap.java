@@ -17,33 +17,19 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.platform.NativeLibrariesBootstrap;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(GameRenderer.class)
-public class MixinGameRenderer {
-  @Inject(method = "update", at = @At("HEAD"), cancellable = true)
-  private void updateHook(DeltaTracker deltaTracker, CallbackInfo ci) {
+@Mixin(NativeLibrariesBootstrap.class)
+public class MixinNativeLibrariesBootstrap {
+  @Inject(method = "loadLibraries", at = @At("HEAD"), cancellable = true)
+  private static void skipLoadLibraries(CallbackInfo ci) {
+    // Headless mode runs against the stubbed HeadlessMC LWJGL, which has no native
+    // libraries to extract and load. Skip the whole bootstrap to avoid touching the
+    // uninitialized LWJGL Configuration.
     ci.cancel();
   }
-
-  @Inject(method = "extract", at = @At("HEAD"), cancellable = true)
-  private void extractHook(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    ci.cancel();
-  }
-
-  @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-  private void renderHook(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    ci.cancel();
-  }
-
-  @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
-  private void tickHook(CallbackInfo ci) {
-    ci.cancel();
-  }
-
 }

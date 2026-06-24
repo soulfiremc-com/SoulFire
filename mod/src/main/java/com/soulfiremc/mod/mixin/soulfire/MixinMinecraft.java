@@ -64,7 +64,7 @@ public class MixinMinecraft implements IMinecraft {
   }
 
   @Inject(method = "crash", at = @At("HEAD"), cancellable = true)
-  private static void preventCrash(Minecraft minecraft, File gameDirectory, CrashReport crashReport, CallbackInfo ci) {
+  private static void preventCrash(Minecraft minecraft, File gameDirectory, CrashReport crashReport, int exitCode, CallbackInfo ci) {
     Bootstrap.realStdoutPrintln(crashReport.getFriendlyReport(ReportType.CRASH));
     ci.cancel();
   }
@@ -79,7 +79,7 @@ public class MixinMinecraft implements IMinecraft {
     SFConstants.MINECRAFT_INSTANCE.set((Minecraft) (Object) this);
   }
 
-  @Inject(method = "destroy", at = @At("HEAD"), cancellable = true)
+  @Inject(method = "exitWorldAndClose", at = @At("HEAD"), cancellable = true)
   private void preventDestroy(CallbackInfo ci) {
     ci.cancel();
   }

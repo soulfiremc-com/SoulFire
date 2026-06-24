@@ -17,32 +17,27 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.api.event;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.soulfiremc.server.api.SoulFireAPI;
-import com.soulfiremc.server.api.event.bot.BotPostTickEvent;
-import com.soulfiremc.server.api.event.bot.BotPreTickEvent;
+import com.soulfiremc.server.api.event.bot.BotShouldRespawnEvent;
 import com.soulfiremc.server.bot.BotConnection;
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(Minecraft.class)
-public class MixinMinecraft {
-  @Inject(method = "tick", at = @At("HEAD"))
-  private void onTickPre(CallbackInfo ci) {
+@Mixin(Gui.class)
+public class MixinGui {
+  @WrapOperation(method = "setScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;shouldShowDeathScreen()Z"))
+  private boolean shouldRespawnEvent(LocalPlayer instance, Operation<Boolean> original) {
     var connection = BotConnection.currentOptional().orElse(null);
     if (connection == null) {
-      return;
+      return original.call(instance);
     }
-    connection.automation().tick();
-    connection.botControl().tick();
-    SoulFireAPI.postEvent(new BotPreTickEvent(connection));
-  }
 
-  @Inject(method = "tick", at = @At("RETURN"))
-  private void onTickPost(CallbackInfo ci) {
-    BotConnection.currentOptional()
-      .ifPresent(connection -> SoulFireAPI.postEvent(new BotPostTickEvent(connection)));
+    var event = new BotShouldRespawnEvent(connection, !original.call(instance));
+    SoulFireAPI.postEvent(event);
+    return !event.shouldRespawn();
   }
 }

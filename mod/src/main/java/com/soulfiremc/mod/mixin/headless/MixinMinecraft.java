@@ -18,8 +18,6 @@
 package com.soulfiremc.mod.mixin.headless;
 
 import com.mojang.authlib.minecraft.UserApiService;
-import com.mojang.blaze3d.TracyFrameCapture;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.SystemReport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -29,7 +27,6 @@ import net.minecraft.client.resources.language.LanguageManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -45,18 +42,15 @@ public class MixinMinecraft {
     ((Minecraft) (Object) this).gameRenderer.close();
   }
 
-  @Redirect(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen()V"))
-  private void blitToScreenHook(RenderTarget instance) {
-    // There is no screen in headless mode.
-  }
-
-  @Redirect(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;flipFrame(Lcom/mojang/blaze3d/TracyFrameCapture;)V"))
-  private void flipFrameHook(TracyFrameCapture tracyFrameCapture) {
-    // Avoid global GPU fence rotation while several bot clients tick concurrently.
+  @Inject(method = "renderFrame", at = @At("HEAD"), cancellable = true)
+  private void renderFrameHook(boolean tick, CallbackInfo ci) {
+    // There is no screen to present in headless mode, and the actual rendering is already
+    // cancelled in GameRenderer. Skip the whole surface acquire/present path.
+    ci.cancel();
   }
 
   @Inject(method = "createUserApiService", at = @At("HEAD"), cancellable = true)
-  private void createUserApiServiceHook(CallbackInfoReturnable<UserApiService> cir) {
+  private static void createUserApiServiceHook(CallbackInfoReturnable<UserApiService> cir) {
     cir.setReturnValue(UserApiService.OFFLINE);
   }
 

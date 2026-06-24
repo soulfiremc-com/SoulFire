@@ -18,16 +18,30 @@
 package com.soulfiremc.mod.mixin.headless.rendering;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.RenderSystem;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(RenderTarget.class)
 public class MixinRenderTarget {
+  @Shadow
+  public int width;
 
-  @Inject(method = "blitToScreen", at = @At("HEAD"), cancellable = true)
-  private void blitToScreenHook(CallbackInfo ci) {
+  @Shadow
+  public int height;
+
+  @Inject(method = "createBuffers", at = @At("HEAD"), cancellable = true)
+  private void createBuffersHook(int width, int height, CallbackInfo ci) {
+    var maxTextureSize = RenderSystem.getDevice().getDeviceInfo().limits().maxTextureSize();
+    if (width <= 0 || height <= 0 || width <= maxTextureSize && height <= maxTextureSize) {
+      return;
+    }
+
+    this.width = width;
+    this.height = height;
     ci.cancel();
   }
 
