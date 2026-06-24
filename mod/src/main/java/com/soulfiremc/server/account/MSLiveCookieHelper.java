@@ -20,6 +20,8 @@ package com.soulfiremc.server.account;
 import com.google.gson.JsonArray;
 import com.soulfiremc.server.util.structs.GsonInstance;
 
+import java.util.Locale;
+
 /// Utility for parsing various cookie input formats into a Cookie header string
 /// suitable for Microsoft Live authentication.
 ///
@@ -28,6 +30,9 @@ import com.soulfiremc.server.util.structs.GsonInstance;
 /// - Cookie Editor JSON (array of objects with domain/name/value)
 /// - Raw cookie header string (semicolon-separated name=value pairs)
 public final class MSLiveCookieHelper {
+  private static final String LIVE_PARENT_DOMAIN = "live.com";
+  private static final String LOGIN_LIVE_HOST = "login.live.com";
+
   private MSLiveCookieHelper() {}
 
   /// Parses a cookie input string (in any supported format) into a Cookie header value.
@@ -65,8 +70,12 @@ public final class MSLiveCookieHelper {
   }
 
   private static boolean looksLikeCookieJar(String input) {
-    return input.contains("\t")
-      && (input.contains("__Host-MSAAUTHP") || input.contains("login.live.com"));
+    var hasLiveCookieMarker = input.contains("__Host-MSAAUTHP")
+      || input.contains("login.live.com")
+      || input.contains("\tMSPAuth\t")
+      || input.contains("\tMSPProf\t")
+      || input.contains("\tPPLState\t");
+    return input.contains("\t") && hasLiveCookieMarker;
   }
 
   private static boolean looksLikeRawCookieHeader(String input) {
@@ -86,7 +95,12 @@ public final class MSLiveCookieHelper {
     var out = new StringBuilder();
     for (var line : cookieJar.split("\\R")) {
       var l = line.strip();
-      if (l.isEmpty() || l.startsWith("#")) {
+      if (l.isEmpty()) {
+        continue;
+      }
+      if (l.startsWith("#HttpOnly_")) {
+        l = l.substring("#HttpOnly_".length());
+      } else if (l.startsWith("#")) {
         continue;
       }
 
@@ -96,7 +110,7 @@ public final class MSLiveCookieHelper {
       }
 
       var domain = stripDomain(parts[0].strip());
-      if (!isLiveDomain(domain)) {
+      if (!isCookieDomainForLoginLive(domain)) {
         continue;
       }
 
@@ -142,7 +156,7 @@ public final class MSLiveCookieHelper {
       if (obj.has("domain")) {
         try {
           var domain = stripDomain(obj.get("domain").getAsString());
-          if (!isLiveDomain(domain)) {
+          if (!isCookieDomainForLoginLive(domain)) {
             continue;
           }
         } catch (Exception _) {
@@ -187,8 +201,9 @@ public final class MSLiveCookieHelper {
     out.append(name).append('=').append(value);
   }
 
-  private static boolean isLiveDomain(String domain) {
-    return "login.live.com".equals(domain) || domain.endsWith(".login.live.com");
+  private static boolean isCookieDomainForLoginLive(String domain) {
+    var normalized = stripLeadingDot(domain).toLowerCase(Locale.ROOT);
+    return LOGIN_LIVE_HOST.equals(normalized) || LIVE_PARENT_DOMAIN.equals(normalized);
   }
 
   private static String stripEnclosingQuotes(String v) {
@@ -205,6 +220,9 @@ public final class MSLiveCookieHelper {
 
   private static String stripDomain(String domain) {
     var d = domain.strip();
+    if (d.startsWith("#HttpOnly_")) {
+      d = d.substring("#HttpOnly_".length());
+    }
     if (d.startsWith("http://")) {
       d = d.substring("http://".length());
     }
@@ -216,5 +234,13 @@ public final class MSLiveCookieHelper {
       d = d.substring(0, slash);
     }
     return d.strip();
+  }
+
+  private static String stripLeadingDot(String domain) {
+    var d = domain.strip();
+    if (d.startsWith(".")) {
+      return d.substring(1);
+    }
+    return d;
   }
 }

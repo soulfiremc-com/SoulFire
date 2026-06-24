@@ -192,7 +192,12 @@ public final class ClientSettingsManager {
   }
 
   private boolean looksLikeCookieJar(String input) {
-    return input.contains("\t") && input.contains("login.live.com");
+    var hasLiveCookieMarker = input.contains("__Host-MSAAUTHP")
+      || input.contains("login.live.com")
+      || input.contains("\tMSPAuth\t")
+      || input.contains("\tMSPProf\t")
+      || input.contains("\tPPLState\t");
+    return input.contains("\t") && hasLiveCookieMarker;
   }
 
   private boolean looksLikeCookieEditorJson(String input) {
