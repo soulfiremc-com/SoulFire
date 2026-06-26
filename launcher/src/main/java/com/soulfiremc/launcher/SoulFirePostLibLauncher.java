@@ -18,9 +18,6 @@
 package com.soulfiremc.launcher;
 
 import com.soulfiremc.builddata.BuildData;
-import com.soulfiremc.shared.Base64Helpers;
-import com.soulfiremc.shared.ProxyCheckLogFilter;
-import com.soulfiremc.shared.SFInfoPlaceholder;
 import lombok.SneakyThrows;
 import net.fabricmc.loader.impl.launch.knot.KnotClient;
 import net.fabricmc.loader.impl.util.SystemProperties;
@@ -30,10 +27,14 @@ import net.lenni0451.reflect.Agents;
 import org.apache.logging.log4j.LogManager;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public final class SoulFirePostLibLauncher {
   private SoulFirePostLibLauncher() {
@@ -77,12 +78,10 @@ public final class SoulFirePostLibLauncher {
       System.setProperty("joml.nounsafe", "true");
       System.setProperty(SystemProperties.SKIP_MC_PROVIDER, "true");
       System.setProperty("sf.bootstrap.class", bootstrapClassName);
-      System.setProperty("sf.initial.arguments", Base64Helpers.joinBase64(args));
+      System.setProperty("sf.initial.arguments", joinBase64(args));
 
       injectEarlyMixins();
       setupManagedMods(basePath);
-      SFInfoPlaceholder.register();
-      ProxyCheckLogFilter.register();
       SFMinecraftDownloader.loadAndInjectMinecraftJar(basePath);
 
       KnotClient.main(new String[]{"--username", "SoulFire"});
@@ -118,5 +117,11 @@ public final class SoulFirePostLibLauncher {
     } catch (IOException t) {
       throw new IllegalStateException("Failed to inject mixins", t);
     }
+  }
+
+  private static String joinBase64(String[] args) {
+    return Arrays.stream(args)
+      .map(arg -> Base64.getEncoder().encodeToString(arg.getBytes(StandardCharsets.UTF_8)))
+      .collect(Collectors.joining(","));
   }
 }

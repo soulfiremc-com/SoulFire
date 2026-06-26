@@ -93,6 +93,7 @@ dependencies {
   api(libs.fastutil)
   api(libs.caffeine)
   api(libs.jetbrains.annotations)
+  api("org.checkerframework:checker-qual:4.2.0")
   api(libs.immutables.gson)
 
   api(libs.reflect)
@@ -117,6 +118,9 @@ dependencies {
 
   // For early mixins
   api(libs.bundles.classtransform)
+
+  // For optional io_uring event loop support
+  api("io.netty:netty-transport-classes-io_uring")
 }
 
 loom {
@@ -144,6 +148,22 @@ tasks.shadowJar {
 
   archiveClassifier.set("")
   destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
+  filesMatching("META-INF/services/**") {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+  }
+  mergeServiceFiles()
+  dependencies {
+    exclude(dependency("io.github.llamalad7:mixinextras-fabric:.*"))
+    exclude(dependency("net.fabricmc:dev-launch-injector:.*"))
+    exclude(dependency("net.fabricmc:fabric-loader:.*"))
+    exclude(dependency("net.fabricmc:fabric-log4j-util:.*"))
+    exclude(dependency("net.fabricmc:sponge-mixin:.*"))
+    exclude(dependency("org.ow2.asm:asm:.*"))
+    exclude(dependency("org.ow2.asm:asm-analysis:.*"))
+    exclude(dependency("org.ow2.asm:asm-commons:.*"))
+    exclude(dependency("org.ow2.asm:asm-tree:.*"))
+    exclude(dependency("org.ow2.asm:asm-util:.*"))
+  }
 }
 
 tasks.jar {

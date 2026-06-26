@@ -23,10 +23,10 @@
       <PatternLayout>
         <LoggerNamePatternSelector
           disableAnsi="false"
-          defaultPattern="%highlight{[%d{HH:mm:ss} %level]${soulfire:context_info} [%logger{1.*}]: %minecraftFormatting{%msg}%n%xEx}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}">
+          defaultPattern="%highlight{[%d{HH:mm:ss} %level]${soulfire:context_info} [%logger{1.*}]: %minecraftFormatting{%msg}%n%ex}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}">
           <!-- SoulFire doesn't need a prefix -->
           <PatternMatch key="com.soulfiremc."
-                        pattern="%highlight{[%d{HH:mm:ss} %level]${soulfire:context_info} [%logger{1}]: %minecraftFormatting{%msg}%n%xEx}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}"/>
+                        pattern="%highlight{[%d{HH:mm:ss} %level]${soulfire:context_info} [%logger{1}]: %minecraftFormatting{%msg}%n%ex}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}"/>
         </LoggerNamePatternSelector>
       </PatternLayout>
       <Filters>
@@ -39,7 +39,7 @@
                              filePattern="logs/%d{yyyy-MM-dd}-%i.log.gz"
                              immediateFlush="false">
       <PatternLayout
-        pattern="[%d{HH:mm:ss}] [%t/%level]${soulfire:context_info} [%logger]: %msg%n%xEx"/>
+        pattern="[%d{HH:mm:ss}] [%t/%level]${soulfire:context_info} [%logger]: %msg%n%ex"/>
       <Policies>
         <TimeBasedTriggeringPolicy/>
         <OnStartupTriggeringPolicy/>

@@ -7,6 +7,15 @@ dependencies {
 
   api(projects.buildData)
 
+  api(libs.bundles.classtransform)
+  api(libs.reflect)
+
+  api(libs.bundles.log4j)
+  api(libs.jline)
+  api(libs.jansi)
+  api(libs.terminalconsoleappender)
+  api(libs.disruptor)
+
   api("org.ow2.asm:asm:9.10.1")
   api("org.ow2.asm:asm-analysis:9.10.1")
   api("org.ow2.asm:asm-commons:9.10.1")

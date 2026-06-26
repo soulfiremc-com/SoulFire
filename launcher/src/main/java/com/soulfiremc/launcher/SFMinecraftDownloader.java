@@ -20,18 +20,9 @@ package com.soulfiremc.launcher;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.soulfiremc.shared.LazyObject;
 import lombok.SneakyThrows;
-import net.fabricmc.loader.impl.game.GameProviderHelper;
-import net.fabricmc.loader.impl.launch.MappingConfiguration;
 import net.fabricmc.loader.impl.util.SystemProperties;
-import net.fabricmc.mappingio.format.proguard.ProGuardFileReader;
-import net.fabricmc.mappingio.format.tiny.Tiny2FileReader;
-import net.fabricmc.mappingio.format.tiny.Tiny2FileWriter;
-import net.fabricmc.mappingio.tree.MemoryMappingTree;
 
-import java.io.File;
-import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,10 +30,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public final class SFMinecraftDownloader {
   private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "26.2");
@@ -85,21 +72,19 @@ public final class SFMinecraftDownloader {
       IO.println("Minecraft already downloaded, continuing");
     } else {
       IO.println("Downloading Minecraft...");
-      var versionInfo = new LazyObject<>(() -> {
-        var versionUrl = getUrl(MANIFEST_URL)
-          .getAsJsonArray("versions")
-          .asList()
-          .stream()
-          .map(JsonElement::getAsJsonObject)
-          .filter(v -> MINECRAFT_VERSION.equals(v.get("id").getAsString()))
-          .map(v -> v.get("url").getAsString())
-          .findFirst()
-          .orElseThrow(() -> new RuntimeException("Minecraft version " + MINECRAFT_VERSION + " not found in manifest"));
-        return getUrl(versionUrl);
-      });
+      var versionUrl = getUrl(MANIFEST_URL)
+        .getAsJsonArray("versions")
+        .asList()
+        .stream()
+        .map(JsonElement::getAsJsonObject)
+        .filter(v -> MINECRAFT_VERSION.equals(v.get("id").getAsString()))
+        .map(v -> v.get("url").getAsString())
+        .findFirst()
+        .orElseThrow(() -> new RuntimeException("Minecraft version " + MINECRAFT_VERSION + " not found in manifest"));
+      var versionInfo = getUrl(versionUrl);
 
       if (!Files.exists(minecraftJarPath)) {
-        var clientUrl = versionInfo.get()
+        var clientUrl = versionInfo
           .getAsJsonObject("downloads")
           .getAsJsonObject("client")
           .get("url")

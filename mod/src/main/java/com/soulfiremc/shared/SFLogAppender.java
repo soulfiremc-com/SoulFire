@@ -48,9 +48,9 @@ public final class SFLogAppender extends AbstractAppender {
   public static final SFLogAppender INSTANCE = new SFLogAppender();
   private static final AtomicInteger LOG_COUNTER = new AtomicInteger(0);
   private static final LoggerNamePatternSelector SELECTOR = LoggerNamePatternSelector.createSelector(
-    "%highlight{%minecraftFormatting{%msg}%xEx}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}",
+    "%highlight{%minecraftFormatting{%msg}%ex}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}",
     new PatternMatch[]{
-      new PatternMatch("com.soulfiremc.", "%highlight{%minecraftFormatting{%msg}%xEx}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}"),
+      new PatternMatch("com.soulfiremc.", "%highlight{%minecraftFormatting{%msg}%ex}{FATAL=red, ERROR=red, WARN=yellow, INFO=normal, DEBUG=cyan, TRACE=black}"),
     },
     true,
     false,
@@ -62,7 +62,15 @@ public final class SFLogAppender extends AbstractAppender {
 
   private SFLogAppender() {
     super("SFLogAppender", null, null, false, Property.EMPTY_ARRAY);
+  }
 
+  @Override
+  public void start() {
+    if (isStarted()) {
+      return;
+    }
+
+    super.start();
     ((Logger) LogManager.getRootLogger()).addAppender(this);
   }
 

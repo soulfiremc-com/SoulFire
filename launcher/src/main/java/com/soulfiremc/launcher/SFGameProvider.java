@@ -59,18 +59,6 @@ public class SFGameProvider extends MinecraftGameProvider {
 
   @SneakyThrows
   @Override
-  public void initialize(FabricLauncher launcher) {
-    super.initialize(launcher);
-    ClassLoader prevCl = Thread.currentThread().getContextClassLoader();
-    Thread.currentThread().setContextClassLoader(launcher.getTargetClassLoader());
-    launcher.loadIntoTarget("com.soulfiremc.shared.SoulFireEarlyBootstrap")
-      .getMethod("earlyBootstrap")
-      .invoke(null);
-    Thread.currentThread().setContextClassLoader(prevCl);
-  }
-
-  @SneakyThrows
-  @Override
   public Path getLaunchDirectory() {
     var launchDir = Path.of(System.getProperty("sf.baseDir")).resolve("minecraft");
     Files.createDirectories(launchDir);
