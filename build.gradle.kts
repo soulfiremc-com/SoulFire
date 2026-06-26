@@ -42,12 +42,6 @@ allprojects {
         includeModule("net.kyori", "adventure-text-feature-pagination")
       }
     }
-    maven("https://maven.parchmentmc.org") {
-      name = "ParchmentMC"
-      content {
-        includeGroup("org.parchmentmc")
-      }
-    }
     maven("https://maven.fabricmc.net") {
       name = "FabricMC"
       content {

@@ -5,15 +5,6 @@ plugins {
   alias(libs.plugins.jooq.codegen)
 }
 
-repositories {
-  maven("https://maven.parchmentmc.org") {
-    name = "ParchmentMC"
-    content {
-      includeGroup("org.parchmentmc.data")
-    }
-  }
-}
-
 dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
 
