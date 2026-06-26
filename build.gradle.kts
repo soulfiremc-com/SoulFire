@@ -12,6 +12,17 @@ allprojects {
   description = "Advanced Minecraft Server-Stresser Tool."
 
   repositories {
+    exclusiveContent {
+      forRepository {
+        maven {
+          name = "MavenCentralNetty"
+          url = uri("https://repo.maven.apache.org/maven2/")
+        }
+      }
+      filter {
+        includeGroup("io.netty")
+      }
+    }
     maven("https://repo.viaversion.com") {
       name = "ViaVersion Repository"
       content {
