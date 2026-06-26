@@ -79,30 +79,6 @@ public final class SFMinecraftDownloader {
   }
 
   @SneakyThrows
-  private static void setRemapClasspath(Path basePath) {
-    var remapPathFile = Files.createTempFile("soulfire-mc-remap-", ".txt");
-    remapPathFile.toFile().deleteOnExit();
-
-    var getDeobfJarDir = GameProviderHelper.class.getDeclaredMethod("getDeobfJarDir", Path.class, String.class, String.class);
-    getDeobfJarDir.setAccessible(true);
-    var deobfJarDir = (Path) getDeobfJarDir.invoke(null, basePath.resolve("minecraft"), "minecraft", MINECRAFT_VERSION);
-
-    Files.writeString(remapPathFile, Stream.concat(Arrays.stream(System.getProperty("java.class.path")
-          .split(File.pathSeparator)),
-        Stream.of(
-          deobfJarDir
-            .resolve("client-intermediary.jar")
-            .toAbsolutePath()
-            .toString()
-        )
-      )
-      .collect(Collectors.joining(File.pathSeparator)));
-
-    System.setProperty(SystemProperties.REMAP_CLASSPATH_FILE, remapPathFile.toString());
-  }
-
-  @SuppressWarnings("unused")
-  @SneakyThrows
   public static void loadAndInjectMinecraftJar(Path basePath) {
     var minecraftJarPath = getMinecraftClientJarPath(basePath);
     if (Files.exists(minecraftJarPath)) {
