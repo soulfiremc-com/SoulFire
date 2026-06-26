@@ -16,7 +16,7 @@ jmh = "me.champeau.jmh:0.7.3"
 jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooq" }
 
 [libraries]
-gradle-plugin-shadow = "gradle.plugin.com.github.johnrengelman:shadow:8.0.0"
+gradle-plugin-shadow = "com.gradleup.shadow:com.gradleup.shadow.gradle.plugin:9.4.3"
 gradle-plugin-lombok = "io.freefair.gradle:lombok-plugin:9.5.0"
 gradle-plugin-indra-git = "net.kyori:indra-git:4.0.0"
 gradle-plugin-loom = "net.fabricmc:fabric-loom:1.17.12"

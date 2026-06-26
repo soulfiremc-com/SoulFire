@@ -35,7 +35,6 @@ develocity {
 include(
   "build-data",
   "proto",
-  "shared",
   "mod",
   "launcher",
   "j8-launcher",

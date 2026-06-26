@@ -3,12 +3,11 @@ plugins {
   id("net.fabricmc.fabric-loom")
   alias(libs.plugins.jmh)
   alias(libs.plugins.jooq.codegen)
+  id("com.gradleup.shadow")
 }
 
 dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
-
-  compileOnly(projects.shared)
 
   minecraft("com.mojang:minecraft:26.2")
   implementation("net.fabricmc:fabric-loader:0.19.3")
@@ -42,15 +41,7 @@ dependencies {
     exclude("io.netty")
     exclude("org.slf4j")
   }
-  include(libs.picoli) {
-    exclude("io.netty")
-    exclude("org.slf4j")
-  }
   api(projects.proto) {
-    exclude("io.netty")
-    exclude("org.slf4j")
-  }
-  include(projects.proto) {
     exclude("io.netty")
     exclude("org.slf4j")
   }
@@ -59,20 +50,73 @@ dependencies {
     exclude("io.netty")
     exclude("org.slf4j")
   }
-  include(headlessMcNotation) {
-    exclude("io.netty")
-    exclude("org.slf4j")
-  }
 
   testRuntimeOnly(libs.junit.launcher)
   testImplementation(libs.junit)
-  testImplementation(projects.shared)
-
-  jmhImplementation(projects.shared)
 
   jooqCodegen(libs.jooq.codegen)
   jooqCodegen(libs.jooq.meta.extensions)
   jooqCodegen(libs.sqlite)
+
+  api(projects.buildData)
+
+  api("io.github.classgraph:classgraph:4.8.184")
+
+  // For microsoft account authentication
+  api(libs.minecraftauth) {
+    exclude("com.google.code.gson", "gson")
+    exclude("org.slf4j", "slf4j-api")
+  }
+
+  // For profiling
+  api(libs.spark) {
+    exclude("org.ow2.asm", "asm")
+  }
+
+  // Log/Console libraries
+  api(libs.bundles.log4j)
+  api(libs.jline)
+  api(libs.jansi)
+  api(libs.bundles.ansi4j)
+  api(libs.terminalconsoleappender)
+  api(libs.slf4j)
+  api(libs.disruptor)
+
+  api(libs.bundles.kyori)
+  api(libs.commons.validator)
+  api(libs.commons.io)
+
+  api(libs.openai)
+
+  api(libs.guava)
+  api(libs.gson)
+  api(libs.fastutil)
+  api(libs.caffeine)
+  api(libs.jetbrains.annotations)
+  api(libs.immutables.gson)
+
+  api(libs.reflect)
+  api(libs.lambdaevents)
+
+  // For database support
+  api(libs.bundles.jooq)
+  api(libs.flyway.core)
+  api(libs.flyway.mysql)
+  api(libs.hikaricp)
+  api(libs.sqlite)
+  api(libs.mariadb)
+
+  api(libs.bundles.armeria)
+  api(libs.bundles.reactor.netty)
+
+  // For mail support
+  api(libs.angus)
+
+  // For tls cert provisioning
+  api(libs.acme4j)
+
+  // For early mixins
+  api(libs.bundles.classtransform)
 }
 
 loom {
@@ -80,9 +124,30 @@ loom {
 
   runs {
     configureEach {
-      ideConfigGenerated(false)
+      generateRunConfig = false
     }
   }
+}
+
+tasks.shadowJar {
+  val mainOutputDirectories = sourceSets.main.get().output.files.map { it.toPath().toAbsolutePath().normalize() }
+
+  dependsOn(tasks.jar)
+  from(zipTree(tasks.jar.flatMap { it.archiveFile }))
+  from(rootProject.layout.projectDirectory.file("LICENSE"))
+  eachFile {
+    val sourcePath = file.toPath().toAbsolutePath().normalize()
+    if (mainOutputDirectories.any(sourcePath::startsWith)) {
+      exclude()
+    }
+  }
+
+  archiveClassifier.set("")
+  destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
+}
+
+tasks.jar {
+  archiveClassifier.set("raw")
 }
 
 configurations {
@@ -112,15 +177,15 @@ tasks {
 configurations.create("mod-jar")
 
 artifacts {
-  add("mod-jar", tasks.jar.flatMap { it.archiveFile }) {
-    builtBy(tasks.jar)
+  add("mod-jar", tasks.shadowJar.flatMap { it.archiveFile }) {
+    builtBy(tasks.shadowJar)
   }
 }
 
 publishing {
   publications {
     getByName<MavenPublication>("mavenJava") {
-      artifact(tasks.jar)
+      artifact(tasks.shadowJar)
     }
   }
 }
