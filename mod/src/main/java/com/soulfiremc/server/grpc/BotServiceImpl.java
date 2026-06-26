@@ -66,6 +66,11 @@ import java.util.concurrent.Callable;
 public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
   private final SoulFireServer soulFireServer;
 
+  /// Runtime snapshot for a single bot computed inside the bot's context, used
+  /// to populate a {@link BotListEntry}. Any field may be absent when the bot
+  /// has not fully spawned.
+  private record BotRuntimeInfo(BotLiveState liveState, BotConnectionPhase phase, Integer pingMs) {}
+
   /**
    * Builds a BotLiveState from a LocalPlayer. Exposed package-private so
    * {@link BotLiveServiceImpl} can reuse the same snapshot structure for its
@@ -306,20 +311,41 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           .setProfileId(profileId.toString())
           .setIsOnline(botConnections.containsKey(profileId));
 
+        var accountName = account.lastKnownName();
+        if (accountName != null) {
+          entryBuilder.setAccountName(accountName);
+        }
+
         var activeBot = botConnections.get(profileId);
-        if (activeBot != null) {
-          var liveState = callInBotContext(activeBot, () -> {
+        if (activeBot == null || activeBot.isDisconnected()) {
+          entryBuilder.setConnectionPhase(BotConnectionPhase.BOT_CONNECTION_PHASE_DISCONNECTED);
+        } else {
+          var info = callInBotContext(activeBot, () -> {
             var minecraft = activeBot.minecraft();
             var player = minecraft.player;
-            return player != null
-              ? buildLiveState(minecraft, player, false)
-              : null;
-          });
-          if (liveState != null) {
+            if (player == null) {
+              // Connected/handshaking but the player has not spawned yet.
+              return new BotRuntimeInfo(null, BotConnectionPhase.BOT_CONNECTION_PHASE_CONNECTING, null);
+            }
             // Don't include inventory for list view (too expensive)
-            entryBuilder.setLiveState(liveState);
+            var liveState = buildLiveState(minecraft, player, false);
+            Integer pingMs = null;
+            var playerInfo = player.connection.getPlayerInfo(player.getUUID());
+            if (playerInfo != null) {
+              pingMs = playerInfo.getLatency();
+            }
+            return new BotRuntimeInfo(liveState, BotConnectionPhase.BOT_CONNECTION_PHASE_SPAWNED, pingMs);
+          });
+
+          entryBuilder.setConnectionPhase(info.phase());
+          if (info.liveState() != null) {
+            entryBuilder.setLiveState(info.liveState());
+          }
+          if (info.pingMs() != null) {
+            entryBuilder.setPingMs(info.pingMs());
           }
         }
+
         responseBuilder.addBots(entryBuilder.build());
       }
 

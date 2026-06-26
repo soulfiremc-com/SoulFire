@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+option java_package = "com.soulfiremc.grpc.generated";
+option java_multiple_files = true;
+
+package soulfire.v1;
+
+import "soulfire/api_docs.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// PluginStatsService - Plugin runtime statistics
+// ============================================================================
+//
+// ServerPlugin (in common.proto) describes a plugin statically: id, version,
+// author, etc. It says nothing about what a plugin is doing at runtime.
+//
+// PluginStatsService exposes live, per-instance runtime stats that plugins
+// report themselves through the server's plugin metrics API: how long a plugin
+// has been active, how many bots it is acting on, and arbitrary named counters
+// or gauges (e.g. "diamonds mined" = 1195). This is what powers the
+// "active plugins" cards on the instance overview.
+// ============================================================================
+
+// A single named metric reported by a plugin (a counter or a gauge).
+message PluginMetric {
+  // Stable machine key for the metric (e.g. "diamonds_mined").
+  string key = 1 [(google.api.field_behavior) = REQUIRED];
+  // Human-friendly label for display (e.g. "Diamonds mined").
+  string display_name = 2 [(google.api.field_behavior) = REQUIRED];
+  // Current value. Counters accumulate; gauges reflect the latest set value.
+  double value = 3 [(google.api.field_behavior) = REQUIRED];
+  // Optional unit shown next to the value (e.g. "blocks", "ms"). May be empty.
+  string unit = 4;
+  // Optional icon hint for the client (e.g. a Minecraft item id like
+  // "minecraft:diamond", or a lucide icon name). Absent if not provided.
+  optional string icon = 5;
+}
+
+// Runtime status for a single plugin within an instance.
+message PluginRuntimeStat {
+  // The plugin id (matches ServerPlugin.id).
+  string plugin_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // Whether the plugin is currently active in this instance (has reported at
+  // least once during the current session).
+  bool enabled = 2 [(google.api.field_behavior) = REQUIRED];
+  // Number of currently-online bots this plugin is acting on.
+  int32 active_bot_count = 3 [(google.api.field_behavior) = REQUIRED];
+  // When the plugin first became active in the current session.
+  google.protobuf.Timestamp running_since = 4;
+  // All metrics the plugin has reported, ordered by registration.
+  repeated PluginMetric metrics = 5;
+}
+
+// Request to retrieve plugin runtime stats for a specific instance.
+message GetInstancePluginStatsRequest {
+  // The UUID of the SoulFire instance to get plugin stats for.
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+}
+
+// Response containing runtime stats for all reporting plugins in an instance.
+message GetInstancePluginStatsResponse {
+  // One entry per plugin that has reported runtime stats this session.
+  repeated PluginRuntimeStat stats = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Service for retrieving plugin runtime statistics.
+// Stats are collected server-side from plugins via the plugin metrics API.
+// All operations require appropriate permissions.
+service PluginStatsService {
+  // Returns runtime stats for every plugin that has reported in the instance.
+  // Requires: READ_BOT_INFO permission on the instance
+  // Errors: NOT_FOUND if instance does not exist
+  rpc GetInstancePluginStats (GetInstancePluginStatsRequest) returns (GetInstancePluginStatsResponse) {
+    option (google.api.http) = { get: "/v1/instances/{instance_id}/plugin-stats" };
+    option (soulfire.v1.api_method) = {
+      display_name: "Get instance plugin stats"
+      permissions: "READ_BOT_INFO"
+      scope: "instance"
+    };
+  }
+}

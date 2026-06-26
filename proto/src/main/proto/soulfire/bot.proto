@@ -52,6 +52,24 @@ message BotListRequest {
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
 }
 
+// Fine-grained connection phase for a bot, more detailed than the is_online
+// boolean. SPAWNED implies the player entity exists and live_state is available.
+enum BotConnectionPhase {
+  // Unknown phase (e.g. for a bot that has never been started).
+  BOT_CONNECTION_PHASE_UNSPECIFIED = 0;
+  // The bot has been created and is establishing its connection / logging in,
+  // but the player has not spawned yet.
+  BOT_CONNECTION_PHASE_CONNECTING = 1;
+  // The bot is connected to the server (post-login) but has not fully spawned.
+  BOT_CONNECTION_PHASE_CONNECTED = 2;
+  // The bot's player has spawned; live_state reflects the player.
+  BOT_CONNECTION_PHASE_SPAWNED = 3;
+  // The bot's player is currently dead, awaiting respawn.
+  BOT_CONNECTION_PHASE_DIED = 4;
+  // The bot is not connected to a server.
+  BOT_CONNECTION_PHASE_DISCONNECTED = 5;
+}
+
 // Entry representing a single bot in the bot list.
 // Contains summary information suitable for display in a list view.
 message BotListEntry {
@@ -67,6 +85,20 @@ message BotListEntry {
   // Will be absent if the bot is offline or the player hasn't fully spawned.
   // Note: For list views, inventory data is NOT included (too expensive).
   optional BotLiveState live_state = 3;
+
+  // Network latency (ping) of the bot to the connected Minecraft server, in
+  // milliseconds. Present only when the bot is online and the server has
+  // reported a latency value for it.
+  optional int32 ping_ms = 4;
+
+  // Fine-grained connection phase. Where is_online is a coarse boolean, this
+  // distinguishes connecting / connected / spawned / disconnected states.
+  BotConnectionPhase connection_phase = 5 [(google.api.field_behavior) = REQUIRED];
+
+  // Last known account (player) name of the bot, for convenient display in
+  // list views without joining against the instance account configuration.
+  // Absent if the name is unknown.
+  optional string account_name = 6;
 }
 
 // Response containing the list of all bots in an instance.

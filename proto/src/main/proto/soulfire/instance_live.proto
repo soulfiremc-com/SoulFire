@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+option java_package = "com.soulfiremc.grpc.generated";
+option java_multiple_files = true;
+
+package soulfire.v1;
+
+import "soulfire/api_docs.proto";
+import "soulfire/bot_live.proto";
+import "google/api/field_behavior.proto";
+
+// ============================================================================
+// InstanceLiveService - Instance-wide live event stream
+// ============================================================================
+//
+// While BotLiveService.WatchBotEvents exposes a stream scoped to a single bot,
+// InstanceLiveService multiplexes events across ALL bots in an instance into a
+// single stream. This is what powers an instance-wide live feed (chat across
+// every bot, plus join/leave lifecycle) without opening one stream per bot.
+//
+// Events reuse the structured BotChatEvent / BotLifecycleEvent messages from
+// bot_live.proto and tag each one with the originating bot.
+// ============================================================================
+
+// Selects which categories of events the instance stream should deliver.
+// Each category is opt-in; a stream with no categories enabled stays silent.
+message InstanceEventFilter {
+  // Deliver chat and system messages observed by any bot as BotChatEvent.
+  bool include_chat = 1;
+  // Deliver connect / disconnect lifecycle events as BotLifecycleEvent.
+  bool include_lifecycle = 2;
+}
+
+// Request to subscribe to an instance's multiplexed live event stream.
+message WatchInstanceEventsRequest {
+  // The UUID of the SoulFire instance to watch.
+  string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Which event categories to include in the stream.
+  InstanceEventFilter filter = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// A single event on the instance-wide stream, tagged with the bot that
+// produced it.
+message InstanceEvent {
+  // Profile UUID of the bot that observed / produced this event.
+  string bot_profile_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
+  // Last known account name of that bot, for convenient display. May be empty.
+  string bot_name = 2;
+
+  oneof event {
+    // A chat or system message observed by the bot.
+    BotChatEvent chat = 3;
+    // A connection lifecycle change for the bot.
+    BotLifecycleEvent lifecycle = 4;
+  }
+}
+
+// Service for streaming instance-wide live events.
+// All operations require appropriate permissions.
+service InstanceLiveService {
+  // Subscribes to a single multiplexed event stream covering every bot in the
+  // instance. The stream stays open until the client cancels. Unlike
+  // WatchBotEvents it does not emit an initial snapshot; it only forwards
+  // events as they happen.
+  rpc WatchInstanceEvents (WatchInstanceEventsRequest) returns (stream InstanceEvent) {
+    option (soulfire.v1.api_method) = {
+      display_name: "Watch instance events"
+      permissions: "READ_BOT_INFO"
+      scope: "instance"
+      execution: "Opens a live event stream until the client cancels."
+      side_effects: "Allocates server-side subscription resources for the instance."
+    };
+  }
+}

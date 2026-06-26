@@ -29,6 +29,7 @@ import com.soulfiremc.server.api.event.session.SessionEndedEvent;
 import com.soulfiremc.server.api.event.session.SessionStartEvent;
 import com.soulfiremc.server.api.event.session.SessionTickEvent;
 import com.soulfiremc.server.api.metadata.MetadataHolder;
+import com.soulfiremc.server.api.metrics.InstancePluginStats;
 import com.soulfiremc.server.automation.AutomationTeamCoordinator;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotConnectionFactory;
@@ -81,6 +82,7 @@ public final class InstanceManager {
   private final CachedLazyObject<String> friendlyNameCache;
   private final SettingsPageRegistry instanceSettingsPageRegistry;
   private final InstanceMetricsCollector metricsCollector;
+  private final InstancePluginStats pluginStats;
   private final AutomationTeamCoordinator automationCoordinator;
   private final AtomicBoolean allBotsConnected = new AtomicBoolean(false);
   private SessionLifecycle sessionLifecycle = SessionLifecycle.STOPPED;
@@ -113,6 +115,7 @@ public final class InstanceManager {
 
     this.metricsCollector = new InstanceMetricsCollector(this);
     SoulFireAPI.registerListenersOfObject(metricsCollector);
+    this.pluginStats = new InstancePluginStats();
     this.automationCoordinator = new AutomationTeamCoordinator(this);
 
     try {
@@ -595,6 +598,7 @@ public final class InstanceManager {
       log.info("Starting session with {} bots and {} active proxies", factories.size(), usedProxies);
     }
 
+    pluginStats.reset();
     SoulFireAPI.postEvent(new SessionStartEvent(this));
 
     var connectSemaphore = new Semaphore(settingsSource.get(BotSettings.CONCURRENT_CONNECTS));
