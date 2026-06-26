@@ -87,6 +87,7 @@ angus = "org.eclipse.angus:angus-mail:2.0.5"
 javax-annotations = "javax.annotation:javax.annotation-api:1.3.2"
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 junit = "org.junit.jupiter:junit-jupiter:6.1.0"
+fabric-loader-junit = "net.fabricmc:fabric-loader-junit:0.19.3"
 evalex = "com.ezylang:EvalEx:3.6.2"
 
 [bundles]

@@ -17,24 +17,66 @@
  */
 package com.soulfiremc.test.utils;
 
-import com.soulfiremc.test.mixin.MixinSupportMain;
-import lombok.SneakyThrows;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.ClientBootstrap;
+import net.minecraft.core.Holder;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.tags.TagKey;
+import net.minecraft.tags.TagLoader;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public final class TestBootstrap {
+  private static final Object BOOTSTRAP_LOCK = new Object();
+  private static volatile boolean bootstrapped;
+
   private TestBootstrap() {
   }
 
-  @SneakyThrows
   public static void bootstrapForTest() {
-    MixinSupportMain.load();
+    Thread.currentThread().setContextClassLoader(TestBootstrap.class.getClassLoader());
 
-    SharedConstants.tryDetectVersion();
-    SharedConstants.CHECK_DATA_FIXER_SCHEMA = false;
-    Bootstrap.bootStrap();
-    ClientBootstrap.bootstrap();
-    Bootstrap.validate();
+    if (bootstrapped) {
+      return;
+    }
+
+    synchronized (BOOTSTRAP_LOCK) {
+      if (bootstrapped) {
+        return;
+      }
+
+      SharedConstants.tryDetectVersion();
+      SharedConstants.CHECK_DATA_FIXER_SCHEMA = false;
+      Bootstrap.bootStrap();
+      bindTagsToEmpty();
+      ClientBootstrap.bootstrap();
+      Bootstrap.validate();
+      bootstrapped = true;
+    }
+  }
+
+  private static void bindTagsToEmpty() {
+    for (var registry : BuiltInRegistries.REGISTRY) {
+      bindTagsToEmpty(registry);
+    }
+  }
+
+  private static <T> void bindTagsToEmpty(Registry<T> registry) {
+    try {
+      registry.prepareTagReload(new TagLoader.LoadResult<T>(registry.key(), Map.<TagKey<T>, List<Holder<T>>>of()))
+        .apply();
+    } catch (IllegalStateException e) {
+      if (registry instanceof MappedRegistry<?> mappedRegistry && Objects.equals(e.getMessage(), "Invalid method used for tag loading")) {
+        mappedRegistry.bindAllTagsToEmpty();
+        return;
+      }
+
+      throw e;
+    }
   }
 }

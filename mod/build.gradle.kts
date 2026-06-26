@@ -1,9 +1,34 @@
+import org.gradle.api.file.FileCollection
+import org.gradle.process.CommandLineArgumentProvider
+
 plugins {
   `sf-special-publish-conventions`
   id("net.fabricmc.fabric-loom")
   alias(libs.plugins.jmh)
   alias(libs.plugins.jooq.codegen)
   id("com.gradleup.shadow")
+}
+
+private class FabricSystemLibrariesArgumentProvider(
+  @get:Classpath
+  val classpath: FileCollection
+) : CommandLineArgumentProvider {
+  override fun asArguments(): Iterable<String> {
+    val systemLibraries = classpath.files
+      .asSequence()
+      .filter { it.isFile && it.extension == "jar" }
+      .filter { file -> SYSTEM_LIBRARY_PREFIXES.any(file.name::startsWith) }
+      .joinToString(File.pathSeparator) { it.absolutePath }
+
+    return listOf("-Dfabric.systemLibraries=$systemLibraries")
+  }
+
+  companion object {
+    private val SYSTEM_LIBRARY_PREFIXES = listOf(
+      "mariadb-java-client-",
+      "sqlite-jdbc-"
+    )
+  }
 }
 
 dependencies {
@@ -52,6 +77,7 @@ dependencies {
   }
 
   testRuntimeOnly(libs.junit.launcher)
+  testRuntimeOnly(libs.fabric.loader.junit)
   testImplementation(libs.junit)
 
   jooqCodegen(libs.jooq.codegen)
@@ -179,6 +205,10 @@ configurations {
 tasks {
   test {
     useJUnitPlatform()
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
+    systemProperty("fabric.debug.disableModIds", "viafabricplus,viafabricplus-api,viafabricplus-visuals")
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgumentProviders.add(FabricSystemLibrariesArgumentProvider(configurations.testRuntimeClasspath.get()))
   }
 
   processIncludeJars {
