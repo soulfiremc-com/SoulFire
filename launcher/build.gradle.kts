@@ -27,7 +27,7 @@ dependencies {
 
   api("at.yawk.lz4:lz4-java:1.11.0")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:7.3.1")
+  api("com.github.oshi:oshi-core:7.3.2")
   api("com.google.code.gson:gson:2.14.0")
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.6.0-jre")
@@ -67,7 +67,7 @@ dependencies {
   api("org.slf4j:slf4j-api:2.0.18")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.4")
-  api("org.checkerframework:checker-qual:4.2.0")
+  api("org.checkerframework:checker-qual:4.2.1")
 
   // Newest netty
   api("io.netty:netty-all:4.2.15.Final")
