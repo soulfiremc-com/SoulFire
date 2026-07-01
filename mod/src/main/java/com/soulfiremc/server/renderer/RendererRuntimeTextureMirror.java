@@ -156,6 +156,10 @@ public final class RendererRuntimeTextureMirror {
     return location.getPath().startsWith("skins/");
   }
 
+  private static boolean isMapTexture(Identifier location) {
+    return location.getNamespace().equals("minecraft") && location.getPath().startsWith("map/");
+  }
+
   private static boolean isPlayerTexture(Identifier location) {
     var path = location.getPath();
     return path.startsWith("skins/")
@@ -221,7 +225,7 @@ public final class RendererRuntimeTextureMirror {
       if (!hasWritableRegion(destX, destY, width, height)) {
         return;
       }
-      if (isIgnorablePlayerTextureUpload(destX, destY, width, height) && isFullyTransparent(source, width, height, sourceX, sourceY)) {
+      if (isIgnorableTransparentUpload(destX, destY, width, height) && isFullyTransparent(source, width, height, sourceX, sourceY)) {
         return;
       }
 
@@ -237,7 +241,7 @@ public final class RendererRuntimeTextureMirror {
       if (!hasWritableRegion(destX, destY, width, height)) {
         return;
       }
-      if (isIgnorablePlayerTextureUpload(destX, destY, width, height) && isFullyTransparent(source, format, width, height)) {
+      if (isIgnorableTransparentUpload(destX, destY, width, height) && isFullyTransparent(source, format, width, height)) {
         return;
       }
 
@@ -262,8 +266,12 @@ public final class RendererRuntimeTextureMirror {
         && destY + height <= this.height;
     }
 
-    private boolean isIgnorablePlayerTextureUpload(int destX, int destY, int width, int height) {
-      return isPlayerTexture(location) && destX == 0 && destY == 0 && width == this.width && height == this.height;
+    private boolean isIgnorableTransparentUpload(int destX, int destY, int width, int height) {
+      if (destX != 0 || destY != 0 || width != this.width || height != this.height) {
+        return false;
+      }
+
+      return isPlayerTexture(location) || !hasUploadData && isMapTexture(location);
     }
 
     private boolean isFullyTransparent(NativeImage source, int width, int height, int sourceX, int sourceY) {

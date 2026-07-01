@@ -209,6 +209,67 @@ class RendererAssetsRuntimeTextureTest {
   }
 
   @Test
+  void ignoresBlankMirroredMapTextureRegistration() {
+    var location = Identifier.withDefaultNamespace("map/test-blank-registration");
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2);
+
+    try (var source = new NativeImage(2, 2, true)) {
+      RendererRuntimeTextureMirror.register(location, gpuTexture, source);
+
+      assertNull(RendererRuntimeTextureMirror.texture(location));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
+  void mirrorsMapTextureUploadAfterBlankRegistration() {
+    var location = Identifier.withDefaultNamespace("map/test-upload-after-blank");
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2);
+
+    try {
+      try (var blank = new NativeImage(2, 2, true)) {
+        RendererRuntimeTextureMirror.register(location, gpuTexture, blank);
+      }
+
+      try (var loaded = new NativeImage(2, 2, true)) {
+        loaded.setPixel(1, 1, 0xFF112233);
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, loaded, 0, 0, 2, 2, 0, 0);
+      }
+
+      var mirrored = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(mirrored);
+      assertEquals(0xFF112233, mirrored.toBufferedImage().getRGB(1, 1));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
+  void allowsMirroredMapTextureToBecomeTransparentAfterUploadDataExists() {
+    var location = Identifier.withDefaultNamespace("map/test-transparent-overwrite");
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2);
+    RendererRuntimeTextureMirror.register(location, gpuTexture);
+
+    try {
+      try (var loaded = new NativeImage(2, 2, true)) {
+        loaded.setPixel(0, 0, 0xFF112233);
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, loaded, 0, 0, 2, 2, 0, 0);
+      }
+
+      try (var blank = new NativeImage(2, 2, true)) {
+        RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, blank, 0, 0, 2, 2, 0, 0);
+      }
+
+      var mirrored = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(mirrored);
+      assertTrue(mirrored.isFullyTransparent());
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
+  }
+
+  @Test
   void mirrorsInitialDynamicTexturePixelsOnRegistration() {
     var location = Identifier.withDefaultNamespace("test/runtime-mirror-initial");
     var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 1);
