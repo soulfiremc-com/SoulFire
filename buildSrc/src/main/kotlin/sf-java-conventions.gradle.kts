@@ -29,7 +29,7 @@ spotbugs {
 
 dependencies {
   errorprone("com.google.errorprone:error_prone_core:2.50.0")
-  spotbugs("com.github.spotbugs:spotbugs:4.10.2")
+  spotbugs("com.github.spotbugs:spotbugs:4.10.3")
 
   rewrite("org.openrewrite.recipe:rewrite-static-analysis:2.38.0")
   rewrite("org.openrewrite.recipe:rewrite-migrate-java:3.39.0")
