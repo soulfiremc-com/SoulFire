@@ -22,7 +22,7 @@ dependencies {
   implementation("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.9")
   implementation(libs.gradle.plugin.freefair)
   implementation("net.ltgt.errorprone:net.ltgt.errorprone.gradle.plugin:5.1.0")
-  implementation("org.openrewrite:plugin:7.36.0")
+  implementation("org.openrewrite:plugin:7.37.0")
   implementation("org.ow2.asm:asm:9.10.1")
 }
 
