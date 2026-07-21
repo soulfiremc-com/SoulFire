@@ -27,7 +27,7 @@ log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "lo
 log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
 log4j-iostreams = { module = "org.apache.logging.log4j:log4j-iostreams", version.ref = "log4j" }
 log4j-jul = { module = "org.apache.logging.log4j:log4j-jul", version.ref = "log4j" }
-jline = "org.jline:jline-terminal-jansi:3.30.15"
+jline = "org.jline:jline-terminal-jansi:3.30.16"
 jansi = "org.fusesource.jansi:jansi:2.4.3"
 ansi4j-core-api = "com.github.PavelKastornyy.ansi4j:ansi4j-core-api:ansi4j-1.1.0"
 ansi4j-core-impl = "com.github.PavelKastornyy.ansi4j:ansi4j-core-impl:ansi4j-1.1.0"
@@ -75,7 +75,7 @@ flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 hikaricp = "com.zaxxer:HikariCP:7.1.0"
 mariadb = "org.mariadb.jdbc:mariadb-java-client:3.5.9"
-sqlite = "org.xerial:sqlite-jdbc:3.53.2.0"
+sqlite = "org.xerial:sqlite-jdbc:3.53.2.1"
 acme4j = "org.shredzone.acme4j:acme4j-client:5.1.0"
 kotlin-bom = "org.jetbrains.kotlin:kotlin-bom:2.4.10"
 classtransform-mixinstranslator = { module = "net.lenni0451.classtransform:mixinstranslator", version.ref = "classtransform" }
