@@ -54,10 +54,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.ResourceLoadStateTracker;
-import net.minecraft.client.User;
+import net.minecraft.client.*;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -346,6 +343,9 @@ public final class BotConnection {
             minecraft.packetProcessor.runningThread = minecraft.gameThread;
             while (minecraft.running && !isDisconnected && !Thread.currentThread().isInterrupted()) {
               minecraft.runTick(true);
+
+              // renderFrame is cancelled in headless mode, so the vanilla frame limiter never runs
+              FramerateLimiter.limitDisplayFPS(minecraft.getFramerateLimitTracker().getFramerateLimit());
             }
           } catch (Throwable t) {
             var conciseConnectionError = conciseConnectionError(t);
