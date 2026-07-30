@@ -125,7 +125,7 @@ jobs:
         run: python -m hatchling build
       - name: Upload npm package
         if: inputs.publish_npm
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: npm-package
           path: .artifacts/npm/*.tgz
@@ -133,7 +133,7 @@ jobs:
           retention-days: 1
       - name: Upload Python package
         if: inputs.publish_pypi
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: python-package
           path: sdk/python/dist/*
@@ -160,7 +160,7 @@ jobs:
       - name: Install current npm
         run: npm install --global npm@latest
       - name: Download npm package
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: npm-package
           path: dist/npm
@@ -182,7 +182,7 @@ jobs:
 
     steps:
       - name: Download Python package
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: python-package
           path: dist/python
