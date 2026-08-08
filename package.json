@@ -1,7 +1,7 @@
 {
   "name": "soulfire-monorepo",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "sdk:generate": "buf generate && node scripts/format-generated-sdks.mjs",
     "sdk:lint-proto": "buf lint",
