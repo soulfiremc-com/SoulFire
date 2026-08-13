@@ -130,10 +130,10 @@ PRs are welcome, too.
 
 ## 🌟 Star History
 
-<a href="https://star-history.com/#soulfiremc-com/SoulFire&Date">
+<a href="https://star-history.dera.page/#soulfiremc-com/SoulFire&type=Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=soulfiremc-com/SoulFire&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=soulfiremc-com/SoulFire&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=soulfiremc-com/SoulFire&type=Date" />
+    <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=soulfiremc-com/SoulFire&type=Date" />
   </picture>
 </a>
