@@ -103,7 +103,7 @@
   },
   "devDependencies": {
     "@effect/platform": "0.97.1",
-    "@types/node": "24.13.3",
+    "@types/node": "26.4.0",
     "effect": "3.22.1",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
