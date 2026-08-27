@@ -109,8 +109,8 @@ jobs:
           npm init --yes
           npm install --ignore-scripts \
             "$sdk_archive" \
-            effect@3.22.0 \
-            @effect/platform@0.97.0
+            effect@3.22.1 \
+            @effect/platform@0.97.1
           node --input-type=module -e '
             import { SoulFire } from "@soulfiremc/sdk/node";
             if (typeof SoulFire.connect !== "function") {
