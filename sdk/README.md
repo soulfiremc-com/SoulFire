@@ -35,8 +35,8 @@ The high-level clients support:
 Install the root Node dependencies and generate both language bindings:
 
 ```bash
-pnpm install
-pnpm sdk:generate
+bun install
+bun run sdk:generate
 ```
 
 Generation uses the checked-in `buf.gen.yaml`. Do not edit files marked as

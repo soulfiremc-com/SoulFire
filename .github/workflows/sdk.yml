@@ -8,9 +8,9 @@ on:
       - "buf.lock"
       - "buf.yaml"
       - "docs/mineflayer-parity.json"
+      - "bun.lock"
+      - "bunfig.toml"
       - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
       - "proto/**"
       - "scripts/format-generated-sdks.mjs"
       - "scripts/validate-mineflayer-parity.mjs"
@@ -23,9 +23,9 @@ on:
       - "buf.lock"
       - "buf.yaml"
       - "docs/mineflayer-parity.json"
+      - "bun.lock"
+      - "bunfig.toml"
       - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
       - "proto/**"
       - "scripts/format-generated-sdks.mjs"
       - "scripts/validate-mineflayer-parity.mjs"
@@ -45,13 +45,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.0"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
-          cache: pnpm
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
@@ -59,22 +60,22 @@ jobs:
           cache: pip
           cache-dependency-path: sdk/python/pyproject.toml
       - name: Install TypeScript dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Generate SDK bindings
-        run: pnpm sdk:generate
+        run: bun run sdk:generate
       - name: Verify generated bindings
         run: git diff --exit-code -- sdk/typescript/src/generated sdk/python/src/soulfire
       - name: Lint Protobuf definitions
-        run: pnpm sdk:lint-proto
+        run: bun run sdk:lint-proto
       - name: Validate Mineflayer parity audit
         run: node scripts/validate-mineflayer-parity.mjs
       - name: Check Protobuf compatibility
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: pnpm exec buf breaking --against ".git#branch=origin/${BASE_REF},subdir=proto/src/main/proto"
+        run: bunx buf breaking --against ".git#branch=origin/${BASE_REF},subdir=proto/src/main/proto"
       - name: Check TypeScript SDK
-        run: pnpm --filter @soulfiremc/sdk check
+        run: bun run --filter @soulfiremc/sdk check
       - name: Import Node.js entry points
         run: |
           node -e 'const sdk = await import("./sdk/typescript/dist/node.js"); if (typeof sdk.SoulFire.connect !== "function") throw new Error("Effect Node.js entry point is invalid")'
@@ -83,7 +84,7 @@ jobs:
         working-directory: sdk/typescript
         run: |
           package_dir="$(mktemp -d)"
-          pnpm pack --pack-destination "$package_dir"
+          bun pm pack --destination "$package_dir"
           package_archive="$(find "$package_dir" -name '*.tgz' -print -quit)"
           tar -tf "$package_archive" | grep -q 'package/dist/index.js'
           tar -tf "$package_archive" | grep -q 'package/dist/browser.js'
@@ -102,7 +103,7 @@ jobs:
         run: |
           package_dir="$(mktemp -d)"
           consumer_dir="$(mktemp -d)"
-          pnpm --dir sdk/typescript pack --pack-destination "$package_dir"
+          (cd sdk/typescript && bun pm pack --destination "$package_dir")
           sdk_archive="$(find "$package_dir" -name 'soulfiremc-sdk-*.tgz' -print -quit)"
           cd "$consumer_dir"
           npm init --yes
@@ -124,7 +125,7 @@ jobs:
       - name: Verify plugin SDK generator
         run: |
           fixture_root="$(mktemp -d)"
-          pnpm exec buf build \
+          bunx buf build \
             --as-file-descriptor-set \
             --path proto/src/main/proto/soulfire/plugin/example/v1/example.proto \
             -o "$fixture_root/example.binpb"
@@ -140,9 +141,12 @@ jobs:
             --language python \
             --package soulfire-example-fixture \
             --output "$fixture_root/python"
-          pnpm --dir "$fixture_root/typescript" add \
-            --save-dev "@soulfiremc/sdk@file:$GITHUB_WORKSPACE/sdk/typescript"
-          pnpm --dir "$fixture_root/typescript" check
+          mkdir -p "$fixture_root/packages"
+          (cd sdk/typescript && bun pm pack --destination "$fixture_root/packages")
+          sdk_archive="$(find "$fixture_root/packages" -name 'soulfiremc-sdk-*.tgz' -print -quit)"
+          bun add --cwd "$fixture_root/typescript" \
+            --dev "@soulfiremc/sdk@file:$sdk_archive"
+          bun run --cwd "$fixture_root/typescript" check
           python -m ruff check "$fixture_root/python"
           python -m ruff format --check "$fixture_root/python"
           python -m pyright -p "$fixture_root/python"
@@ -175,21 +179,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: pnpm
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: "1.4.0"
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Build SDK
-        run: pnpm --filter @soulfiremc/sdk build
+        run: bun run --filter @soulfiremc/sdk build
       - name: Import Bun entry points
         run: |
           bun -e 'const sdk = await import("./sdk/typescript/dist/bun.js"); if (typeof sdk.SoulFire.connect !== "function") throw new Error("Effect Bun entry point is invalid")'
@@ -204,21 +201,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version: "24"
-          cache: pnpm
+          bun-version: "1.4.0"
       - name: Set up Deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: latest
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Build SDK
-        run: pnpm --filter @soulfiremc/sdk build
+        run: bun run --filter @soulfiremc/sdk build
       - name: Check browser entry point
         run: deno check --node-modules-dir=manual sdk/typescript/dist/browser.js
 

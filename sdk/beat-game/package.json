@@ -41,14 +41,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "pnpm clean && tsc -p tsconfig.build.json",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm typecheck:smoke && pnpm check:boundary && pnpm check:browser",
+    "build": "bun run clean && tsc -p tsconfig.build.json",
+    "check": "bun run typecheck && bun run test && bun run build && bun run typecheck:smoke && bun run check:boundary && bun run check:browser",
     "check:boundary": "node scripts/check-public-sdk-boundary.mjs",
     "check:browser": "node scripts/check-browser-bundle.mjs",
     "clean": "node scripts/clean-dist.mjs",
-    "prepack": "pnpm build",
-    "smoke:e2e": "pnpm --filter @soulfiremc/sdk build && pnpm build && pnpm typecheck:smoke && ../../gradlew -p ../.. :dedicated-launcher:uberJar && node --experimental-strip-types smoke/e2e.ts",
-    "smoke:controlled": "SOULFIRE_E2E_CONTROLLED=true pnpm smoke:e2e",
+    "prepack": "bun run build",
+    "smoke:e2e": "bun run --filter @soulfiremc/sdk build && bun run build && bun run typecheck:smoke && ../../gradlew -p ../.. :dedicated-launcher:uberJar && node --experimental-strip-types smoke/e2e.ts",
+    "smoke:controlled": "SOULFIRE_E2E_CONTROLLED=true bun run smoke:e2e",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "typecheck:smoke": "tsc -p tsconfig.smoke.json --noEmit"
@@ -57,7 +57,7 @@
     "@soulfiremc/sdk": "workspace:*"
   },
   "peerDependencies": {
-    "effect": "^3.22.0"
+    "effect": "^3.22.1"
   },
   "devDependencies": {
     "@bufbuild/protobuf": "2.14.0",

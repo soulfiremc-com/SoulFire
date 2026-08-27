@@ -1,9 +1,0 @@
-packages:
-  - sdk/beat-game
-  - sdk/typescript
-
-allowBuilds:
-  "@bufbuild/buf": true
-  "@parcel/watcher": false
-  esbuild: true
-  msgpackr-extract: false

@@ -10,7 +10,7 @@ applications that use Promises and async iterables.
 ## Install
 
 ```bash
-pnpm add @soulfiremc/sdk effect @effect/platform
+bun add @soulfiremc/sdk effect @effect/platform
 ```
 
 The SDK requires a compatible Effect runtime. Use
@@ -498,7 +498,7 @@ operation as an `AsyncIterable`.
 Plugin authors can generate a complete companion package from a running server:
 
 ```bash
-pnpm exec soulfire-sdk generate \
+bunx soulfire-sdk generate \
   --server https://soulfire.example.com \
   --plugin example \
   --language typescript \

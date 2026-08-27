@@ -72,11 +72,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "pnpm clean && tsc -p tsconfig.build.json",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:browser",
+    "build": "bun run clean && tsc -p tsconfig.build.json",
+    "check": "bun run typecheck && bun run test && bun run build && bun run check:browser",
     "check:browser": "node scripts/check-browser-bundle.mjs",
     "clean": "node scripts/clean-dist.mjs",
-    "prepack": "pnpm build",
+    "prepack": "bun run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -98,8 +98,8 @@
     "@bufbuild/buf-win32-x64": "1.72.0"
   },
   "peerDependencies": {
-    "@effect/platform": "^0.97.0",
-    "effect": "^3.22.0"
+    "@effect/platform": "^0.97.1",
+    "effect": "^3.22.1"
   },
   "devDependencies": {
     "@effect/platform": "0.97.1",

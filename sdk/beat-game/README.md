@@ -10,7 +10,7 @@ SoulFire remains the remote Minecraft client. This package owns game policy.
 ## Install
 
 ```bash
-pnpm add @soulfiremc/sdk @soulfiremc/beat-game effect
+bun add @soulfiremc/sdk @soulfiremc/beat-game effect
 ```
 
 ## Run one bot

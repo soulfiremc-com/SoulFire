@@ -1,11 +1,19 @@
 {
   "name": "soulfire-monorepo",
   "private": true,
-  "packageManager": "pnpm@11.24.0",
+  "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "sdk/beat-game",
+    "sdk/typescript"
+  ],
+  "trustedDependencies": [
+    "@bufbuild/buf",
+    "esbuild"
+  ],
   "scripts": {
     "sdk:generate": "buf generate && node scripts/format-generated-sdks.mjs",
     "sdk:lint-proto": "buf lint",
-    "sdk:check": "pnpm sdk:generate && pnpm sdk:lint-proto && pnpm --filter @soulfiremc/sdk check && pnpm --filter @soulfiremc/beat-game check"
+    "sdk:check": "bun run sdk:generate && bun run sdk:lint-proto && bun run --filter @soulfiremc/sdk check"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.72.0",

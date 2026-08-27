@@ -35,7 +35,7 @@ dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
 
   minecraft("com.mojang:minecraft:26.2")
-  implementation("net.fabricmc:fabric-loader:0.19.4")
+  implementation("net.fabricmc:fabric-loader:0.19.3")
 
   val viaFabricPlusNotation = "com.viaversion:viafabricplus:4.6.0"
   implementation(viaFabricPlusNotation) {

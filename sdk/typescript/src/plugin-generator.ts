@@ -493,6 +493,7 @@ async function generateTypeScript(
   const packageJson = {
     name: model.typescriptPackageName,
     version: model.metadata.pluginVersion,
+    packageManager: "bun@1.4.0",
     description: model.metadata.description,
     license: model.metadata.license,
     type: "module",
@@ -517,18 +518,18 @@ async function generateTypeScript(
       check: "tsc -p tsconfig.json --noEmit",
     },
     peerDependencies: {
-      "@effect/platform": "^0.97.0",
+      "@effect/platform": "^0.97.1",
       "@soulfiremc/sdk": `^${SDK_VERSION}`,
-      effect: "^3.22.0",
+      effect: "^3.22.1",
     },
     dependencies: {
-      "@bufbuild/protobuf": "2.13.0",
+      "@bufbuild/protobuf": "2.14.0",
       "@connectrpc/connect": "2.1.2",
     },
     devDependencies: {
-      "@effect/platform": "0.97.0",
+      "@effect/platform": "0.97.1",
       "@soulfiremc/sdk": `^${SDK_VERSION}`,
-      effect: "3.22.0",
+      effect: "3.22.1",
       typescript: "^7.0.0",
     },
   };
@@ -564,8 +565,8 @@ async function generateTypeScript(
     "utf8",
   );
   await writeFile(
-    join(outputDirectory, "pnpm-workspace.yaml"),
-    "packages:\n  - .\n\nallowBuilds:\n  msgpackr-extract: false\n",
+    join(outputDirectory, "bunfig.toml"),
+    '[install]\nlinker = "hoisted"\n',
     "utf8",
   );
   await writeFile(

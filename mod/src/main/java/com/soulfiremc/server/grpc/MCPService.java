@@ -1154,7 +1154,6 @@ public final class MCPService {
     return builder.build();
   }
 
-  @SuppressWarnings("unchecked")
   private static McpServerFeatures.AsyncToolSpecification tool(
     String name,
     String description,
@@ -1162,13 +1161,15 @@ public final class MCPService {
     List<String> required,
     BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest,
       Mono<McpSchema.CallToolResult>> handler) {
+    var inputSchema = Map.<String, Object>of(
+      "type", "object",
+      "properties", properties,
+      "required", required
+    );
     return new McpServerFeatures.AsyncToolSpecification(
-      new McpSchema.Tool(name, null, description, new McpSchema.JsonSchema(
-        "object",
-        (Map<String, Object>) properties,
-        required,
-        null, null, null
-      ), null, null, null),
+      McpSchema.Tool.builder(name, inputSchema)
+        .description(description)
+        .build(),
       handler
     );
   }

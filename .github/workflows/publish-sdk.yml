@@ -43,8 +43,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.0"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -65,17 +67,17 @@ jobs:
           python -c 'import os, pathlib, re; text = pathlib.Path("sdk/python/pyproject.toml").read_text(); match = re.search(r"(?m)^version = \"([^\"]+)\"$", text); version = match.group(1) if match else None; expected = os.environ["RELEASE_VERSION"]; assert version == expected, f"Python SDK version {version} does not match {expected}"'
           python -c 'import os, pathlib, re; text = pathlib.Path("sdk/python/src/soulfire/connection.py").read_text(); match = re.search(r"(?m)^SDK_VERSION: Final = \"([^\"]+)\"$", text); version = match.group(1) if match else None; expected = os.environ["RELEASE_VERSION"]; assert version == expected, f"Python handshake version {version} does not match {expected}"'
       - name: Install TypeScript dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Generate SDK bindings
-        run: pnpm sdk:generate
+        run: bun run sdk:generate
       - name: Verify generated bindings
         run: git diff --exit-code -- sdk/typescript/src/generated sdk/python/src/soulfire
       - name: Lint Protobuf definitions
-        run: pnpm sdk:lint-proto
+        run: bun run sdk:lint-proto
       - name: Validate Mineflayer parity audit
         run: node scripts/validate-mineflayer-parity.mjs
       - name: Check TypeScript SDK
-        run: pnpm --filter @soulfiremc/sdk check
+        run: bun run --filter @soulfiremc/sdk check
       - name: Import Node.js entry points
         run: |
           node -e 'const sdk = await import("./sdk/typescript/dist/node.js"); if (typeof sdk.SoulFire.connect !== "function") throw new Error("Effect Node.js entry point is invalid")'
@@ -84,7 +86,7 @@ jobs:
         working-directory: sdk/typescript
         run: |
           package_dir="$(mktemp -d)"
-          pnpm pack --pack-destination "$package_dir"
+          bun pm pack --destination "$package_dir"
           package_archive="$(find "$package_dir" -name '*.tgz' -print -quit)"
           tar -tf "$package_archive" | grep -q 'package/dist/index.js'
           tar -tf "$package_archive" | grep -q 'package/dist/browser.js'
@@ -112,11 +114,11 @@ jobs:
         working-directory: sdk/typescript
         run: |
           mkdir -p ../../.artifacts/npm
-          pnpm pack --pack-destination ../../.artifacts/npm
+          bun pm pack --destination ../../.artifacts/npm
       - name: Build beat-game npm package
         if: inputs.publish_npm
         working-directory: sdk/beat-game
-        run: pnpm pack --pack-destination ../../.artifacts/npm
+        run: bun pm pack --destination ../../.artifacts/npm
       - name: Build Python package
         if: inputs.publish_pypi
         working-directory: sdk/python
@@ -204,15 +206,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.0"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           package-manager-cache: false
       - name: Install TypeScript dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Publish JSR package
         working-directory: sdk/typescript
         run: npx --yes jsr@0.14.3 publish
