@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: "24"
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
@@ -227,7 +227,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up next Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.15-dev"
           allow-prereleases: true
@@ -247,7 +247,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up free-threaded Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14t"
       - name: Install Python SDK dependencies
