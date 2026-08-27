@@ -53,7 +53,7 @@ public final class SoulFireDedicatedBootstrap extends SoulFireAbstractBootstrap 
 
     if (Boolean.getBoolean("sf.dumpOpenApi")) {
       try {
-        Files.write(SFPathConstants.BASE_DIR.resolve("sf-openapi.json"), soulFire.rpcServer().openApiService().openApiDocument());
+        Files.write(SFPathConstants.baseDirectory().resolve("sf-openapi.json"), soulFire.rpcServer().openApiService().openApiDocument());
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
@@ -86,7 +86,7 @@ public final class SoulFireDedicatedBootstrap extends SoulFireAbstractBootstrap 
           return List.of();
         }
       },
-      SFPathConstants.BASE_DIR
+      SFPathConstants.baseDirectory()
     ).start();
 
     soulFire.shutdownManager().awaitShutdown();

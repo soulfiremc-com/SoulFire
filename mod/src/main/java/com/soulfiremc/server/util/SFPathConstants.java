@@ -20,12 +20,14 @@ package com.soulfiremc.server.util;
 import java.nio.file.Path;
 
 public final class SFPathConstants {
-  public static final Path BASE_DIR = Path.of(System.getProperty("sf.baseDir"));
-
   private SFPathConstants() {}
 
+  public static Path baseDirectory() {
+    return Path.of(System.getProperty("sf.baseDir"));
+  }
+
   public static Path getConfigDirectory() {
-    return SFPathConstants.BASE_DIR.resolve("config");
+    return baseDirectory().resolve("config");
   }
 
   public static Path getMapsDirectory(Path baseDir) {

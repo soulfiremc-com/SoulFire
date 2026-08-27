@@ -146,7 +146,7 @@ public final class SFCommandDefinition implements Callable<Integer> {
       cliManager.shutdownManager(),
       commandManager::execute,
       commandManager::complete,
-      SFPathConstants.BASE_DIR
+      SFPathConstants.baseDirectory()
     ).start();
 
     cliManager.shutdownManager().awaitShutdown();

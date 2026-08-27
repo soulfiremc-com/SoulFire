@@ -45,7 +45,7 @@ public final class DatabaseManager {
   }
 
   private static DatabaseContext forSqlite() {
-    var dbFile = SFPathConstants.BASE_DIR.resolve("soulfire.sqlite");
+    var dbFile = SFPathConstants.baseDirectory().resolve("soulfire.sqlite");
     var jdbcUrl = "jdbc:sqlite:%s".formatted(dbFile);
 
     var hikariConfig = new HikariConfig();

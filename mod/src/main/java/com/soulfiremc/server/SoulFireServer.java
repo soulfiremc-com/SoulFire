@@ -126,7 +126,7 @@ public final class SoulFireServer {
 
     this.shutdownManager = new ShutdownManager(this::shutdownHook);
 
-    this.jwtSecretKey = KeyHelper.getOrCreateJWTSecretKey(SFPathConstants.BASE_DIR.resolve("secret-key.bin"));
+    this.jwtSecretKey = KeyHelper.getOrCreateJWTSecretKey(SFPathConstants.baseDirectory().resolve("secret-key.bin"));
 
     try {
       Files.createDirectories(getObjectStoragePath());
@@ -267,7 +267,7 @@ public final class SoulFireServer {
   }
 
   public Path getObjectStoragePath() {
-    return SFPathConstants.BASE_DIR.resolve("object-storage");
+    return SFPathConstants.baseDirectory().resolve("object-storage");
   }
 
   public Path getScriptCodePath(UUID id) {

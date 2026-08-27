@@ -37,20 +37,15 @@ import java.util.Scanner;
 
 @Slf4j
 public final class AcmeClient {
-  private static final Path TLS_DIR = SFPathConstants.BASE_DIR.resolve("tls");
-  public static final Path USER_KEY_FILE = TLS_DIR.resolve("acme-user.key");
-  public static final Path DOMAIN_KEY_FILE = TLS_DIR.resolve("acme-domain.key");
-  public static final Path DOMAIN_CHAIN_FILE = TLS_DIR.resolve("acme-domain-chain.crt");
-
   // Maximum time to wait until VALID/INVALID is expected
   private static final Duration TIMEOUT = Duration.ofMinutes(30);
 
   public void provisionAcmeCertIfNeeded() {
     if (Boolean.getBoolean("sf.grpc.acme.enabled")) {
       System.setProperty("sf.grpc.tls.enabled", "true");
-      System.setProperty("sf.grpc.tls.key", DOMAIN_KEY_FILE.toString());
+      System.setProperty("sf.grpc.tls.key", domainKeyFile().toString());
       System.clearProperty("sf.grpc.tls.key.password");
-      System.setProperty("sf.grpc.tls.cert", DOMAIN_CHAIN_FILE.toString());
+      System.setProperty("sf.grpc.tls.cert", domainChainFile().toString());
 
       try {
         fetchCertificate();
@@ -61,7 +56,7 @@ public final class AcmeClient {
   }
 
   private void fetchCertificate() throws IOException, AcmeException, InterruptedException {
-    Files.createDirectories(TLS_DIR);
+    Files.createDirectories(tlsDirectory());
 
     // Load the user key file. If there is no key file, create a new one.
     var userKeyPair = loadOrCreateUserKeyPair();
@@ -108,21 +103,22 @@ public final class AcmeClient {
     log.info("Certificate URL: {}", certificate.getLocation());
 
     // Write a combined file containing the certificate and chain.
-    try (var fw = Files.newBufferedWriter(DOMAIN_CHAIN_FILE)) {
+    try (var fw = Files.newBufferedWriter(domainChainFile())) {
       certificate.writeCertificate(fw);
     }
   }
 
   private KeyPair loadOrCreateUserKeyPair() throws IOException {
-    if (Files.exists(USER_KEY_FILE)) {
+    var userKeyFile = userKeyFile();
+    if (Files.exists(userKeyFile)) {
       // If there is a key file, read it
-      try (var fr = Files.newBufferedReader(USER_KEY_FILE)) {
+      try (var fr = Files.newBufferedReader(userKeyFile)) {
         return KeyPairUtils.readKeyPair(fr);
       }
     } else {
       // If there is none, create a new key pair and save it
       var userKeyPair = KeyPairUtils.createKeyPair();
-      try (var fw = Files.newBufferedWriter(USER_KEY_FILE)) {
+      try (var fw = Files.newBufferedWriter(userKeyFile)) {
         KeyPairUtils.writeKeyPair(userKeyPair, fw);
       }
       return userKeyPair;
@@ -130,13 +126,14 @@ public final class AcmeClient {
   }
 
   private KeyPair loadOrCreateDomainKeyPair() throws IOException {
-    if (Files.exists(DOMAIN_KEY_FILE)) {
-      try (var fr = Files.newBufferedReader(DOMAIN_KEY_FILE)) {
+    var domainKeyFile = domainKeyFile();
+    if (Files.exists(domainKeyFile)) {
+      try (var fr = Files.newBufferedReader(domainKeyFile)) {
         return KeyPairUtils.readKeyPair(fr);
       }
     } else {
       var domainKeyPair = KeyPairUtils.createKeyPair(4096);
-      try (var fw = Files.newBufferedWriter(DOMAIN_KEY_FILE)) {
+      try (var fw = Files.newBufferedWriter(domainKeyFile)) {
         KeyPairUtils.writeKeyPair(domainKeyPair, fw);
       }
       return domainKeyPair;
@@ -149,7 +146,7 @@ public final class AcmeClient {
     if (tos.isPresent()) {
       var tosUrl = tos.get();
       var tosHash = AcmeUtils.hexEncode(SFHelpers.md5Hash(tosUrl.toString()));
-      var tosFile = TLS_DIR.resolve("tos-%s.txt".formatted(tosHash));
+      var tosFile = tlsDirectory().resolve("tos-%s.txt".formatted(tosHash));
       if (!Files.exists(tosFile)) {
         scannerPromptYes("You agree to: %s".formatted(tosUrl));
         Files.writeString(tosFile, tosUrl.toString());
@@ -170,6 +167,22 @@ public final class AcmeClient {
     log.info("Logged into account, URL: {}", account.getLocation());
 
     return account;
+  }
+
+  private static Path tlsDirectory() {
+    return SFPathConstants.baseDirectory().resolve("tls");
+  }
+
+  private static Path userKeyFile() {
+    return tlsDirectory().resolve("acme-user.key");
+  }
+
+  private static Path domainKeyFile() {
+    return tlsDirectory().resolve("acme-domain.key");
+  }
+
+  private static Path domainChainFile() {
+    return tlsDirectory().resolve("acme-domain-chain.crt");
   }
 
   private void authorize(Authorization auth) throws AcmeException, InterruptedException {

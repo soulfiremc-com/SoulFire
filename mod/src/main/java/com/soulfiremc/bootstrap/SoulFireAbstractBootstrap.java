@@ -107,7 +107,7 @@ public abstract class SoulFireAbstractBootstrap {
   }
 
   private void injectFileProperties() {
-    var optionsFile = SFPathConstants.BASE_DIR.resolve("soulfire.properties");
+    var optionsFile = SFPathConstants.baseDirectory().resolve("soulfire.properties");
     if (!Files.exists(optionsFile)) {
       return;
     }
