@@ -1,7 +1,7 @@
 {
   "name": "soulfire-monorepo",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "sdk:generate": "buf generate && node scripts/format-generated-sdks.mjs",
     "sdk:lint-proto": "buf lint",
@@ -9,6 +9,6 @@
   },
   "devDependencies": {
     "@bufbuild/buf": "1.72.0",
-    "@bufbuild/protoc-gen-es": "2.13.0"
+    "@bufbuild/protoc-gen-es": "2.14.0"
   }
 }

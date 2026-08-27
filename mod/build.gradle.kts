@@ -35,7 +35,7 @@ dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
 
   minecraft("com.mojang:minecraft:26.2")
-  implementation("net.fabricmc:fabric-loader:0.19.3")
+  implementation("net.fabricmc:fabric-loader:0.19.4")
 
   val viaFabricPlusNotation = "com.viaversion:viafabricplus:4.6.0"
   implementation(viaFabricPlusNotation) {
@@ -86,7 +86,7 @@ dependencies {
 
   api(projects.buildData)
 
-  api("io.github.classgraph:classgraph:4.8.184")
+  api("io.github.classgraph:classgraph:4.8.194")
 
   // For microsoft account authentication
   api(libs.minecraftauth) {
@@ -119,7 +119,7 @@ dependencies {
   api(libs.fastutil)
   api(libs.caffeine)
   api(libs.jetbrains.annotations)
-  api("org.checkerframework:checker-qual:4.2.1")
+  api("org.checkerframework:checker-qual:4.2.2")
   api(libs.immutables.gson)
 
   api(libs.reflect)

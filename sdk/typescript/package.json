@@ -81,10 +81,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.13.0",
+    "@bufbuild/protobuf": "2.14.0",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-web": "2.1.2",
-    "@effect/platform-node": "0.108.0",
+    "@effect/platform-node": "0.108.1",
     "adm-zip": "0.6.0",
     "tar": "7.5.22"
   },
@@ -102,12 +102,12 @@
     "effect": "^3.22.0"
   },
   "devDependencies": {
-    "@effect/platform": "0.97.0",
-    "@types/node": "24.10.1",
-    "effect": "3.22.0",
-    "esbuild": "0.28.1",
+    "@effect/platform": "0.97.1",
+    "@types/node": "24.13.3",
+    "effect": "3.22.1",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "publishConfig": {
     "access": "public"
