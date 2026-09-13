@@ -81,30 +81,30 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.14.0",
-    "@connectrpc/connect": "2.1.2",
-    "@connectrpc/connect-web": "2.1.2",
-    "@effect/platform-node": "0.108.1",
-    "adm-zip": "0.6.0",
+    "@bufbuild/protobuf": "2.15.0",
+    "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-web": "2.2.0",
+    "@effect/platform-node": "0.108.2",
+    "adm-zip": "0.6.1",
     "tar": "7.5.22"
   },
   "optionalDependencies": {
-    "@bufbuild/buf-darwin-arm64": "1.72.0",
-    "@bufbuild/buf-darwin-x64": "1.72.0",
-    "@bufbuild/buf-linux-aarch64": "1.72.0",
-    "@bufbuild/buf-linux-armv7": "1.72.0",
-    "@bufbuild/buf-linux-x64": "1.72.0",
-    "@bufbuild/buf-win32-arm64": "1.72.0",
-    "@bufbuild/buf-win32-x64": "1.72.0"
+    "@bufbuild/buf-darwin-arm64": "1.73.0",
+    "@bufbuild/buf-darwin-x64": "1.73.0",
+    "@bufbuild/buf-linux-aarch64": "1.73.0",
+    "@bufbuild/buf-linux-armv7": "1.73.0",
+    "@bufbuild/buf-linux-x64": "1.73.0",
+    "@bufbuild/buf-win32-arm64": "1.73.0",
+    "@bufbuild/buf-win32-x64": "1.73.0"
   },
   "peerDependencies": {
     "@effect/platform": "^0.97.1",
     "effect": "^3.22.1"
   },
   "devDependencies": {
-    "@effect/platform": "0.97.1",
-    "@types/node": "26.4.0",
-    "effect": "3.22.1",
+    "@effect/platform": "0.97.2",
+    "@types/node": "26.5.1",
+    "effect": "3.22.2",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
