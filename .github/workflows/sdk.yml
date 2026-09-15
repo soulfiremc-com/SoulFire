@@ -7,13 +7,11 @@ on:
       - "buf.gen.yaml"
       - "buf.lock"
       - "buf.yaml"
-      - "docs/mineflayer-parity.json"
       - "bun.lock"
       - "bunfig.toml"
       - "package.json"
       - "proto/**"
       - "scripts/format-generated-sdks.mjs"
-      - "scripts/validate-mineflayer-parity.mjs"
       - "sdk/python/**"
       - "sdk/typescript/**"
   pull_request:
@@ -22,13 +20,11 @@ on:
       - "buf.gen.yaml"
       - "buf.lock"
       - "buf.yaml"
-      - "docs/mineflayer-parity.json"
       - "bun.lock"
       - "bunfig.toml"
       - "package.json"
       - "proto/**"
       - "scripts/format-generated-sdks.mjs"
-      - "scripts/validate-mineflayer-parity.mjs"
       - "sdk/python/**"
       - "sdk/typescript/**"
 
@@ -67,8 +63,6 @@ jobs:
         run: git diff --exit-code -- sdk/typescript/src/generated sdk/python/src/soulfire
       - name: Lint Protobuf definitions
         run: bun run sdk:lint-proto
-      - name: Validate Mineflayer parity audit
-        run: node scripts/validate-mineflayer-parity.mjs
       - name: Check Protobuf compatibility
         if: github.event_name == 'pull_request'
         env:

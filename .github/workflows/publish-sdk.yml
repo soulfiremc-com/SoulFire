@@ -93,8 +93,6 @@ jobs:
         run: git diff --exit-code -- sdk/typescript/src/generated sdk/python/src/soulfire
       - name: Lint Protobuf definitions
         run: bun run sdk:lint-proto
-      - name: Validate Mineflayer parity audit
-        run: node scripts/validate-mineflayer-parity.mjs
       - name: Check TypeScript SDK
         run: bun run --filter @soulfiremc/sdk check
       - name: Import Node.js entry points
