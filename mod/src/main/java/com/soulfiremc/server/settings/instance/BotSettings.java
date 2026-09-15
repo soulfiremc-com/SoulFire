@@ -166,7 +166,7 @@ public final class BotSettings implements SettingsObject {
         Whether to use IO_URING for bot connections. This can improve performance and reduce CPU usage on Linux systems that support it.
         Requires a compatible kernel version and Java version.
         IO_URING won't be used if this option is disabled, your protocol version is bedrock edition or your PC does not support IO_URING.""")
-      .defaultValue(true)
+      .defaultValue(false)
       .build();
 
   private static String formatVersion(ProtocolVersion version) {
