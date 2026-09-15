@@ -18,6 +18,7 @@
 package com.soulfiremc.mod.mixin.headless.rendering;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.soulfiremc.mod.util.TexturePixels;
 import org.lwjgl.system.MemoryUtil;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -66,9 +67,10 @@ public class MixinNativeImage {
   }
 
   private static void copyPixels(BufferedImage source, NativeImage target, NativeImage.Format format) {
+    var pixels = TexturePixels.argb(source);
     for (var y = 0; y < source.getHeight(); y++) {
       for (var x = 0; x < source.getWidth(); x++) {
-        writePixel(target, format, x, y, source.getRGB(x, y));
+        writePixel(target, format, x, y, pixels[y * source.getWidth() + x]);
       }
     }
   }

@@ -628,9 +628,9 @@ public final class InventoryItemIconRenderer {
       vertex.u(),
       vertex.v(),
       (vertex.color() >>> 24) & 0xFF,
-      (vertex.color() >>> 16) & 0xFF,
-      (vertex.color() >>> 8) & 0xFF,
-      vertex.color() & 0xFF
+      ((vertex.color() >>> 16) & 0xFF) * vertex.shade(),
+      ((vertex.color() >>> 8) & 0xFF) * vertex.shade(),
+      (vertex.color() & 0xFF) * vertex.shade()
     );
   }
 

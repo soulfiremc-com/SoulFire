@@ -1296,7 +1296,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
     }
     var effectiveRenderType = renderType != null ? renderType : materialInfo.itemRenderType();
-    color = directionalLightColor(color, captured.normal(), effectiveRenderType, FaceLighting.FRONT);
+    if (guiLighting == null) {
+      color = directionalLightColor(color, captured.normal(), effectiveRenderType, FaceLighting.FRONT);
+    }
     color = modulateColor(color, lightColor(light, materialInfo.lightEmission(), effectiveRenderType));
     var alphaMode = alphaMode(effectiveRenderType, captured.texture(), color, captured.uv());
     var face = RendererAssets.GeometryFace.of(
@@ -1319,6 +1321,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       0.0F,
       alphaCutoutThreshold(effectiveRenderType, alphaMode)
     );
+    if (guiLighting != null) {
+      var shade = directionalLight(captured.normal(), effectiveRenderType, FaceLighting.FRONT);
+      renderQuad = new RenderQuad(renderQuad.v0().withShade(shade), renderQuad.v1().withShade(shade),
+        renderQuad.v2().withShade(shade), renderQuad.v3().withShade(shade), renderQuad.material());
+    }
     addRenderTypeQuad(withRenderState(withOverlay(renderQuad, effectiveRenderType, overlay), effectiveRenderType), effectiveRenderType);
   }
 
@@ -1644,7 +1651,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private RenderVertex withOverlay(RenderVertex vertex, int overlayColor) {
-    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor);
+    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor, vertex.shade());
   }
 
   private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {
@@ -1744,21 +1751,31 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private int directionalLightColor(int color, Vector3f normal, @Nullable RenderType renderType, FaceLighting faceLighting) {
-    if (!usesDirectionalLighting(renderType) || normal.lengthSquared() <= 1.0E-8F) {
-      return color;
-    }
+    var light = directionalLight(normal, renderType, faceLighting);
+    var r = Math.clamp(Math.round(((color >>> 16) & 0xFF) * light), 0, 255);
+    var g = Math.clamp(Math.round(((color >>> 8) & 0xFF) * light), 0, 255);
+    var b = Math.clamp(Math.round((color & 0xFF) * light), 0, 255);
+    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+  }
 
-    var unitNormal = new Vector3f(normal).normalize();
+  private float directionalLight(Vector3f normal, @Nullable RenderType renderType, FaceLighting faceLighting) {
+    if (!usesDirectionalLighting(renderType) || normal.lengthSquared() <= 1.0E-8F) {
+      return 1.0F;
+    }
+    // Vanilla submits normals as signed normalized bytes; the shader does not normalize them again.
+    var unitNormal = guiLighting != null
+      ? new Vector3f(packedNormalComponent(normal.x), packedNormalComponent(normal.y), packedNormalComponent(normal.z))
+      : new Vector3f(normal).normalize();
     if (faceLighting == FaceLighting.BACK) {
       unitNormal.negate();
     }
     var light0 = Math.max(0.0F, levelLight0().dot(unitNormal));
     var light1 = Math.max(0.0F, levelLight1().dot(unitNormal));
-    var light = Math.min(1.0F, (light0 + light1) * 0.6F + 0.4F);
-    var r = Math.clamp(Math.round(((color >>> 16) & 0xFF) * light), 0, 255);
-    var g = Math.clamp(Math.round(((color >>> 8) & 0xFF) * light), 0, 255);
-    var b = Math.clamp(Math.round((color & 0xFF) * light), 0, 255);
-    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+    return Math.min(1.0F, (light0 + light1) * 0.6F + 0.4F);
+  }
+
+  private static float packedNormalComponent(float component) {
+    return (int) (Math.clamp(component, -1.0F, 1.0F) * 127.0F) / 127.0F;
   }
 
   private Vector3f levelLight0() {
@@ -2402,7 +2419,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       FaceLighting faceLighting
     ) {
       var shadingRenderType = shadingRenderType();
-      var shadedColor = directionalLightColor(color, normal, shadingRenderType, faceLighting);
+      var shadedColor = guiLighting == null ? directionalLightColor(color, normal, shadingRenderType, faceLighting) : color;
       var shadedOverlayColor = applyOverlay ? overlayColor : RenderVertex.NO_OVERLAY_COLOR;
       if (materialOverride == null) {
         var lightColor = lightColor(light, 0, shadingRenderType);
@@ -2418,7 +2435,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         u,
         v,
         shadedColor,
-        shadedOverlayColor
+        shadedOverlayColor,
+        guiLighting != null ? directionalLight(normal, shadingRenderType, faceLighting) : 1.0F
       );
     }
 

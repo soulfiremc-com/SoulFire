@@ -309,6 +309,23 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void guiLightingUsesPackedNormalsWithoutRenormalizing() throws Exception {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var context = new RenderContext(null, null, false, camera, null, 64, 4096, 0, 256, 0, null, null);
+    var collector = new VanillaSubmitCollector(context, new GuiLighting(new Vector3f(1, 0, 0), new Vector3f()));
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{-1}, null);
+    var consumer = newTextConsumer(collector, texture, RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test")));
+    addEntityVertex(consumer, 0, 0, 0, 0, 0, 0.6F, 0.8F, 0);
+    addEntityVertex(consumer, 0, 1, 0, 0, 1, 0.6F, 0.8F, 0);
+    addEntityVertex(consumer, 1, 1, 0, 1, 1, 0.6F, 0.8F, 0);
+    addEntityVertex(consumer, 1, 0, 0, 1, 0, 0.6F, 0.8F, 0);
+    flush(consumer);
+    var vertex = collector.buildScene().opaque()[0].v0();
+    assertEquals(0xFFFFFFFF, vertex.color());
+    assertEquals(0.7590551F, vertex.shade(), 0.0000001F);
+  }
+
+  @Test
   void entityBackFacesUseOppositePerFaceLighting() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);

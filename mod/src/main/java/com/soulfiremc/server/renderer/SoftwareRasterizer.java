@@ -241,7 +241,9 @@ final class SoftwareRasterizer {
           }
         }
 
-        var color = modulate(modulate(sampled, vertexColor), material.color());
+        var color = frontend == RasterFrontend.GUI_ITEM
+          ? modulateGuiItem(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
+          : modulate(modulate(sampled, vertexColor), material.color());
         if (frontend == RasterFrontend.WORLD) {
           color = applyOverlay(
             color,
@@ -562,6 +564,20 @@ final class SoftwareRasterizer {
 
   private static int colorChannel(float value) {
     return Math.clamp(Math.round(value), 0, 255);
+  }
+
+  private static int modulateGuiItem(int sample, int tint, float w0, float w1, float w2, float inverseW,
+                                      ProjectedVertex v0, ProjectedVertex v1, ProjectedVertex v2) {
+    // The shader multiplies interpolated lighting and texture channels before UNORM framebuffer conversion.
+    var a = modulateChannel(sample >>> 24, tint >>> 24, (w0 * v0.aOverW() + w1 * v1.aOverW() + w2 * v2.aOverW()) / inverseW);
+    var r = modulateChannel((sample >>> 16) & 255, (tint >>> 16) & 255, (w0 * v0.rOverW() + w1 * v1.rOverW() + w2 * v2.rOverW()) / inverseW);
+    var g = modulateChannel((sample >>> 8) & 255, (tint >>> 8) & 255, (w0 * v0.gOverW() + w1 * v1.gOverW() + w2 * v2.gOverW()) / inverseW);
+    var b = modulateChannel(sample & 255, tint & 255, (w0 * v0.bOverW() + w1 * v1.bOverW() + w2 * v2.bOverW()) / inverseW);
+    return (a << 24) | (r << 16) | (g << 8) | b;
+  }
+
+  private static int modulateChannel(int sample, int tint, float vertex) {
+    return colorChannel(sample * (tint / 255.0F) * (vertex / 255.0F));
   }
 
   private static int modulate(int sample, int multiplier) {

@@ -293,7 +293,8 @@ val lavapipeTest = sourceSets.create("lavapipeTest") {
   compileClasspath += sourceSets.main.get().output + configurations.compileClasspath.get()
   runtimeClasspath += sourceSets.main.get().output + configurations.runtimeClasspath.get()
 }
-val lavapipeOutput = layout.buildDirectory.dir("lavapipe-test/output")
+val lavapipeScene = providers.gradleProperty("lavapipeScene").orElse("items")
+val lavapipeOutput = layout.buildDirectory.dir(lavapipeScene.map { "lavapipe-test/output/$it" })
 val lavapipeRun = layout.buildDirectory.dir("lavapipe-test/run")
 val lavapipeIcd = providers.gradleProperty("lavapipeIcd")
   .orElse("/usr/share/vulkan/icd.d/lvp_icd.x86_64.json")
@@ -305,6 +306,7 @@ loom {
       sourceSet.set(lavapipeTest.name)
       runDirectory.set(lavapipeRun)
       systemProperties.put("fabric.debug.disableModIds", "soulfire,viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock,spark")
+      systemProperties.put("sf.lavapipe.scene", lavapipeScene)
       systemProperties.put("sf.lavapipe.output", lavapipeOutput.map { it.asFile.absolutePath })
       jvmArguments.addAll("--enable-native-access=ALL-UNNAMED", "-Xmx2G")
       programArguments.addAll("--graphicsBackend", "VULKAN", "--width", "854", "--height", "480", "--username", "LavapipeTest")
@@ -325,10 +327,12 @@ tasks.named("runLavapipeTest") {
   val output = lavapipeOutput.get().asFile
   val run = lavapipeRun.get().asFile
   val icd = lavapipeIcd.get()
+  val scene = lavapipeScene.get()
   doFirst {
+    require(scene in listOf("items", "inventory")) { "Unknown scene: $scene" }
     require(File(icd).isFile) { "Lavapipe ICD not found: $icd. Set -PlavapipeIcd=/path/to/lvp_icd.json" }
     output.mkdirs()
-    listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt").forEach {
+    listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt", "scene.json", "software-trace.json").forEach {
       output.resolve(it).delete()
     }
     run.mkdirs()
@@ -341,6 +345,8 @@ tasks.named("runLavapipeTest") {
       maxFps:30
       enableVsync:false
       fullscreen:false
+      bobView:false
+      fovEffectScale:0.0
       tutorialStep:none
       soundCategory_master:0.0
     """.trimIndent() + "\n")

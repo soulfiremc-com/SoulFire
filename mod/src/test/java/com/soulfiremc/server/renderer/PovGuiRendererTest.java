@@ -137,6 +137,20 @@ class PovGuiRendererTest {
   }
 
   @Test
+  void guiLightingRetainsPrecisionUntilTextureMultiplication() {
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFF7F7F7F}, null);
+    var material = RenderMaterial.create(texture, RendererAssets.AlphaMode.OPAQUE, -1, true, 0);
+    var scene = SceneData.builder();
+    scene.add(new RenderQuad(
+      new RenderVertex(0, 0, 0, 0, 0, -1).withShade(0.5F),
+      new RenderVertex(8, 0, 0, 1, 0, -1).withShade(0.5F),
+      new RenderVertex(8, 8, 0, 1, 1, -1).withShade(0.5F),
+      new RenderVertex(0, 8, 0, 0, 1, -1).withShade(0.5F), material));
+    var image = GuiPictureRenderer.rasterize(scene.build(), 8, 8, new Matrix4f(), 0);
+    assertEquals(0xFF404040, image.getRGB(2, 2));
+  }
+
+  @Test
   void previewProjectsOrthographicallyAndOccludesFarGeometry() {
     var scene = SceneData.builder();
     scene.add(quad(0xFF00FF00, -100));

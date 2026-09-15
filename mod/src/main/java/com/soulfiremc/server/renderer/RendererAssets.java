@@ -25,6 +25,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.math.Quadrant;
+import com.soulfiremc.mod.util.TexturePixels;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -248,9 +249,7 @@ public final class RendererAssets {
         throw new IOException("Invalid color map image: " + location);
       }
 
-      var pixels = new int[image.getWidth() * image.getHeight()];
-      image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
-      return pixels;
+      return TexturePixels.argb(image);
     }
   }
 
@@ -1204,10 +1203,8 @@ public final class RendererAssets {
 
       var width = image.getWidth();
       var height = image.getHeight();
-      var pixels = image.getRGB(0, 0, width, height, null, 0, width);
-      var textureImage = fromArgb(width, height, pixels, metadata);
-      textureImage.bufferedImage = image;
-      return textureImage;
+      var pixels = TexturePixels.argb(image);
+      return fromArgb(width, height, pixels, metadata);
     }
 
     public static TextureImage fromArgb(int width, int height, int[] pixels, @Nullable JsonObject metadata) {

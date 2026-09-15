@@ -351,6 +351,7 @@ public final class RendererDebugDump {
       json.addProperty("v", vertex.v());
       json.addProperty("color", hexArgb(vertex.color()));
       json.addProperty("overlayColor", hexArgb(vertex.overlayColor()));
+      json.addProperty("shade", vertex.shade());
       json.addProperty("sampleArgb", hexArgb(material.texture().sample(vertex.u(), vertex.v(), ctx.animationTick())));
       return json;
     }

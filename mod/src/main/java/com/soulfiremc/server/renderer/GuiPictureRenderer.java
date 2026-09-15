@@ -118,6 +118,6 @@ final class GuiPictureRenderer {
   private static ProjectedVertex project(RenderVertex vertex, Matrix4f transform, float depthBias) {
     var position = transform.transformPosition(vertex.x(), vertex.y(), vertex.z(), new Vector3f());
     return new ProjectedVertex(position.x(), position.y(), (1000.0F - position.z() + depthBias) / 2000.0F, 1, vertex.u(), vertex.v(),
-      (vertex.color() >>> 24) & 255, (vertex.color() >>> 16) & 255, (vertex.color() >>> 8) & 255, vertex.color() & 255);
+      (vertex.color() >>> 24) & 255, ((vertex.color() >>> 16) & 255) * vertex.shade(), ((vertex.color() >>> 8) & 255) * vertex.shade(), (vertex.color() & 255) * vertex.shade());
   }
 }

@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParser;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -44,6 +46,8 @@ import java.util.Locale;
 public final class LavapipeComparison {
   private static final long START = System.nanoTime();
   private static final Path OUTPUT = Path.of(System.getProperty("sf.lavapipe.output"));
+  private static final boolean INVENTORY = System.getProperty("sf.lavapipe.scene", "items").equals("inventory");
+  private static boolean prepared;
   private static int frames;
   private static boolean capturing;
   private static boolean finished;
@@ -61,7 +65,7 @@ public final class LavapipeComparison {
     if (minecraft.gui.overlay() != null || minecraft.level == null || minecraft.player == null) {
       return;
     }
-    if (!(minecraft.gui.screen() instanceof ComparisonScreen)) {
+    if (!prepared) {
       var info = RenderSystem.getDevice().getDeviceInfo();
       if (!info.backendName().toLowerCase(Locale.ROOT).contains("vulkan")
         || !info.driverInfo().toLowerCase(Locale.ROOT).contains("llvmpipe")) {
@@ -69,10 +73,16 @@ public final class LavapipeComparison {
       }
       minecraft.options.guiScale().set(2);
       minecraft.options.pauseOnLostFocus = false;
-      minecraft.gui.setScreen(new ComparisonScreen());
+      if (INVENTORY) {
+        InventoryComparisonScene.prepare(minecraft);
+      } else {
+        minecraft.gui.setScreen(new ComparisonScreen());
+      }
+      prepared = true;
       return;
     }
-    if (++frames < 8 || capturing) {
+    minecraft.gui.toastManager().clear();
+    if (++frames < (INVENTORY ? 60 : 8) || capturing) {
       return;
     }
     capturing = true;
@@ -98,6 +108,9 @@ public final class LavapipeComparison {
   }
 
   private static BufferedImage renderSoftware(Minecraft minecraft, int width, int height) {
+    if (INVENTORY) {
+      return InventoryComparisonScene.renderSoftware(minecraft, width, height, OUTPUT);
+    }
     var state = new GuiRenderState();
     ComparisonScreen.draw(new GuiGraphicsExtractor(minecraft, state, 0, 0));
     var camera = new Camera(Vec3.ZERO, 0, 0, width, height, 70, 16);
@@ -120,6 +133,11 @@ public final class LavapipeComparison {
     var changed = 0;
     var significant = 0;
     var maximum = 0;
+    var inventoryErrors = new DifferenceStats();
+    var outsideErrors = new DifferenceStats();
+    var scale = Minecraft.getInstance().getWindow().getGuiScale();
+    var inventoryX = (Minecraft.getInstance().getWindow().getGuiScaledWidth() - 176) / 2 * scale;
+    var inventoryY = (Minecraft.getInstance().getWindow().getGuiScaledHeight() - 166) / 2 * scale;
     for (var y = 0; y < height; y++) {
       for (var x = 0; x < width; x++) {
         var a = reference.getRGB(x, y);
@@ -140,6 +158,11 @@ public final class LavapipeComparison {
           significant++;
         }
         maximum = Math.max(maximum, largest);
+        if (INVENTORY) {
+          var inside = x >= inventoryX && x < inventoryX + 176 * scale
+            && y >= inventoryY && y < inventoryY + 166 * scale;
+          (inside ? inventoryErrors : outsideErrors).add(a, b);
+        }
         diff.setRGB(x, y, color);
         comparison.setRGB(x, y, a);
         comparison.setRGB(x + width, y, b);
@@ -155,8 +178,40 @@ public final class LavapipeComparison {
       {"width": %d, "height": %d, "changedPixels": %d, "pixelsAboveTwo": %d,
        "maxChannelError": %d, "meanAbsoluteChannelError": %.6f, "diffAmplification": 8}
       """, width, height, changed, significant, maximum, absoluteError / (width * (double) height * 3));
+    if (INVENTORY) {
+      var json = JsonParser.parseString(report).getAsJsonObject();
+      var gson = new GsonBuilder().setPrettyPrinting().create();
+      json.add("inventory", gson.toJsonTree(inventoryErrors));
+      json.add("outsideInventory", gson.toJsonTree(outsideErrors));
+      report = gson.toJson(json);
+    }
     Files.writeString(OUTPUT.resolve("metrics.json"), report);
     System.out.println("Lavapipe comparison written to " + OUTPUT + "\n" + report);
+  }
+
+  private static final class DifferenceStats {
+    private int pixels;
+    private int changedPixels;
+    private int pixelsAboveTwo;
+    private int maxChannelError;
+    private long absoluteChannelError;
+
+    private void add(int reference, int software) {
+      pixels++;
+      var maximum = 0;
+      for (var shift : new int[]{16, 8, 0}) {
+        var error = Math.abs(((reference >>> shift) & 255) - ((software >>> shift) & 255));
+        absoluteChannelError += error;
+        maximum = Math.max(maximum, error);
+      }
+      if (maximum > 0) {
+        changedPixels++;
+      }
+      if (maximum > 2) {
+        pixelsAboveTwo++;
+      }
+      maxChannelError = Math.max(maxChannelError, maximum);
+    }
   }
 
   private static final class ComparisonScreen extends Screen {
