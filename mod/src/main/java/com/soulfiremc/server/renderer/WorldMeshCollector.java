@@ -20,6 +20,7 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.vertex.QuadInstance;
 import lombok.experimental.UtilityClass;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.geom.builders.UVPair;
 import net.minecraft.client.renderer.block.BlockModelLighter;
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
@@ -195,8 +196,10 @@ public class WorldMeshCollector {
 
     var materialInfo = quad.materialInfo();
     var sprite = materialInfo.sprite();
+    var atlas = RendererAssets.instance().renderTexture(sprite.atlasLocation());
     var texture = RendererAssets.instance().texture(sprite.contents().name())
-      .withTerrainFiltering(sprite.contents().byMipLevel);
+      .withTerrainFiltering(sprite.contents().byMipLevel, atlas.width(), atlas.height(),
+        Math.round(sprite.getU0() * atlas.width()), Math.round(sprite.getV0() * atlas.height()));
     var alphaMode = RendererAssets.alphaModeForVanillaLayer(layer);
     var material = RenderMaterial
       .create(texture, alphaMode, 0xFFFFFFFF, false, 0.0F, RenderMaterial.defaultAlphaCutoutThreshold(alphaMode))
@@ -214,8 +217,8 @@ public class WorldMeshCollector {
         position.x() + x,
         position.y() + y,
         position.z() + z,
-        BakedQuadUv.localU(sprite, packedUv),
-        BakedQuadUv.localV(sprite, packedUv),
+        UVPair.unpackU(packedUv),
+        UVPair.unpackV(packedUv),
         color
       ).withLightColor(VanillaLightmap.color(ctx, instance.getLightCoords(i), materialInfo.lightEmission()));
     }

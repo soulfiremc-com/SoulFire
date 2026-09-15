@@ -38,12 +38,16 @@ public final class RasterPipeline {
   }
 
   public void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick) {
+    renderFirstPersonOverlay(camera, sceneData, buffers, animationTick, RasterFogState.DISABLED);
+  }
+
+  void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, RasterFogState fogState) {
     if (sceneData.totalQuadCount() == 0) {
       return;
     }
 
     buffers.clearDepth();
-    renderScene(camera, sceneData, buffers, animationTick, RasterFogState.DISABLED);
+    renderScene(camera, sceneData, buffers, animationTick, fogState);
   }
 
   void renderScene(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, RasterFogState fogState) {
@@ -154,7 +158,7 @@ public final class RasterPipeline {
 
     var sortDepth = sortDepth(camera, quad);
     emitClippedTriangle(camera, viewVertices[0], viewVertices[1], viewVertices[2], material, sortDepth, out);
-    emitClippedTriangle(camera, viewVertices[0], viewVertices[2], viewVertices[3], material, sortDepth, out);
+    emitClippedTriangle(camera, viewVertices[2], viewVertices[3], viewVertices[0], material, sortDepth, out);
   }
 
   private void emitClippedTriangle(Camera camera, ClipVertex v0, ClipVertex v1, ClipVertex v2,
@@ -165,7 +169,7 @@ public final class RasterPipeline {
     }
     var projected = new ProjectedVertex[clipped.length];
     for (var i = 0; i < clipped.length; i++) {
-      projected[i] = projectVertex(camera, clipped[i]);
+      projected[i] = projectVertex(camera, clipped[i], clipped[i] != v0 && clipped[i] != v1 && clipped[i] != v2);
       if (!isFinite(projected[i])) {
         return;
       }
@@ -218,13 +222,14 @@ public final class RasterPipeline {
       var currentInside = currentDistance >= 0.0F;
       var nextInside = nextDistance >= 0.0F;
 
-      if (currentInside && nextInside) {
-        output.add(next);
-      } else if (currentInside != nextInside) {
-        var t = currentDistance / (currentDistance - nextDistance);
-        output.add(interpolate(current, next, t));
-        if (nextInside) {
-          output.add(next);
+      if (currentInside) {
+        output.add(current);
+      }
+      if (currentInside != nextInside) {
+        if (Math.abs(currentDistance) < Math.abs(nextDistance)) {
+          output.add(interpolate(current, next, currentDistance / (currentDistance - nextDistance)));
+        } else {
+          output.add(interpolate(next, current, nextDistance / (nextDistance - currentDistance)));
         }
       }
     }
@@ -267,8 +272,8 @@ public final class RasterPipeline {
     var relativeX = (float) (vertex.x() - camera.eyeX());
     var relativeY = (float) (vertex.y() - camera.eyeY());
     var relativeZ = (float) (vertex.z() - camera.eyeZ());
-    var sphericalFogDistance = (float) Math.sqrt(relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ);
-    var cylindricalFogDistance = Math.max((float) Math.sqrt(relativeX * relativeX + relativeZ * relativeZ), Math.abs(relativeY));
+    var sphericalFogDistance = (float) Math.sqrt(Math.fma(relativeX, relativeX, Math.fma(relativeY, relativeY, relativeZ * relativeZ)));
+    var cylindricalFogDistance = Math.max((float) Math.sqrt(Math.fma(relativeX, relativeX, relativeZ * relativeZ)), Math.abs(relativeY));
     var position = new Vector4f(
       relativeX,
       relativeY,
@@ -306,12 +311,13 @@ public final class RasterPipeline {
     );
   }
 
-  private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex) {
+  private ProjectedVertex projectVertex(Camera camera, ClipVertex vertex, boolean clipped) {
     var inverseW = 1.0F / vertex.w();
     var ndcX = vertex.x() * inverseW;
     var ndcY = vertex.y() * inverseW;
-    var screenX = Math.fma(ndcX, camera.width() * 0.5F, camera.width() * 0.5F);
-    var screenY = Math.fma(-ndcY, camera.height() * 0.5F, camera.height() * 0.5F);
+    var screenX = clipped ? ndcX * (camera.width() * 0.5F) + camera.width() * 0.5F : Math.fma(ndcX, camera.width() * 0.5F, camera.width() * 0.5F);
+    var windowY = clipped ? ndcY * (camera.height() * 0.5F) + camera.height() * 0.5F : Math.fma(ndcY, camera.height() * 0.5F, camera.height() * 0.5F);
+    var screenY = camera.height() - windowY;
     // Keep depth precision through projection instead of rounding clip Z before the divide.
     var projection = camera.projectionMatrix();
     var depth = Math.clamp((-projection.m22() + projection.m32() / (double) vertex.w()) * 0.5 + 0.5, 0.0, 1.0);
@@ -331,7 +337,8 @@ public final class RasterPipeline {
       vertex.overlayA() * inverseW,
       vertex.overlayR() * inverseW,
       vertex.overlayG() * inverseW,
-      vertex.overlayB() * inverseW
+      vertex.overlayB() * inverseW,
+      windowY
     );
   }
 
@@ -381,12 +388,12 @@ public final class RasterPipeline {
   }
 
   private enum ClipPlane {
-    NEAR,
-    FAR,
-    LEFT,
     RIGHT,
+    LEFT,
     TOP,
-    BOTTOM
+    BOTTOM,
+    FAR,
+    NEAR
   }
 
   private void recordTriangleCount(RasterPassKind passKind, int count) {

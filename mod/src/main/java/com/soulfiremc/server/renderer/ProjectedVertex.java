@@ -34,7 +34,8 @@ public record ProjectedVertex(
   float overlayAOverW,
   float overlayROverW,
   float overlayGOverW,
-  float overlayBOverW
+  float overlayBOverW,
+  float interpolationY
 ) {
   public ProjectedVertex(
     float x,
@@ -64,7 +65,8 @@ public record ProjectedVertex(
       255.0F * inverseW,
       255.0F * inverseW,
       255.0F * inverseW,
-      255.0F * inverseW
+      255.0F * inverseW,
+      y
     );
   }
 }

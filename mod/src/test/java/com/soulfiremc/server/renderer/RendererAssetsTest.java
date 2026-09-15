@@ -39,11 +39,12 @@ class RendererAssetsTest {
       base.fillRect(0, 0, 2, 2, 0xFFFF0000);
       mip.setPixel(0, 0, 0xFF0000FF);
       var texture = RendererAssets.TextureImage.fromArgb(2, 2,
-        new int[]{-1, -1, -1, -1}, null).withTerrainFiltering(new NativeImage[]{base, mip});
+        new int[]{-1, -1, -1, -1}, null).withTerrainFiltering(new NativeImage[]{base, mip}, 2, 2, 0, 0);
 
       assertEquals(0xFFFF0000, texture.sampleTerrain(0.25F, 0.25F, 0, 0.01F, 0, 0, 0.01F));
       assertEquals(0xFF0000FF, texture.sampleTerrain(0.25F, 0.25F, 0, 1, 0, 0, 1));
-      assertEquals(0xFF6A0095, texture.sampleTerrain(0.25F, 0.25F, 0, 0.75F, 0, 0, 0));
+      // The mip weight truncates to eight fractional bits before channel interpolation.
+      assertEquals(0xFF6B0094, texture.sampleTerrain(0.25F, 0.25F, 0, 0.75F, 0, 0, 0));
     }
   }
 

@@ -170,6 +170,17 @@ final class SoftwareRasterizer {
       return;
     }
 
+    var planes = frontend == RasterFrontend.WORLD ? new AttributePlane[]{
+      AttributePlane.of(v0, v1, v2, v0.inverseW(), v1.inverseW(), v2.inverseW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.uOverW(), v1.uOverW(), v2.uOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.vOverW(), v1.vOverW(), v2.vOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.aOverW(), v1.aOverW(), v2.aOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.rOverW(), v1.rOverW(), v2.rOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.gOverW(), v1.gOverW(), v2.gOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.bOverW(), v1.bOverW(), v2.bOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.sphericalFogDistanceOverW(), v1.sphericalFogDistanceOverW(), v2.sphericalFogDistanceOverW(), viewport.height()),
+      AttributePlane.of(v0, v1, v2, v0.cylindricalFogDistanceOverW(), v1.cylindricalFogDistanceOverW(), v2.cylindricalFogDistanceOverW(), viewport.height())
+    } : null;
     var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, material) : 0.0F;
     var depthFogProjection = depthFogProjection(viewport, material);
     // GPU raster coverage uses fixed-point subpixel coordinates; interpolation retains the original plane.
@@ -225,13 +236,13 @@ final class SoftwareRasterizer {
           continue;
         }
 
-        var inverseW = Math.fma(normalizedW1, v1.inverseW() - v0.inverseW(), Math.fma(normalizedW2, v2.inverseW() - v0.inverseW(), v0.inverseW()));
+        var inverseW = planes != null ? planes[0].at(x, y) : Math.fma(normalizedW1, v1.inverseW() - v0.inverseW(), Math.fma(normalizedW2, v2.inverseW() - v0.inverseW(), v0.inverseW()));
         if (!Float.isFinite(inverseW) || Math.abs(inverseW) < 1.0E-8F) {
           continue;
         }
 
-        var u = Math.fma(normalizedW1, v1.uOverW() - v0.uOverW(), Math.fma(normalizedW2, v2.uOverW() - v0.uOverW(), v0.uOverW())) / inverseW;
-        var v = Math.fma(normalizedW1, v1.vOverW() - v0.vOverW(), Math.fma(normalizedW2, v2.vOverW() - v0.vOverW(), v0.vOverW())) / inverseW;
+        var u = planes != null ? planes[1].at(x, y) * (1.0F / inverseW) : Math.fma(normalizedW1, v1.uOverW() - v0.uOverW(), Math.fma(normalizedW2, v2.uOverW() - v0.uOverW(), v0.uOverW())) / inverseW;
+        var v = planes != null ? planes[2].at(x, y) * (1.0F / inverseW) : Math.fma(normalizedW1, v1.vOverW() - v0.vOverW(), Math.fma(normalizedW2, v2.vOverW() - v0.vOverW(), v0.vOverW())) / inverseW;
         if (!Float.isFinite(u) || !Float.isFinite(v)) {
           continue;
         }
@@ -240,18 +251,14 @@ final class SoftwareRasterizer {
         var sampleV = frontend == RasterFrontend.WORLD ? material.uvTransform().v(u, v, animationTick) : v;
         int sampled;
         if (frontend == RasterFrontend.WORLD && material.texture().usesTerrainFiltering()) {
-          var w0Dx = (v2.y() - v1.y()) / area;
-          var w1Dx = (v0.y() - v2.y()) / area;
-          var w2Dx = (v1.y() - v0.y()) / area;
-          var w0Dy = (v1.x() - v2.x()) / area;
-          var w1Dy = (v2.x() - v0.x()) / area;
-          var w2Dy = (v0.x() - v1.x()) / area;
-          var qDx = w0Dx * v0.inverseW() + w1Dx * v1.inverseW() + w2Dx * v2.inverseW();
-          var qDy = w0Dy * v0.inverseW() + w1Dy * v1.inverseW() + w2Dy * v2.inverseW();
-          var duDx = (w0Dx * v0.uOverW() + w1Dx * v1.uOverW() + w2Dx * v2.uOverW() - u * qDx) / inverseW;
-          var duDy = (w0Dy * v0.uOverW() + w1Dy * v1.uOverW() + w2Dy * v2.uOverW() - u * qDy) / inverseW;
-          var dvDx = (w0Dx * v0.vOverW() + w1Dx * v1.vOverW() + w2Dx * v2.vOverW() - v * qDx) / inverseW;
-          var dvDy = (w0Dy * v0.vOverW() + w1Dy * v1.vOverW() + w2Dy * v2.vOverW() - v * qDy) / inverseW;
+          var leftW = 1.0F / planes[0].at(x & ~1, y);
+          var rightW = 1.0F / planes[0].at(x | 1, y);
+          var topW = 1.0F / planes[0].at(x, y & ~1);
+          var bottomW = 1.0F / planes[0].at(x, y | 1);
+          var duDx = planes[1].at(x | 1, y) * rightW - planes[1].at(x & ~1, y) * leftW;
+          var duDy = planes[1].at(x, y & ~1) * topW - planes[1].at(x, y | 1) * bottomW;
+          var dvDx = planes[2].at(x | 1, y) * rightW - planes[2].at(x & ~1, y) * leftW;
+          var dvDy = planes[2].at(x, y & ~1) * topW - planes[2].at(x, y | 1) * bottomW;
           sampled = material.texture().sampleTerrain(sampleU, sampleV, animationTick, duDx, duDy, dvDx, dvDy);
         } else {
           sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
@@ -267,7 +274,11 @@ final class SoftwareRasterizer {
             continue;
           }
         }
-        var color = modulateFragment(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, dissolveMask != null, frontend == RasterFrontend.WORLD);
+        var color = planes != null ? new FragmentColor(
+          modulateChannel((sampled >>> 16) & 255, (material.color() >>> 16) & 255, planes[4].at(x, y) * (1.0F / inverseW)),
+          modulateChannel((sampled >>> 8) & 255, (material.color() >>> 8) & 255, planes[5].at(x, y) * (1.0F / inverseW)),
+          modulateChannel(sampled & 255, material.color() & 255, planes[6].at(x, y) * (1.0F / inverseW)),
+          modulateChannel(sampled >>> 24, material.color() >>> 24, dissolveMask != null ? 1.0F : planes[3].at(x, y) * (1.0F / inverseW))) : modulateFragment(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, dissolveMask != null, frontend == RasterFrontend.WORLD);
         if (frontend == RasterFrontend.WORLD) {
           color = applyOverlay(
             color,
@@ -292,8 +303,8 @@ final class SoftwareRasterizer {
           } else {
             color = applyFog(
               color,
-              interpolatedFogDistance(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, true),
-              interpolatedFogDistance(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, false),
+              planes[7].at(x, y) * (1.0F / inverseW),
+              planes[8].at(x, y) * (1.0F / inverseW),
               fogState,
               material.fogMode()
             );
@@ -613,6 +624,38 @@ final class SoftwareRasterizer {
 
   private static float modulateChannel(int sample, int tint, float vertex) {
     return (sample * (1.0F / 255.0F)) * (vertex * (tint * (1.0F / 255.0F)));
+  }
+
+  private record AttributePlane(float dx, float dy, float origin, int height) {
+    static AttributePlane of(ProjectedVertex v0, ProjectedVertex v1, ProjectedVertex v2, float a0, float a1, float a2, int height) {
+      var area = edge(v0.x(), v0.y(), v1.x(), v1.y(), v2.x(), v2.y());
+      if (area > 0) {
+        var swapVertex = v1;
+        v1 = v2;
+        v2 = swapVertex;
+        var swapAttribute = a1;
+        a1 = a2;
+        a2 = swapAttribute;
+      }
+      var y0 = v0.interpolationY();
+      var y1 = v1.interpolationY();
+      var y2 = v2.interpolationY();
+      var x01 = v0.x() - v1.x();
+      var y01 = y0 - y1;
+      var x20 = v2.x() - v0.x();
+      var y20 = y2 - y0;
+      var inverseArea = 1.0F / (x01 * y20 - y01 * x20);
+      var a01 = a0 - a1;
+      var a20 = a2 - a0;
+      var dx = a01 * (y20 * inverseArea) - a20 * (y01 * inverseArea);
+      var dy = a20 * (x01 * inverseArea) - a01 * (x20 * inverseArea);
+      var origin = a0 - (dx * (v0.x() - 0.5F) + dy * (y0 - 0.5F));
+      return new AttributePlane(dx, dy, origin, height);
+    }
+
+    float at(int x, int y) {
+      return Math.fma(dy, height - y - 1, Math.fma(dx, x, origin));
+    }
   }
 
   private record FragmentColor(float r, float g, float b, float a) {

@@ -145,7 +145,7 @@ public class SoftwareRenderer {
           hudFov(options.fov()),
           100.0F
         );
-        RASTER_PIPELINE.renderFirstPersonOverlay(handCamera, handScene, buffers, ctx.animationTick());
+        RASTER_PIPELINE.renderFirstPersonOverlay(handCamera, handScene, buffers, ctx.animationTick(), RasterFogState.from(ctx));
       }
     }
 

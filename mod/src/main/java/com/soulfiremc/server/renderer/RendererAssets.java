@@ -1175,6 +1175,7 @@ public final class RendererAssets {
     private volatile TextureImage linearFiltered;
     private volatile TextureImage terrainFiltered;
     private TextureImage[] mipLevels;
+    private AtlasRegion atlasRegion;
     @Nullable
     private BufferedImage bufferedImage;
 
@@ -1305,8 +1306,8 @@ public final class RendererAssets {
       var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
       var yOffset = frameIndex * clampedFrameHeight;
       if (linearFiltering) {
-        var texelX = ((float) Math.rint(sampledU * width * 256.0F) - 128) / 256.0F;
-        var texelY = ((float) Math.rint(sampledV * clampedFrameHeight * 256.0F) - 128) / 256.0F;
+        var texelX = ((float) Math.rint(sampledU * (atlasRegion == null ? width : atlasRegion.width()) * 256.0F) - 128) / 256.0F - (atlasRegion == null ? 0 : atlasRegion.x());
+        var texelY = ((float) Math.rint(sampledV * (atlasRegion == null ? clampedFrameHeight : atlasRegion.height()) * 256.0F) - 128) / 256.0F - (atlasRegion == null ? 0 : atlasRegion.y());
         var x0 = (int) Math.floor(texelX);
         var y0 = (int) Math.floor(texelY);
         var fx = texelX - x0;
@@ -1342,14 +1343,17 @@ public final class RendererAssets {
       if (filtered == null) {
         filtered = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels,
           hasAlpha, hasTranslucentPixels, addressModeU, addressModeV, true);
+        filtered.atlasRegion = atlasRegion;
+        filtered.mipLevels = mipLevels;
         linearFiltered = filtered;
       }
       return filtered;
     }
 
-    public TextureImage withTerrainFiltering(NativeImage[] nativeMips) {
+    public TextureImage withTerrainFiltering(NativeImage[] nativeMips, int atlasWidth, int atlasHeight, int originX, int originY) {
+      var region = new AtlasRegion(atlasWidth, atlasHeight, originX, originY);
       var filtered = terrainFiltered;
-      if (filtered == null) {
+      if (filtered == null || !region.equals(filtered.atlasRegion)) {
         var levels = new TextureImage[nativeMips.length];
         for (var level = 0; level < levels.length; level++) {
           var image = nativeMips[level];
@@ -1362,6 +1366,7 @@ public final class RendererAssets {
           levels[level] = new TextureImage(image.getWidth(), image.getHeight(), Math.max(1, frameHeight >> level),
             frameCount, frameTime, frameOrder, data, hasAlpha, hasTranslucentPixels,
             TextureAddressMode.CLAMP_TO_EDGE, TextureAddressMode.CLAMP_TO_EDGE, true);
+          levels[level].atlasRegion = new AtlasRegion(Math.max(1, atlasWidth >> level), Math.max(1, atlasHeight >> level), originX >> level, originY >> level);
         }
         filtered = levels[0];
         filtered.mipLevels = levels;
@@ -1375,6 +1380,8 @@ public final class RendererAssets {
     }
 
     int sampleTerrain(float u, float v, long tick, float duDx, float duDy, float dvDx, float dvDy) {
+      var width = atlasRegion.width();
+      var frameHeight = atlasRegion.height();
       var texelU = u * width;
       var texelV = v * frameHeight;
       var sizeU = (float) Math.sqrt(duDx * duDx + duDy * duDy) * width;
@@ -1390,7 +1397,10 @@ public final class RendererAssets {
       var b = mipLevels[upper].sample(adjustedU, adjustedV, tick);
       var result = 0;
       for (var shift = 0; shift < 32; shift += 8) {
-        result |= Math.round(((a >>> shift) & 255) * (1 - (lod - lower)) + ((b >>> shift) & 255) * (lod - lower)) << shift;
+        var start = (a >>> shift) & 255;
+        var end = (b >>> shift) & 255;
+        var weight = (int) ((lod - lower) * 256.0F);
+        result |= (start + (int) Math.rint((end - start) * weight / 256.0F)) << shift;
       }
       return result;
     }
@@ -1427,6 +1437,8 @@ public final class RendererAssets {
         requiredAddressModeV, linearFiltering
       );
       textureImage.bufferedImage = bufferedImage;
+      textureImage.atlasRegion = atlasRegion;
+      textureImage.mipLevels = mipLevels;
       return textureImage;
     }
 
@@ -1441,6 +1453,8 @@ public final class RendererAssets {
     public TextureAddressMode addressModeV() {
       return addressModeV;
     }
+
+    private record AtlasRegion(int width, int height, int x, int y) {}
 
     public int width() {
       return width;
