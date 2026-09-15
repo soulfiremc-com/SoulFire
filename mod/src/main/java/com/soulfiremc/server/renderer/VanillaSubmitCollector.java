@@ -31,6 +31,8 @@ import net.minecraft.client.gui.font.TextRenderable;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.UVPair;
+import net.minecraft.client.particle.ParticleEngine;
+import net.minecraft.client.particle.QuadParticleGroup;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
@@ -50,7 +52,6 @@ import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.feature.phase.SimpleFeatureRenderPhase;
 import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -117,6 +118,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private static final Direction[] DIRECTIONS = Direction.values();
   private static final RendererAssets.TextureImage WHITE_TEXTURE = createSolidTexture(0xFFFFFFFF);
   private final RenderContext ctx;
+  private final Vec3 origin;
   private final @Nullable GuiLighting guiLighting;
   private final RendererAssets assets;
   private final NavigableMap<Integer, FeatureBuckets> bucketsByOrder;
@@ -129,11 +131,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   VanillaSubmitCollector(RenderContext ctx, @Nullable GuiLighting guiLighting) {
-    this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0, guiLighting);
+    this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0, guiLighting, Vec3.ZERO);
   }
 
-  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, FeatureBuckets> bucketsByOrder, SortGroupRegistry sortGroups, int order, @Nullable GuiLighting guiLighting) {
+  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, FeatureBuckets> bucketsByOrder, SortGroupRegistry sortGroups, int order, @Nullable GuiLighting guiLighting, Vec3 origin) {
     this.ctx = ctx;
+    this.origin = origin;
     this.guiLighting = guiLighting;
     this.assets = RendererAssets.instance();
     this.bucketsByOrder = bucketsByOrder;
@@ -168,15 +171,18 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return dispatcher.shouldRender(entity, createFrustum(ctx), ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
   }
 
-  static SceneData collectEntities(RenderContext ctx, Iterable<Entity> entities) {
+  static VanillaSubmitCollector cameraRelativeCollector(RenderContext ctx) {
+    var origin = new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+    return new VanillaSubmitCollector(ctx, new TreeMap<>(), new SortGroupRegistry(), 0, null, origin);
+  }
+
+  void submitEntities(Iterable<Entity> entities) {
     var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
-    var collector = new VanillaSubmitCollector(ctx);
     for (var entity : entities) {
       var renderState = dispatcher.extractEntity(entity, 1.0F);
       var poseStack = new PoseStack();
-      dispatcher.submit(renderState, collector.cameraRenderState(), renderState.x, renderState.y, renderState.z, poseStack, collector);
+      dispatcher.submit(renderState, cameraRenderState(), renderState.x - origin.x, renderState.y - origin.y, renderState.z - origin.z, poseStack, this);
     }
-    return collector.buildScene();
   }
 
   static SceneData collectHandsWithItems(RenderContext ctx, float partialTick) {
@@ -215,30 +221,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return collector.buildScene();
   }
 
-  static SceneData collectBlockEntity(RenderContext ctx, BlockEntity blockEntity) {
-    return collectBlockEntity(ctx, blockEntity, null, false);
-  }
-
-  static SceneData collectBlockEntity(
-    RenderContext ctx,
-    BlockEntity blockEntity,
-    @Nullable Integer crumblingProgress,
-    boolean globallyRendered
-  ) {
-    var collector = new VanillaSubmitCollector(ctx);
+  void submitBlockEntity(BlockEntity blockEntity, @Nullable Integer crumblingProgress, boolean globallyRendered) {
     var dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
-    dispatcher.prepare(new Vec3(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ()));
+    dispatcher.prepare(origin);
     var poseStack = new PoseStack();
     var blockPos = blockEntity.getBlockPos();
-    poseStack.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
+    poseStack.translate(blockPos.getX() - origin.x, blockPos.getY() - origin.y, blockPos.getZ() - origin.z);
     var crumblingOverlay = crumblingProgress != null ? new ModelFeatureRenderer.CrumblingOverlay(crumblingProgress, poseStack.last()) : null;
     var renderState = dispatcher.tryExtractRenderState(blockEntity, 1.0F, crumblingOverlay, globallyRendered);
-    if (renderState == null) {
-      return SceneData.EMPTY;
+    if (renderState != null) {
+      dispatcher.submit(renderState, poseStack, this, cameraRenderState());
     }
-
-    dispatcher.submit(renderState, poseStack, collector, collector.cameraRenderState());
-    return collector.buildScene();
   }
 
   static SceneData collectBreakingBlockModel(RenderContext ctx, BlockPos pos, BlockStateModel blockStateModel, long seed, int progress) {
@@ -249,7 +242,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return collector.buildScene();
   }
 
-  static SceneData collectParticles(RenderContext ctx) {
+  void submitParticles() {
     var minecraft = Minecraft.getInstance();
     var particleCamera = new net.minecraft.client.Camera();
     particleCamera.setLevel(ctx.level());
@@ -259,18 +252,33 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     particleCamera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
     particleCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
 
-    var particlesState = new ParticlesRenderState();
-    minecraft.particleEngine.extract(particlesState, createFrustum(ctx).offset(-3.0F), particleCamera, 1.0F);
+    var particlesState = extractParticles(minecraft.particleEngine, createFrustum(ctx).offset(-3.0F), particleCamera);
     if (particlesState.particles.isEmpty()) {
-      return SceneData.EMPTY;
+      return;
     }
 
-    var collector = new VanillaSubmitCollector(ctx);
-    var cameraState = collector.cameraRenderState();
+    var cameraState = cameraRenderState();
     for (var particle : particlesState.particles) {
-      particle.submit(collector, cameraState);
+      particle.submit(this, cameraState);
     }
-    return collector.buildScene();
+  }
+
+  static ParticlesRenderState extractParticles(ParticleEngine engine, Frustum frustum, net.minecraft.client.Camera camera) {
+    var particlesState = new ParticlesRenderState();
+    // Quad groups append to a cache owned by the client frame. Extract POV geometry into separate caches.
+    var cachedStates = new IdentityHashMap<QuadParticleGroup, QuadParticleRenderState>();
+    for (var group : engine.particles.values()) {
+      if (group instanceof QuadParticleGroup quads) {
+        cachedStates.put(quads, quads.particleTypeRenderState);
+        quads.particleTypeRenderState = new QuadParticleRenderState();
+      }
+    }
+    try {
+      engine.extract(particlesState, frustum, camera, 1.0F);
+      return particlesState;
+    } finally {
+      cachedStates.forEach((group, state) -> group.particleTypeRenderState = state);
+    }
   }
 
   private static Frustum createFrustum(RenderContext ctx) {
@@ -298,7 +306,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     for (var orderedBuckets : bucketsByOrder.values()) {
       sceneData = sceneData.merge(orderedBuckets.build());
     }
-    return sceneData;
+    return sceneData.withOrigin(origin);
   }
 
   private SceneData.Builder builder() {
@@ -333,9 +341,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private double poseOriginDistanceSq(Matrix4fc pose) {
     var position = pose.transformPosition(new Vector3f());
-    var dx = position.x() - ctx.camera().eyeX();
-    var dy = position.y() - ctx.camera().eyeY();
-    var dz = position.z() - ctx.camera().eyeZ();
+    var dx = position.x() - (ctx.camera().eyeX() - origin.x);
+    var dy = position.y() - (ctx.camera().eyeY() - origin.y);
+    var dz = position.z() - (ctx.camera().eyeZ() - origin.z);
     return dx * dx + dy * dy + dz * dz;
   }
 
@@ -346,8 +354,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private void addRenderTypeQuad(RenderQuad quad, @Nullable RenderType renderType) {
     if (renderType != null && renderType.isOutline()) {
       builder().addOutline(quad);
-    } else if (renderType != null && renderType.outputTarget() == OutputTarget.WEATHER_TARGET) {
-      builder().addWeather(quad);
     } else {
       builder().add(quad);
     }
@@ -371,7 +377,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public OrderedSubmitNodeCollector order(int order) {
-    return buckets == bucketsByOrder.get(order) ? this : new VanillaSubmitCollector(ctx, bucketsByOrder, sortGroups, order, guiLighting);
+    return buckets == bucketsByOrder.get(order) ? this : new VanillaSubmitCollector(ctx, bucketsByOrder, sortGroups, order, guiLighting, origin);
   }
 
   @Override
@@ -892,9 +898,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       withStage(stage, () -> {
         storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, lightCoords) -> {
           var rotation = new Quaternionf(qx, qy, qz, qw);
-          var worldX = x + (float) ctx.camera().eyeX();
-          var worldY = y + (float) ctx.camera().eyeY();
-          var worldZ = z + (float) ctx.camera().eyeZ();
+          var worldX = x + (float) (ctx.camera().eyeX() - origin.x);
+          var worldY = y + (float) (ctx.camera().eyeY() - origin.y);
+          var worldZ = z + (float) (ctx.camera().eyeZ() - origin.z);
           var vertices = new Vector3f[]{
             rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, -1.0F),
             rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, 1.0F),
@@ -905,13 +911,22 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
             .create(
               texture,
               alphaMode,
-              modulateColor(color, lightColor(lightCoords, 0, null)),
+              0xFFFFFFFF,
               true,
               0.0F,
               RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD
             )
-            .withPipelineState(layer.pipeline());
-          var quad = face(vertices, new float[]{u1, v1, u1, v0, u0, v0, u0, v1}, material);
+            .withPipelineState(layer.pipeline())
+            .withSortOnUpload(false);
+          var uv = new float[]{u1, v1, u1, v0, u0, v0, u0, v1};
+          var litColor = lightColor(lightCoords, 0, null);
+          var renderVertices = new RenderVertex[4];
+          for (var i = 0; i < renderVertices.length; i++) {
+            var vertex = vertices[i];
+            renderVertices[i] = new RenderVertex(vertex.x, vertex.y, vertex.z, uv[i * 2], uv[i * 2 + 1], color)
+              .withLightColor(litColor);
+          }
+          var quad = new RenderQuad(renderVertices[0], renderVertices[1], renderVertices[2], renderVertices[3], material);
           if (layer.translucent()) {
             builder().addTranslucentParticle(quad);
           } else {
@@ -1715,13 +1730,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     if (faceLighting == FaceLighting.BACK) {
       unitNormal.negate();
     }
-    var light0 = Math.max(0.0F, levelLight0().dot(unitNormal));
-    var light1 = Math.max(0.0F, levelLight1().dot(unitNormal));
+    var light0 = Math.max(0.0F, shaderDot(levelLight0(), unitNormal));
+    var light1 = Math.max(0.0F, shaderDot(levelLight1(), unitNormal));
     return Math.min(1.0F, (light0 + light1) * 0.6F + 0.4F);
   }
 
+  private static float shaderDot(Vector3f left, Vector3f right) {
+    return (left.z * right.z + left.y * right.y) + left.x * right.x;
+  }
+
   private static float packedNormalComponent(float component) {
-    return (int) (Math.clamp(component, -1.0F, 1.0F) * 127.0F) / 127.0F;
+    return (int) (Math.clamp(component, -1.0F, 1.0F) * 127.0F) * (1.0F / 127.0F);
   }
 
   private Vector3f levelLight0() {
@@ -1973,7 +1992,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           }
           case TRIANGLE_FAN -> {
             for (var i = 1; i + 1 < vertices.size(); i++) {
-              emitTriangle(vertices.getFirst(), vertices.get(i), vertices.get(i + 1));
+              emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.getFirst());
             }
           }
           case LINES, DEBUG_LINES, DEBUG_LINE_STRIP -> {
@@ -2200,9 +2219,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     private Vector4f clipPosition(Vector3f position, float viewScale) {
       var view = ctx.camera().viewRotationMatrix().transform(new Vector4f(
-        (float) (position.x() - ctx.camera().eyeX()),
-        (float) (position.y() - ctx.camera().eyeY()),
-        (float) (position.z() - ctx.camera().eyeZ()),
+        (float) (position.x() - (ctx.camera().eyeX() - origin.x)),
+        (float) (position.y() - (ctx.camera().eyeY() - origin.y)),
+        (float) (position.z() - (ctx.camera().eyeZ() - origin.z)),
         1.0F
       ));
       if (viewScale != 1.0F) {
@@ -2213,7 +2232,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     private Matrix4f clipToWorld(float viewScale) {
       var view = ctx.camera().viewRotationMatrix();
-      view.translate((float) -ctx.camera().eyeX(), (float) -ctx.camera().eyeY(), (float) -ctx.camera().eyeZ());
+      view.translate((float) (origin.x - ctx.camera().eyeX()), (float) (origin.y - ctx.camera().eyeY()), (float) (origin.z - ctx.camera().eyeZ()));
       return new Matrix4f(ctx.camera().projectionMatrix())
         .scale(viewScale, viewScale, viewScale)
         .mul(view)
@@ -2649,7 +2668,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
             }
           }
           var material = RenderMaterial.create(faceTexture, alphaMode, 0xFFFFFFFF, false, 0.0F)
-            .withPipelineState(layer.pipeline());
+            .withPipelineState(layer.pipeline())
+            .withSortOnUpload(false);
           var vertices = new RenderVertex[4];
           for (var j = 0; j < 4; j++) {
             var vertex = captured.get(j);

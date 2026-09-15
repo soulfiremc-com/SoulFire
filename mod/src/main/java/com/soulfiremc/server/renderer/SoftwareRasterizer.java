@@ -21,7 +21,6 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.platform.BlendFactor;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
-import org.jetbrains.annotations.Nullable;
 
 /// Shared projected-triangle raster backend for world and GUI item render frontends.
 final class SoftwareRasterizer {
@@ -58,7 +57,6 @@ final class SoftwareRasterizer {
     int clipMaxY,
     RasterFogState fogState
   ) {
-    var projection = camera.projectionMatrix();
     rasterizeTriangle(
       animationTick,
       triangle,
@@ -67,7 +65,7 @@ final class SoftwareRasterizer {
       clipMinY,
       clipMaxX,
       clipMaxY,
-      new Viewport(camera.width(), camera.height(), projection.m22(), projection.m32()),
+      new Viewport(camera.width(), camera.height()),
       fogState,
       RasterFrontend.WORLD,
       false
@@ -90,7 +88,7 @@ final class SoftwareRasterizer {
       0,
       width - 1,
       height - 1,
-      new Viewport(width, height, 0.0F, 0.0F),
+      new Viewport(width, height),
       RasterFogState.DISABLED,
       RasterFrontend.GUI_ITEM,
       writeDepth
@@ -116,7 +114,7 @@ final class SoftwareRasterizer {
       clipMinY,
       clipMaxX,
       clipMaxY,
-      new Viewport(width, height, 0.0F, 0.0F),
+      new Viewport(width, height),
       RasterFogState.DISABLED,
       RasterFrontend.GUI_SCREEN,
       false
@@ -189,7 +187,6 @@ final class SoftwareRasterizer {
     var depthPlane = frontend == RasterFrontend.WORLD
       ? AttributePlane.of(v0, v1, v2, (float) (1.0 - v0.depth()), (float) (1.0 - v1.depth()), (float) (1.0 - v2.depth()), viewport.height()) : null;
     var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, material) : 0.0F;
-    var depthFogProjection = depthFogProjection(viewport, material);
     // GPU raster coverage uses fixed-point subpixel coordinates; interpolation retains the original plane.
     var x0 = (int) Math.rint(v0.x() * 256.0F);
     var y0 = frontend != RasterFrontend.WORLD ? (int) Math.rint(v0.y() * 256.0F)
@@ -319,8 +316,8 @@ final class SoftwareRasterizer {
         }
 
         if (frontend == RasterFrontend.WORLD && material.fogMode() != RenderMaterial.FogMode.NONE) {
-          if (material.fogMode() == RenderMaterial.FogMode.DEPTH_COLOR_MIX && depthFogProjection != null) {
-            var fogDistance = depthFogDistance(depth, depthFogProjection);
+          if (material.fogMode() == RenderMaterial.FogMode.DEPTH_COLOR_MIX) {
+            var fogDistance = 1.0F / inverseW;
             color = applyFog(color, fogDistance, fogDistance, fogState, material.fogMode(), material.glintAlpha());
           } else {
             color = applyFog(
@@ -432,41 +429,6 @@ final class SoftwareRasterizer {
     var dzDx = (z1 * y2 - z2 * y1) / denominator;
     var dzDy = (x1 * z2 - x2 * z1) / denominator;
     return bias + Math.max(Math.abs(dzDx), Math.abs(dzDy)) * factor;
-  }
-
-  @Nullable
-  private static DepthFogProjection depthFogProjection(Viewport viewport, RenderMaterial material) {
-    if (material.fogMode() != RenderMaterial.FogMode.DEPTH_COLOR_MIX) {
-      return null;
-    }
-
-    return new DepthFogProjection(viewport.projectionM22(), viewport.projectionM32());
-  }
-
-  private static float depthFogDistance(double depth, DepthFogProjection projection) {
-    var denominator = depth * -2.0F + 1.0F - projection.m22();
-    if (!Double.isFinite(denominator) || Math.abs(denominator) <= 1.0E-8F) {
-      return Float.POSITIVE_INFINITY;
-    }
-
-    var distance = -projection.m32() / denominator;
-    return Double.isFinite(distance) ? (float) distance : Float.POSITIVE_INFINITY;
-  }
-
-  private static float interpolatedFogDistance(
-    float weight0,
-    float weight1,
-    float weight2,
-    float inverseW,
-    ProjectedVertex v0,
-    ProjectedVertex v1,
-    ProjectedVertex v2,
-    boolean spherical
-  ) {
-    if (spherical) {
-      return (weight0 * v0.sphericalFogDistanceOverW() + weight1 * v1.sphericalFogDistanceOverW() + weight2 * v2.sphericalFogDistanceOverW()) / inverseW;
-    }
-    return (weight0 * v0.cylindricalFogDistanceOverW() + weight1 * v1.cylindricalFogDistanceOverW() + weight2 * v2.cylindricalFogDistanceOverW()) / inverseW;
   }
 
   private static boolean hasFragmentLighting(ProjectedVertex vertex) {
@@ -726,7 +688,7 @@ final class SoftwareRasterizer {
     return color;
   }
 
-  private static int blend(int dstColor, int srcColor, RenderMaterial.BlendState blendState) {
+  static int blend(int dstColor, int srcColor, RenderMaterial.BlendState blendState) {
     return blend(dstColor, (srcColor >>> 16) & 255, (srcColor >>> 8) & 255, srcColor & 255, srcColor >>> 24, blendState);
   }
 
@@ -829,9 +791,8 @@ final class SoftwareRasterizer {
     GUI_SCREEN
   }
 
-  private record Viewport(int width, int height, float projectionM22, float projectionM32) {}
+  private record Viewport(int width, int height) {}
 
-  private record DepthFogProjection(float m22, float m32) {}
 
   private record TextureCoord(float u, float v) {}
 }

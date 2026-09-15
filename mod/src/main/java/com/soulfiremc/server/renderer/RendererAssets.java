@@ -148,6 +148,11 @@ public final class RendererAssets {
     var texture = runtimeTexture != null
       ? runtimeTexture
       : isRuntimeClientTexturePath(textureLocation) ? runtimeTextureFallback(textureLocation) : texture(textureLocation);
+    var minecraft = Minecraft.getInstance();
+    if (minecraft != null && minecraft.getTextureManager() != null) {
+      var nativeTexture = minecraft.getTextureManager().getTexture(textureLocation);
+      texture = withSampler(texture, nativeTexture.getSampler());
+    }
     return isAtlasTextureLocation(textureLocation) ? texture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE) : texture;
   }
 
@@ -1300,6 +1305,13 @@ public final class RendererAssets {
         TextureAddressMode.REPEAT,
         TextureAddressMode.REPEAT, false
       );
+      var textureMetadata = metadata != null && metadata.has("texture") ? metadata.getAsJsonObject("texture") : null;
+      if (textureMetadata != null && textureMetadata.has("blur") && textureMetadata.get("blur").getAsBoolean()) {
+        textureImage = textureImage.withLinearFiltering();
+      }
+      if (textureMetadata != null && textureMetadata.has("clamp") && textureMetadata.get("clamp").getAsBoolean()) {
+        textureImage = textureImage.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE);
+      }
       return textureImage;
     }
 

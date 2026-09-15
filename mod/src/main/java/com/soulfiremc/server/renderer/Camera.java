@@ -51,8 +51,7 @@ public final class Camera {
   private final float farPlane;
   private final Matrix4f viewRotationMatrix;
   private final Matrix4f projectionMatrix;
-  private final float reverseDepthScale;
-  private final float reverseDepthTranslation;
+  private final Matrix4f rasterProjectionMatrix;
   private final Matrix4f viewProjectionMatrix;
   private final Quaternionf orientation;
   private final FrustumIntersection frustumIntersection;
@@ -100,17 +99,15 @@ public final class Camera {
     this.viewRotationMatrix = new Matrix4f().rotation(new Quaternionf(orientation).conjugate());
     var viewMatrix = new Matrix4f(viewRotationMatrix).translate((float) -eyeX, (float) -eyeY, (float) -eyeZ);
     this.projectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, nearPlane, farPlane);
-    var reverseProjection = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, farPlane, nearPlane, true);
-    this.reverseDepthScale = reverseProjection.m22();
-    this.reverseDepthTranslation = reverseProjection.m32();
+    this.rasterProjectionMatrix = new Matrix4f().setPerspective((float) fovRad, (float) aspectRatio, farPlane, nearPlane, true);
     var viewRotationProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewRotationMatrix);
     this.viewProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewMatrix);
     this.frustumIntersection = new FrustumIntersection(viewRotationProjectionMatrix);
   }
 
   // Preserve the native zero-to-one reversed depth range until framebuffer conversion.
-  float clipDepth(float w) {
-    return Math.fma(-reverseDepthScale, w, reverseDepthTranslation);
+  Matrix4f rasterProjectionMatrix() {
+    return new Matrix4f(rasterProjectionMatrix);
   }
 
   public Camera atOrigin() {

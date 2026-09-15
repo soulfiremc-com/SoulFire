@@ -68,12 +68,8 @@ public final class RendererDebugDump {
     var debugTrace = RenderDebugTrace.createForced(width, height, maxDistance, options.yRot(), options.xRot());
     return debugTrace.call(() -> {
       var renderStart = System.nanoTime();
-      var camera = new Camera(options.eyePos(), options.yRot(), options.xRot(), width, height, fov, maxDistance + 32.0F);
+      var camera = new Camera(options.eyePos(), options.yRot(), options.xRot(), width, height, fov, Math.max(maxDistance * 4.0F, Minecraft.getInstance().options.cloudRange().get() * 16.0F));
       var ctx = RenderContext.create(level, player, camera, maxDistance);
-
-      var blockEntityCollectStart = System.nanoTime();
-      var blockEntityScene = SceneCollector.collectBlockEntities(ctx);
-      var blockEntityCollectNanos = System.nanoTime() - blockEntityCollectStart;
 
       var worldCollectStart = System.nanoTime();
       var worldScene = WorldMeshCollector.collect(ctx);
@@ -81,20 +77,20 @@ public final class RendererDebugDump {
       debugTrace.worldCollectNanos(worldCollectNanos);
 
       var dynamicCollectStart = System.nanoTime();
-      var dynamicScene = SceneCollector.collectEntitiesAndWeather(ctx, player);
+      var dynamicScene = SceneCollector.collectDynamicScene(ctx, player);
       var dynamicCollectNanos = System.nanoTime() - dynamicCollectStart;
 
       var cloudCollectStart = System.nanoTime();
       var cloudScene = CloudMeshCollector.collect(ctx);
       var cloudCollectNanos = System.nanoTime() - cloudCollectStart;
-      debugTrace.dynamicCollectNanos(blockEntityCollectNanos + dynamicCollectNanos + cloudCollectNanos);
+      debugTrace.dynamicCollectNanos(dynamicCollectNanos + cloudCollectNanos);
 
-      var sceneData = worldScene.merge(blockEntityScene).merge(dynamicScene).merge(cloudScene);
+      var sceneData = worldScene.merge(dynamicScene).merge(cloudScene);
       var buffers = new RasterBuffers(width, height);
 
       var rasterStart = System.nanoTime();
       RASTER_PIPELINE.render(ctx, sceneData, buffers);
-      SoftwareRenderer.renderOverlays(ctx, options, buffers);
+      SoftwareRenderer.renderOverlays(ctx, options, sceneData, buffers);
       var rasterNanos = System.nanoTime() - rasterStart;
       var totalNanos = System.nanoTime() - renderStart;
       debugTrace.rasterNanos(rasterNanos);
@@ -107,11 +103,10 @@ public final class RendererDebugDump {
       var writer = new SceneDumpWriter(texturesDirectory, runtimeTexturesDirectory, atlasDirectory, ctx, camera, fov, maxDistance);
       var sceneJson = writer.writeScene(
         worldScene,
-        blockEntityScene,
         dynamicScene,
         cloudScene,
         sceneData,
-        new TimingNanos(worldCollectNanos, blockEntityCollectNanos, dynamicCollectNanos, cloudCollectNanos, rasterNanos, totalNanos),
+        new TimingNanos(worldCollectNanos, dynamicCollectNanos, cloudCollectNanos, rasterNanos, totalNanos),
         debugTrace.snapshot()
       );
       var scenePath = outputDirectory.resolve("scene.json");
@@ -141,7 +136,6 @@ public final class RendererDebugDump {
 
   private record TimingNanos(
     long worldCollect,
-    long blockEntityCollect,
     long dynamicCollect,
     long cloudCollect,
     long raster,
@@ -183,7 +177,6 @@ public final class RendererDebugDump {
 
     private JsonObject writeScene(
       SceneData worldScene,
-      SceneData blockEntityScene,
       SceneData dynamicScene,
       SceneData cloudScene,
       SceneData sceneData,
@@ -196,7 +189,7 @@ public final class RendererDebugDump {
       root.add("context", contextJson());
       root.add("timingMs", timingJson(timing));
       root.add("trace", GSON.toJsonTree(trace));
-      root.add("sourceSceneCounts", sourceSceneCountsJson(worldScene, blockEntityScene, dynamicScene, cloudScene));
+      root.add("sourceSceneCounts", sourceSceneCountsJson(worldScene, dynamicScene, cloudScene));
       root.add("sceneCounts", sceneCountsJson(sceneData));
 
       var passes = new JsonObject();
@@ -268,7 +261,6 @@ public final class RendererDebugDump {
     private JsonObject timingJson(TimingNanos timing) {
       var json = new JsonObject();
       json.addProperty("worldCollect", nanosToMillis(timing.worldCollect()));
-      json.addProperty("blockEntityCollect", nanosToMillis(timing.blockEntityCollect()));
       json.addProperty("dynamicCollect", nanosToMillis(timing.dynamicCollect()));
       json.addProperty("cloudCollect", nanosToMillis(timing.cloudCollect()));
       json.addProperty("raster", nanosToMillis(timing.raster()));
@@ -278,14 +270,12 @@ public final class RendererDebugDump {
 
     private JsonObject sourceSceneCountsJson(
       SceneData worldScene,
-      SceneData blockEntityScene,
       SceneData dynamicScene,
       SceneData cloudScene
     ) {
       var json = new JsonObject();
       json.add("world", sceneCountsJson(worldScene));
-      json.add("blockEntities", sceneCountsJson(blockEntityScene));
-      json.add("entitiesAndWeather", sceneCountsJson(dynamicScene));
+      json.add("dynamicFeatures", sceneCountsJson(dynamicScene));
       json.add("clouds", sceneCountsJson(cloudScene));
       return json;
     }
@@ -331,6 +321,11 @@ public final class RendererDebugDump {
       json.add("uvBounds", uvBoundsJson(uv));
       json.add("alphaCoverage", alphaCoverageJson(coverage));
       json.addProperty("centerSampleArgb", hexArgb(material.texture().sample(centerU, centerV, ctx.animationTick())));
+      var origin = new JsonArray();
+      origin.add(quad.origin().x);
+      origin.add(quad.origin().y);
+      origin.add(quad.origin().z);
+      json.add("origin", origin);
       json.add("vertices", verticesJson(quad));
       return json;
     }

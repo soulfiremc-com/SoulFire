@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.google.gson.JsonObject;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.AddressMode;
@@ -79,6 +80,21 @@ class RendererAssetsTest {
     assertEquals(0xFF00FF00, filtered.sample(1, 0, 0));
     assertEquals(0xFF404040, texture.withLinearFiltering().sample(0, 0, 0));
     assertEquals(0xFF000000, texture.sample(0.5F, 0.5F, 0));
+  }
+
+  @Test
+  void textureMetadataControlsFilteringAndEdgeAddressing() {
+    var settings = new JsonObject();
+    settings.addProperty("blur", true);
+    settings.addProperty("clamp", true);
+    var metadata = new JsonObject();
+    metadata.add("texture", settings);
+    var texture = RendererAssets.TextureImage.fromArgb(2, 1,
+      new int[]{0xFFFF0000, 0xFF0000FF}, metadata);
+
+    assertEquals(0xFFFF0000, texture.sample(0, 0.5F, 0));
+    assertEquals(0xFF7F0080, texture.sample(0.5F, 0.5F, 0));
+    assertEquals(0xFF0000FF, texture.sample(1, 0.5F, 0));
   }
 
   @Test

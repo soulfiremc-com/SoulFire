@@ -35,8 +35,10 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,6 +76,26 @@ class RasterPipelineTest {
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
 
     assertEquals(0xFFFF0000, buffers.image().getRGB(WIDTH / 2, HEIGHT / 2));
+  }
+
+  @Test
+  void localOriginsPreserveSubpixelGeometryAtLargeWorldCoordinates() {
+    var origin = new Vec3(29_999_999.25, -59.38, -29_999_999.75);
+    var pipeline = new RasterPipeline();
+    var localCamera = new Camera(Vec3.ZERO, 12, 8, WIDTH, HEIGHT, 70, 64);
+    var distantCamera = new Camera(origin, 12, 8, WIDTH, HEIGHT, 70, 64);
+    var scene = SceneData.builder();
+    scene.add(quad(-0.731F, -0.812F, 3.141F, 0.617F, 0.913F,
+      solidTexture(0xFF1257AB), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    var localBuffers = new RasterBuffers(WIDTH, HEIGHT);
+    var distantBuffers = new RasterBuffers(WIDTH, HEIGHT);
+    var geometry = scene.build();
+    renderSynthetic(pipeline, localCamera, geometry, localBuffers, 0, 0xFF000000);
+    renderSynthetic(pipeline, distantCamera, geometry.withOrigin(origin), distantBuffers, 0, 0xFF000000);
+
+    assertArrayEquals(localBuffers.colorBuffer(), distantBuffers.colorBuffer());
+    assertArrayEquals(localBuffers.depthBuffer(), distantBuffers.depthBuffer());
+    assertTrue(Arrays.stream(localBuffers.colorBuffer()).anyMatch(color -> color != 0xFF000000));
   }
 
   @Test
@@ -468,7 +490,7 @@ class RasterPipelineTest {
   }
 
   @Test
-  void beaconBeamFogUsesProjectedFragmentDepth() {
+  void beaconBeamFogUsesReciprocalClipW() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
@@ -500,8 +522,8 @@ class RasterPipelineTest {
     var color = buffers.image().getRGB(sampleX, sampleY);
 
     assertEquals(RenderMaterial.FogMode.DEPTH_COLOR_MIX, material.fogMode());
-    assertTrue(((color >> 16) & 0xFF) > 220, () -> "expected projected-depth beacon fog to preserve red but was 0x" + Integer.toHexString(color));
-    assertTrue(((color >> 8) & 0xFF) < 40, () -> "expected projected-depth beacon fog to avoid spherical green fog but was 0x" + Integer.toHexString(color));
+    assertTrue(((color >> 16) & 0xFF) > 220, () -> "expected clip-W beacon fog to preserve red but was 0x" + Integer.toHexString(color));
+    assertTrue(((color >> 8) & 0xFF) < 40, () -> "expected clip-W beacon fog to avoid spherical green fog but was 0x" + Integer.toHexString(color));
   }
 
   @Test

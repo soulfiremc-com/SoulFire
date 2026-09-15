@@ -15,24 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.server.renderer;
+package com.soulfiremc.manual.mixin;
 
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.Entity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Invoker;
 
-/// A textured quad ready to be projected and rasterized.
-public record RenderQuad(
-  RenderVertex v0,
-  RenderVertex v1,
-  RenderVertex v2,
-  RenderVertex v3,
-  RenderMaterial material,
-  Vec3 origin
-) {
-  public RenderQuad(RenderVertex v0, RenderVertex v1, RenderVertex v2, RenderVertex v3, RenderMaterial material) {
-    this(v0, v1, v2, v3, material, Vec3.ZERO);
-  }
+@Mixin(Entity.class)
+public interface StressEntityAccess {
+  @Invoker("setSharedFlag")
+  void setClientFlag(int flag, boolean value);
 
-  public RenderQuad withOrigin(Vec3 origin) {
-    return new RenderQuad(v0, v1, v2, v3, material, this.origin.add(origin));
-  }
 }

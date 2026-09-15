@@ -21,6 +21,7 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
@@ -29,6 +30,7 @@ import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.MoonPhase;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.material.FogType;
 import org.joml.Matrix3f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
@@ -54,8 +56,8 @@ public final class SkyRenderer {
 
   private SkyRenderer() {}
 
-  public static void renderBackground(RenderContext ctx, RasterBuffers buffers) {
-    var state = SkyState.create(ctx);
+  static void renderBackground(RenderContext ctx, RasterBuffers buffers, RasterFogState fog) {
+    var state = SkyState.create(ctx, fog);
     var camera = ctx.camera();
     var pixels = buffers.colorBuffer();
     var width = camera.width();
@@ -72,8 +74,8 @@ public final class SkyRenderer {
     });
   }
 
-  public static RenderQuad[] collectSkyQuads(RenderContext ctx) {
-    var state = SkyState.create(ctx);
+  static RenderQuad[] collectSkyQuads(RenderContext ctx, RasterFogState fog) {
+    var state = SkyState.create(ctx, fog);
     if (!state.shouldRenderSky()) {
       return new RenderQuad[0];
     }
@@ -222,7 +224,7 @@ public final class SkyRenderer {
     }
 
     for (var i = 0; i < 16; i++) {
-      quads.add(new RenderQuad(center, ring[i], ring[i + 1], ring[i + 1], material));
+      quads.add(new RenderQuad(ring[i], ring[i + 1], center, center, material));
     }
   }
 
@@ -244,7 +246,7 @@ public final class SkyRenderer {
     }
 
     for (var i = 0; i < ring.length - 1; i++) {
-      quads.add(new RenderQuad(center, ring[i], ring[i + 1], ring[i + 1], material));
+      quads.add(new RenderQuad(ring[i], ring[i + 1], center, center, material));
     }
   }
 
@@ -304,14 +306,8 @@ public final class SkyRenderer {
 
   private static RenderVertex skyVertex(Camera camera, Matrix4fc pose, float x, float y, float z, float u, float v, int color) {
     var transformed = pose.transformPosition(new Vector3f(x, y, z));
-    return new RenderVertex(
-      (float) (camera.eyeX() + transformed.x()),
-      (float) (camera.eyeY() + transformed.y()),
-      (float) (camera.eyeZ() + transformed.z()),
-      u,
-      v,
-      color
-    );
+    return new RenderVertex((float) (camera.eyeX() + transformed.x()), (float) (camera.eyeY() + transformed.y()),
+      (float) (camera.eyeZ() + transformed.z()), u, v, color);
   }
 
   private static RenderMaterial skyMaterial(
@@ -361,45 +357,13 @@ public final class SkyRenderer {
     var sphericalFog = Mth.clamp(spherical / fogEnd, 0.0F, 1.0F);
     var cylindricalFog = cylindrical >= fogEnd ? 1.0F : 0.0F;
     var fogValue = Math.max(sphericalFog, cylindricalFog) * ARGB.alphaFloat(fogColor);
-    return ARGB.srgbLerp(fogValue, color, ARGB.opaque(fogColor));
-  }
-
-  static int atmosphericFogColor(RenderContext ctx) {
-    var probe = ctx.environmentProbe();
-    var fogColor = probe.getValue(EnvironmentAttributes.FOG_COLOR, 1.0F);
-    var renderDistanceChunks = ctx.maxDistance() / 16.0F;
-    if (renderDistanceChunks >= 4.0F) {
-      var sunAngle = probe.getValue(EnvironmentAttributes.SUN_ANGLE, 1.0F) * (float) (Math.PI / 180.0);
-      var sunX = Mth.sin(sunAngle) > 0.0F ? -1.0F : 1.0F;
-      var lookingAtSunFactor = (float) (ctx.camera().forwardX() * sunX);
-      if (lookingAtSunFactor > 0.0F) {
-        var sunriseColor = probe.getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, 1.0F);
-        var alpha = ARGB.alphaFloat(sunriseColor);
-        if (alpha > 0.0F) {
-          fogColor = ARGB.srgbLerp(lookingAtSunFactor * alpha, fogColor, ARGB.opaque(sunriseColor));
-        }
-      }
-    }
-
-    var skyColor = applyWeatherDarken(
-      probe.getValue(EnvironmentAttributes.SKY_COLOR, 1.0F),
-      ctx.level().getRainLevel(1.0F),
-      ctx.level().getThunderLevel(1.0F)
+    var remaining = 1.0F - fogValue;
+    return ARGB.color(
+      255,
+      (int) Math.rint((ARGB.redFloat(color) * remaining + ARGB.redFloat(fogColor) * fogValue) * 255.0F),
+      (int) Math.rint((ARGB.greenFloat(color) * remaining + ARGB.greenFloat(fogColor) * fogValue) * 255.0F),
+      (int) Math.rint((ARGB.blueFloat(color) * remaining + ARGB.blueFloat(fogColor) * fogValue) * 255.0F)
     );
-    var skyFogEnd = Math.min(probe.getValue(EnvironmentAttributes.SKY_FOG_END_DISTANCE, 1.0F) / 16.0F, renderDistanceChunks);
-    var skyColorMixFactor = Mth.clampedLerp(skyFogEnd / 32.0F, 0.25F, 1.0F);
-    skyColorMixFactor = 1.0F - (float) Math.pow(skyColorMixFactor, 0.25);
-    return ARGB.opaque(ARGB.srgbLerp(skyColorMixFactor, fogColor, skyColor));
-  }
-
-  private static int applyWeatherDarken(int color, float rainLevel, float thunderLevel) {
-    if (rainLevel > 0.0F) {
-      color = ARGB.scaleRGB(color, 1.0F - rainLevel * 0.5F, 1.0F - rainLevel * 0.5F, 1.0F - rainLevel * 0.4F);
-    }
-    if (thunderLevel > 0.0F) {
-      color = ARGB.scaleRGB(color, 1.0F - thunderLevel * 0.5F);
-    }
-    return color;
   }
 
   private static Identifier moonTexture(MoonPhase phase) {
@@ -452,10 +416,12 @@ public final class SkyRenderer {
     float endFlashXAngle,
     float endFlashYAngle
   ) {
-    private static SkyState create(RenderContext ctx) {
+    private static SkyState create(RenderContext ctx, RasterFogState fog) {
       var probe = ctx.environmentProbe();
       var skybox = ctx.level().dimensionType().skybox();
-      var shouldRenderSky = skybox != DimensionType.Skybox.NONE && !doesMobEffectBlockSky(ctx);
+      var fluid = Minecraft.getInstance().gameRenderer.mainCamera().getFluidInCamera();
+      var shouldRenderSky = skybox != DimensionType.Skybox.NONE && fluid != FogType.LAVA && fluid != FogType.POWDER_SNOW
+        && !doesMobEffectBlockSky(ctx);
       var endFlashState = ctx.level().endFlashState();
       var endFlashIntensity = endFlashState != null ? endFlashState.getIntensity(1.0F) : 0.0F;
       var endFlashXAngle = endFlashState != null ? endFlashState.getXAngle() : 0.0F;
@@ -472,8 +438,8 @@ public final class SkyRenderer {
         probe.getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, 1.0F),
         probe.getValue(EnvironmentAttributes.MOON_PHASE, 1.0F),
         ARGB.opaque(probe.getValue(EnvironmentAttributes.SKY_COLOR, 1.0F)),
-        atmosphericFogColor(ctx),
-        Math.min(ctx.maxDistance(), probe.getValue(EnvironmentAttributes.SKY_FOG_END_DISTANCE, 1.0F)),
+        ARGB.colorFromFloat(1.0F, fog.color().x(), fog.color().y(), fog.color().z()),
+        fog.skyEnd(),
         endFlashIntensity,
         endFlashXAngle,
         endFlashYAngle

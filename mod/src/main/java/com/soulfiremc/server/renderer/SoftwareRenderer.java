@@ -96,16 +96,12 @@ public class SoftwareRenderer {
 
       var dynamicCollectNanos = 0L;
 
-      var blockEntityCollectStart = System.nanoTime();
-      var blockEntityScene = SceneCollector.collectBlockEntities(ctx);
-      dynamicCollectNanos += System.nanoTime() - blockEntityCollectStart;
-
       var worldCollectStart = System.nanoTime();
       var worldScene = WorldMeshCollector.collect(ctx);
       debugTrace.worldCollectNanos(System.nanoTime() - worldCollectStart);
 
       var dynamicCollectStart = System.nanoTime();
-      var dynamicScene = SceneCollector.collectEntitiesAndWeather(ctx, localPlayer);
+      var dynamicScene = SceneCollector.collectDynamicScene(ctx, localPlayer);
       dynamicCollectNanos += System.nanoTime() - dynamicCollectStart;
 
       var cloudCollectStart = System.nanoTime();
@@ -113,12 +109,12 @@ public class SoftwareRenderer {
       dynamicCollectNanos += System.nanoTime() - cloudCollectStart;
       debugTrace.dynamicCollectNanos(dynamicCollectNanos);
 
-      var sceneData = worldScene.merge(blockEntityScene).merge(dynamicScene).merge(cloudScene);
+      var sceneData = worldScene.merge(dynamicScene).merge(cloudScene);
       var buffers = new RasterBuffers(options.width(), options.height());
 
       var rasterStart = System.nanoTime();
       RASTER_PIPELINE.render(ctx, sceneData, buffers);
-      renderOverlays(ctx, options, buffers);
+      renderOverlays(ctx, options, sceneData, buffers);
       debugTrace.rasterNanos(System.nanoTime() - rasterStart);
       debugTrace.totalNanos(System.nanoTime() - renderStart);
       debugTrace.logSummary(sceneData);
@@ -130,6 +126,7 @@ public class SoftwareRenderer {
   static void renderOverlays(
     RenderContext ctx,
     Options options,
+    SceneData sceneData,
     RasterBuffers buffers
   ) {
     if (options.includeHands()) {
@@ -154,6 +151,8 @@ public class SoftwareRenderer {
       var screenCamera = new Camera(Vec3.ZERO, 180, 0, options.width(), options.height(), hudFov(options.fov()), 100);
       RASTER_PIPELINE.renderScene(screenCamera, effects, buffers, ctx.animationTick(), RasterFogState.from(ctx));
     }
+
+    RASTER_PIPELINE.renderOutlines(ctx.camera(), sceneData.outlines(), buffers, ctx.animationTick());
 
     if (options.includeHud()) {
       PovHudRenderer.render(ctx, buffers);

@@ -230,9 +230,9 @@ public final class CloudMeshCollector {
     var renderVertices = new RenderVertex[4];
     for (var i = 0; i < 4; i++) {
       var vertex = vertices[insideFace ? 3 - i : i];
-      var relativeX = (vertex[0] + cellX) * CELL_SIZE - xInCell;
+      var relativeX = (vertex[0] * CELL_SIZE - xInCell) + cellX * CELL_SIZE;
       var relativeY = vertex[1] * CELL_HEIGHT + relativeBottomY;
-      var relativeZ = (vertex[2] + cellZ) * CELL_SIZE - zInCell;
+      var relativeZ = (vertex[2] * CELL_SIZE - zInCell) + cellZ * CELL_SIZE;
       renderVertices[i] = new RenderVertex(
         relativeX,
         relativeY,

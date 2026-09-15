@@ -17,8 +17,12 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.pipeline.BlendFunction;
+
 /// Applies vanilla's entity-outline edge filter and two separable blur passes.
 final class EntityOutlineRenderer {
+  private static final RenderMaterial.BlendState BLEND = RenderMaterial.BlendState.from(BlendFunction.ENTITY_OUTLINE_BLIT);
+
   private EntityOutlineRenderer() {}
 
   static void composite(RasterBuffers mask, RasterBuffers target) {
@@ -29,17 +33,7 @@ final class EntityOutlineRenderer {
     var outline = blur(horizontal, width, height, false);
     var destination = target.colorBuffer();
     for (var i = 0; i < outline.length; i++) {
-      var alpha = (outline[i] >>> 24) * (1.0F / 255.0F);
-      if (alpha == 0) {
-        continue;
-      }
-      var color = destination[i] & 0xFF000000;
-      for (var shift = 0; shift < 24; shift += 8) {
-        var source = (outline[i] >>> shift) & 255;
-        var background = (destination[i] >>> shift) & 255;
-        color |= channel(source * alpha + background * (1.0F - alpha)) << shift;
-      }
-      destination[i] = color;
+      destination[i] = SoftwareRasterizer.blend(destination[i], outline[i], BLEND);
     }
   }
 
@@ -73,18 +67,30 @@ final class EntityOutlineRenderer {
   }
 
   static int[] blur(int[] source, int width, int height, boolean horizontal) {
+    var flipped = new int[source.length];
+    for (var y = 0; y < height; y++) {
+      System.arraycopy(source, y * width, flipped, (height - y - 1) * width, width);
+    }
+    var texture = RendererAssets.TextureImage.fromArgb(width, height, flipped, null)
+      .withAddressMode(RendererAssets.TextureAddressMode.CLAMP_TO_EDGE).withLinearFiltering();
     var result = new int[source.length];
+    var texelX = 1.0F / width;
+    var texelY = 1.0F / height;
+    var stepX = horizontal ? texelX : 0.0F;
+    var stepY = horizontal ? 0.0F : texelY;
     for (var y = 0; y < height; y++) {
       for (var x = 0; x < width; x++) {
+        var u = Math.fma(texelX, x, texelX * 0.5F);
+        var v = Math.fma(texelY, height - y - 1, texelY * 0.5F);
+        var first = texture.sample(u - stepX * 1.5F, v - stepY * 1.5F, 0);
+        var second = texture.sample(u + stepX * 0.5F, v + stepY * 0.5F, 0);
+        var last = texture.sample(u + stepX * 2.0F, v + stepY * 2.0F, 0);
         var color = 0;
         for (var shift = 0; shift < 32; shift += 8) {
-          var total = 0;
-          for (var offset = -2; offset <= 2; offset++) {
-            var sampleX = horizontal ? Math.clamp(x + offset, 0, width - 1) : x;
-            var sampleY = horizontal ? y : Math.clamp(y + offset, 0, height - 1);
-            total += (source[sampleY * width + sampleX] >>> shift) & 255;
-          }
-          color |= channel(total * (shift == 24 ? 0.5F : 0.2F)) << shift;
+          var total = ((first >>> shift) & 255) * (1.0F / 255.0F)
+            + ((second >>> shift) & 255) * (1.0F / 255.0F)
+            + ((last >>> shift) & 255) * (1.0F / 255.0F) * 0.5F;
+          color |= channel((shift == 24 ? total : total / 2.5F) * 255.0F) << shift;
         }
         result[y * width + x] = color;
       }

@@ -26,12 +26,17 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.UVPair;
+import net.minecraft.client.particle.ParticleEngine;
+import net.minecraft.client.particle.ParticleRenderType;
+import net.minecraft.client.particle.QuadParticleGroup;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.SpriteContents;
@@ -58,6 +63,9 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VanillaSubmitCollectorTextTest {
@@ -473,16 +481,16 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
-  void weatherTargetRenderTypesRouteToWeatherPass() throws Exception {
+  void lightningKeepsItsFeaturePhaseBeforeClouds() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
 
     collector.submitCustomGeometry(new PoseStack(), RenderTypes.lightning(), (_, consumer) -> addTextQuad(consumer, 0x80FFFFFF));
 
     var scene = sceneData(collector);
-    assertEquals(0, scene.translucent().length);
-    assertEquals(1, scene.weather().length);
-    assertTrue(scene.weather()[0].material().blendState().blends());
+    assertEquals(1, scene.translucent().length);
+    assertEquals(0, scene.weather().length);
+    assertTrue(scene.translucent()[0].material().blendState().blends());
   }
 
   @Test
@@ -544,7 +552,42 @@ class VanillaSubmitCollectorTextTest {
     assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.cutout()[0].material().alphaCutoutThreshold());
     assertEquals(RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD, scene.translucentParticles()[0].material().alphaCutoutThreshold());
     assertTrue(scene.translucentParticles()[0].material().depthWrite());
-    assertTrue(((scene.translucentParticles()[0].material().color() >> 16) & 0xFF) < 255);
+    assertFalse(scene.translucentParticles()[0].material().sortOnUpload());
+    assertTrue(((scene.translucentParticles()[0].v0().lightColor() >> 16) & 0xFF) < 255);
+  }
+
+  @Test
+  void particleExtractionIsolatesAndRestoresClientCachesEvenOnFailure() {
+    var fail = new java.util.concurrent.atomic.AtomicBoolean();
+    var engine = new ParticleEngine(null, null) {
+      @Override
+      public void extract(ParticlesRenderState output, Frustum frustum, net.minecraft.client.Camera camera, float partialTick) {
+        var cache = ((QuadParticleGroup) particles.get(ParticleRenderType.SINGLE_QUADS)).particleTypeRenderState;
+        assertTrue(cache.isEmpty());
+        addParticle(cache, SingleQuadParticle.Layer.TRANSLUCENT, 5, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+        if (fail.get()) {
+          throw new IllegalStateException();
+        }
+        output.add(cache);
+      }
+    };
+    var group = new QuadParticleGroup(engine, ParticleRenderType.SINGLE_QUADS);
+    engine.particles.put(ParticleRenderType.SINGLE_QUADS, group);
+    var clientCache = group.particleTypeRenderState;
+    addParticle(clientCache, SingleQuadParticle.Layer.TRANSLUCENT, 4, 0xFFFFFFFF, LightCoordsUtil.FULL_BRIGHT);
+
+    var extracted = VanillaSubmitCollector.extractParticles(engine, null, null);
+    assertEquals(1, extracted.particles.size());
+    assertNotSame(clientCache, extracted.particles.getFirst());
+    assertSame(clientCache, group.particleTypeRenderState);
+    assertFalse(clientCache.isEmpty());
+    extracted.reset();
+    assertFalse(clientCache.isEmpty());
+
+    fail.set(true);
+    assertThrows(IllegalStateException.class, () -> VanillaSubmitCollector.extractParticles(engine, null, null));
+    assertSame(clientCache, group.particleTypeRenderState);
+    assertFalse(clientCache.isEmpty());
   }
 
   @Test
@@ -626,6 +669,27 @@ class VanillaSubmitCollectorTextTest {
     assertEquals(0xFFFF0000, quad.v1().color());
     assertEquals(0xFFFF0000, quad.v2().color());
     assertEquals(0xFFFF0000, quad.v3().color());
+  }
+
+  @Test
+  void triangleFansUseSuccessiveRimVerticesForFlatShading() throws Exception {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var consumer = newConsumer(collector, texture, RenderTypes.leash(), PrimitiveTopology.TRIANGLE_FAN);
+    addVertex(consumer, 0, 0, 4, 0, 0, 0xFFFF0000, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, -1, -1, 4, 0, 0, 0xFF00FF00, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, 1, -1, 4, 0, 0, 0xFF0000FF, LightCoordsUtil.FULL_BRIGHT);
+    addVertex(consumer, 1, 1, 4, 0, 0, 0xFFFFFF00, LightCoordsUtil.FULL_BRIGHT);
+    flush(consumer);
+    var quads = sceneData(collector).opaque();
+    assertEquals(2, quads.length);
+    for (var i = 0; i < quads.length; i++) {
+      var expected = i == 0 ? 0xFF00FF00 : 0xFF0000FF;
+      for (var vertex : List.of(quads[i].v0(), quads[i].v1(), quads[i].v2(), quads[i].v3())) {
+        assertEquals(expected, vertex.color());
+      }
+    }
   }
 
   @Test

@@ -132,6 +132,9 @@ mutable field net/minecraft/client/renderer/texture/TextureManager byPath Ljava/
 mutable field net/minecraft/client/renderer/texture/TextureManager tickableTextures Ljava/util/Set;
 
 accessible field net/minecraft/client/particle/ParticleEngine resourceManager Lnet/minecraft/client/particle/ParticleResources;
+accessible field net/minecraft/client/particle/ParticleEngine particles Ljava/util/Map;
+accessible field net/minecraft/client/particle/QuadParticleGroup particleTypeRenderState Lnet/minecraft/client/renderer/state/level/QuadParticleRenderState;
+mutable field net/minecraft/client/particle/QuadParticleGroup particleTypeRenderState Lnet/minecraft/client/renderer/state/level/QuadParticleRenderState;
 
 accessible field net/minecraft/client/Options minecraft Lnet/minecraft/client/Minecraft;
 mutable field net/minecraft/client/Options minecraft Lnet/minecraft/client/Minecraft;

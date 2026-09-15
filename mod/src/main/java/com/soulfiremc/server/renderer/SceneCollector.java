@@ -51,13 +51,14 @@ public class SceneCollector {
   private static final float[] WEATHER_COLUMN_SIZE_X = weatherColumnSizes(true);
   private static final float[] WEATHER_COLUMN_SIZE_Z = weatherColumnSizes(false);
 
-  public static SceneData collectEntitiesAndWeather(RenderContext ctx, LocalPlayer localPlayer) {
+  public static SceneData collectDynamicScene(RenderContext ctx, LocalPlayer localPlayer) {
     var level = ctx.level();
     var builder = SceneData.builder();
     var trace = RenderDebugTrace.current();
     var options = Minecraft.getInstance().options;
     Entity.setViewScale(Mth.clamp(options.getEffectiveRenderDistance() / 8.0, 1.0, 2.5) * options.entityDistanceScaling().get());
 
+    var collector = VanillaSubmitCollector.cameraRelativeCollector(ctx);
     var visibleEntities = new ArrayList<Entity>();
     VanillaSubmitCollector.prepareEntityDispatcher(ctx, localPlayer);
     try {
@@ -83,12 +84,14 @@ public class SceneCollector {
 
         visibleEntities.add(entity);
       }
-      builder.addAll(VanillaSubmitCollector.collectEntities(ctx, visibleEntities));
+      collector.submitEntities(visibleEntities);
+      collectBlockEntities(ctx, collector);
+      collector.submitParticles();
+      builder.addAll(collector.buildScene());
     } finally {
       VanillaSubmitCollector.resetEntityDispatcher();
     }
 
-    builder.addAll(VanillaSubmitCollector.collectParticles(ctx));
     collectBlockDestroyAnimations(ctx, builder);
     collectWeather(level, ctx, builder);
     return builder.build();
@@ -98,8 +101,7 @@ public class SceneCollector {
     return entity == localPlayer && !ctx.cameraDetached() && !localPlayer.isSleeping();
   }
 
-  public static SceneData collectBlockEntities(RenderContext ctx) {
-    var builder = SceneData.builder();
+  private static void collectBlockEntities(RenderContext ctx, VanillaSubmitCollector collector) {
     var level = ctx.level();
     var camera = ctx.camera();
     var seen = new HashSet<BlockPos>();
@@ -110,7 +112,7 @@ public class SceneCollector {
       if (blockEntity.isRemoved()) {
         globalBlockEntities.remove();
       } else {
-        collectBlockEntity(ctx, builder, seen, blockEntity, true);
+        collectBlockEntity(ctx, collector, seen, blockEntity, true);
       }
     }
 
@@ -134,16 +136,15 @@ public class SceneCollector {
 
         LevelChunk chunk = level.getChunk(chunkX, chunkZ);
         for (var blockEntity : chunk.getBlockEntities().values()) {
-          collectBlockEntity(ctx, builder, seen, blockEntity, false);
+          collectBlockEntity(ctx, collector, seen, blockEntity, false);
         }
       }
     }
-    return builder.build();
   }
 
   private static void collectBlockEntity(
     RenderContext ctx,
-    SceneData.Builder builder,
+    VanillaSubmitCollector collector,
     HashSet<BlockPos> seen,
     BlockEntity blockEntity,
     boolean globallyRendered
@@ -166,10 +167,7 @@ public class SceneCollector {
     }
 
     var progress = globallyRendered ? -1 : blockDestroyProgress(pos);
-    var scene = VanillaSubmitCollector.collectBlockEntity(ctx, blockEntity, progress >= 0 ? progress : null, globallyRendered);
-    if (scene.totalQuadCount() > 0) {
-      builder.addAll(scene);
-    }
+    collector.submitBlockEntity(blockEntity, progress >= 0 ? progress : null, globallyRendered);
   }
 
   private static void collectBlockDestroyAnimations(RenderContext ctx, SceneData.Builder builder) {
@@ -227,8 +225,8 @@ public class SceneCollector {
     }
 
     var assets = RendererAssets.instance();
-    collectWeatherColumns(ctx, builder, renderState, renderState.rainColumns, assets.texture(RAIN_LOCATION), 1.0F);
-    collectWeatherColumns(ctx, builder, renderState, renderState.snowColumns, assets.texture(SNOW_LOCATION), 0.8F);
+    collectWeatherColumns(ctx, builder, renderState, renderState.rainColumns, assets.renderTexture(RAIN_LOCATION), 1.0F);
+    collectWeatherColumns(ctx, builder, renderState, renderState.snowColumns, assets.renderTexture(SNOW_LOCATION), 0.8F);
   }
 
   private static void collectWeatherColumns(
@@ -270,27 +268,28 @@ public class SceneCollector {
 
       var halfSizeX = WEATHER_COLUMN_SIZE_X[tableIndex] / 2.0F;
       var halfSizeZ = WEATHER_COLUMN_SIZE_Z[tableIndex] / 2.0F;
-      var x0 = column.x() + 0.5F - halfSizeX;
-      var x1 = column.x() + 0.5F + halfSizeX;
-      var y0 = (float) column.bottomY();
-      var y1 = (float) column.topY();
-      var z0 = column.z() + 0.5F - halfSizeZ;
-      var z1 = column.z() + 0.5F + halfSizeZ;
+      var x0 = relativeX - halfSizeX;
+      var x1 = relativeX + halfSizeX;
+      var y0 = (float) (column.bottomY() - camera.eyeY());
+      var y1 = (float) (column.topY() - camera.eyeY());
+      var z0 = relativeZ - halfSizeZ;
+      var z1 = relativeZ + halfSizeZ;
       var u0 = column.uOffset();
       var u1 = column.uOffset() + 1.0F;
       var v0 = column.bottomY() * 0.25F + column.vOffset();
       var v1 = column.topY() * 0.25F + column.vOffset();
       var color = ARGB.white(alpha);
+      var lightColor = VanillaLightmap.color(ctx, column.lightCoords(), 0);
       var material = RenderMaterial
-        .create(texture, RendererAssets.AlphaMode.TRANSLUCENT, color, true, 0.0F, RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD)
+        .create(texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, true, 0.0F, RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD)
         .withPipelineState(pipeline);
       builder.addWeather(new RenderQuad(
-        new RenderVertex(x0, y1, z0, u0, v0, 0xFFFFFFFF),
-        new RenderVertex(x1, y1, z1, u1, v0, 0xFFFFFFFF),
-        new RenderVertex(x1, y0, z1, u1, v1, 0xFFFFFFFF),
-        new RenderVertex(x0, y0, z0, u0, v1, 0xFFFFFFFF),
+        new RenderVertex(x0, y1, z0, u0, v0, color).withLightColor(lightColor),
+        new RenderVertex(x1, y1, z1, u1, v0, color).withLightColor(lightColor),
+        new RenderVertex(x1, y0, z1, u1, v1, color).withLightColor(lightColor),
+        new RenderVertex(x0, y0, z0, u0, v1, color).withLightColor(lightColor),
         material
-      ));
+      ).withOrigin(new Vec3(camera.eyeX(), camera.eyeY(), camera.eyeZ())));
       RenderDebugTrace.current().weatherBillboard();
     }
   }

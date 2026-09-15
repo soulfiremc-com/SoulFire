@@ -111,7 +111,7 @@ class SceneCollectorTest {
   }
 
   @Test
-  void weatherMaterialColorDoesNotBakeColumnLight() throws Exception {
+  void weatherKeepsColumnColorAndLightingSeparate() throws Exception {
     var method = SceneCollector.class.getDeclaredMethod(
       "collectWeatherColumns",
       RenderContext.class,
@@ -152,7 +152,9 @@ class SceneCollectorTest {
 
     var weather = builder.build().weather();
     assertEquals(1, weather.length);
-    var color = weather[0].material().color();
+    assertEquals(0xFFFFFFFF, weather[0].material().color());
+    assertEquals(VanillaLightmap.color(ctx, 0, 0), weather[0].v0().lightColor());
+    var color = weather[0].v0().color();
     assertEquals(0x00FFFFFF, color & 0x00FFFFFF);
     assertTrue(((color >>> 24) & 0xFF) > 0);
   }

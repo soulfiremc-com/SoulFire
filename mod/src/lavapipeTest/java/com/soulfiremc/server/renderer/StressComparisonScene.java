@@ -18,6 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 import com.google.gson.GsonBuilder;
+import com.soulfiremc.manual.mixin.StressEntityAccess;
 import com.soulfiremc.manual.mixin.StressGuardianAccess;
 import com.soulfiremc.manual.mixin.StressItemAccess;
 import net.minecraft.client.Minecraft;
@@ -229,6 +230,11 @@ final class StressComparisonScene {
     put(minecraft, -6, 0, 12, block("soul_fire"));
   }
 
+  private static void setClientGlowing(Entity entity, boolean glowing) {
+    // Entity.FLAG_GLOWING is synchronized metadata; setGlowingTag only works on the server.
+    ((StressEntityAccess) entity).setClientFlag(6, glowing);
+  }
+
   private static void buildEntities(Minecraft minecraft) {
     // Every registered type with a client factory gets a slot. Exceptions are recorded, never silently omitted.
     var index = 0;
@@ -268,18 +274,18 @@ final class StressComparisonScene {
       stand.setLeftLegPose(new Rotations(i * 4, 0, 10));
       stand.setRightLegPose(new Rotations(-i * 4, 0, -10));
       equip(stand);
-      stand.setGlowingTag(i % 4 == 0);
+      setClientGlowing(stand, i % 4 == 0);
       stand.setInvisible(i % 5 == 0);
     }
     for (var i = 0; i < 8; i++) {
       var sheep = spawn(minecraft, "sheep", -7 + i, 0, 6, "{Color:" + i + "b}");
       ((Leashable) sheep).setLeashedTo(holder, false);
-      sheep.setGlowingTag(i % 2 == 0);
+      setClientGlowing(sheep, i % 2 == 0);
     }
     var zombie = (LivingEntity) spawn(minecraft, "zombie", 7, 0, -1, "{IsBaby:1b}");
     equip(zombie);
     zombie.setInvisible(true);
-    zombie.setGlowingTag(true);
+    setClientGlowing(zombie, true);
     spawn(minecraft, "creeper", 8, 0, 2, "{powered:1b}");
     spawn(minecraft, "enderman", 10, 0, 2, "{carriedBlockState:{Name:'minecraft:grass_block'}}");
     var dinnerbone = spawn(minecraft, "cow", 12, 0, 2, "{}");
@@ -450,6 +456,7 @@ final class StressComparisonScene {
       "scene", view, "seed", SEED, "camera", Map.of("position", camera.position(), "yaw", camera.yRot(), "pitch", camera.xRot(), "fov", camera.getFov()),
       "entities", ENTITY_COUNTS, "blocks", BLOCK_COUNTS, "particles", PARTICLE_COUNTS,
       "excludedEntities", EXCLUSIONS, "softwareMaxDistance", distance,
+      "glowingEntities", ENTITIES.stream().filter(Entity::isCurrentlyGlowing).count(),
       "coverageNote", "Counts describe stage contents, not visibility. Views deliberately overlap features; inspect the native image for occlusion.")));
     Files.writeString(output.resolve("software-trace.json"), gson.toJson(result.debugTrace()));
     return result.image();

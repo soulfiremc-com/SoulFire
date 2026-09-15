@@ -179,6 +179,10 @@ public record RenderMaterial(
     );
   }
 
+  public RenderMaterial withSortOnUpload(boolean sortOnUpload) {
+    return new RenderMaterial(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha);
+  }
+
   public RenderMaterial withGlintAlpha(float alpha) {
     return new RenderMaterial(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha);
   }

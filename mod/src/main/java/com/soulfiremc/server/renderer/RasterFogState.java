@@ -31,12 +31,13 @@ record RasterFogState(
   float environmentalEnd,
   float renderDistanceStart,
   float renderDistanceEnd,
-  float cloudsEnd
+  float cloudsEnd,
+  float skyEnd
 ) {
   RasterFogState(boolean enabled, int color, float environmentalStart, float environmentalEnd,
                  float renderDistanceStart, float renderDistanceEnd) {
     this(enabled, new Vector4f(ARGB.redFloat(color), ARGB.greenFloat(color), ARGB.blueFloat(color), ARGB.alphaFloat(color)),
-      environmentalStart, environmentalEnd, renderDistanceStart, renderDistanceEnd, Float.MAX_VALUE);
+      environmentalStart, environmentalEnd, renderDistanceStart, renderDistanceEnd, Float.MAX_VALUE, Float.MAX_VALUE);
   }
 
   static final RasterFogState DISABLED = new RasterFogState(false, 0, Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
@@ -53,6 +54,6 @@ record RasterFogState(
     var fog = minecraft.gameRenderer.fogRenderer.setupFog(camera, Math.max(1, ctx.maxDistance() / 16), DeltaTracker.ONE,
       ctx.lightmapRenderState().bossOverlayWorldDarkening, ctx.level());
     return new RasterFogState(true, new Vector4f(fog.color), fog.environmentalStart, fog.environmentalEnd,
-      fog.renderDistanceStart, fog.renderDistanceEnd, fog.cloudEnd);
+      fog.renderDistanceStart, fog.renderDistanceEnd, fog.cloudEnd, fog.skyEnd);
   }
 }

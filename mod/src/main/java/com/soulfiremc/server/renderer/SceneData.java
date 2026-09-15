@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.renderer;
 
+import net.minecraft.world.phys.Vec3;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -65,6 +67,19 @@ public record SceneData(
       concat(weather, other.weather),
       concat(outlines, other.outlines)
     );
+  }
+
+  public SceneData withOrigin(Vec3 origin) {
+    if (origin.equals(Vec3.ZERO)) {
+      return this;
+    }
+    return new SceneData(withOrigin(opaque, origin), withOrigin(cutout, origin), withOrigin(translucent, origin),
+      withOrigin(terrainTranslucent, origin), withOrigin(translucentParticles, origin), withOrigin(clouds, origin),
+      withOrigin(weather, origin), withOrigin(outlines, origin));
+  }
+
+  private static RenderQuad[] withOrigin(RenderQuad[] quads, Vec3 origin) {
+    return Arrays.stream(quads).map(quad -> quad.withOrigin(origin)).toArray(RenderQuad[]::new);
   }
 
   public int totalQuadCount() {
