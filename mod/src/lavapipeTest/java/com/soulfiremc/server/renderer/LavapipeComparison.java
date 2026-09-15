@@ -54,6 +54,12 @@ public final class LavapipeComparison {
 
   private LavapipeComparison() {}
 
+  public static void beforeExtract(Minecraft minecraft) {
+    if (INVENTORY) {
+      InventoryComparisonScene.freezeEnvironment(minecraft);
+    }
+  }
+
   public static void afterFrame(Minecraft minecraft) {
     if (finished) {
       minecraft.stop();

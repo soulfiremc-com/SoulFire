@@ -2,6 +2,6 @@
   "required": true,
   "package": "com.soulfiremc.manual.mixin",
   "compatibilityLevel": "JAVA_25",
-  "client": ["LavapipeTestMixin", "NativeAtlasMirror"],
+  "client": ["LavapipeTestMixin", "NativeAtlasMirror", "ComparisonEnvironment", "ComparisonPartialTick"],
   "injectors": {"defaultRequire": 1}
 }

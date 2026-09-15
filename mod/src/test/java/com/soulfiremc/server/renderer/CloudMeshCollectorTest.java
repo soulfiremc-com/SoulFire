@@ -65,7 +65,7 @@ class CloudMeshCollectorTest {
     var textureData = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
     var camera = new Camera(new Vec3(0.0, 64.0, 0.0), 0.0F, 0.0F, 64, 64, 70.0, 256.0F);
 
-    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xFFFFFFFF, 96.0F, 2, 0L, 128.0F);
+    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xFFFFFFFF, 96.0F, 2, 0L, 0, 128.0F);
 
     assertEquals(0, scene.opaque().length);
     assertEquals(0, scene.cutout().length);
@@ -74,6 +74,20 @@ class CloudMeshCollectorTest {
     assertEquals(0, scene.weather().length);
     assertTrue(scene.clouds()[0].material().depthWrite());
     assertEquals(RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL, scene.clouds()[0].material().depthTest());
+  }
+
+  @Test
+  void cloudMotionIncludesTheFractionalTick() {
+    var texture = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
+    var camera = new Camera(new Vec3(0, 64, 0), 0, 0, 64, 64, 70, 256);
+    var before = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0, 128);
+    var after = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0.5F, 128);
+
+    assertEquals(before.clouds().length, after.clouds().length);
+    for (var i = 0; i < before.clouds().length; i++) {
+      assertEquals(before.clouds()[i].v0().x() - 0.015F, after.clouds()[i].v0().x(), 0.00001F);
+      assertEquals(before.clouds()[i].v0().z(), after.clouds()[i].v0().z());
+    }
   }
 
   private static RendererAssets.TextureImage solidTexture(int color) {

@@ -52,6 +52,8 @@ Use a flat local server for a scene like the Alpha HUD screenshot:
 
 This mode equips a diamond helmet, elytra, sword, and totem. It fills the inventory, adds a nearby `ProbeB`, and opens the inventory screen.
 It also adds the Alpha HUD boss bar and fixes the inventory preview's mouse coordinates.
+The test holds both world clocks at 6000 ticks, clears rain and thunder, and fixes entity animation time and the fractional tick.
+These client-only settings keep cloud positions and lighting stable while retaining clouds in the comparison.
 After 60 frames, it captures the native framebuffer and runs the complete software renderer against the same live client state.
 
 Open `mod/build/lavapipe-test/output/inventory/comparison.png`.

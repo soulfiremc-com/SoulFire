@@ -1214,7 +1214,8 @@ public final class RendererAssets {
 
       pixels = Arrays.copyOf(pixels, width * height);
       var animation = metadata != null && metadata.has("animation") ? metadata.getAsJsonObject("animation") : null;
-      var frameHeight = animation != null && animation.has("height") ? animation.get("height").getAsInt() : Math.min(width, height);
+      var frameHeight = animation == null ? height
+        : animation.has("height") ? animation.get("height").getAsInt() : Math.min(width, height);
       frameHeight = frameHeight <= 0 || frameHeight > height ? Math.min(width, height) : frameHeight;
       frameHeight = Math.max(1, frameHeight);
       var frameCount = Math.max(1, height / frameHeight);

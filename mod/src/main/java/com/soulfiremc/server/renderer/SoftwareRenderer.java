@@ -90,7 +90,7 @@ public class SoftwareRenderer {
         options.width(),
         options.height(),
         options.fov(),
-        options.maxDistance() + 32.0F
+        Math.max(options.maxDistance() * 4.0F, Minecraft.getInstance().options.cloudRange().get() * 16.0F)
       );
       var ctx = RenderContext.create(level, localPlayer, camera, options.maxDistance());
 

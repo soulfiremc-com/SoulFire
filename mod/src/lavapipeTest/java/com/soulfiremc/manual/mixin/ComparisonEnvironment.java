@@ -17,19 +17,19 @@
  */
 package com.soulfiremc.manual.mixin;
 
-import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
-import net.minecraft.client.renderer.texture.SpriteLoader;
-import net.minecraft.client.renderer.texture.TextureAtlas;
+import com.soulfiremc.server.renderer.LavapipeComparison;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(TextureAtlas.class)
-public class NativeAtlasMirror {
-  @Inject(method = "upload", at = @At("TAIL"))
-  private void mirrorUploadedAtlas(SpriteLoader.Preparations preparations, CallbackInfo ci) {
-    var atlas = (TextureAtlas) (Object) this;
-    RendererRuntimeTextureMirror.registerAtlas(atlas, atlas.getTexture());
+@Mixin(GameRenderer.class)
+public class ComparisonEnvironment {
+  @Inject(method = "extract", at = @At("HEAD"))
+  private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+    LavapipeComparison.beforeExtract(Minecraft.getInstance());
   }
 }

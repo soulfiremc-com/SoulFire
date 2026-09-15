@@ -18,7 +18,6 @@
 package com.soulfiremc.mod.mixin.headless.rendering;
 
 import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
@@ -114,17 +113,7 @@ public abstract class MixinTextureAtlas extends AbstractTexture {
       var device = RenderSystem.getDevice();
       texture = device.createTexture(atlas.location()::toString, 5, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
       textureView = device.createTextureView(texture);
-      try (var pixels = new NativeImage(width, height, true)) {
-        for (var sprite : sprites) {
-          var contents = sprite.contents();
-          for (var y = 0; y < contents.height(); y++) {
-            for (var x = 0; x < contents.width(); x++) {
-              pixels.setPixel(sprite.getX() + x, sprite.getY() + y, contents.originalImage.getPixel(x, y));
-            }
-          }
-        }
-        RendererRuntimeTextureMirror.register(atlas.location(), texture, pixels);
-      }
+      RendererRuntimeTextureMirror.registerAtlas(atlas, texture);
     }
     return textureView;
   }

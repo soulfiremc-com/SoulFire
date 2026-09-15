@@ -27,6 +27,8 @@ import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
 import net.minecraft.world.BossEvent;
+import net.minecraft.world.clock.ClockNetworkState;
+import net.minecraft.world.clock.WorldClocks;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
@@ -44,6 +46,20 @@ import java.util.UUID;
 
 final class InventoryComparisonScene {
   private InventoryComparisonScene() {}
+
+  static void freezeEnvironment(Minecraft minecraft) {
+    if (minecraft.level == null) {
+      return;
+    }
+    var level = minecraft.level;
+    level.setTimeFromServer(6000);
+    level.clockManager().handleUpdates(6000, Map.of(level.registryAccess().get(WorldClocks.OVERWORLD).orElseThrow(), new ClockNetworkState(6000, 0, 0)));
+    level.setRainLevel(0);
+    level.setThunderLevel(0);
+    for (var entity : level.entitiesForRendering()) {
+      entity.tickCount = 60;
+    }
+  }
 
   static void prepare(Minecraft minecraft) {
     var player = minecraft.player;
@@ -94,6 +110,8 @@ final class InventoryComparisonScene {
       "camera", Map.of("x", position.x, "y", position.y, "z", position.z,
         "yaw", camera.yRot(), "pitch", camera.xRot(), "fov", camera.getFov()),
       "gameTime", minecraft.level.getGameTime(),
+      "dayTime", minecraft.level.getOverworldClockTime(),
+      "partialTick", minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false),
       "guiScale", minecraft.getWindow().getGuiScale(),
       "softwareMaxDistance", 32,
       "nativeRenderDistanceChunks", minecraft.options.renderDistance().get()

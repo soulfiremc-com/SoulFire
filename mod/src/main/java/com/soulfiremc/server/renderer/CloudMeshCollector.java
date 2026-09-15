@@ -66,7 +66,8 @@ public final class CloudMeshCollector {
       cloudColor,
       ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, 1.0F),
       range,
-      ctx.animationTick(),
+      ctx.level().getGameTime(),
+      Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false),
       cloudFogEnd
     );
   }
@@ -78,7 +79,8 @@ public final class CloudMeshCollector {
     int cloudColor,
     float cloudHeight,
     int range,
-    long animationTick,
+    long gameTime,
+    float partialTick,
     float cloudFogEnd
   ) {
     if (cloudStatus == CloudStatus.OFF || ARGB.alpha(cloudColor) == 0) {
@@ -90,7 +92,7 @@ public final class CloudMeshCollector {
     var relativeCameraPos = relativeTopY < 0.0F
       ? RelativeCameraPos.ABOVE_CLOUDS
       : relativeBottomY > 0.0F ? RelativeCameraPos.BELOW_CLOUDS : RelativeCameraPos.INSIDE_CLOUDS;
-    var cloudOffset = (float) (animationTick % (texture.width() * (long) TICKS_PER_CELL));
+    var cloudOffset = (float) (gameTime % (texture.width() * (long) TICKS_PER_CELL)) + partialTick;
     var cloudX = camera.eyeX() + cloudOffset * BLOCKS_PER_SECOND / 20.0F;
     var cloudZ = camera.eyeZ() + 3.96F;
     var textureWidthBlocks = texture.width() * (double) CELL_SIZE;

@@ -33,6 +33,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RendererAssetsTest {
   @Test
+  void staticPortraitTextureUsesItsFullHeightAtEveryTick() {
+    var texture = RendererAssets.TextureImage.fromArgb(2, 3,
+      new int[]{0xFFFF0000, 0xFFFF0000, 0xFF00FF00, 0xFF00FF00, 0xFF0000FF, 0xFF0000FF}, null);
+
+    for (var tick : new long[]{0, 1, 6000}) {
+      assertEquals(0xFFFF0000, texture.sample(0.5F, 1.0F / 6, tick));
+      assertEquals(0xFF00FF00, texture.sample(0.5F, 0.5F, tick));
+      assertEquals(0xFF0000FF, texture.sample(0.5F, 5.0F / 6, tick));
+    }
+  }
+
+  @Test
   void mapsVanillaChunkLayersToRasterAlphaModes() {
     assertEquals(RendererAssets.AlphaMode.OPAQUE, RendererAssets.alphaModeForVanillaLayer(ChunkSectionLayer.SOLID));
     assertEquals(RendererAssets.AlphaMode.CUTOUT, RendererAssets.alphaModeForVanillaLayer(ChunkSectionLayer.CUTOUT));

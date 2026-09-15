@@ -21,6 +21,7 @@ import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -43,6 +44,24 @@ public final class RendererRuntimeTextureMirror {
   private static final Map<Object, Object> FALLBACK_SCOPES = new IdentityHashMap<>();
 
   private RendererRuntimeTextureMirror() {}
+
+  public static void registerAtlas(TextureAtlas atlas, GpuTexture texture) {
+    try (var pixels = new NativeImage(atlas.getWidth(), atlas.getHeight(), true)) {
+      for (var sprite : atlas.sprites) {
+        var contents = sprite.contents();
+        var paddingX = Math.round(sprite.getU0() * atlas.getWidth()) - sprite.getX();
+        var paddingY = Math.round(sprite.getV0() * atlas.getHeight()) - sprite.getY();
+        // Vanilla's atlas upload extends the edge texels into the sprite's padding.
+        for (var y = -paddingY; y < contents.height() + paddingY; y++) {
+          for (var x = -paddingX; x < contents.width() + paddingX; x++) {
+            pixels.setPixel(sprite.getX() + paddingX + x, sprite.getY() + paddingY + y,
+              contents.originalImage.getPixel(Math.clamp(x, 0, contents.width() - 1), Math.clamp(y, 0, contents.height() - 1)));
+          }
+        }
+      }
+      register(atlas.location(), texture, pixels);
+    }
+  }
 
   public static void register(Identifier location, @Nullable GpuTexture texture) {
     register(GLOBAL_SCOPE, location, texture, null);
