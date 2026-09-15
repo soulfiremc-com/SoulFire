@@ -36,7 +36,9 @@ import java.nio.ByteBuffer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RendererAssetsRuntimeTextureTest {
@@ -111,6 +113,29 @@ class RendererAssetsRuntimeTextureTest {
       RendererAssets.AlphaMode.CUTOUT,
       VanillaSubmitCollector.alphaMode(null, texture, 0xFFFFFFFF, translucentUv)
     );
+  }
+
+  @Test
+  void reusesTextureSnapshotsUntilPixelsChange() {
+    var location = Identifier.withDefaultNamespace("test/snapshot-cache");
+    var gpuTexture = new FakeGpuTexture(GpuFormat.RGBA8_UNORM, 2, 2);
+    try (var source = new NativeImage(2, 2, false)) {
+      source.fillRect(0, 0, 2, 2, 0xFF123456);
+      RendererRuntimeTextureMirror.register(location, gpuTexture, source);
+      var before = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(before);
+      assertSame(before, RendererRuntimeTextureMirror.texture(gpuTexture));
+      source.setPixel(0, 0, 0xFFABCDEF);
+      RendererRuntimeTextureMirror.mirrorWrite(gpuTexture, source, 0, 0, 1, 1, 0, 0);
+      var after = RendererRuntimeTextureMirror.texture(location);
+      assertNotNull(after);
+      assertNotSame(before, after);
+      assertSame(after, RendererRuntimeTextureMirror.texture(location));
+      assertEquals(0xFF123456, before.toBufferedImage().getRGB(0, 0));
+      assertEquals(0xFFABCDEF, after.toBufferedImage().getRGB(0, 0));
+    } finally {
+      RendererRuntimeTextureMirror.unregister(location);
+    }
   }
 
   @Test

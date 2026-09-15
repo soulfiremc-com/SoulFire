@@ -520,6 +520,7 @@ public final class RendererRuntimeTextureMirror {
     private final GpuFormat format;
     private final int[] pixels;
     private boolean hasUploadData;
+    private RendererAssets.@Nullable TextureImage snapshot;
 
     private MirroredTexture(GpuTexture texture) {
       this.width = texture.getWidth(0);
@@ -556,6 +557,7 @@ public final class RendererRuntimeTextureMirror {
             nativeImagePixel(source, region.sourceX() + x, region.sourceY() + y);
         }
       }
+      snapshot = null;
       hasUploadData = true;
       return true;
     }
@@ -574,6 +576,7 @@ public final class RendererRuntimeTextureMirror {
           pixels[region.destX() + x + (region.destY() + y) * this.width] = bufferPixel(data, format, sourceOffset);
         }
       }
+      snapshot = null;
       hasUploadData = true;
       return true;
     }
@@ -592,6 +595,7 @@ public final class RendererRuntimeTextureMirror {
           pixels[region.destX() + x + (region.destY() + y) * this.width] = bufferPixel(data, format, sourceOffset);
         }
       }
+      snapshot = null;
       hasUploadData = true;
       return true;
     }
@@ -621,6 +625,7 @@ public final class RendererRuntimeTextureMirror {
           region.width()
         );
       }
+      snapshot = null;
       hasUploadData = true;
       return true;
     }
@@ -635,6 +640,7 @@ public final class RendererRuntimeTextureMirror {
         var rowStart = region.destX() + (region.destY() + y) * this.width;
         Arrays.fill(pixels, rowStart, rowStart + region.width(), color);
       }
+      snapshot = null;
       hasUploadData = true;
       return true;
     }
@@ -752,7 +758,10 @@ public final class RendererRuntimeTextureMirror {
 
     @Nullable
     private RendererAssets.TextureImage toTextureImage() {
-      return RendererAssets.TextureImage.fromArgb(width, height, pixels, null);
+      if (snapshot == null) {
+        snapshot = RendererAssets.TextureImage.fromArgb(width, height, pixels, null);
+      }
+      return snapshot;
     }
   }
 
