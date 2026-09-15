@@ -17,16 +17,16 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.viaversion;
 
-import com.viaversion.viafabricplus.save.AbstractSave;
+import com.viaversion.viafabricplus.util.JsonSave;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(AbstractSave.class)
-public class MixinAbstractSave {
-  @Inject(method = "save", at = @At("HEAD"), cancellable = true, remap = false)
-  private void onSave(CallbackInfo ci) {
+@Mixin(JsonSave.class)
+public class MixinJsonSave {
+  @Inject(method = "write", at = @At("HEAD"), cancellable = true, remap = false)
+  private static void onSave(CallbackInfo ci) {
     // No need to save anything, we save within SoulFire
     ci.cancel();
   }

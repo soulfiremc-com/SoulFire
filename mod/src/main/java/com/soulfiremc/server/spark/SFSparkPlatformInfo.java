@@ -18,7 +18,7 @@
 package com.soulfiremc.server.spark;
 
 import com.soulfiremc.builddata.BuildData;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import me.lucko.spark.common.platform.PlatformInfo;
 
 public final class SFSparkPlatformInfo implements PlatformInfo {
@@ -44,6 +44,6 @@ public final class SFSparkPlatformInfo implements PlatformInfo {
 
   @Override
   public String getMinecraftVersion() {
-    return ProtocolTranslator.NATIVE_VERSION.getName();
+    return ProtocolTranslationImpl.NATIVE_VERSION.getName();
   }
 }

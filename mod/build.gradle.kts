@@ -37,11 +37,17 @@ dependencies {
   minecraft("com.mojang:minecraft:26.2")
   implementation("net.fabricmc:fabric-loader:0.19.3")
 
-  val viaFabricPlusNotation = "com.viaversion:viafabricplus:4.6.0"
+  val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.0.1"
   implementation(viaFabricPlusNotation) {
     exclude("org.lz4")
   }
   include(viaFabricPlusNotation) {
+    isTransitive = false
+  }
+
+  val viaFabricPlusBedrockNotation = "com.viaversion:viafabricplus-bedrock:1.0.1"
+  implementation(viaFabricPlusBedrockNotation)
+  include(viaFabricPlusBedrockNotation) {
     isTransitive = false
   }
 
@@ -206,7 +212,7 @@ tasks {
   test {
     useJUnitPlatform()
     systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
-    systemProperty("fabric.debug.disableModIds", "viafabricplus,viafabricplus-api,viafabricplus-visuals")
+    systemProperty("fabric.debug.disableModIds", "viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock")
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     jvmArgumentProviders.add(FabricSystemLibrariesArgumentProvider(configurations.testRuntimeClasspath.get()))
   }

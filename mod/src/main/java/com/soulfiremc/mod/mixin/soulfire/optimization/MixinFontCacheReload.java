@@ -17,7 +17,7 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.optimization;
 
-import com.viaversion.viafabricplus.features.font.FontCacheReload;
+import com.viaversion.viafabricplus.features.global.FontCacheReload;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

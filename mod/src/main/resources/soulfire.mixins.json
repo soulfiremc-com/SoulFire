@@ -26,9 +26,9 @@
     "soulfire.lifecycle.MixinMain",
     "soulfire.optimization.MixinDataFixers",
     "soulfire.optimization.MixinFontCacheReload",
-    "soulfire.viaversion.MixinAbstractSave",
-    "soulfire.viaversion.MixinAccountsSave",
-    "soulfire.viaversion.MixinProtocolTranslator",
+    "soulfire.viaversion.MixinJsonSave",
+    "soulfire.viaversion.MixinBedrockAccount",
+    "soulfire.viaversion.MixinProtocolTranslation",
     "soulfire.viaversion.MixinViaBedrockConfig"
   ],
   "client": [

@@ -25,7 +25,7 @@ import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.command.brigadier.BrigadierHelper;
 import com.soulfiremc.server.settings.instance.BotSettings;
 import com.viaversion.viaaprilfools.api.AprilFoolsProtocolVersion;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import net.raphimc.viabedrock.api.BedrockProtocolVersion;
 import net.raphimc.vialegacy.api.LegacyProtocolVersion;
 
@@ -105,7 +105,7 @@ public final class PrintDocsCommand {
 
                       builder.append("| `%s`%s | `%s` | `%s` |%n".formatted(
                         version.getName(),
-                        ProtocolTranslator.NATIVE_VERSION == version ? " (native)" : "",
+                        ProtocolTranslationImpl.NATIVE_VERSION == version ? " (native)" : "",
                         versionId,
                         type
                       ));

@@ -21,7 +21,8 @@ import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
 import com.viaversion.viaaprilfools.api.AprilFoolsProtocolVersion;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
+import com.viaversion.viafabricplus.protocoltranslator.util.ProtocolVersionDetector;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import com.viaversion.viaversion.api.protocol.version.VersionType;
 import lombok.AccessLevel;
@@ -175,7 +176,7 @@ public final class BotSettings implements SettingsObject {
   public static List<ProtocolVersion> getAvailableProtocolVersions() {
     return ProtocolVersion.getReversedProtocols()
       .stream()
-      .filter(version -> version != ProtocolTranslator.AUTO_DETECT_PROTOCOL)
+      .filter(version -> version != ProtocolVersionDetector.AUTO_DETECT_VERSION)
       .toList();
   }
 
@@ -211,6 +212,6 @@ public final class BotSettings implements SettingsObject {
   }
 
   private static String getLatestProtocolVersionId() {
-    return formatVersion(ProtocolTranslator.NATIVE_VERSION);
+    return formatVersion(ProtocolTranslationImpl.NATIVE_VERSION);
   }
 }

@@ -24,7 +24,7 @@ import com.soulfiremc.server.api.PluginApiDefinition;
 import com.soulfiremc.server.api.SoulFireAPI;
 import com.soulfiremc.server.settings.server.ServerSettings;
 import com.soulfiremc.server.user.PermissionContext;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
@@ -117,8 +117,8 @@ public final class SdkServiceImpl extends SdkServiceGrpc.SdkServiceImplBase {
       .setCommitHash(BuildData.COMMIT)
       .setBranchName(BuildData.BRANCH)
       .setApiVersion(currentApiVersion())
-      .setNativeMinecraftVersion(ProtocolTranslator.NATIVE_VERSION.getName())
-      .addSupportedMinecraftVersions(ProtocolTranslator.NATIVE_VERSION.getName())
+      .setNativeMinecraftVersion(ProtocolTranslationImpl.NATIVE_VERSION.getName())
+      .addSupportedMinecraftVersions(ProtocolTranslationImpl.NATIVE_VERSION.getName())
       .addAllTransports(List.of(
         SdkTransport.SDK_TRANSPORT_GRPC,
         SdkTransport.SDK_TRANSPORT_GRPC_WEB,

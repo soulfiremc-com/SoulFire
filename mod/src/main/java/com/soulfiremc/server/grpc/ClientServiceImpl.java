@@ -24,7 +24,7 @@ import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.settings.server.ServerSettings;
 import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.util.RPCConstants;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -102,7 +102,7 @@ public final class ClientServiceImpl extends ClientServiceGrpc.ClientServiceImpl
             .setPublicWebdavAddress(buildWebDAVAddress(publicAddress))
             .setPublicDocsAddress(buildDocsAddress(publicAddress))
             .setPublicMcpAddress(buildMCPAddress(publicAddress))
-            .setMinecraftVersion(ProtocolTranslator.NATIVE_VERSION.getName())
+            .setMinecraftVersion(ProtocolTranslationImpl.NATIVE_VERSION.getName())
             .build())
           .build());
       responseObserver.onCompleted();

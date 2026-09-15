@@ -30,7 +30,7 @@ import com.soulfiremc.server.api.event.bot.BotPacketPreReceiveEvent;
 import com.soulfiremc.server.api.event.bot.BotPacketPreSendEvent;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.user.PermissionContext;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import io.grpc.Status;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -85,7 +85,7 @@ public final class BotProtocolServiceImpl extends BotProtocolServiceGrpc.BotProt
   ) {
     var target = requireReadableBot(request.getInstanceId(), request.getBotId());
     var protocols = activeProtocols(target.bot());
-    var nativeVersion = ProtocolTranslator.NATIVE_VERSION;
+    var nativeVersion = ProtocolTranslationImpl.NATIVE_VERSION;
     var remoteVersion = target.bot().currentProtocolVersion();
     var rawEnabled = ServerRPCConstants.USER_CONTEXT_KEY.get().hasPermission(
       PermissionContext.instance(InstancePermission.RAW_PROTOCOL, target.instanceId()));

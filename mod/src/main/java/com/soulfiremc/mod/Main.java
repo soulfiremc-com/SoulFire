@@ -17,18 +17,12 @@
  */
 package com.soulfiremc.mod;
 
-import com.viaversion.viafabricplus.settings.impl.DebugSettings;
-import net.fabricmc.api.ModInitializer;
+import com.viaversion.viafabricplus.ViaFabricPlus;
+import com.viaversion.viafabricplus.api.entrypoint.ViaFabricPlusEntrypoint;
 
-public final class Main implements ModInitializer {
+public final class Main implements ViaFabricPlusEntrypoint {
   @Override
-  public void onInitialize() {
-    DebugSettings.INSTANCE.printNetworkingErrorsToLogs.setValue(false);
-
-    // Entity.class;
-    // LivingEntity.class;
-    // Player.class;
-    // AbstractClientPlayer.class;
-    // LocalPlayer.class;
+  public void onPostSettingsLoading() {
+    ViaFabricPlus.api().settings().advanced().printNetworkingErrorsToLogs().setActive(false);
   }
 }

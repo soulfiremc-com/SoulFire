@@ -27,7 +27,7 @@ import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotThreadExecution;
 import com.soulfiremc.server.user.PermissionContext;
-import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslator;
+import com.viaversion.viafabricplus.protocoltranslator.ProtocolTranslationImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -96,11 +96,11 @@ public final class RegistryServiceImpl
       return onGameThread(bot, () -> {
         var protocol = bot
           .map(value -> value.currentProtocolVersion().getVersion())
-          .orElse(ProtocolTranslator.NATIVE_VERSION.getVersion());
+          .orElse(ProtocolTranslationImpl.NATIVE_VERSION.getVersion());
         return GetRegistryIdentityResponse.newBuilder()
           .setIdentity(RegistryIdentity.newBuilder()
             .setSoulfireVersion(BuildData.VERSION)
-            .setMinecraftVersion(ProtocolTranslator.NATIVE_VERSION.getName())
+            .setMinecraftVersion(ProtocolTranslationImpl.NATIVE_VERSION.getName())
             .setProtocolVersion(protocol)
             .setRegistryHash(registryHash(bot)))
           .addAllSupportedKinds(SUPPORTED_KINDS)
@@ -378,7 +378,7 @@ public final class RegistryServiceImpl
     var material = new StringBuilder()
       .append(BuildData.VERSION)
       .append('|')
-      .append(ProtocolTranslator.NATIVE_VERSION.getName());
+      .append(ProtocolTranslationImpl.NATIVE_VERSION.getName());
     for (var kind : SUPPORTED_KINDS) {
       try {
         registry(kind, bot).keySet().stream()

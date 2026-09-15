@@ -19,16 +19,16 @@ package com.soulfiremc.mod.mixin.soulfire.viaversion;
 
 import com.soulfiremc.server.account.service.BedrockData;
 import com.soulfiremc.server.bot.BotConnection;
-import com.viaversion.viafabricplus.save.impl.AccountsSave;
+import com.viaversion.viafabricplus.bedrock.account.BedrockAccount;
 import net.raphimc.minecraftauth.bedrock.BedrockAuthManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(AccountsSave.class)
-public class MixinAccountsSave {
-  @Inject(method = "getBedrockAccount", at = @At("HEAD"), remap = false, cancellable = true)
+@Mixin(BedrockAccount.class)
+public class MixinBedrockAccount {
+  @Inject(method = "get", at = @At("HEAD"), remap = false, cancellable = true)
   private void getBedrockAccount(CallbackInfoReturnable<BedrockAuthManager> cir) {
     var connection = BotConnection.currentOptional().orElse(null);
     if (connection == null) {
