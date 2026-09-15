@@ -289,7 +289,6 @@ public final class RasterPipeline {
       Math.fma(transform.m02(), position.x, Math.fma(transform.m12(), position.y, Math.fma(transform.m22(), position.z, transform.m32()))),
       Math.fma(transform.m03(), position.x, Math.fma(transform.m13(), position.y, Math.fma(transform.m23(), position.z, transform.m33())))
     );
-    var color = vertex.color();
     var overlayColor = vertex.overlayColor();
     return new ClipVertex(
       clip.x,
@@ -300,10 +299,10 @@ public final class RasterPipeline {
       cylindricalFogDistance,
       vertex.u(),
       vertex.v(),
-      ((color >>> 24) & 0xFF) * (1.0F / 255.0F),
-      ((color >>> 16) & 0xFF) * (1.0F / 255.0F) * vertex.shade() * (((vertex.lightColor() >>> 16) & 255) * (1.0F / 255.0F)),
-      ((color >>> 8) & 0xFF) * (1.0F / 255.0F) * vertex.shade() * (((vertex.lightColor() >>> 8) & 255) * (1.0F / 255.0F)),
-      (color & 0xFF) * (1.0F / 255.0F) * vertex.shade() * ((vertex.lightColor() & 255) * (1.0F / 255.0F)),
+      vertex.colorChannel(24),
+      vertex.colorChannel(16) * vertex.shade() * (((vertex.lightColor() >>> 16) & 255) * (1.0F / 255.0F)),
+      vertex.colorChannel(8) * vertex.shade() * (((vertex.lightColor() >>> 8) & 255) * (1.0F / 255.0F)),
+      vertex.colorChannel(0) * vertex.shade() * ((vertex.lightColor() & 255) * (1.0F / 255.0F)),
       (overlayColor >>> 24) & 0xFF,
       (overlayColor >>> 16) & 0xFF,
       (overlayColor >>> 8) & 0xFF,

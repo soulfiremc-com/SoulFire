@@ -240,7 +240,7 @@ public final class CloudMeshCollector {
         0.0F,
         0.0F,
         cloudColor
-      ).withShade(faceShade(useTopColor ? Direction.UP : direction));
+      ).withUniformColor(cloudColor).withShade(faceShade(useTopColor ? Direction.UP : direction));
     }
 
     builder.addCloud(new RenderQuad(renderVertices[0], renderVertices[1], renderVertices[2], renderVertices[3], material));

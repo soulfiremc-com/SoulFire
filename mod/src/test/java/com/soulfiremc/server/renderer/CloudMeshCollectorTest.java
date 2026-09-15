@@ -65,13 +65,14 @@ class CloudMeshCollectorTest {
     var textureData = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
     var camera = new Camera(new Vec3(0.0, 64.0, 0.0), 0.0F, 0.0F, 64, 64, 70.0, 256.0F);
 
-    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xFFFFFFFF, 96.0F, 2, 0L, 0);
+    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xCCFFFFFF, 96.0F, 2, 0L, 0);
 
     assertEquals(0, scene.opaque().length);
     assertEquals(0, scene.cutout().length);
     assertEquals(0, scene.translucent().length);
     assertTrue(scene.clouds().length > 0);
     assertEquals(0, scene.weather().length);
+    assertEquals(0.8F, scene.clouds()[0].v0().colorChannel(24));
     assertTrue(scene.clouds()[0].material().depthWrite());
     assertEquals(RenderMaterial.DepthTest.LESS_THAN_OR_EQUAL, scene.clouds()[0].material().depthTest());
   }

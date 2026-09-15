@@ -43,8 +43,8 @@ class RendererAssetsTest {
 
       assertEquals(0xFFFF0000, texture.sampleTerrain(0.25F, 0.25F, 0, 0.01F, 0, 0, 0.01F));
       assertEquals(0xFF0000FF, texture.sampleTerrain(0.25F, 0.25F, 0, 1, 0, 0, 1));
-      // The mip weight truncates to eight fractional bits before channel interpolation.
-      assertEquals(0xFF6B0094, texture.sampleTerrain(0.25F, 0.25F, 0, 0.75F, 0, 0, 0));
+      // Lavapipe approximates log2(2.25) / 2 as 0.5625, giving a mip weight of 144/256.
+      assertEquals(0xFF70008F, texture.sampleTerrain(0.25F, 0.25F, 0, 0.75F, 0, 0, 0));
     }
   }
 

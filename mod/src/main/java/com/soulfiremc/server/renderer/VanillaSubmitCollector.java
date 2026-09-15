@@ -1648,7 +1648,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private RenderVertex withOverlay(RenderVertex vertex, int overlayColor) {
-    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor, vertex.shade(), vertex.lightColor());
+    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor, vertex.shade(), vertex.lightColor(), vertex.colorSource());
   }
 
   private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {

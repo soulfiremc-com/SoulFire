@@ -193,6 +193,9 @@ public final class LavapipeComparison {
     }
     Files.writeString(OUTPUT.resolve("metrics.json"), report);
     System.out.println("Lavapipe comparison written to " + OUTPUT + "\n" + report);
+    if (changed != 0) {
+      throw new IllegalStateException("Renderer parity failed: " + changed + " pixels differ; maximum channel error " + maximum);
+    }
   }
 
   private static final class DifferenceStats {

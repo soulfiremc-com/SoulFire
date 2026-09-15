@@ -18,7 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 /// A textured vertex with packed tint and a floating-point RGB lighting multiplier.
-public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor) {
+public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource) {
   public static final int NO_OVERLAY_COLOR = 0xFFFFFFFF;
 
   public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor) {
@@ -29,15 +29,33 @@ public record RenderVertex(float x, float y, float z, float u, float v, int colo
     this(x, y, z, u, v, color, overlayColor, shade, 0xFFFFFFFF);
   }
 
+  public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor) {
+    this(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.VERTEX_ATTRIBUTE);
+  }
+
+  public RenderVertex withUniformColor(int color) {
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.UNIFORM);
+  }
+
+  float colorChannel(int shift) {
+    var channel = (color >>> shift) & 255;
+    // Vanilla builds uniform colors with division; UNORM vertex fetch uses a reciprocal.
+    return colorSource == ColorSource.UNIFORM ? channel / 255.0F : channel * (1.0F / 255.0F);
+  }
+
   public RenderVertex withShade(float shade) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource);
   }
 
   public RenderVertex withLightColor(int lightColor) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource);
   }
 
   public RenderVertex(float x, float y, float z, float u, float v, int color) {
     this(x, y, z, u, v, color, NO_OVERLAY_COLOR);
+  }
+  public enum ColorSource {
+    VERTEX_ATTRIBUTE,
+    UNIFORM
   }
 }

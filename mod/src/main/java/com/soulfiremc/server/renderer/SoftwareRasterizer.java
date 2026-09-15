@@ -514,9 +514,10 @@ final class SoftwareRasterizer {
       return color;
     }
 
-    var r = Mth.lerp(fogAmount, color.r(), ((fogState.color() >> 16) & 0xFF) * (1.0F / 255.0F));
-    var g = Mth.lerp(fogAmount, color.g(), ((fogState.color() >> 8) & 0xFF) * (1.0F / 255.0F));
-    var b = Mth.lerp(fogAmount, color.b(), (fogState.color() & 0xFF) * (1.0F / 255.0F));
+    // Preserve GLSL mix evaluation: rewriting this as start + t * (end - start) changes rounding.
+    var r = color.r() * (1.0F - fogAmount) + ARGB.redFloat(fogState.color()) * fogAmount;
+    var g = color.g() * (1.0F - fogAmount) + ARGB.greenFloat(fogState.color()) * fogAmount;
+    var b = color.b() * (1.0F - fogAmount) + ARGB.blueFloat(fogState.color()) * fogAmount;
     return new FragmentColor(r, g, b, color.a());
   }
 

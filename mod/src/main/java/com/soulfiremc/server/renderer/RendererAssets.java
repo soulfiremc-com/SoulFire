@@ -1390,7 +1390,13 @@ public final class RendererAssets {
       var adjustedV = antialiasedTexel(texelV, sizeV) / frameHeight;
       var dx = duDx * duDx * width * width + dvDx * dvDx * frameHeight * frameHeight;
       var dy = duDy * duDy * width * width + dvDy * dvDy * frameHeight * frameHeight;
-      var lod = Math.clamp((float) (Math.log(Math.max(dx, dy)) / (2 * Math.log(2))), 0, mipLevels.length - 1);
+      // Lavapipe selects mip levels with a piecewise linear log2 approximation.
+      // An exact logarithm changes the eight-bit mip blend weights.
+      var footprint = Math.max(dx, dy);
+      var rhoBits = Float.floatToRawIntBits(Float.isFinite(footprint) ? footprint : 0.0F);
+      var exponent = (rhoBits >>> 23) - 128;
+      var mantissa = Float.intBitsToFloat((rhoBits & 0x7FFFFF) | 0x3F800000);
+      var lod = Math.clamp((exponent + mantissa) * 0.5F, 0, mipLevels.length - 1);
       var lower = (int) lod;
       var upper = Math.min(lower + 1, mipLevels.length - 1);
       var a = mipLevels[lower].sample(adjustedU, adjustedV, tick);
