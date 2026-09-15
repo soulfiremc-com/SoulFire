@@ -314,13 +314,13 @@ public final class SkyRenderer {
     RendererAssets.TextureImage texture,
     int color,
     RenderMaterial.BlendState blendState,
-    int alphaCutoutThreshold
+    float alphaCutoutThreshold
   ) {
     return new RenderMaterial(
       texture,
       RendererAssets.AlphaMode.TRANSLUCENT,
       color,
-      true,
+      RenderMaterial.CullMode.NONE,
       0.0F,
       0.0F,
       0.0F,

@@ -23,6 +23,11 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
+import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.metadata.animation.AnimationFrame;
+import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
+import net.minecraft.client.resources.metadata.animation.FrameSize;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,6 +37,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,6 +52,34 @@ class RendererAssetsRuntimeTextureTest {
   @BeforeAll
   static void bootstrap() {
     TestBootstrap.bootstrapForTest();
+  }
+
+  @Test
+  void atlasMirrorUsesFirstScheduledFrameAndExtendsItsEdges() throws Exception {
+    var image = new NativeImage(2, 4, true);
+    image.setPixel(0, 2, 0xFFFF0000);
+    image.setPixel(1, 2, 0xFF00FF00);
+    image.setPixel(0, 3, 0xFF0000FF);
+    image.setPixel(1, 3, 0xFFFFFFFF);
+    var animation = new AnimationMetadataSection(Optional.of(List.of(new AnimationFrame(1), new AnimationFrame(0))),
+      Optional.empty(), Optional.empty(), 1, false);
+    try (var contents = new SpriteContents(Identifier.withDefaultNamespace("test/animated"), new FrameSize(2, 2), image,
+      Optional.of(animation), List.of(), Optional.empty());
+         var atlas = new NativeImage(6, 6, true)) {
+      var constructor = TextureAtlasSprite.class.getDeclaredConstructor(Identifier.class, SpriteContents.class,
+        int.class, int.class, int.class, int.class, int.class);
+      constructor.setAccessible(true);
+      var sprite = (TextureAtlasSprite) constructor.newInstance(Identifier.withDefaultNamespace("textures/atlas/test.png"),
+        contents, 6, 6, 1, 1, 1);
+      RendererRuntimeTextureMirror.writeAtlasSprite(atlas, sprite);
+      for (var y = 0; y < 6; y++) {
+        for (var x = 0; x < 6; x++) {
+          var expected = x >= 1 && x <= 4 && y >= 1 && y <= 4
+            ? image.getPixel(Math.clamp(x - 2, 0, 1), 2 + Math.clamp(y - 2, 0, 1)) : 0;
+          assertEquals(expected, atlas.getPixel(x, y));
+        }
+      }
+    }
   }
 
   @Test

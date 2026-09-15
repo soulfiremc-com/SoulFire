@@ -271,7 +271,7 @@ public final class CloudMeshCollector {
       WHITE_TEXTURE,
       RendererAssets.AlphaMode.TRANSLUCENT,
       0xFFFFFFFF,
-      !fancyClouds,
+      fancyClouds ? RenderMaterial.CullMode.BACK : RenderMaterial.CullMode.NONE,
       0.0F,
       0.0F,
       0.0F,

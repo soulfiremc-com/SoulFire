@@ -35,6 +35,7 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.Vec3;
 
 /// Builds raster-ready world meshes from the loaded chunk sections around the camera.
 @UtilityClass
@@ -138,9 +139,9 @@ public class WorldMeshCollector {
                 modelSet,
                 blockState,
                 blockPos,
-                originX + localX,
-                originY + localY,
-                originZ + localZ,
+                localX,
+                localY,
+                localZ,
                 cutoutLeaves,
                 trace
               );
@@ -152,7 +153,7 @@ public class WorldMeshCollector {
       BlockModelLighter.clearCache();
     }
 
-    return builder.build();
+    return builder.build().withOrigin(new Vec3(originX, originY, originZ));
   }
 
   private static void emitBlockModel(
@@ -254,7 +255,7 @@ public class WorldMeshCollector {
     int color,
     boolean doubleSided,
     float depthBias,
-    int alphaCutoutThreshold
+    float alphaCutoutThreshold
   ) {
     return toRenderQuad(face, offsetX, offsetY, offsetZ, color, doubleSided, depthBias, alphaCutoutThreshold, false);
   }
@@ -289,7 +290,7 @@ public class WorldMeshCollector {
     int color,
     boolean doubleSided,
     float depthBias,
-    int alphaCutoutThreshold,
+    float alphaCutoutThreshold,
     boolean applyLayerState
   ) {
     var material = RenderMaterial.create(face.texture(), face.alphaMode(), color, doubleSided, depthBias, alphaCutoutThreshold);

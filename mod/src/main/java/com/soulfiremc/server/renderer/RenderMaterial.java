@@ -37,11 +37,11 @@ public record RenderMaterial(
   RendererAssets.TextureImage texture,
   RendererAssets.AlphaMode alphaMode,
   int color,
-  boolean doubleSided,
+  CullMode cullMode,
   float depthBias,
   float polygonOffsetFactor,
   float polygonOffsetUnits,
-  int alphaCutoutThreshold,
+  float alphaCutoutThreshold,
   AlphaCutoutSource alphaCutoutSource,
   DepthTest depthTest,
   boolean depthWrite,
@@ -62,11 +62,11 @@ public record RenderMaterial(
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
     int color,
-    boolean doubleSided,
+    CullMode cullMode,
     float depthBias,
     float polygonOffsetFactor,
     float polygonOffsetUnits,
-    int alphaCutoutThreshold,
+    float alphaCutoutThreshold,
     AlphaCutoutSource alphaCutoutSource,
     DepthTest depthTest,
     boolean depthWrite,
@@ -82,22 +82,22 @@ public record RenderMaterial(
     @Nullable RendererAssets.TextureImage secondaryTexture,
     int portalLayers
   ) {
-    this(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, 1.0F);
+    this(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, 1.0F);
   }
 
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
   private static final int DEFAULT_END_PORTAL_LAYERS = 15;
-  static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
+  static final float ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = 0.1F * 255.0F;
 
   public RenderMaterial(
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
     int color,
-    boolean doubleSided,
+    CullMode cullMode,
     float depthBias,
     float polygonOffsetFactor,
     float polygonOffsetUnits,
-    int alphaCutoutThreshold,
+    float alphaCutoutThreshold,
     AlphaCutoutSource alphaCutoutSource,
     DepthTest depthTest,
     boolean depthWrite,
@@ -115,7 +115,7 @@ public record RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      cullMode,
       depthBias,
       polygonOffsetFactor,
       polygonOffsetUnits,
@@ -153,13 +153,13 @@ public record RenderMaterial(
     int color,
     boolean doubleSided,
     float depthBias,
-    int alphaCutoutThreshold
+    float alphaCutoutThreshold
   ) {
     return new RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      doubleSided ? CullMode.NONE : CullMode.BACK,
       depthBias,
       0.0F,
       0.0F,
@@ -180,11 +180,11 @@ public record RenderMaterial(
   }
 
   public RenderMaterial withSortOnUpload(boolean sortOnUpload) {
-    return new RenderMaterial(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha);
+    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha);
   }
 
   public RenderMaterial withGlintAlpha(float alpha) {
-    return new RenderMaterial(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha);
+    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha);
   }
 
   public RenderMaterial withDepthState(@Nullable DepthStencilState depthStencilState) {
@@ -192,7 +192,7 @@ public record RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      cullMode,
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(depthStencilState),
       polygonOffsetUnits + depthBiasConstant(depthStencilState),
@@ -215,12 +215,12 @@ public record RenderMaterial(
     );
   }
 
-  public RenderMaterial withDoubleSided(boolean doubleSided) {
+  public RenderMaterial withCullMode(CullMode cullMode) {
     return new RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      cullMode,
       depthBias,
       polygonOffsetFactor,
       polygonOffsetUnits,
@@ -258,7 +258,7 @@ public record RenderMaterial(
       textureWithRenderTypeAddressMode(texture, renderType, fragmentShader),
       pipelineAlphaMode,
       color,
-      doubleSided || !pipeline.isCull(),
+      !pipeline.isCull() ? CullMode.NONE : cullMode,
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
@@ -291,7 +291,7 @@ public record RenderMaterial(
       textureWithShaderAddressMode(texture, fragmentShader),
       pipelineAlphaMode,
       color,
-      doubleSided || !pipeline.isCull(),
+      !pipeline.isCull() ? CullMode.NONE : cullMode,
       depthBias,
       polygonOffsetFactor + depthBiasScaleFactor(pipeline.getDepthStencilState()),
       polygonOffsetUnits + depthBiasConstant(pipeline.getDepthStencilState()),
@@ -319,7 +319,7 @@ public record RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      cullMode,
       depthBias,
       polygonOffsetFactor,
       polygonOffsetUnits,
@@ -347,7 +347,7 @@ public record RenderMaterial(
       texture,
       alphaMode,
       color,
-      doubleSided,
+      cullMode,
       depthBias,
       polygonOffsetFactor,
       polygonOffsetUnits,
@@ -370,23 +370,23 @@ public record RenderMaterial(
     );
   }
 
-  public static int defaultAlphaCutoutThreshold(RendererAssets.AlphaMode alphaMode) {
+  public static float defaultAlphaCutoutThreshold(RendererAssets.AlphaMode alphaMode) {
     return switch (alphaMode) {
       case OPAQUE -> 0;
-      case CUTOUT -> 128;
-      case TRANSLUCENT -> 3;
+      case CUTOUT -> 127.5F;
+      case TRANSLUCENT -> 2.55F;
     };
   }
 
-  public static int shaderAlphaCutoutThreshold(RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+  public static float shaderAlphaCutoutThreshold(RenderType renderType, RendererAssets.AlphaMode alphaMode) {
     return shaderAlphaCutoutThreshold(renderType.pipeline(), alphaMode);
   }
 
-  public static int shaderAlphaCutoutThreshold(RenderPipeline pipeline, RendererAssets.AlphaMode alphaMode) {
+  public static float shaderAlphaCutoutThreshold(RenderPipeline pipeline, RendererAssets.AlphaMode alphaMode) {
     var alphaCutout = pipeline.getShaderDefines().values().get("ALPHA_CUTOUT");
     if (alphaCutout != null) {
       try {
-        return Math.clamp((int) Math.ceil(Float.parseFloat(alphaCutout) * 255.0F), 0, 255);
+        return Math.clamp(Float.parseFloat(alphaCutout) * 255.0F, 0, 255);
       } catch (NumberFormatException _) {
         return defaultAlphaCutoutThreshold(alphaMode);
       }
@@ -660,6 +660,12 @@ public record RenderMaterial(
     }
   }
 
+  public enum CullMode {
+    NONE,
+    FRONT,
+    BACK
+  }
+
   public enum DepthTest {
     ALWAYS_PASS {
       @Override
@@ -790,11 +796,11 @@ public record RenderMaterial(
     }
 
     public float u(float u, float v) {
-      return u * uFromU + v * uFromV + uOffsetScale;
+      return u * uFromU + (v * uFromV + uOffsetScale);
     }
 
     public float v(float u, float v) {
-      return u * vFromU + v * vFromV + vOffsetScale;
+      return u * vFromU + (v * vFromV + vOffsetScale);
     }
   }
 }

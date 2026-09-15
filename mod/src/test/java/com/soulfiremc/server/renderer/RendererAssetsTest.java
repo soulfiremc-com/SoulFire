@@ -68,6 +68,37 @@ class RendererAssetsTest {
   }
 
   @Test
+  void terrainAntialiasingRoundsHalfTexelCentersToEven() {
+    try (var base = new NativeImage(4, 1, true)) {
+      var colors = new int[]{0xFF000000, 0xFFFF0000, 0xFF0000FF, 0xFFFFFFFF};
+      for (var x = 0; x < colors.length; x++) {
+        base.setPixel(x, 0, colors[x]);
+      }
+      var texture = RendererAssets.TextureImage.fromArgb(4, 1, colors, null)
+        .withTerrainFiltering(new NativeImage[]{base}, 4, 1, 0, 0);
+      assertEquals(0xFF4000BF, texture.sampleTerrain(0.625F, 0.5F, 0, 0.5F, 0, 0, 0));
+      assertEquals(0xFFBF0040, texture.sampleTerrain(0.375F, 0.5F, 0, 0.5F, 0, 0, 0));
+    }
+  }
+
+  @Test
+  void standardSamplingUsesDistinctMinificationAndMagnificationFilters() {
+    try (var base = new NativeImage(2, 2, true); var mip = new NativeImage(1, 1, true)) {
+      base.fillRect(0, 0, 1, 2, 0xFFFF0000);
+      base.fillRect(1, 0, 1, 2, 0xFF0000FF);
+      mip.setPixel(0, 0, 0xFF800080);
+      var texture = RendererAssets.TextureImage.fromArgb(2, 2, new int[]{-1, -1, -1, -1}, null)
+        .withTerrainFiltering(new NativeImage[]{base, mip}, 8, 8, 2, 2)
+        .withStandardSampling().withFiltering(true, false, Float.POSITIVE_INFINITY);
+      assertEquals(0xFF0000FF, texture.sampleGrad(0.375F, 0.375F, 0, 0.01F, 0, 0, 0.01F));
+      assertEquals(0xFF800080, texture.sampleGrad(0.375F, 0.375F, 0, 0.25F, 0, 0, 0.25F));
+      var noMips = texture.withFiltering(true, false, 0);
+      assertEquals(0xFF7F0080, noMips.sampleGrad(0.375F, 0.375F, 0, 0.25F, 0, 0, 0.25F));
+      assertEquals(0xFFFF0000, noMips.sampleGrad(0.3125F, 0.375F, 0, 0.25F, 0, 0, 0.25F));
+    }
+  }
+
+  @Test
   void linearFilteringInterpolatesTexelsAndClampsSpriteEdges() {
     var texture = RendererAssets.TextureImage.fromArgb(2, 2,
       new int[]{0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFF000000}, null);

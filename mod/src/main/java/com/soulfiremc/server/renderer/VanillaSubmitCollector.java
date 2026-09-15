@@ -29,7 +29,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.font.TextRenderable;
 import net.minecraft.client.model.Model;
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.UVPair;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.particle.QuadParticleGroup;
@@ -48,8 +47,11 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.CustomFeatureRenderer;
+import net.minecraft.client.renderer.feature.FeatureRendererType;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.feature.phase.SimpleFeatureRenderPhase;
+import net.minecraft.client.renderer.feature.phase.TranslucentFeatureRenderPhase;
+import net.minecraft.client.renderer.feature.submit.TranslucentSubmit;
 import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
@@ -66,7 +68,6 @@ import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
@@ -95,6 +96,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -339,11 +341,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return captureBuilder.build();
   }
 
-  private double poseOriginDistanceSq(Matrix4fc pose) {
+  private float poseOriginDistanceSq(Matrix4fc pose) {
     var position = pose.transformPosition(new Vector3f());
-    var dx = position.x() - (ctx.camera().eyeX() - origin.x);
-    var dy = position.y() - (ctx.camera().eyeY() - origin.y);
-    var dz = position.z() - (ctx.camera().eyeZ() - origin.z);
+    var dx = (float) (position.x() - (ctx.camera().eyeX() - origin.x));
+    var dy = (float) (position.y() - (ctx.camera().eyeY() - origin.y));
+    var dz = (float) (position.z() - (ctx.camera().eyeZ() - origin.z));
     return dx * dx + dy * dy + dz * dz;
   }
 
@@ -517,8 +519,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
       capturePreparedText(
         poseStack.last().pose(),
-        font().prepareText(text, x, y, color, shadow, displayMode == Font.DisplayMode.SEE_THROUGH, backgroundColor),
-        displayMode,
+        font().prepareText(text, x, y, color, outlineColor == 0 && shadow, false, outlineColor == 0 ? backgroundColor : 0),
+        outlineColor == 0 ? displayMode : Font.DisplayMode.POLYGON_OFFSET,
         light
       );
     });
@@ -651,12 +653,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         crumblingOverlay
       ));
       if (scene.totalQuadCount() > 0) {
-        buckets.translucentModelDraws.add(new SortedScene(poseOriginDistanceSq(poseStack.last().pose()), scene));
+        buckets.translucentModelDraws.submit(new SortedScene(poseOriginDistanceSq(poseStack.last().pose()), scene));
       }
       return;
     }
 
-    withStage(FeatureStage.SOLID_MODEL, () -> captureModelSubmit(
+    var scene = captureScene(() -> captureModelSubmit(
       model,
       state,
       poseStack,
@@ -668,6 +670,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       outlineColor,
       crumblingOverlay
     ));
+    buckets.solidModelDraws.computeIfAbsent(renderType, _ -> SceneData.builder()).addAll(scene);
   }
 
   private <S> void captureModelSubmit(
@@ -692,27 +695,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   @Override
-  public void submitModelPart(
-    ModelPart modelPart,
-    PoseStack poseStack,
-    RenderType renderType,
-    int light,
-    int overlay,
-    TextureAtlasSprite sprite,
-    int color,
-    ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
-    int emission
-  ) {
-    withStage(stageForRenderType(renderType, FeatureStage.SOLID_MODEL_PART, FeatureStage.TRANSLUCENT_MODEL_PART), () -> {
-      var texture = textureFromRenderType(renderType);
-      var alphaMode = alphaMode(renderType, texture, color);
-      Consumer<VertexConsumer> renderer = consumer -> modelPart.render(poseStack, consumer, light, overlay, color);
-      captureRenderedGeometry(renderType, texture, alphaMode, alphaCutoutThreshold(renderType, alphaMode), sprite, null, renderer);
-      captureCrumblingGeometry(true, crumblingOverlay, renderer);
-    });
-  }
-
-  @Override
   public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState, int color) {
     var minecraft = Minecraft.getInstance();
     var blockState = movingBlockRenderState.blockState;
@@ -722,7 +704,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var stage = model.hasMaterialFlag(1) ? FeatureStage.TRANSLUCENT_BLOCK : FeatureStage.SOLID_BLOCK;
     withStage(stage, () -> {
       var basePose = poseStack.last().copy();
-      var consumers = new LinkedHashMap<RenderType, CapturingVertexConsumer>();
+      var consumers = new LinkedHashMap<RenderType, Map<TextureAtlasSprite, CapturingVertexConsumer>>();
       BlockQuadOutput output = (x, y, z, quad, instance) -> {
         var materialInfo = quad.materialInfo();
         var layer = materialInfo != null ? materialInfo.layer() : ChunkSectionLayer.SOLID;
@@ -743,7 +725,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         model,
         seed
       );
-      consumers.values().forEach(CapturingVertexConsumer::flush);
+      consumers.values().forEach(bySprite -> bySprite.values().forEach(CapturingVertexConsumer::flush));
     });
   }
 
@@ -889,52 +871,58 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    for (Map.Entry<SingleQuadParticle.Layer, QuadParticleRenderState.Storage> entry : quadParticles.particles.entrySet()) {
-      var layer = entry.getKey();
-      var storage = entry.getValue();
-      var texture = assets.textureAtlas(layer.textureAtlasLocation());
-      var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
-      var stage = layer.translucent() ? FeatureStage.TRANSLUCENT_PARTICLE : FeatureStage.SOLID_PARTICLE;
-      withStage(stage, () -> {
-        storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, lightCoords) -> {
-          var rotation = new Quaternionf(qx, qy, qz, qw);
-          var worldX = x + (float) (ctx.camera().eyeX() - origin.x);
-          var worldY = y + (float) (ctx.camera().eyeY() - origin.y);
-          var worldZ = z + (float) (ctx.camera().eyeZ() - origin.z);
-          var vertices = new Vector3f[]{
-            rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, -1.0F),
-            rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, 1.0F),
-            rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, 1.0F),
-            rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, -1.0F)
-          };
-          var material = RenderMaterial
-            .create(
-              texture,
-              alphaMode,
-              0xFFFFFFFF,
-              true,
-              0.0F,
-              RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD
-            )
-            .withPipelineState(layer.pipeline())
-            .withSortOnUpload(false);
-          var uv = new float[]{u1, v1, u1, v0, u0, v0, u0, v1};
-          var litColor = lightColor(lightCoords, 0, null);
-          var renderVertices = new RenderVertex[4];
-          for (var i = 0; i < renderVertices.length; i++) {
-            var vertex = vertices[i];
-            renderVertices[i] = new RenderVertex(vertex.x, vertex.y, vertex.z, uv[i * 2], uv[i * 2 + 1], color)
-              .withLightColor(litColor);
-          }
-          var quad = new RenderQuad(renderVertices[0], renderVertices[1], renderVertices[2], renderVertices[3], material);
-          if (layer.translucent()) {
-            builder().addTranslucentParticle(quad);
-          } else {
-            builder().add(quad);
-          }
-        });
-      });
+    var solidLayers = new IdentityHashMap<SingleQuadParticle.Layer, QuadParticleRenderState.Storage>();
+    var translucentLayers = new IdentityHashMap<SingleQuadParticle.Layer, QuadParticleRenderState.Storage>();
+    quadParticles.particles.forEach((layer, storage) ->
+      (layer.translucent() ? translucentLayers : solidLayers).put(layer, storage));
+    for (var layers : List.of(solidLayers, translucentLayers)) {
+      layers.forEach(this::submitParticleLayer);
     }
+  }
+
+  private void submitParticleLayer(SingleQuadParticle.Layer layer, QuadParticleRenderState.Storage storage) {
+    var texture = assets.textureAtlas(layer.textureAtlasLocation());
+    var alphaMode = layer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.CUTOUT;
+    var stage = layer.translucent() ? FeatureStage.TRANSLUCENT_PARTICLE : FeatureStage.SOLID_PARTICLE;
+    withStage(stage, () -> {
+      storage.forEachParticle((x, y, z, qx, qy, qz, qw, size, u0, u1, v0, v1, color, lightCoords) -> {
+        var rotation = new Quaternionf(qx, qy, qz, qw);
+        var worldX = x + (float) (ctx.camera().eyeX() - origin.x);
+        var worldY = y + (float) (ctx.camera().eyeY() - origin.y);
+        var worldZ = z + (float) (ctx.camera().eyeZ() - origin.z);
+        var vertices = new Vector3f[]{
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, -1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, 1.0F, 1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, 1.0F),
+          rotateParticleVertex(rotation, worldX, worldY, worldZ, size, -1.0F, -1.0F)
+        };
+        var material = RenderMaterial
+          .create(
+            texture,
+            alphaMode,
+            0xFFFFFFFF,
+            true,
+            0.0F,
+            RenderMaterial.ONE_TENTH_ALPHA_CUTOUT_THRESHOLD
+          )
+          .withPipelineState(layer.pipeline())
+          .withSortOnUpload(false);
+        var uv = new float[]{u1, v1, u1, v0, u0, v0, u0, v1};
+        var litColor = lightColor(lightCoords, 0, null);
+        var renderVertices = new RenderVertex[4];
+        for (var i = 0; i < renderVertices.length; i++) {
+          var vertex = vertices[i];
+          renderVertices[i] = new RenderVertex(vertex.x, vertex.y, vertex.z, uv[i * 2], uv[i * 2 + 1], color)
+            .withLightColor(litColor);
+        }
+        var quad = new RenderQuad(renderVertices[0], renderVertices[1], renderVertices[2], renderVertices[3], material);
+        if (layer.translucent()) {
+          builder().addTranslucentParticle(quad);
+        } else {
+          builder().add(quad);
+        }
+      });
+    });
   }
 
   @Override
@@ -1162,7 +1150,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private void putMovingBlockQuad(
     PoseStack.Pose basePose,
-    Map<RenderType, CapturingVertexConsumer> consumers,
+    Map<RenderType, Map<TextureAtlasSprite, CapturingVertexConsumer>> consumers,
     float x,
     float y,
     float z,
@@ -1178,18 +1166,26 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       instance.setColor(color);
       renderType = renderType.outline().orElseThrow();
     }
-    movingBlockConsumer(consumers, renderType).putBakedQuad(pose, quad, instance);
+    movingBlockConsumer(consumers, renderType, quad.materialInfo().sprite()).putBakedQuad(pose, quad, instance);
   }
 
-  private CapturingVertexConsumer movingBlockConsumer(Map<RenderType, CapturingVertexConsumer> consumers, RenderType renderType) {
-    return consumers.computeIfAbsent(renderType, currentRenderType -> {
-      var texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
-      var alphaMode = alphaMode(currentRenderType, texture, 0xFFFFFFFF);
+  private CapturingVertexConsumer movingBlockConsumer(Map<RenderType, Map<TextureAtlasSprite, CapturingVertexConsumer>> consumers,
+                                                       RenderType renderType, TextureAtlasSprite sprite) {
+    return consumers.computeIfAbsent(renderType, _ -> new LinkedHashMap<>()).computeIfAbsent(sprite, _ -> {
+      var texture = textureForSprite(sprite, renderType);
+      var alphaMode = alphaMode(renderType, texture, 0xFFFFFFFF);
       return new CapturingVertexConsumer(
-        new Matrix4f(), currentRenderType.primitiveTopology(), texture, alphaMode,
-        alphaCutoutThreshold(currentRenderType, alphaMode), currentRenderType, null
+        new Matrix4f(), renderType.primitiveTopology(), texture, alphaMode,
+        alphaCutoutThreshold(renderType, alphaMode), renderType, null
       );
     });
+  }
+
+  private RendererAssets.TextureImage textureForSprite(TextureAtlasSprite sprite, @Nullable RenderType renderType) {
+    var binding = renderType == null ? null : renderType.state.textures.get("Sampler0");
+    var sampler = binding == null ? null : RendererAssets.sampler(binding.sampler());
+    return sampler != null && sampler.getMaxLod().orElse(Double.POSITIVE_INFINITY) > 0
+      ? assets.terrainTexture(sprite).withStandardSampling() : assets.renderTexture(sprite.atlasLocation());
   }
 
   private static RenderType movingBlockRenderType(ChunkSectionLayer layer) {
@@ -1217,7 +1213,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     RenderType renderType,
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
-    int alphaCutoutThreshold,
+    float alphaCutoutThreshold,
     @Nullable TextureAtlasSprite sprite,
     @Nullable RenderMaterial materialOverride,
     Consumer<VertexConsumer> renderer
@@ -1308,7 +1304,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int light,
     int overlay
   ) {
-    var captured = captureBakedQuad(quad, pose);
+    var captured = captureBakedQuad(quad, pose, renderType);
     if (captured == null) {
       return;
     }
@@ -1355,7 +1351,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return;
     }
 
-    var captured = captureBakedQuad(quad, pose);
+    var captured = captureBakedQuad(quad, pose, renderType);
     if (captured == null) {
       return;
     }
@@ -1422,14 +1418,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   @Nullable
-  private CapturedBakedQuad captureBakedQuad(BakedQuad quad, PoseStack.Pose pose) {
+  private CapturedBakedQuad captureBakedQuad(BakedQuad quad, PoseStack.Pose pose, @Nullable RenderType renderType) {
     if (quad == null || quad.materialInfo() == null || quad.materialInfo().sprite() == null || quad.materialInfo().sprite().contents() == null) {
       return null;
     }
 
     var sprite = quad.materialInfo().sprite();
     // Keep world-item UVs in atlas space through interpolation, as in the native shader.
-    var texture = guiLighting == null ? assets.renderTexture(sprite.atlasLocation()) : assets.texture(sprite.contents().name());
+    var texture = guiLighting == null ? textureForSprite(sprite, renderType != null ? renderType : quad.materialInfo().itemRenderType()) : assets.texture(sprite.contents().name());
     var vertices = new Vector3f[4];
     var uv = new float[8];
     var poseMatrix = pose.pose();
@@ -1466,7 +1462,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     );
     capturePreparedText(
       pose,
-      font().prepareText(text.getVisualOrderText(), x, y, color, false, displayMode == Font.DisplayMode.SEE_THROUGH, backgroundColor),
+      font().prepareText(text.getVisualOrderText(), x, y, color, false, false, backgroundColor),
       displayMode,
       light
     );
@@ -1498,7 +1494,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       renderType,
       null
     );
-    renderable.render(pose, consumer, light, displayMode == Font.DisplayMode.SEE_THROUGH);
+    renderable.render(pose, consumer, light, false);
     consumer.flush();
   }
 
@@ -1545,7 +1541,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int emission,
     boolean doubleSided,
     float[] uv,
-    int alphaCutoutThreshold
+    float alphaCutoutThreshold
   ) {
     var face = RendererAssets.GeometryFace.of(vertices, uv, texture, alphaMode, null, -1, emission, true);
     builder().add(WorldMeshCollector.toRenderQuad(face, 0.0, 0.0, 0.0, color, doubleSided, 0.0F, alphaCutoutThreshold));
@@ -1698,7 +1694,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return assets.texture(ENCHANTED_GLINT_ITEM);
   }
 
-  private int alphaCutoutThreshold(@Nullable RenderType renderType, RendererAssets.AlphaMode alphaMode) {
+  private float alphaCutoutThreshold(@Nullable RenderType renderType, RendererAssets.AlphaMode alphaMode) {
     if (renderType == null) {
       return RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
     }
@@ -1814,7 +1810,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private boolean usesLightmap(@Nullable RenderType renderType) {
-    return renderType == null || renderType.state.useLightmap && !shaderDefines(renderType).contains("EMISSIVE");
+    if (renderType == null) {
+      return true;
+    }
+    var defines = shaderDefines(renderType);
+    return renderType.state.useLightmap && !defines.contains("EMISSIVE") && !defines.contains("IS_SEE_THROUGH") && !defines.contains("IS_GUI");
   }
 
   private RendererAssets.TextureImage textureFromRenderType(@Nullable RenderType renderType) {
@@ -1882,7 +1882,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final PrimitiveTopology mode;
     private final RendererAssets.TextureImage texture;
     private final RendererAssets.AlphaMode alphaMode;
-    private final int alphaCutoutThreshold;
+    private final float alphaCutoutThreshold;
     @Nullable
     private final DepthStencilState depthStencilState;
     @Nullable
@@ -1899,7 +1899,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       PrimitiveTopology mode,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode,
-      int alphaCutoutThreshold,
+      float alphaCutoutThreshold,
       @Nullable RenderType renderType,
       @Nullable DepthStencilState depthStencilState
     ) {
@@ -1911,7 +1911,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       PrimitiveTopology mode,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode,
-      int alphaCutoutThreshold,
+      float alphaCutoutThreshold,
       @Nullable RenderType renderType,
       @Nullable DepthStencilState depthStencilState,
       @Nullable RenderMaterial materialOverride,
@@ -1936,7 +1936,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       PrimitiveTopology mode,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode,
-      int alphaCutoutThreshold,
+      float alphaCutoutThreshold,
       @Nullable RenderType renderType,
       @Nullable DepthStencilState depthStencilState,
       @Nullable RenderMaterial materialOverride
@@ -1950,7 +1950,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       PrimitiveTopology mode,
       RendererAssets.TextureImage texture,
       RendererAssets.AlphaMode alphaMode,
-      int alphaCutoutThreshold,
+      float alphaCutoutThreshold,
       @Nullable RenderType renderType,
       @Nullable DepthStencilState depthStencilState,
       @Nullable RenderMaterial materialOverride,
@@ -2163,10 +2163,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       RenderMaterial material
     ) {
       var applyOverlay = materialOverride == null && usesOverlay(renderType);
-      if (usesPerFaceLighting(shadingRenderType()) && material.doubleSided()) {
-        var oneSidedMaterial = material.withDoubleSided(false);
-        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.FRONT, 0, 1, 2, 3), renderType);
-        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, oneSidedMaterial, FaceLighting.BACK, 3, 2, 1, 0), renderType);
+      if (usesPerFaceLighting(shadingRenderType()) && material.cullMode() == RenderMaterial.CullMode.NONE) {
+        var frontMaterial = material.withCullMode(RenderMaterial.CullMode.BACK);
+        var backMaterial = material.withCullMode(RenderMaterial.CullMode.FRONT);
+        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, frontMaterial, FaceLighting.FRONT, 0, 1, 2, 3), renderType);
+        addRenderTypeQuad(renderQuad(positions, normals, colors, uv, lights, overlayColors, applyOverlay, backMaterial, FaceLighting.BACK, 0, 1, 2, 3), renderType);
         return;
       }
 
@@ -2614,7 +2615,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private final class FluidOutput implements FluidRenderer.Output {
     private final LinkedHashMap<ChunkSectionLayer, CapturingVertexConsumer> consumers = new LinkedHashMap<>();
     private final RendererAssets.TextureImage texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
-    private final Matrix4f sectionOrigin;
 
     private final List<TextureAtlasSprite> sprites;
 
@@ -2626,11 +2626,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       if (model.overlayMaterial() != null) {
         sprites.add(model.overlayMaterial().sprite());
       }
-      this.sectionOrigin = new Matrix4f().translation(
-        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getX())),
-        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getY())),
-        SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getZ()))
-      );
     }
 
     @Override
@@ -2638,7 +2633,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return consumers.computeIfAbsent(
         layer,
         currentLayer -> new CapturingVertexConsumer(
-          sectionOrigin,
+          new Matrix4f(),
           PrimitiveTopology.QUADS,
           texture,
           currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
@@ -2668,8 +2663,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
             }
           }
           var material = RenderMaterial.create(faceTexture, alphaMode, 0xFFFFFFFF, false, 0.0F)
-            .withPipelineState(layer.pipeline())
-            .withSortOnUpload(false);
+            .withPipelineState(layer.pipeline());
           var vertices = new RenderVertex[4];
           for (var j = 0; j < 4; j++) {
             var vertex = captured.get(j);
@@ -2756,7 +2750,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     double distanceToCameraSq
   ) {}
 
-  private record SortedScene(double distanceSq, SceneData scene) {}
+  private record SortedScene(float distanceToCameraSq, SceneData scene) implements TranslucentSubmit {
+    @Override
+    public FeatureRendererType<? extends TranslucentSubmit> featureType() {
+      return ModelFeatureRenderer.TYPE;
+    }
+  }
 
   private enum FaceLighting {
     FRONT,
@@ -2774,7 +2773,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private enum FeatureStage {
     SOLID_MODEL,
-    SOLID_MODEL_PART,
     SOLID_FLAME,
     SOLID_LEASH,
     SOLID_ITEM,
@@ -2783,7 +2781,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     SOLID_PARTICLE,
     TRANSLUCENT_SHADOW,
     TRANSLUCENT_MODEL,
-    TRANSLUCENT_MODEL_PART,
     TRANSLUCENT_NAME_TAG,
     TRANSLUCENT_TEXT,
     TRANSLUCENT_ITEM,
@@ -2796,7 +2793,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final EnumMap<FeatureStage, SceneData.Builder> builders = new EnumMap<>(FeatureStage.class);
     private final ArrayList<NameTagDraw> nameTagSeeThrough = new ArrayList<>();
     private final ArrayList<NameTagDraw> nameTagNormal = new ArrayList<>();
-    private final ArrayList<SortedScene> translucentModelDraws = new ArrayList<>();
+    private final Map<RenderType, SceneData.Builder> solidModelDraws = new HashMap<>();
+    private final TranslucentFeatureRenderPhase translucentModelDraws = new TranslucentFeatureRenderPhase();
     private final EnumMap<FeatureStage, SimpleFeatureRenderPhase> customGeometry = new EnumMap<>(FeatureStage.class);
 
     private void flushCustomGeometry(VanillaSubmitCollector collector) {
@@ -2833,16 +2831,15 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private void flushSortedModelDraws() {
+      var solidTarget = builder(FeatureStage.SOLID_MODEL);
+      solidModelDraws.values().forEach(draw -> solidTarget.addAll(draw.build()));
+      solidModelDraws.clear();
       if (translucentModelDraws.isEmpty()) {
         return;
       }
 
-      translucentModelDraws.sort(Comparator.comparingDouble(SortedScene::distanceSq).reversed());
       var target = builder(FeatureStage.TRANSLUCENT_MODEL);
-      for (var draw : translucentModelDraws) {
-        target.addAll(draw.scene());
-      }
-      translucentModelDraws.clear();
+      translucentModelDraws.sortInto((submit, _) -> target.addAll(((SortedScene) submit).scene()));
     }
   }
 

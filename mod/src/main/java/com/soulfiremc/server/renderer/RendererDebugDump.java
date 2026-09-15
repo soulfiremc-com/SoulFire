@@ -374,7 +374,7 @@ public final class RendererDebugDump {
       json.addProperty("texture", textureId(material.texture()));
       json.addProperty("alphaMode", material.alphaMode().name());
       json.addProperty("color", hexArgb(material.color()));
-      json.addProperty("doubleSided", material.doubleSided());
+      json.addProperty("cullMode", material.cullMode().name());
       json.addProperty("depthBias", material.depthBias());
       json.addProperty("polygonOffsetFactor", material.polygonOffsetFactor());
       json.addProperty("polygonOffsetUnits", material.polygonOffsetUnits());

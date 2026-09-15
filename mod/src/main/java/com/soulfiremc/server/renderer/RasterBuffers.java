@@ -45,6 +45,13 @@ public final class RasterBuffers {
     return image;
   }
 
+  public BufferedImage opaqueImage() {
+    var snapshot = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+    var pixels = ((DataBufferInt) snapshot.getRaster().getDataBuffer()).getData();
+    System.arraycopy(colorBuffer, 0, pixels, 0, colorBuffer.length);
+    return snapshot;
+  }
+
   public int[] colorBuffer() {
     return colorBuffer;
   }

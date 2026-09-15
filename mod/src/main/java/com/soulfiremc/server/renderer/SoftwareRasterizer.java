@@ -48,7 +48,7 @@ final class SoftwareRasterizer {
 
   static void rasterizeWorldTriangle(
     Camera camera,
-    long animationTick,
+    double animationTick,
     ProjectedTriangle triangle,
     RasterBuffers buffers,
     int clipMinX,
@@ -73,7 +73,7 @@ final class SoftwareRasterizer {
   }
 
   static void rasterizeGuiItemTriangle(
-    long animationTick,
+    double animationTick,
     ProjectedTriangle triangle,
     RasterBuffers buffers,
     boolean writeDepth
@@ -96,7 +96,7 @@ final class SoftwareRasterizer {
   }
 
   static void rasterizeScreenTriangle(
-    long animationTick,
+    double animationTick,
     ProjectedTriangle triangle,
     RasterBuffers buffers,
     int clipMinX,
@@ -144,7 +144,7 @@ final class SoftwareRasterizer {
   }
 
   private static void rasterizeTriangle(
-    long animationTick,
+    double animationTick,
     ProjectedTriangle triangle,
     RasterBuffers buffers,
     int clipMinX,
@@ -165,7 +165,8 @@ final class SoftwareRasterizer {
     if (Math.abs(area) < 1.0E-5F) {
       return;
     }
-    if (!material.doubleSided() && area <= 0.0F) {
+    if ((material.cullMode() == RenderMaterial.CullMode.BACK && area <= 0.0F)
+      || (material.cullMode() == RenderMaterial.CullMode.FRONT && area >= 0.0F)) {
       return;
     }
 
@@ -182,7 +183,8 @@ final class SoftwareRasterizer {
       AttributePlane.of(v0, v1, v2, v0.cylindricalFogDistanceOverW(), v1.cylindricalFogDistanceOverW(), v2.cylindricalFogDistanceOverW(), planeHeight),
       AttributePlane.of(v0, v1, v2, v0.lightROverW(), v1.lightROverW(), v2.lightROverW(), planeHeight),
       AttributePlane.of(v0, v1, v2, v0.lightGOverW(), v1.lightGOverW(), v2.lightGOverW(), planeHeight),
-      AttributePlane.of(v0, v1, v2, v0.lightBOverW(), v1.lightBOverW(), v2.lightBOverW(), planeHeight)
+      AttributePlane.of(v0, v1, v2, v0.lightBOverW(), v1.lightBOverW(), v2.lightBOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.projectionQOverW(), v1.projectionQOverW(), v2.projectionQOverW(), planeHeight)
     } : null;
     var depthPlane = frontend == RasterFrontend.WORLD
       ? AttributePlane.of(v0, v1, v2, (float) (1.0 - v0.depth()), (float) (1.0 - v1.depth()), (float) (1.0 - v2.depth()), viewport.height()) : null;
@@ -258,7 +260,7 @@ final class SoftwareRasterizer {
         var sampleU = u;
         var sampleV = v;
         int sampled;
-        if (frontend == RasterFrontend.WORLD && material.texture().usesTerrainFiltering()) {
+        if (frontend == RasterFrontend.WORLD && material.texture().usesGradientSampling()) {
           var leftW = 1.0F / planes[0].at(x & ~1, y);
           var rightW = 1.0F / planes[0].at(x | 1, y);
           var topW = 1.0F / planes[0].at(x, y & ~1);
@@ -267,7 +269,7 @@ final class SoftwareRasterizer {
           var duDy = planes[1].at(x, y & ~1) * topW - planes[1].at(x, y | 1) * bottomW;
           var dvDx = planes[2].at(x | 1, y) * rightW - planes[2].at(x & ~1, y) * leftW;
           var dvDy = planes[2].at(x, y & ~1) * topW - planes[2].at(x, y | 1) * bottomW;
-          sampled = material.texture().sampleTerrain(sampleU, sampleV, animationTick, duDx, duDy, dvDx, dvDy);
+          sampled = material.texture().sampleGrad(sampleU, sampleV, (long) animationTick, duDx, duDy, dvDx, dvDy);
         } else {
           sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
         }
@@ -284,7 +286,7 @@ final class SoftwareRasterizer {
         var dissolveMask = frontend == RasterFrontend.WORLD ? material.dissolveMaskTexture() : null;
         if (dissolveMask != null) {
           var vertexAlpha = (normalizedW0 * v0.aOverW() + normalizedW1 * v1.aOverW() + normalizedW2 * v2.aOverW()) / inverseW;
-          if (vertexAlpha * 255.0F < (dissolveMask.sample(sampleU, sampleV, animationTick) >>> 24)) {
+          if (vertexAlpha * 255.0F < (dissolveMask.sample(sampleU, sampleV, (long) animationTick) >>> 24)) {
             continue;
           }
         }
@@ -293,6 +295,9 @@ final class SoftwareRasterizer {
           modulateChannel((sampled >>> 8) & 255, (material.color() >>> 8) & 255, planes[5].at(x, y) * (1.0F / inverseW)),
           modulateChannel(sampled & 255, material.color() & 255, planes[6].at(x, y) * (1.0F / inverseW)),
           modulateChannel(sampled >>> 24, material.color() >>> 24, dissolveMask != null ? 1.0F : planes[3].at(x, y) * (1.0F / inverseW))) : modulateFragment(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, dissolveMask != null, frontend == RasterFrontend.WORLD);
+        if (frontend == RasterFrontend.WORLD && material.textureSampleMode() == RenderMaterial.TextureSampleMode.END_PORTAL) {
+          color = sampleEndPortal(material, u, v, planes[12].at(x, y) * (1.0F / inverseW), animationTick);
+        }
         if (frontend == RasterFrontend.WORLD) {
           color = applyOverlay(
             color,
@@ -336,6 +341,10 @@ final class SoftwareRasterizer {
           continue;
         }
 
+        if ((x == 240 && y == 252) || (x == 312 && y == 294) || (x == 524 && y == 235)) {
+          System.out.println("FINAL_PIXEL " + x + "," + y + " source=" + color + " destination=" + Integer.toHexString(colorBuffer[rasterIndex])
+            + " depth=" + depth + " material=" + material);
+        }
         if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT && !material.blendState().blends()) {
           if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
             depthBuffer[rasterIndex] = depth;
@@ -539,9 +548,9 @@ final class SoftwareRasterizer {
     int x,
     int y,
     Viewport viewport,
-    long animationTick
+    double animationTick
   ) {
-    var sample = material.texture().sample(u, v, animationTick);
+    var sample = material.texture().sample(u, v, (long) animationTick);
     if (frontend == RasterFrontend.GUI_ITEM) {
       return sample;
     }
@@ -552,24 +561,24 @@ final class SoftwareRasterizer {
         var intensity = (sample >> 16) & 0xFF;
         yield (intensity << 24) | (intensity << 16) | (intensity << 8) | intensity;
       }
-      case END_PORTAL -> sampleEndPortal(material, x, y, viewport, animationTick);
+      case END_PORTAL -> 0xFFFFFFFF;
     };
   }
 
-  private static int sampleEndPortal(RenderMaterial material, int x, int y, Viewport viewport, long animationTick) {
-    var projectedU = (x + 0.5F) / viewport.width();
-    var projectedV = 1.0F - (y + 0.5F) / viewport.height();
-    var baseSample = material.texture().sample(projectedU, projectedV, animationTick);
+  private static FragmentColor sampleEndPortal(RenderMaterial material, float u, float v, float q, double animationTick) {
+    var projectedU = u * (1.0F / q);
+    var projectedV = v * (1.0F / q);
+    var baseSample = material.texture().sample(projectedU, projectedV, (long) animationTick);
     var r = textureChannel(baseSample, 16) * END_PORTAL_COLORS[0][0];
     var g = textureChannel(baseSample, 8) * END_PORTAL_COLORS[0][1];
     var b = textureChannel(baseSample, 0) * END_PORTAL_COLORS[0][2];
     var secondaryTexture = material.secondaryTexture();
     if (secondaryTexture != null) {
-      var gameTime = Math.floorMod(animationTick, 24000L) / 24000.0F;
+      var gameTime = (float) (animationTick % 24000.0) / 24000.0F;
       var layerCount = Math.min(material.portalLayers(), END_PORTAL_COLORS.length);
       for (var layerIndex = 0; layerIndex < layerCount; layerIndex++) {
-        var layerCoord = endPortalLayerCoord(projectedU, projectedV, layerIndex + 1, gameTime);
-        var layerSample = secondaryTexture.sample(layerCoord.u(), layerCoord.v(), animationTick);
+        var layerCoord = endPortalLayerCoord(u, v, q, layerIndex + 1, gameTime);
+        var layerSample = secondaryTexture.sample(layerCoord.u(), layerCoord.v(), (long) animationTick);
         var layerColor = END_PORTAL_COLORS[layerIndex];
         r += textureChannel(layerSample, 16) * layerColor[0];
         g += textureChannel(layerSample, 8) * layerColor[1];
@@ -577,27 +586,25 @@ final class SoftwareRasterizer {
       }
     }
 
-    return 0xFF000000
-      | (colorChannel(r * 255.0F) << 16)
-      | (colorChannel(g * 255.0F) << 8)
-      | colorChannel(b * 255.0F);
+    return new FragmentColor(r, g, b, 1.0F);
   }
 
   private static float textureChannel(int color, int shift) {
-    return ((color >> shift) & 0xFF) / 255.0F;
+    return ((color >> shift) & 0xFF) * (1.0F / 255.0F);
   }
 
-  private static TextureCoord endPortalLayerCoord(float u, float v, int layer, float gameTime) {
+  private static TextureCoord endPortalLayerCoord(float u, float v, float q, int layer, float gameTime) {
     var layerFloat = (float) layer;
-    var angle = (float) Math.toRadians((layerFloat * layerFloat * 4321.0F + layerFloat * 9.0F) * 2.0F);
+    // The shader compiler factors the common layer before folding its rotation constants.
+    var angle = (layerFloat * (2.0F * (float) (Math.PI / 180.0))) * (layerFloat * 4321.0F + 9.0F);
     var sin = (float) Math.sin(angle);
     var cos = (float) Math.cos(angle);
     var scale = (4.5F - layerFloat / 4.0F) * 2.0F;
-    var rotatedU = (u * cos - v * sin) * scale;
-    var rotatedV = (u * sin + v * cos) * scale;
-    var translatedU = rotatedU + 17.0F / layerFloat;
-    var translatedV = rotatedV + (2.0F + layerFloat / 1.5F) * (gameTime * 1.5F);
-    return new TextureCoord(translatedU * 0.5F + 0.25F, translatedV * 0.5F + 0.25F);
+    var cosScale = (scale * cos) * 0.5F;
+    var sinScale = (scale * sin) * 0.5F;
+    var offsetU = (17.0F / layerFloat) * 0.5F + 0.25F;
+    var offsetV = ((2.0F + layerFloat / 1.5F) * 1.5F * 0.5F) * gameTime + 0.25F;
+    return new TextureCoord((u * cosScale + (v * -sinScale + q * offsetU)) * (1.0F / q), (u * sinScale + (v * cosScale + q * offsetV)) * (1.0F / q));
   }
 
   private static int colorChannel(float value) {

@@ -22,6 +22,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -48,18 +49,27 @@ public final class RendererRuntimeTextureMirror {
   public static void registerAtlas(TextureAtlas atlas, GpuTexture texture) {
     try (var pixels = new NativeImage(atlas.getWidth(), atlas.getHeight(), true)) {
       for (var sprite : atlas.sprites) {
-        var contents = sprite.contents();
-        var paddingX = Math.round(sprite.getU0() * atlas.getWidth()) - sprite.getX();
-        var paddingY = Math.round(sprite.getV0() * atlas.getHeight()) - sprite.getY();
-        // Vanilla's atlas upload extends the edge texels into the sprite's padding.
-        for (var y = -paddingY; y < contents.height() + paddingY; y++) {
-          for (var x = -paddingX; x < contents.width() + paddingX; x++) {
-            pixels.setPixel(sprite.getX() + paddingX + x, sprite.getY() + paddingY + y,
-              contents.originalImage.getPixel(Math.clamp(x, 0, contents.width() - 1), Math.clamp(y, 0, contents.height() - 1)));
-          }
-        }
+        writeAtlasSprite(pixels, sprite);
       }
       register(atlas.location(), texture, pixels);
+    }
+  }
+
+  static void writeAtlasSprite(NativeImage pixels, TextureAtlasSprite sprite) {
+    var contents = sprite.contents();
+    var animation = contents.animatedTexture;
+    var firstFrame = animation == null ? 0 : animation.frames.getFirst().index();
+    var frameRowSize = animation == null ? 1 : animation.frameRowSize;
+    var frameX = firstFrame % frameRowSize * contents.width();
+    var frameY = firstFrame / frameRowSize * contents.height();
+    var paddingX = Math.round(sprite.getU0() * pixels.getWidth()) - sprite.getX();
+    var paddingY = Math.round(sprite.getV0() * pixels.getHeight()) - sprite.getY();
+    // Vanilla's atlas upload extends the edge texels into the sprite's padding.
+    for (var y = -paddingY; y < contents.height() + paddingY; y++) {
+      for (var x = -paddingX; x < contents.width() + paddingX; x++) {
+        pixels.setPixel(sprite.getX() + paddingX + x, sprite.getY() + paddingY + y,
+          contents.originalImage.getPixel(frameX + Math.clamp(x, 0, contents.width() - 1), frameY + Math.clamp(y, 0, contents.height() - 1)));
+      }
     }
   }
 

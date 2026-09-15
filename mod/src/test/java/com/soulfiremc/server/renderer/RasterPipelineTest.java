@@ -149,11 +149,11 @@ class RasterPipelineTest {
     buffers.clearColor(0xFF000000);
     var material = RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0);
     var topLeft = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 4, 0, 1, 1);
+      1, 1, 1, 1, 128, 255, 0, 0, 4, 0, 1, 1, 1);
     var topRight = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 4, 1, 1, 1);
+      1, 1, 1, 1, 128, 255, 0, 0, 4, 1, 1, 1, 1);
     var bottomLeft = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 0, 0, 0, 1);
+      1, 1, 1, 1, 128, 255, 0, 0, 0, 0, 0, 1, 1);
     SoftwareRasterizer.rasterizeWorldTriangle(camera, 0,
       new ProjectedTriangle(topLeft, topRight, bottomLeft, material, 0), buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
     assertEquals(0xFF107000, buffers.image().getRGB(0, 0));
@@ -572,7 +572,7 @@ class RasterPipelineTest {
         solidTexture(0x80A04020),
         RendererAssets.AlphaMode.TRANSLUCENT,
         0xFFFFFFFF,
-        false,
+        RenderMaterial.CullMode.BACK,
         0.0F,
         0.0F,
         0.0F,
@@ -589,7 +589,7 @@ class RasterPipelineTest {
         0,
         1.0F,
         null
-      ).withGlintAlpha(0.5F).withDoubleSided(true)
+      ).withGlintAlpha(0.5F).withCullMode(RenderMaterial.CullMode.NONE)
     ));
 
     renderSynthetic(
@@ -680,7 +680,7 @@ class RasterPipelineTest {
         solidTexture(0xFFFF0000),
         RendererAssets.AlphaMode.OPAQUE,
         0xFFFFFFFF,
-        false,
+        RenderMaterial.CullMode.BACK,
         0.0F,
         0.0F,
         0.0F,
@@ -1085,7 +1085,25 @@ class RasterPipelineTest {
       .create(solidTexture(0x7FFFFFFF), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF, false, 0.0F)
       .withRenderType(RenderTypes.cutoutMovingBlock());
 
-    assertEquals(128, material.alphaCutoutThreshold());
+    assertEquals(127.5F, material.alphaCutoutThreshold());
+  }
+
+  @Test
+  void cutoutKeepsHalfOpaqueTexelsWithInterpolatedVertexAlpha() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
+    var alpha = Math.nextDown(1.0F);
+    var v0 = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 4);
+    var v1 = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 4);
+    var v2 = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 0);
+    for (var texelAlpha : new int[]{127, 128}) {
+      var buffers = new RasterBuffers(4, 4);
+      buffers.clearColor(0xFF000000);
+      var material = RenderMaterial.create(solidTexture(texelAlpha << 24 | 0xFFFFFF), RendererAssets.AlphaMode.CUTOUT,
+        0xFFFFFFFF, true, 0).withRenderType(RenderTypes.cutoutMovingBlock());
+      SoftwareRasterizer.rasterizeWorldTriangle(camera, 0, new ProjectedTriangle(v0, v1, v2, material, 0),
+        buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
+      assertEquals(texelAlpha == 128 ? 0xFFFFFFFF : 0xFF000000, buffers.image().getRGB(0, 0));
+    }
   }
 
   @Test
@@ -1218,7 +1236,7 @@ class RasterPipelineTest {
       .create(solidTexture(0xFF000000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0.0F)
       .withPipelineState(RenderPipelines.END_PORTAL)
       .withSecondaryTexture(solidTexture(0xFFFFFFFF))
-      .withDoubleSided(true);
+      .withCullMode(RenderMaterial.CullMode.NONE);
     var scene = SceneData.builder();
     scene.add(customQuad(
       vertex(-1.0F, -1.0F, 4.0F, 0.0F, 1.0F),
@@ -1605,7 +1623,7 @@ class RasterPipelineTest {
       texture,
       RendererAssets.AlphaMode.TRANSLUCENT,
       0x80FFFFFF,
-      false,
+      RenderMaterial.CullMode.BACK,
       0.0F,
       0.0F,
       0.0F,
@@ -1630,7 +1648,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
@@ -1660,7 +1678,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
@@ -1691,7 +1709,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
@@ -1716,7 +1734,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
@@ -1741,7 +1759,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),
@@ -1766,7 +1784,7 @@ class RasterPipelineTest {
       material.texture(),
       material.alphaMode(),
       material.color(),
-      material.doubleSided(),
+      material.cullMode(),
       material.depthBias(),
       material.polygonOffsetFactor(),
       material.polygonOffsetUnits(),

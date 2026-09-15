@@ -210,7 +210,7 @@ final class PovHudRenderer {
     return false;
   }
 
-  private static int alphaCutoutThreshold(RendererAssets.AlphaMode alphaMode) {
+  private static float alphaCutoutThreshold(RendererAssets.AlphaMode alphaMode) {
     return alphaMode == RendererAssets.AlphaMode.TRANSLUCENT ? 1 : RenderMaterial.defaultAlphaCutoutThreshold(alphaMode);
   }
 

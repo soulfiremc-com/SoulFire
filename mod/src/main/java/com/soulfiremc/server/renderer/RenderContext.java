@@ -61,6 +61,10 @@ public record RenderContext(
     );
   }
 
+  public double interpolatedGameTime() {
+    return level.getGameTime() + (double) Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+  }
+
   private static LightmapRenderState createLightmapRenderState(ClientLevel level, LocalPlayer localPlayer, Camera camera) {
     var minecraft = Minecraft.getInstance();
     var renderer = minecraft.gameRenderer;

@@ -186,11 +186,14 @@ public final class LavapipeComparison {
         var b = software.getRGB(x, y);
         var largest = 0;
         var color = 0;
-        for (var shift : new int[]{16, 8, 0}) {
+        for (var shift : new int[]{24, 16, 8, 0}) {
           var delta = Math.abs(((a >> shift) & 255) - ((b >> shift) & 255));
           absoluteError += delta;
           largest = Math.max(largest, delta);
-          color |= Math.min(255, delta * 8) << shift;
+          if (shift != 24) {
+            var alphaDelta = Math.abs((a >>> 24) - (b >>> 24));
+            color |= Math.min(255, Math.max(delta, alphaDelta) * 8) << shift;
+          }
         }
         if (largest > 0) {
           changed++;
@@ -217,8 +220,8 @@ public final class LavapipeComparison {
     ImageIO.write(comparison, "PNG", OUTPUT.resolve("comparison.png").toFile());
     var report = String.format(Locale.ROOT, """
       {"width": %d, "height": %d, "changedPixels": %d, "pixelsAboveTwo": %d,
-       "maxChannelError": %d, "meanAbsoluteChannelError": %.6f, "diffAmplification": 8}
-      """, width, height, changed, significant, maximum, absoluteError / (width * (double) height * 3));
+       "maxChannelError": %d, "meanAbsoluteChannelError": %.6f, "diffAmplification": 8, "channels": "RGBA"}
+      """, width, height, changed, significant, maximum, absoluteError / (width * (double) height * 4));
     if (INVENTORY) {
       var json = JsonParser.parseString(report).getAsJsonObject();
       var gson = new GsonBuilder().setPrettyPrinting().create();
@@ -243,7 +246,7 @@ public final class LavapipeComparison {
     private void add(int reference, int software) {
       pixels++;
       var maximum = 0;
-      for (var shift : new int[]{16, 8, 0}) {
+      for (var shift : new int[]{24, 16, 8, 0}) {
         var error = Math.abs(((reference >>> shift) & 255) - ((software >>> shift) & 255));
         absoluteChannelError += error;
         maximum = Math.max(maximum, error);

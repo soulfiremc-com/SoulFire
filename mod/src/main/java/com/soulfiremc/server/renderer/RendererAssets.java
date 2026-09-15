@@ -162,8 +162,8 @@ public final class RendererAssets {
     }
 
     var sampled = texture.withAddressModes(textureAddressMode(sampler.getAddressModeU()), textureAddressMode(sampler.getAddressModeV()));
-    return sampler.getMinFilter() == FilterMode.LINEAR && sampler.getMagFilter() == FilterMode.LINEAR
-      ? sampled.withLinearFiltering() : sampled;
+    return sampled.withFiltering(sampler.getMinFilter() == FilterMode.LINEAR,
+      sampler.getMagFilter() == FilterMode.LINEAR, (float) sampler.getMaxLod().orElse(Double.POSITIVE_INFINITY));
   }
 
   static TextureImage withSampler(TextureImage texture, @Nullable Supplier<GpuSampler> samplerSupplier) {
@@ -1199,7 +1199,10 @@ public final class RendererAssets {
     private final TextureAddressMode addressModeU;
     private final TextureAddressMode addressModeV;
     private final boolean linearFiltering;
-    private volatile TextureImage linearFiltered;
+    private boolean minLinearFiltering;
+    private boolean terrainFiltering;
+    private float maxLod = Float.POSITIVE_INFINITY;
+    private volatile TextureImage standardSampled;
     private volatile TextureImage terrainFiltered;
     private TextureImage[] mipLevels;
     private AtlasRegion atlasRegion;
@@ -1230,6 +1233,7 @@ public final class RendererAssets {
       this.addressModeU = addressModeU;
       this.addressModeV = addressModeV;
       this.linearFiltering = linearFiltering;
+      this.minLinearFiltering = linearFiltering;
     }
 
     public static TextureImage from(@Nullable BufferedImage image, @Nullable JsonObject metadata) {
@@ -1327,6 +1331,10 @@ public final class RendererAssets {
     }
 
     public int sample(float u, float v, long tick) {
+      return sample(u, v, tick, linearFiltering);
+    }
+
+    private int sample(float u, float v, long tick, boolean linear) {
       if (pixels.length == 0 || width <= 0) {
         return 0;
       }
@@ -1339,7 +1347,7 @@ public final class RendererAssets {
       var frameOrderIndex = (int) ((tick / frameTime) % frameOrder.length);
       var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
       var yOffset = frameIndex * clampedFrameHeight;
-      if (linearFiltering) {
+      if (linear) {
         var texelX = ((float) Math.rint(sampledU * (atlasRegion == null ? width : atlasRegion.width()) * 256.0F) - 128) / 256.0F - (atlasRegion == null ? 0 : atlasRegion.x());
         var texelY = ((float) Math.rint(sampledV * (atlasRegion == null ? clampedFrameHeight : atlasRegion.height()) * 256.0F) - 128) / 256.0F - (atlasRegion == null ? 0 : atlasRegion.y());
         var x0 = (int) Math.floor(texelX);
@@ -1358,8 +1366,8 @@ public final class RendererAssets {
         }
         return result;
       }
-      var x = Math.clamp((int) (sampledU * width), 0, width - 1);
-      var y = Math.clamp((int) (sampledV * clampedFrameHeight), 0, clampedFrameHeight - 1) + yOffset;
+      var x = Math.clamp((int) (sampledU * (atlasRegion == null ? width : atlasRegion.width())) - (atlasRegion == null ? 0 : atlasRegion.x()), 0, width - 1);
+      var y = Math.clamp((int) (sampledV * (atlasRegion == null ? clampedFrameHeight : atlasRegion.height())) - (atlasRegion == null ? 0 : atlasRegion.y()), 0, clampedFrameHeight - 1) + yOffset;
       return pixels[x + y * width];
     }
 
@@ -1370,18 +1378,38 @@ public final class RendererAssets {
     }
 
     public TextureImage withLinearFiltering() {
-      if (linearFiltering) {
+      return withFiltering(true, true, maxLod);
+    }
+
+    TextureImage withFiltering(boolean minLinear, boolean magLinear, float maxLod) {
+      if (minLinearFiltering == minLinear && linearFiltering == magLinear && this.maxLod == maxLod) {
         return this;
       }
-      var filtered = linearFiltered;
-      if (filtered == null) {
-        filtered = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels,
-          hasAlpha, hasTranslucentPixels, addressModeU, addressModeV, true);
-        filtered.atlasRegion = atlasRegion;
-        filtered.mipLevels = mipLevels;
-        linearFiltered = filtered;
-      }
+      var filtered = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels,
+        hasAlpha, hasTranslucentPixels, addressModeU, addressModeV, magLinear);
+      filtered.atlasRegion = atlasRegion;
+      filtered.mipLevels = mipLevels;
+      filtered.terrainFiltering = terrainFiltering;
+      filtered.minLinearFiltering = minLinear;
+      filtered.maxLod = maxLod;
       return filtered;
+    }
+
+    TextureImage withStandardSampling() {
+      if (!terrainFiltering) {
+        return this;
+      }
+      var sampled = standardSampled;
+      if (sampled == null) {
+        sampled = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels,
+          hasAlpha, hasTranslucentPixels, addressModeU, addressModeV, linearFiltering);
+        sampled.atlasRegion = atlasRegion;
+        sampled.mipLevels = mipLevels;
+        sampled.minLinearFiltering = minLinearFiltering;
+        sampled.maxLod = maxLod;
+        standardSampled = sampled;
+      }
+      return sampled;
     }
 
     private volatile TerrainFrameSnapshot terrainFrameSnapshot;
@@ -1420,6 +1448,7 @@ public final class RendererAssets {
       }
       var result = levels[0];
       result.mipLevels = levels;
+      result.terrainFiltering = true;
       terrainFrameSnapshot = new TerrainFrameSnapshot(frame, result);
       return result;
     }
@@ -1444,13 +1473,54 @@ public final class RendererAssets {
         }
         filtered = levels[0];
         filtered.mipLevels = levels;
+        filtered.terrainFiltering = true;
         terrainFiltered = filtered;
       }
       return filtered;
     }
 
     boolean usesTerrainFiltering() {
-      return mipLevels != null;
+      return terrainFiltering;
+    }
+
+    boolean usesGradientSampling() {
+      return mipLevels != null || minLinearFiltering != linearFiltering;
+    }
+
+    int sampleGrad(float u, float v, long tick, float duDx, float duDy, float dvDx, float dvDy) {
+      if (terrainFiltering) {
+        return sampleTerrain(u, v, tick, duDx, duDy, dvDx, dvDy);
+      }
+      var textureWidth = atlasRegion == null ? width : atlasRegion.width();
+      var textureHeight = atlasRegion == null ? frameHeight : atlasRegion.height();
+      var dx = duDx * duDx * textureWidth * textureWidth + dvDx * dvDx * textureHeight * textureHeight;
+      var dy = duDy * duDy * textureWidth * textureWidth + dvDy * dvDy * textureHeight * textureHeight;
+      var footprint = Math.max(dx, dy);
+      if (footprint <= 1.0F) {
+        return sample(u, v, tick);
+      }
+      var rhoBits = Float.floatToRawIntBits(Float.isFinite(footprint) ? footprint : 0.0F);
+      var exponent = (rhoBits >>> 23) - 128;
+      var mantissa = Float.intBitsToFloat((rhoBits & 0x7FFFFF) | 0x3F800000);
+      var lod = Math.clamp((exponent + mantissa) * 0.5F, 0, Math.min(maxLod, mipLevels == null ? 0 : mipLevels.length - 1));
+      var lower = (int) lod;
+      var upper = mipLevels == null ? 0 : Math.min(lower + 1, mipLevels.length - 1);
+      var lowerTexture = mipLevels == null ? this : mipLevels[lower];
+      var upperTexture = mipLevels == null ? this : mipLevels[upper];
+      var a = lowerTexture.sample(u, v, tick, minLinearFiltering);
+      var b = upperTexture.sample(u, v, tick, minLinearFiltering);
+      return blendMipSamples(a, b, lod - lower);
+    }
+
+    private static int blendMipSamples(int a, int b, float fraction) {
+      var result = 0;
+      var weight = (int) (fraction * 256.0F);
+      for (var shift = 0; shift < 32; shift += 8) {
+        var start = (a >>> shift) & 255;
+        var end = (b >>> shift) & 255;
+        result |= (start + (int) Math.rint((end - start) * weight / 256.0F)) << shift;
+      }
+      return result;
     }
 
     int sampleTerrain(float u, float v, long tick, float duDx, float duDy, float dvDx, float dvDy) {
@@ -1475,18 +1545,11 @@ public final class RendererAssets {
       var upper = Math.min(lower + 1, mipLevels.length - 1);
       var a = mipLevels[lower].sample(adjustedU, adjustedV, tick);
       var b = mipLevels[upper].sample(adjustedU, adjustedV, tick);
-      var result = 0;
-      for (var shift = 0; shift < 32; shift += 8) {
-        var start = (a >>> shift) & 255;
-        var end = (b >>> shift) & 255;
-        var weight = (int) ((lod - lower) * 256.0F);
-        result |= (start + (int) Math.rint((end - start) * weight / 256.0F)) << shift;
-      }
-      return result;
+      return blendMipSamples(a, b, lod - lower);
     }
 
     private static float antialiasedTexel(float coordinate, float footprint) {
-      var center = (float) Math.floor(coordinate + 0.5F) - 0.5F;
+      var center = (float) Math.rint(coordinate) - 0.5F;
       var offset = footprint > 0 ? (coordinate - center - 0.5F) / footprint + 0.5F : 0.5F;
       return center + Math.clamp(offset, 0, 1);
     }
@@ -1519,6 +1582,9 @@ public final class RendererAssets {
       textureImage.bufferedImage = bufferedImage;
       textureImage.atlasRegion = atlasRegion;
       textureImage.mipLevels = mipLevels;
+      textureImage.terrainFiltering = terrainFiltering;
+      textureImage.minLinearFiltering = minLinearFiltering;
+      textureImage.maxLod = maxLod;
       return textureImage;
     }
 

@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -109,7 +110,7 @@ class VanillaSubmitCollectorTextTest {
 
     var scene = sceneData(collector);
     assertTrue(scene.totalQuadCount() > 0);
-    assertTrue(scene.translucent()[0].material().doubleSided());
+    assertEquals(RenderMaterial.CullMode.NONE, scene.translucent()[0].material().cullMode());
 
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);
@@ -343,16 +344,28 @@ class VanillaSubmitCollectorTextTest {
     var renderType = RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test"));
     var consumer = newTextConsumer(collector, texture, renderType);
 
-    addEntityVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F);
-    addEntityVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F);
-    addEntityVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F);
-    addEntityVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, 0.4F, 4.125F, 0.0F, 0.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, -0.75F, -0.4F, 4.525F, 0.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, -0.4F, 4.775F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F);
+    addEntityVertex(consumer, 0.75F, 0.4F, 4.375F, 1.0F, 0.0F, 0.0F, -1.0F, 0.0F);
     flush(consumer);
 
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     renderSynthetic(new RasterPipeline(), camera, sceneData(collector), buffers, 0L, 0xFF000000);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFFFFFFF, 3);
+
+    var reference = SceneData.builder();
+    reference.add(new RenderQuad(
+      new RenderVertex(-0.75F, 0.4F, 4.125F, 0, 0, -1),
+      new RenderVertex(-0.75F, -0.4F, 4.525F, 0, 1, -1),
+      new RenderVertex(0.75F, -0.4F, 4.775F, 1, 1, -1),
+      new RenderVertex(0.75F, 0.4F, 4.375F, 1, 0, -1),
+      RenderMaterial.create(texture, RendererAssets.AlphaMode.OPAQUE, -1, true, 0)
+    ));
+    var referenceBuffers = new RasterBuffers(WIDTH, HEIGHT);
+    renderSynthetic(new RasterPipeline(), camera, reference.build(), referenceBuffers, 0L, 0xFF000000);
+    assertArrayEquals(referenceBuffers.depthBuffer(), buffers.depthBuffer());
   }
 
   @Test
@@ -378,23 +391,29 @@ class VanillaSubmitCollectorTextTest {
   @Test
   void entityShaderDefinesDisableLightmapAndOverlayCapture() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
-    var collector = newCollector(camera);
-    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var renderType = RenderTypes.energySwirl(Identifier.withDefaultNamespace("textures/entity/test"), 0.0F, 0.0F);
-    var consumer = newTextConsumer(collector, texture, renderType);
-    var darkLight = LightCoordsUtil.pack(0, 0);
-    var hurtOverlay = OverlayTexture.pack(0.0F, true);
-
-    addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
-    addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
-    addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
-    addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
-    flush(consumer);
-
-    var scene = sceneData(collector);
-    assertEquals(1, scene.translucent().length);
-    assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().color());
-    assertEquals(RenderVertex.NO_OVERLAY_COLOR, scene.translucent()[0].v0().overlayColor());
+    for (var renderType : List.of(
+      RenderTypes.energySwirl(Identifier.withDefaultNamespace("textures/entity/test"), 0.0F, 0.0F),
+      RenderTypes.textSeeThrough(Identifier.withDefaultNamespace("font/test")),
+      RenderTypes.textBackgroundSeeThrough())) {
+      var collector = newCollector(camera);
+      var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+      var consumer = newTextConsumer(collector, texture, renderType);
+      var darkLight = LightCoordsUtil.pack(0, 0);
+      var hurtOverlay = OverlayTexture.pack(0.0F, true);
+  
+      addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+      addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+      addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+      addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
+      flush(consumer);
+  
+      var scene = sceneData(collector);
+      assertEquals(1, scene.translucent().length);
+      assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().color());
+      assertEquals(RenderVertex.NO_OVERLAY_COLOR, scene.translucent()[0].v0().overlayColor());
+      assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().lightColor());
+      assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().fragmentLightColor());
+    }
   }
 
   @Test
@@ -744,7 +763,7 @@ class VanillaSubmitCollectorTextTest {
     var method = VanillaSubmitCollector.class.getDeclaredMethod("putMovingBlockQuad", PoseStack.Pose.class,
       Map.class, float.class, float.class, float.class, BakedQuad.class, QuadInstance.class, ChunkSectionLayer.class, int.class);
     method.setAccessible(true);
-    method.invoke(collector, new PoseStack().last(), new HashMap<>(Map.of(renderType, consumer)), 0.0F, 0.0F, 0.0F,
+    method.invoke(collector, new PoseStack().last(), new HashMap<>(Map.of(renderType, new HashMap<>(Map.of(sprite, consumer)))), 0.0F, 0.0F, 0.0F,
       quad, instance, ChunkSectionLayer.SOLID, 0);
     flush(consumer);
     var scene = sceneData(collector);
@@ -945,7 +964,7 @@ class VanillaSubmitCollectorTextTest {
       PrimitiveTopology.class,
       RendererAssets.TextureImage.class,
       RendererAssets.AlphaMode.class,
-      int.class,
+      float.class,
       RenderType.class,
       DepthStencilState.class,
       RenderMaterial.class

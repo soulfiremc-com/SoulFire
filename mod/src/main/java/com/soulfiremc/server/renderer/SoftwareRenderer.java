@@ -119,7 +119,7 @@ public class SoftwareRenderer {
       debugTrace.totalNanos(System.nanoTime() - renderStart);
       debugTrace.logSummary(sceneData);
 
-      return new Result(buffers.image(), debugTrace.snapshot());
+      return new Result(buffers.opaqueImage(), debugTrace.snapshot());
     });
   }
 
@@ -142,17 +142,17 @@ public class SoftwareRenderer {
           hudFov(options.fov()),
           100.0F
         );
-        RASTER_PIPELINE.renderFirstPersonOverlay(handCamera, handScene, buffers, ctx.animationTick(), RasterFogState.from(ctx));
+        RASTER_PIPELINE.renderFirstPersonOverlay(handCamera, handScene, buffers, ctx.interpolatedGameTime(), RasterFogState.from(ctx));
       }
     }
 
     if (options.includeHands()) {
       var effects = VanillaSubmitCollector.collectScreenEffects(ctx, partialTick());
       var screenCamera = new Camera(Vec3.ZERO, 180, 0, options.width(), options.height(), hudFov(options.fov()), 100);
-      RASTER_PIPELINE.renderScene(screenCamera, effects, buffers, ctx.animationTick(), RasterFogState.from(ctx));
+      RASTER_PIPELINE.renderScene(screenCamera, effects, buffers, ctx.interpolatedGameTime(), RasterFogState.from(ctx));
     }
 
-    RASTER_PIPELINE.renderOutlines(ctx.camera(), sceneData.outlines(), buffers, ctx.animationTick());
+    RASTER_PIPELINE.renderOutlines(ctx.camera(), sceneData.outlines(), buffers, ctx.interpolatedGameTime());
 
     if (options.includeHud()) {
       PovHudRenderer.render(ctx, buffers);

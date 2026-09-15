@@ -34,18 +34,18 @@ public final class RasterPipeline {
   public void render(RenderContext ctx, SceneData sceneData, RasterBuffers buffers) {
     var fog = RasterFogState.from(ctx);
     renderSky(ctx, buffers, fog);
-    renderScene(ctx.camera(), sceneData, buffers, ctx.animationTick(), fog);
+    renderScene(ctx.camera(), sceneData, buffers, ctx.interpolatedGameTime(), fog);
   }
 
-  public void renderScene(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick) {
+  public void renderScene(Camera camera, SceneData sceneData, RasterBuffers buffers, double animationTick) {
     renderScene(camera, sceneData, buffers, animationTick, RasterFogState.DISABLED);
   }
 
-  public void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick) {
+  public void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, double animationTick) {
     renderFirstPersonOverlay(camera, sceneData, buffers, animationTick, RasterFogState.DISABLED);
   }
 
-  void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, RasterFogState fogState) {
+  void renderFirstPersonOverlay(Camera camera, SceneData sceneData, RasterBuffers buffers, double animationTick, RasterFogState fogState) {
     if (sceneData.totalQuadCount() == 0) {
       return;
     }
@@ -54,7 +54,7 @@ public final class RasterPipeline {
     renderScene(camera, sceneData, buffers, animationTick, fogState);
   }
 
-  void renderScene(Camera camera, SceneData sceneData, RasterBuffers buffers, long animationTick, RasterFogState fogState) {
+  void renderScene(Camera camera, SceneData sceneData, RasterBuffers buffers, double animationTick, RasterFogState fogState) {
     rasterPass(camera, animationTick, sceneData.opaque(), buffers, false, RasterPassKind.OPAQUE, fogState);
     rasterPass(camera, animationTick, sceneData.cutout(), buffers, false, RasterPassKind.CUTOUT, fogState);
     rasterPass(camera, animationTick, sceneData.translucent(), buffers, true, RasterPassKind.TRANSLUCENT, fogState);
@@ -64,7 +64,7 @@ public final class RasterPipeline {
     rasterPass(camera, animationTick, sceneData.weather(), buffers, false, RasterPassKind.TRANSLUCENT, fogState);
   }
 
-  void renderOutlines(Camera camera, RenderQuad[] outlines, RasterBuffers buffers, long animationTick) {
+  void renderOutlines(Camera camera, RenderQuad[] outlines, RasterBuffers buffers, double animationTick) {
     if (outlines.length > 0) {
       var mask = new RasterBuffers(camera.width(), camera.height());
       mask.clearColor(0);
@@ -75,13 +75,13 @@ public final class RasterPipeline {
 
   private void renderSky(RenderContext ctx, RasterBuffers buffers, RasterFogState fog) {
     SkyRenderer.renderBackground(ctx, buffers, fog);
-    rasterPass(ctx.camera(), ctx.animationTick(), SkyRenderer.collectSkyQuads(ctx, fog), buffers, false, RasterPassKind.UNTRACKED, RasterFogState.DISABLED);
+    rasterPass(ctx.camera(), ctx.interpolatedGameTime(), SkyRenderer.collectSkyQuads(ctx, fog), buffers, false, RasterPassKind.UNTRACKED, RasterFogState.DISABLED);
     buffers.clearDepth();
   }
 
   private void rasterPass(
     Camera camera,
-    long animationTick,
+    double animationTick,
     RenderQuad[] quads,
     RasterBuffers buffers,
     boolean sortBackToFront,
@@ -159,10 +159,10 @@ public final class RasterPipeline {
     viewRotation.scale(material.viewScale());
     var clipTransform = new Matrix4f(projection).mul(viewRotation);
     var viewVertices = new ClipVertex[]{
-      toClipVertex(camera, quad.origin(), clipTransform, material.uvTransform(), quad.v0()),
-      toClipVertex(camera, quad.origin(), clipTransform, material.uvTransform(), quad.v1()),
-      toClipVertex(camera, quad.origin(), clipTransform, material.uvTransform(), quad.v2()),
-      toClipVertex(camera, quad.origin(), clipTransform, material.uvTransform(), quad.v3())
+      toClipVertex(camera, quad.origin(), clipTransform, material, quad.v0()),
+      toClipVertex(camera, quad.origin(), clipTransform, material, quad.v1()),
+      toClipVertex(camera, quad.origin(), clipTransform, material, quad.v2()),
+      toClipVertex(camera, quad.origin(), clipTransform, material, quad.v3())
     };
     for (var vertex : viewVertices) {
       if (!isFinite(vertex)) {
@@ -314,10 +314,21 @@ public final class RasterPipeline {
     );
   }
 
-  private ClipVertex toClipVertex(Camera camera, Vec3 origin, Matrix4f transform, RenderMaterial.UvTransform uvTransform, RenderVertex vertex) {
-    var relativeX = (float) (vertex.x() - (camera.eyeX() - origin.x));
-    var relativeY = (float) (vertex.y() - (camera.eyeY() - origin.y));
-    var relativeZ = (float) (vertex.z() - (camera.eyeZ() - origin.z));
+  private static float relativePosition(float coordinate, double origin, double eye, boolean terrain) {
+    if (terrain) {
+      var cameraBlock = Math.floor(eye);
+      return (coordinate + (float) (origin - cameraBlock)) + (float) (cameraBlock - eye);
+    }
+    return (float) (coordinate - (eye - origin));
+  }
+
+  private ClipVertex toClipVertex(Camera camera, Vec3 origin, Matrix4f transform, RenderMaterial material, RenderVertex vertex) {
+    var uvTransform = material.uvTransform();
+    var terrain = material.texture().usesTerrainFiltering();
+    var projectiveTexture = material.textureSampleMode() == RenderMaterial.TextureSampleMode.END_PORTAL;
+    var relativeX = relativePosition(vertex.x(), origin.x, camera.eyeX(), terrain);
+    var relativeY = relativePosition(vertex.y(), origin.y, camera.eyeY(), terrain);
+    var relativeZ = relativePosition(vertex.z(), origin.z, camera.eyeZ(), terrain);
     var sphericalFogDistance = (float) Math.sqrt((relativeZ * relativeZ + relativeY * relativeY) + relativeX * relativeX);
     var cylindricalFogDistance = Math.max((float) Math.sqrt(relativeX * relativeX + relativeZ * relativeZ), Math.abs(relativeY));
     var position = new Vector4f(
@@ -340,8 +351,8 @@ public final class RasterPipeline {
       clip.w,
       sphericalFogDistance,
       cylindricalFogDistance,
-      uvTransform.u(vertex.u(), vertex.v()),
-      uvTransform.v(vertex.u(), vertex.v()),
+      projectiveTexture ? clip.x * 0.5F + clip.w * 0.5F : uvTransform.u(vertex.u(), vertex.v()),
+      projectiveTexture ? clip.y * 0.5F + clip.w * 0.5F : uvTransform.v(vertex.u(), vertex.v()),
       vertex.colorChannel(24),
       vertex.colorChannel(16) * vertex.shade() * (((vertex.lightColor() >>> 16) & 255) * (1.0F / 255.0F)),
       vertex.colorChannel(8) * vertex.shade() * (((vertex.lightColor() >>> 8) & 255) * (1.0F / 255.0F)),
@@ -384,7 +395,8 @@ public final class RasterPipeline {
       windowY,
       vertex.lightR() * inverseW,
       vertex.lightG() * inverseW,
-      vertex.lightB() * inverseW
+      vertex.lightB() * inverseW,
+      vertex.w() * inverseW
     );
   }
 
