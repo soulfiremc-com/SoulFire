@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.server.renderer;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -29,8 +30,14 @@ record RasterFogState(
   float environmentalStart,
   float environmentalEnd,
   float renderDistanceStart,
-  float renderDistanceEnd
+  float renderDistanceEnd,
+  float cloudsEnd
 ) {
+  RasterFogState(boolean enabled, int color, float environmentalStart, float environmentalEnd,
+                 float renderDistanceStart, float renderDistanceEnd) {
+    this(enabled, color, environmentalStart, environmentalEnd, renderDistanceStart, renderDistanceEnd, Float.MAX_VALUE);
+  }
+
   static final RasterFogState DISABLED = new RasterFogState(false, 0, Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
 
   static RasterFogState from(RenderContext ctx) {
@@ -50,7 +57,9 @@ record RasterFogState(
       environmentalStart,
       environmentalEnd,
       renderDistanceEnd - renderDistanceFogSpan,
-      renderDistanceEnd
+      renderDistanceEnd,
+      Math.min(Minecraft.getInstance().options.cloudRange().get() * 16.0F,
+        probe.getValue(EnvironmentAttributes.CLOUD_FOG_END_DISTANCE, 1.0F))
     );
   }
 

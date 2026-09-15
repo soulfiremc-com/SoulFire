@@ -18,6 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
@@ -32,6 +33,35 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RendererAssetsTest {
+  @Test
+  void terrainSamplingSelectsAndBlendsMipLevelsFromThePixelFootprint() {
+    try (var base = new NativeImage(2, 2, true); var mip = new NativeImage(1, 1, true)) {
+      base.fillRect(0, 0, 2, 2, 0xFFFF0000);
+      mip.setPixel(0, 0, 0xFF0000FF);
+      var texture = RendererAssets.TextureImage.fromArgb(2, 2,
+        new int[]{-1, -1, -1, -1}, null).withTerrainFiltering(new NativeImage[]{base, mip});
+
+      assertEquals(0xFFFF0000, texture.sampleTerrain(0.25F, 0.25F, 0, 0.01F, 0, 0, 0.01F));
+      assertEquals(0xFF0000FF, texture.sampleTerrain(0.25F, 0.25F, 0, 1, 0, 0, 1));
+      assertEquals(0xFF6A0095, texture.sampleTerrain(0.25F, 0.25F, 0, 0.75F, 0, 0, 0));
+    }
+  }
+
+  @Test
+  void linearFilteringInterpolatesTexelsAndClampsSpriteEdges() {
+    var texture = RendererAssets.TextureImage.fromArgb(2, 2,
+      new int[]{0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFF000000}, null);
+    var filtered = texture.withAddressMode(RendererAssets.TextureAddressMode.CLAMP_TO_EDGE).withLinearFiltering();
+
+    // Each filter axis rounds its signed interpolation delta to nearest even.
+    assertEquals(0xFF3F4040, filtered.sample(0.5F, 0.5F, 0));
+    assertEquals(0xFFFF0000, filtered.sample(0.25F, 0.25F, 0));
+    assertEquals(0xFFFF0000, filtered.sample(0, 0, 0));
+    assertEquals(0xFF00FF00, filtered.sample(1, 0, 0));
+    assertEquals(0xFF404040, texture.withLinearFiltering().sample(0, 0, 0));
+    assertEquals(0xFF000000, texture.sample(0.5F, 0.5F, 0));
+  }
+
   @Test
   void staticPortraitTextureUsesItsFullHeightAtEveryTick() {
     var texture = RendererAssets.TextureImage.fromArgb(2, 3,
@@ -77,7 +107,7 @@ class RendererAssetsTest {
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
     var sampler = new FakeSampler(AddressMode.CLAMP_TO_EDGE, AddressMode.REPEAT);
 
-    var sampled = RendererAssets.withSamplerAddressMode(texture, sampler);
+    var sampled = RendererAssets.withSampler(texture, sampler);
 
     assertEquals(RendererAssets.TextureAddressMode.CLAMP_TO_EDGE, sampled.addressModeU());
     assertEquals(RendererAssets.TextureAddressMode.REPEAT, sampled.addressModeV());

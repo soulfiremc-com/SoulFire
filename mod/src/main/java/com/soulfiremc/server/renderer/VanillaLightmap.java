@@ -93,7 +93,8 @@ final class VanillaLightmap {
     g = lerp(renderState.brightness, g, notGamma[1]);
     b = lerp(renderState.brightness, b, notGamma[2]);
 
-    return ARGB.colorFromFloat(1.0F, Math.clamp(r, 0.0F, 1.0F), Math.clamp(g, 0.0F, 1.0F), Math.clamp(b, 0.0F, 1.0F));
+    return ARGB.color(255, (int) Math.rint(Math.clamp(r, 0.0F, 1.0F) * 255.0F),
+      (int) Math.rint(Math.clamp(g, 0.0F, 1.0F) * 255.0F), (int) Math.rint(Math.clamp(b, 0.0F, 1.0F) * 255.0F));
   }
 
   private static float brightness(float level) {

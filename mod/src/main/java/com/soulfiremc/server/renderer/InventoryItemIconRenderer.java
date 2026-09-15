@@ -581,7 +581,7 @@ public final class InventoryItemIconRenderer {
     }
 
     if (alphaMode == RendererAssets.AlphaMode.TRANSLUCENT) {
-      projectedTriangles.sort((left, right) -> Float.compare(right.sortDepth(), left.sortDepth()));
+      projectedTriangles.sort((left, right) -> Double.compare(right.sortDepth(), left.sortDepth()));
     }
 
     for (var triangle : projectedTriangles) {
@@ -1749,7 +1749,7 @@ public final class InventoryItemIconRenderer {
   }
 
   private static RendererAssets.TextureImage textureImage(RenderSetup.TextureBinding binding) {
-    return RendererAssets.withSamplerAddressMode(RendererAssets.instance().renderTexture(binding.location()), binding.sampler());
+    return RendererAssets.withSampler(RendererAssets.instance().renderTexture(binding.location()), binding.sampler());
   }
 
   private record CapturedVertex(Vector3f position, int color, float u, float v, float lineWidth) {

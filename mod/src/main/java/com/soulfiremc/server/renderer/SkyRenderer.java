@@ -349,8 +349,15 @@ public final class SkyRenderer {
       return fogColor;
     }
 
-    var spherical = (float) Math.sqrt(x * x + y * y + z * z);
-    var cylindrical = Math.max((float) Math.sqrt(x * x + z * z), Math.abs(y));
+    // The sky is an eight-triangle fan. Fog distances are evaluated at its vertices,
+    // then interpolated across each triangle, rather than measured at the fragment.
+    var absX = Math.abs(x);
+    var absZ = Math.abs(z);
+    var edgeWeight = Math.max(absX + absZ * 0.41421356F, absZ + absX * 0.41421356F) / SKY_DISC_RADIUS;
+    var centerDistance = Math.abs(TOP_SKY_Y);
+    var edgeDistance = (float) Math.sqrt(SKY_DISC_RADIUS * SKY_DISC_RADIUS + TOP_SKY_Y * TOP_SKY_Y);
+    var spherical = Mth.lerp(edgeWeight, centerDistance, edgeDistance);
+    var cylindrical = Mth.lerp(edgeWeight, centerDistance, SKY_DISC_RADIUS);
     var sphericalFog = Mth.clamp(spherical / fogEnd, 0.0F, 1.0F);
     var cylindricalFog = cylindrical >= fogEnd ? 1.0F : 0.0F;
     var fogValue = Math.max(sphericalFog, cylindricalFog) * ARGB.alphaFloat(fogColor);

@@ -29,7 +29,7 @@ import net.minecraft.world.attribute.EnvironmentAttributes;
 
 import java.util.Arrays;
 
-/// Builds the same cloud cell mesh as Minecraft's CloudRenderer, but as CPU-rasterized quads.
+/// Builds Minecraft's cloud cell mesh in camera-relative coordinates.
 public final class CloudMeshCollector {
   private static final Identifier CLOUD_TEXTURE = Identifier.withDefaultNamespace("environment/clouds");
   private static final float CELL_SIZE = 12.0F;
@@ -58,7 +58,6 @@ public final class CloudMeshCollector {
     }
 
     var range = cloudRange(ctx);
-    var cloudFogEnd = Math.min(range * 16.0F, ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_FOG_END_DISTANCE, 1.0F));
     return collect(
       ctx.camera(),
       texture,
@@ -67,8 +66,7 @@ public final class CloudMeshCollector {
       ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, 1.0F),
       range,
       ctx.level().getGameTime(),
-      Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false),
-      cloudFogEnd
+      Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false)
     );
   }
 
@@ -80,20 +78,19 @@ public final class CloudMeshCollector {
     float cloudHeight,
     int range,
     long gameTime,
-    float partialTick,
-    float cloudFogEnd
+    float partialTick
   ) {
     if (cloudStatus == CloudStatus.OFF || ARGB.alpha(cloudColor) == 0) {
       return SceneData.EMPTY;
     }
 
-    var relativeBottomY = cloudHeight - (float) camera.eyeY();
+    var relativeBottomY = (float) (cloudHeight - camera.eyeY());
     var relativeTopY = relativeBottomY + CELL_HEIGHT;
     var relativeCameraPos = relativeTopY < 0.0F
       ? RelativeCameraPos.ABOVE_CLOUDS
       : relativeBottomY > 0.0F ? RelativeCameraPos.BELOW_CLOUDS : RelativeCameraPos.INSIDE_CLOUDS;
     var cloudOffset = (float) (gameTime % (texture.width() * (long) TICKS_PER_CELL)) + partialTick;
-    var cloudX = camera.eyeX() + cloudOffset * BLOCKS_PER_SECOND / 20.0F;
+    var cloudX = camera.eyeX() + cloudOffset * (BLOCKS_PER_SECOND / 20.0F);
     var cloudZ = camera.eyeZ() + 3.96F;
     var textureWidthBlocks = texture.width() * (double) CELL_SIZE;
     var textureHeightBlocks = texture.height() * (double) CELL_SIZE;
@@ -106,7 +103,6 @@ public final class CloudMeshCollector {
     var builder = SceneData.builder();
     buildMesh(
       builder,
-      camera,
       relativeCameraPos,
       cellX,
       cellZ,
@@ -116,7 +112,6 @@ public final class CloudMeshCollector {
       zInCell,
       relativeBottomY,
       cloudColor,
-      cloudFogEnd,
       cloudMaterial(cloudStatus == CloudStatus.FANCY),
       texture
     );
@@ -125,7 +120,6 @@ public final class CloudMeshCollector {
 
   private static void buildMesh(
     SceneData.Builder builder,
-    Camera camera,
     RelativeCameraPos relativePos,
     int centerCellX,
     int centerCellZ,
@@ -135,7 +129,6 @@ public final class CloudMeshCollector {
     float zInCell,
     float relativeBottomY,
     int cloudColor,
-    float cloudFogEnd,
     RenderMaterial material,
     TextureData texture
   ) {
@@ -147,16 +140,15 @@ public final class CloudMeshCollector {
         }
 
         if (relativeCellZ != 0) {
-          tryBuildCell(builder, camera, relativePos, centerCellX, centerCellZ, extrude, relativeCellX, -relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material, texture);
+          tryBuildCell(builder, relativePos, centerCellX, centerCellZ, extrude, relativeCellX, -relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, material, texture);
         }
-        tryBuildCell(builder, camera, relativePos, centerCellX, centerCellZ, extrude, relativeCellX, relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material, texture);
+        tryBuildCell(builder, relativePos, centerCellX, centerCellZ, extrude, relativeCellX, relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, material, texture);
       }
     }
   }
 
   private static void tryBuildCell(
     SceneData.Builder builder,
-    Camera camera,
     RelativeCameraPos relativePos,
     int cellX,
     int cellZ,
@@ -167,7 +159,6 @@ public final class CloudMeshCollector {
     float zInCell,
     float relativeBottomY,
     int cloudColor,
-    float cloudFogEnd,
     RenderMaterial material,
     TextureData texture
   ) {
@@ -179,15 +170,14 @@ public final class CloudMeshCollector {
     }
 
     if (extrude) {
-      buildExtrudedCell(builder, camera, relativePos, relativeCellX, relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material, cellData);
+      buildExtrudedCell(builder, relativePos, relativeCellX, relativeCellZ, xInCell, zInCell, relativeBottomY, cloudColor, material, cellData);
     } else {
-      addFace(builder, camera, relativeCellX, relativeCellZ, Direction.DOWN, false, true, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, relativeCellX, relativeCellZ, Direction.DOWN, false, true, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
   }
 
   private static void buildExtrudedCell(
     SceneData.Builder builder,
-    Camera camera,
     RelativeCameraPos relativePos,
     int x,
     int z,
@@ -195,38 +185,36 @@ public final class CloudMeshCollector {
     float zInCell,
     float relativeBottomY,
     int cloudColor,
-    float cloudFogEnd,
     RenderMaterial material,
     long cellData
   ) {
     if (relativePos != RelativeCameraPos.BELOW_CLOUDS) {
-      addFace(builder, camera, x, z, Direction.UP, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.UP, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (relativePos != RelativeCameraPos.ABOVE_CLOUDS) {
-      addFace(builder, camera, x, z, Direction.DOWN, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.DOWN, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (isNorthEmpty(cellData) && z > 0) {
-      addFace(builder, camera, x, z, Direction.NORTH, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.NORTH, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (isSouthEmpty(cellData) && z < 0) {
-      addFace(builder, camera, x, z, Direction.SOUTH, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.SOUTH, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (isWestEmpty(cellData) && x > 0) {
-      addFace(builder, camera, x, z, Direction.WEST, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.WEST, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (isEastEmpty(cellData) && x < 0) {
-      addFace(builder, camera, x, z, Direction.EAST, false, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+      addFace(builder, x, z, Direction.EAST, false, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
     }
     if (Math.abs(x) <= 1 && Math.abs(z) <= 1) {
       for (var direction : Direction.values()) {
-        addFace(builder, camera, x, z, direction, true, false, xInCell, zInCell, relativeBottomY, cloudColor, cloudFogEnd, material);
+        addFace(builder, x, z, direction, true, false, xInCell, zInCell, relativeBottomY, cloudColor, material);
       }
     }
   }
 
   private static void addFace(
     SceneData.Builder builder,
-    Camera camera,
     int cellX,
     int cellZ,
     Direction direction,
@@ -236,7 +224,6 @@ public final class CloudMeshCollector {
     float zInCell,
     float relativeBottomY,
     int cloudColor,
-    float cloudFogEnd,
     RenderMaterial material
   ) {
     var vertices = faceVertices(direction);
@@ -247,27 +234,16 @@ public final class CloudMeshCollector {
       var relativeY = vertex[1] * CELL_HEIGHT + relativeBottomY;
       var relativeZ = (vertex[2] + cellZ) * CELL_SIZE - zInCell;
       renderVertices[i] = new RenderVertex(
-        (float) (camera.eyeX() + relativeX),
-        (float) (camera.eyeY() + relativeY),
-        (float) (camera.eyeZ() + relativeZ),
+        relativeX,
+        relativeY,
+        relativeZ,
         0.0F,
         0.0F,
-        cloudVertexColor(cloudColor, useTopColor ? Direction.UP : direction, relativeX, relativeY, relativeZ, cloudFogEnd)
-      );
+        cloudColor
+      ).withShade(faceShade(useTopColor ? Direction.UP : direction));
     }
 
     builder.addCloud(new RenderQuad(renderVertices[0], renderVertices[1], renderVertices[2], renderVertices[3], material));
-  }
-
-  private static int cloudVertexColor(int cloudColor, Direction direction, float x, float y, float z, float cloudFogEnd) {
-    var shade = faceShade(direction);
-    var distance = (float) Math.sqrt(x * x + y * y + z * z);
-    var fogAlpha = cloudFogEnd <= 0.0F ? 0.0F : 1.0F - Mth.clamp(distance / cloudFogEnd, 0.0F, 1.0F);
-    var alpha = Math.clamp(Math.round(ARGB.alpha(cloudColor) * fogAlpha), 0, 255);
-    var red = Math.clamp(Math.round(ARGB.red(cloudColor) * shade), 0, 255);
-    var green = Math.clamp(Math.round(ARGB.green(cloudColor) * shade), 0, 255);
-    var blue = Math.clamp(Math.round(ARGB.blue(cloudColor) * shade), 0, 255);
-    return ARGB.color(alpha, red, green, blue);
   }
 
   private static float faceShade(Direction direction) {
@@ -307,7 +283,7 @@ public final class CloudMeshCollector {
       ColorTargetState.WRITE_ALL,
       RenderMaterial.UvTransform.IDENTITY,
       RenderMaterial.TextureSampleMode.COLOR,
-      RenderMaterial.FogMode.NONE,
+      RenderMaterial.FogMode.CLOUD_ALPHA,
       false,
       0,
       1.0F,

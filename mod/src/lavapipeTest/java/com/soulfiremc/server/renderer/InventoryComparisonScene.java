@@ -43,6 +43,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 final class InventoryComparisonScene {
   private InventoryComparisonScene() {}
@@ -56,7 +57,11 @@ final class InventoryComparisonScene {
     level.clockManager().handleUpdates(6000, Map.of(level.registryAccess().get(WorldClocks.OVERWORLD).orElseThrow(), new ClockNetworkState(6000, 0, 0)));
     level.setRainLevel(0);
     level.setThunderLevel(0);
-    for (var entity : level.entitiesForRendering()) {
+    for (var entity : StreamSupport.stream(level.entitiesForRendering().spliterator(), false).toList()) {
+      if (entity != minecraft.player && entity.getId() != -1000) {
+        entity.discard();
+        continue;
+      }
       entity.tickCount = 60;
     }
   }

@@ -23,5 +23,5 @@ public record ProjectedTriangle(
   ProjectedVertex v1,
   ProjectedVertex v2,
   RenderMaterial material,
-  float sortDepth
+  double sortDepth
 ) {}

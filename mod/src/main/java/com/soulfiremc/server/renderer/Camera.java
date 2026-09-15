@@ -27,6 +27,7 @@ import org.joml.Vector3f;
 public final class Camera {
   private static final float DEFAULT_NEAR_PLANE = net.minecraft.client.Camera.PROJECTION_Z_NEAR;
 
+  private final double fov;
   private final int width;
   private final int height;
   private final double eyeX;
@@ -55,6 +56,7 @@ public final class Camera {
   private final FrustumIntersection frustumIntersection;
 
   public Camera(Vec3 eyePos, float yRot, float xRot, int width, int height, double fov, float farPlane) {
+    this.fov = fov;
     this.width = width;
     this.height = height;
     this.eyeX = eyePos.x;
@@ -99,6 +101,10 @@ public final class Camera {
     var viewRotationProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewRotationMatrix);
     this.viewProjectionMatrix = new Matrix4f(projectionMatrix).mul(viewMatrix);
     this.frustumIntersection = new FrustumIntersection(viewRotationProjectionMatrix);
+  }
+
+  public Camera atOrigin() {
+    return new Camera(Vec3.ZERO, yRot, xRot, width, height, fov, farPlane);
   }
 
   public boolean isVisibleAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {

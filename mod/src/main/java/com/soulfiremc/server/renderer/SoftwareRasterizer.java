@@ -172,10 +172,21 @@ final class SoftwareRasterizer {
 
     var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, material) : 0.0F;
     var depthFogProjection = depthFogProjection(viewport, material);
-    var positiveArea = area > 0.0F;
-    var topLeft0 = positiveArea ? isTopLeft(v1.x(), v1.y(), v2.x(), v2.y()) : isTopLeft(v2.x(), v2.y(), v1.x(), v1.y());
-    var topLeft1 = positiveArea ? isTopLeft(v2.x(), v2.y(), v0.x(), v0.y()) : isTopLeft(v0.x(), v0.y(), v2.x(), v2.y());
-    var topLeft2 = positiveArea ? isTopLeft(v0.x(), v0.y(), v1.x(), v1.y()) : isTopLeft(v1.x(), v1.y(), v0.x(), v0.y());
+    // GPU raster coverage uses fixed-point subpixel coordinates; interpolation retains the original plane.
+    var x0 = (int) Math.rint(v0.x() * 256.0F);
+    var y0 = (int) Math.rint(v0.y() * 256.0F);
+    var x1 = (int) Math.rint(v1.x() * 256.0F);
+    var y1 = (int) Math.rint(v1.y() * 256.0F);
+    var x2 = (int) Math.rint(v2.x() * 256.0F);
+    var y2 = (int) Math.rint(v2.y() * 256.0F);
+    var coverageArea = fixedEdge(x0, y0, x1, y1, x2, y2);
+    if (coverageArea == 0) {
+      return;
+    }
+    var positiveArea = coverageArea > 0;
+    var topLeft0 = positiveArea ? isTopLeft(x1, y1, x2, y2) : isTopLeft(x2, y2, x1, y1);
+    var topLeft1 = positiveArea ? isTopLeft(x2, y2, x0, y0) : isTopLeft(x0, y0, x2, y2);
+    var topLeft2 = positiveArea ? isTopLeft(x0, y0, x1, y1) : isTopLeft(x1, y1, x0, y0);
 
     var colorBuffer = buffers.colorBuffer();
     var depthBuffer = buffers.depthBuffer();
@@ -194,18 +205,18 @@ final class SoftwareRasterizer {
         var w0 = edge(v1.x(), v1.y(), v2.x(), v2.y(), sampleX, sampleY);
         var w1 = edge(v2.x(), v2.y(), v0.x(), v0.y(), sampleX, sampleY);
         var w2 = edge(v0.x(), v0.y(), v1.x(), v1.y(), sampleX, sampleY);
-        if (!isInside(positiveArea, w0, w1, w2, topLeft0, topLeft1, topLeft2)) {
+        if (!isInside(positiveArea, fixedEdge(x1, y1, x2, y2, x * 256L + 128, y * 256L + 128), fixedEdge(x2, y2, x0, y0, x * 256L + 128, y * 256L + 128), fixedEdge(x0, y0, x1, y1, x * 256L + 128, y * 256L + 128), topLeft0, topLeft1, topLeft2)) {
           continue;
         }
 
         var normalizedW0 = w0 / area;
         var normalizedW1 = w1 / area;
         var normalizedW2 = w2 / area;
-        var depth = normalizedW0 * v0.depth() + normalizedW1 * v1.depth() + normalizedW2 * v2.depth() + fragmentDepthBias;
+        var depth = Math.fma(normalizedW1, v1.depth() - v0.depth(), Math.fma(normalizedW2, v2.depth() - v0.depth(), v0.depth())) + fragmentDepthBias;
         if (frontend == RasterFrontend.WORLD) {
           depth = Math.clamp(depth, 0.0F, 1.0F);
         }
-        if (!Float.isFinite(depth)) {
+        if (!Double.isFinite(depth)) {
           continue;
         }
 
@@ -214,43 +225,56 @@ final class SoftwareRasterizer {
           continue;
         }
 
-        var inverseW = normalizedW0 * v0.inverseW() + normalizedW1 * v1.inverseW() + normalizedW2 * v2.inverseW();
+        var inverseW = Math.fma(normalizedW1, v1.inverseW() - v0.inverseW(), Math.fma(normalizedW2, v2.inverseW() - v0.inverseW(), v0.inverseW()));
         if (!Float.isFinite(inverseW) || Math.abs(inverseW) < 1.0E-8F) {
           continue;
         }
 
-        var u = (normalizedW0 * v0.uOverW() + normalizedW1 * v1.uOverW() + normalizedW2 * v2.uOverW()) / inverseW;
-        var v = (normalizedW0 * v0.vOverW() + normalizedW1 * v1.vOverW() + normalizedW2 * v2.vOverW()) / inverseW;
+        var u = Math.fma(normalizedW1, v1.uOverW() - v0.uOverW(), Math.fma(normalizedW2, v2.uOverW() - v0.uOverW(), v0.uOverW())) / inverseW;
+        var v = Math.fma(normalizedW1, v1.vOverW() - v0.vOverW(), Math.fma(normalizedW2, v2.vOverW() - v0.vOverW(), v0.vOverW())) / inverseW;
         if (!Float.isFinite(u) || !Float.isFinite(v)) {
           continue;
         }
 
         var sampleU = frontend == RasterFrontend.WORLD ? material.uvTransform().u(u, v, animationTick) : u;
         var sampleV = frontend == RasterFrontend.WORLD ? material.uvTransform().v(u, v, animationTick) : v;
-        var sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
-        var vertexColor = interpolatedColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
-        if (frontend == RasterFrontend.WORLD) {
-          var dissolveMaskTexture = material.dissolveMaskTexture();
-          if (dissolveMaskTexture != null) {
-            var vertexAlpha = (vertexColor >>> 24) & 0xFF;
-            var dissolveMaskAlpha = (dissolveMaskTexture.sample(sampleU, sampleV, animationTick) >>> 24) & 0xFF;
-            if (vertexAlpha < dissolveMaskAlpha) {
-              continue;
-            }
-            vertexColor = forceOpaque(vertexColor);
+        int sampled;
+        if (frontend == RasterFrontend.WORLD && material.texture().usesTerrainFiltering()) {
+          var w0Dx = (v2.y() - v1.y()) / area;
+          var w1Dx = (v0.y() - v2.y()) / area;
+          var w2Dx = (v1.y() - v0.y()) / area;
+          var w0Dy = (v1.x() - v2.x()) / area;
+          var w1Dy = (v2.x() - v0.x()) / area;
+          var w2Dy = (v0.x() - v1.x()) / area;
+          var qDx = w0Dx * v0.inverseW() + w1Dx * v1.inverseW() + w2Dx * v2.inverseW();
+          var qDy = w0Dy * v0.inverseW() + w1Dy * v1.inverseW() + w2Dy * v2.inverseW();
+          var duDx = (w0Dx * v0.uOverW() + w1Dx * v1.uOverW() + w2Dx * v2.uOverW() - u * qDx) / inverseW;
+          var duDy = (w0Dy * v0.uOverW() + w1Dy * v1.uOverW() + w2Dy * v2.uOverW() - u * qDy) / inverseW;
+          var dvDx = (w0Dx * v0.vOverW() + w1Dx * v1.vOverW() + w2Dx * v2.vOverW() - v * qDx) / inverseW;
+          var dvDy = (w0Dy * v0.vOverW() + w1Dy * v1.vOverW() + w2Dy * v2.vOverW() - v * qDy) / inverseW;
+          sampled = material.texture().sampleTerrain(sampleU, sampleV, animationTick, duDx, duDy, dvDx, dvDy);
+        } else {
+          sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
+        }
+        if (frontend == RasterFrontend.GUI_SCREEN) {
+          writeGuiScreenFragment(colorBuffer, rasterIndex, sampled, material, normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
+          continue;
+        }
+        var dissolveMask = frontend == RasterFrontend.WORLD ? material.dissolveMaskTexture() : null;
+        if (dissolveMask != null) {
+          var vertexAlpha = (normalizedW0 * v0.aOverW() + normalizedW1 * v1.aOverW() + normalizedW2 * v2.aOverW()) / inverseW;
+          if (vertexAlpha * 255.0F < (dissolveMask.sample(sampleU, sampleV, animationTick) >>> 24)) {
+            continue;
           }
         }
-
-        var color = frontend == RasterFrontend.GUI_ITEM
-          ? modulateGuiItem(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
-          : modulate(modulate(sampled, vertexColor), material.color());
+        var color = modulateFragment(sampled, material.color(), normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2, dissolveMask != null, frontend == RasterFrontend.WORLD);
         if (frontend == RasterFrontend.WORLD) {
           color = applyOverlay(
             color,
             interpolatedOverlayColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
           );
         }
-        var alpha = (color >>> 24) & 0xFF;
+        var alpha = color.a() * 255.0F;
         if (alpha == 0) {
           continue;
         }
@@ -277,7 +301,7 @@ final class SoftwareRasterizer {
         }
 
         if (frontend == RasterFrontend.GUI_ITEM) {
-          writeGuiItemFragment(colorBuffer, depthBuffer, rasterIndex, depth, color, material, guiDepthWrite);
+          writeGuiItemFragment(colorBuffer, depthBuffer, rasterIndex, depth, color.packed(), material, guiDepthWrite);
           continue;
         }
 
@@ -285,11 +309,11 @@ final class SoftwareRasterizer {
           if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
             depthBuffer[rasterIndex] = depth;
           }
-          writeColor(colorBuffer, rasterIndex, forceOpaque(color), material);
+          writeColor(colorBuffer, rasterIndex, forceOpaque(color.packed()), material);
           continue;
         }
 
-        writeColor(colorBuffer, rasterIndex, color, material);
+        writeColor(colorBuffer, rasterIndex, color.packed(), material);
         if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
           depthBuffer[rasterIndex] = depth;
         }
@@ -297,7 +321,29 @@ final class SoftwareRasterizer {
     }
   }
 
-  private static boolean passesDepth(RasterFrontend frontend, RenderMaterial material, float incoming, float stored) {
+  private static void writeGuiScreenFragment(int[] buffer, int index, int sample, RenderMaterial material,
+                                            float w0, float w1, float w2, float inverseW,
+                                            ProjectedVertex v0, ProjectedVertex v1, ProjectedVertex v2) {
+    var tint = material.color();
+    var alpha = (sample >>> 24) * ((tint >>> 24) / 255.0F)
+      * ((w0 * v0.aOverW() + w1 * v1.aOverW() + w2 * v2.aOverW()) / inverseW / 255.0F);
+    if (alpha <= 0 || alpha < material.alphaCutoutThreshold()) {
+      return;
+    }
+    var red = ((sample >>> 16) & 255) * (((tint >>> 16) & 255) / 255.0F)
+      * ((w0 * v0.rOverW() + w1 * v1.rOverW() + w2 * v2.rOverW()) / inverseW / 255.0F);
+    var green = ((sample >>> 8) & 255) * (((tint >>> 8) & 255) / 255.0F)
+      * ((w0 * v0.gOverW() + w1 * v1.gOverW() + w2 * v2.gOverW()) / inverseW / 255.0F);
+    var blue = (sample & 255) * ((tint & 255) / 255.0F)
+      * ((w0 * v0.bOverW() + w1 * v1.bOverW() + w2 * v2.bOverW()) / inverseW / 255.0F);
+    var destination = buffer[index];
+    var output = material.blendState().blends()
+      ? blend(destination, red, green, blue, alpha, material.blendState())
+      : (colorChannel(alpha) << 24) | (colorChannel(red) << 16) | (colorChannel(green) << 8) | colorChannel(blue);
+    buffer[index] = applyColorWriteMask(destination, output, material.colorWriteMask());
+  }
+
+  private static boolean passesDepth(RasterFrontend frontend, RenderMaterial material, double incoming, double stored) {
     return switch (frontend) {
       case WORLD -> material.depthTest().passes(incoming, stored);
       case GUI_ITEM -> incoming <= stored;
@@ -307,9 +353,9 @@ final class SoftwareRasterizer {
 
   private static void writeGuiItemFragment(
     int[] colorBuffer,
-    float[] depthBuffer,
+    double[] depthBuffer,
     int rasterIndex,
-    float depth,
+    double depth,
     int color,
     RenderMaterial material,
     boolean writeDepth
@@ -328,7 +374,7 @@ final class SoftwareRasterizer {
     }
   }
 
-  private static float fragmentDepthBias(ProjectedTriangle triangle, RenderMaterial material) {
+  private static double fragmentDepthBias(ProjectedTriangle triangle, RenderMaterial material) {
     var bias = material.depthBias() + material.polygonOffsetUnits() * POLYGON_OFFSET_UNIT_DEPTH;
     var factor = material.polygonOffsetFactor();
     if (factor == 0.0F) {
@@ -363,30 +409,14 @@ final class SoftwareRasterizer {
     return new DepthFogProjection(viewport.projectionM22(), viewport.projectionM32());
   }
 
-  private static float depthFogDistance(float depth, DepthFogProjection projection) {
+  private static float depthFogDistance(double depth, DepthFogProjection projection) {
     var denominator = depth * -2.0F + 1.0F - projection.m22();
-    if (!Float.isFinite(denominator) || Math.abs(denominator) <= 1.0E-8F) {
+    if (!Double.isFinite(denominator) || Math.abs(denominator) <= 1.0E-8F) {
       return Float.POSITIVE_INFINITY;
     }
 
     var distance = -projection.m32() / denominator;
-    return Float.isFinite(distance) ? distance : Float.POSITIVE_INFINITY;
-  }
-
-  private static int interpolatedColor(
-    float weight0,
-    float weight1,
-    float weight2,
-    float inverseW,
-    ProjectedVertex v0,
-    ProjectedVertex v1,
-    ProjectedVertex v2
-  ) {
-    var a = colorChannel((weight0 * v0.aOverW() + weight1 * v1.aOverW() + weight2 * v2.aOverW()) / inverseW);
-    var r = colorChannel((weight0 * v0.rOverW() + weight1 * v1.rOverW() + weight2 * v2.rOverW()) / inverseW);
-    var g = colorChannel((weight0 * v0.gOverW() + weight1 * v1.gOverW() + weight2 * v2.gOverW()) / inverseW);
-    var b = colorChannel((weight0 * v0.bOverW() + weight1 * v1.bOverW() + weight2 * v2.bOverW()) / inverseW);
-    return (a << 24) | (r << 16) | (g << 8) | b;
+    return Double.isFinite(distance) ? (float) distance : Float.POSITIVE_INFINITY;
   }
 
   private static float interpolatedFogDistance(
@@ -421,7 +451,7 @@ final class SoftwareRasterizer {
     return (a << 24) | (r << 16) | (g << 8) | b;
   }
 
-  private static int applyOverlay(int color, int overlayColor) {
+  private static FragmentColor applyOverlay(FragmentColor color, int overlayColor) {
     var overlayAlpha = (overlayColor >>> 24) & 0xFF;
     if (overlayAlpha == 255) {
       return color;
@@ -429,14 +459,14 @@ final class SoftwareRasterizer {
 
     var baseWeight = overlayAlpha / 255.0F;
     var overlayWeight = 1.0F - baseWeight;
-    var r = colorChannel(((overlayColor >> 16) & 0xFF) * overlayWeight + ((color >> 16) & 0xFF) * baseWeight);
-    var g = colorChannel(((overlayColor >> 8) & 0xFF) * overlayWeight + ((color >> 8) & 0xFF) * baseWeight);
-    var b = colorChannel((overlayColor & 0xFF) * overlayWeight + (color & 0xFF) * baseWeight);
-    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+    var r = ((overlayColor >> 16) & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.r() * baseWeight;
+    var g = ((overlayColor >> 8) & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.g() * baseWeight;
+    var b = (overlayColor & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.b() * baseWeight;
+    return new FragmentColor(r, g, b, color.a());
   }
 
-  private static int applyFog(
-    int color,
+  private static FragmentColor applyFog(
+    FragmentColor color,
     float sphericalFogDistance,
     float cylindricalFogDistance,
     RasterFogState fogState,
@@ -446,6 +476,10 @@ final class SoftwareRasterizer {
       return color;
     }
 
+    if (fogMode == RenderMaterial.FogMode.CLOUD_ALPHA) {
+      var opacity = 1.0F - linearFogValue(sphericalFogDistance, 0, fogState.cloudsEnd());
+      return new FragmentColor(color.r(), color.g(), color.b(), color.a() * opacity);
+    }
     var rawFogAmount = Math.max(
       linearFogValue(sphericalFogDistance, fogState.environmentalStart(), fogState.environmentalEnd()),
       linearFogValue(cylindricalFogDistance, fogState.renderDistanceStart(), fogState.renderDistanceEnd())
@@ -456,31 +490,31 @@ final class SoftwareRasterizer {
     }
 
     return switch (fogMode) {
-      case NONE -> color;
+      case NONE, CLOUD_ALPHA -> color;
       case COLOR_MIX, DEPTH_COLOR_MIX -> applyColorMixFog(color, fogState, rawFogAmount);
       case ALPHA_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, true);
       case RGB_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, false);
     };
   }
 
-  private static int applyColorMixFog(int color, RasterFogState fogState, float rawFogAmount) {
+  private static FragmentColor applyColorMixFog(FragmentColor color, RasterFogState fogState, float rawFogAmount) {
     var fogAmount = Math.clamp(rawFogAmount * ARGB.alphaFloat(fogState.color()), 0.0F, 1.0F);
     if (fogAmount <= 0.0F) {
       return color;
     }
 
-    var r = colorChannel(Mth.lerp(fogAmount, (color >> 16) & 0xFF, (fogState.color() >> 16) & 0xFF));
-    var g = colorChannel(Mth.lerp(fogAmount, (color >> 8) & 0xFF, (fogState.color() >> 8) & 0xFF));
-    var b = colorChannel(Mth.lerp(fogAmount, color & 0xFF, fogState.color() & 0xFF));
-    return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+    var r = Mth.lerp(fogAmount, color.r(), ((fogState.color() >> 16) & 0xFF) * (1.0F / 255.0F));
+    var g = Mth.lerp(fogAmount, color.g(), ((fogState.color() >> 8) & 0xFF) * (1.0F / 255.0F));
+    var b = Mth.lerp(fogAmount, color.b(), (fogState.color() & 0xFF) * (1.0F / 255.0F));
+    return new FragmentColor(r, g, b, color.a());
   }
 
-  private static int multiplyChannels(int color, float factor, boolean includeAlpha) {
-    var a = includeAlpha ? colorChannel(((color >>> 24) & 0xFF) * factor) : (color >>> 24) & 0xFF;
-    var r = colorChannel(((color >> 16) & 0xFF) * factor);
-    var g = colorChannel(((color >> 8) & 0xFF) * factor);
-    var b = colorChannel((color & 0xFF) * factor);
-    return (a << 24) | (r << 16) | (g << 8) | b;
+  private static FragmentColor multiplyChannels(FragmentColor color, float factor, boolean includeAlpha) {
+    var a = includeAlpha ? color.a() * factor : color.a();
+    var r = color.r() * factor;
+    var g = color.g() * factor;
+    var b = color.b() * factor;
+    return new FragmentColor(r, g, b, a);
   }
 
   private static float linearFogValue(float distance, float start, float end) {
@@ -563,29 +597,28 @@ final class SoftwareRasterizer {
   }
 
   private static int colorChannel(float value) {
-    return Math.clamp(Math.round(value), 0, 255);
+    return Math.clamp((int) Math.rint(value), 0, 255);
   }
 
-  private static int modulateGuiItem(int sample, int tint, float w0, float w1, float w2, float inverseW,
-                                      ProjectedVertex v0, ProjectedVertex v1, ProjectedVertex v2) {
+  private static FragmentColor modulateFragment(int sample, int tint, float w0, float w1, float w2, float inverseW,
+                                      ProjectedVertex v0, ProjectedVertex v1, ProjectedVertex v2, boolean opaqueVertex, boolean normalized) {
+    var vertexScale = normalized ? 1.0F : 1.0F / 255.0F;
     // The shader multiplies interpolated lighting and texture channels before UNORM framebuffer conversion.
-    var a = modulateChannel(sample >>> 24, tint >>> 24, (w0 * v0.aOverW() + w1 * v1.aOverW() + w2 * v2.aOverW()) / inverseW);
-    var r = modulateChannel((sample >>> 16) & 255, (tint >>> 16) & 255, (w0 * v0.rOverW() + w1 * v1.rOverW() + w2 * v2.rOverW()) / inverseW);
-    var g = modulateChannel((sample >>> 8) & 255, (tint >>> 8) & 255, (w0 * v0.gOverW() + w1 * v1.gOverW() + w2 * v2.gOverW()) / inverseW);
-    var b = modulateChannel(sample & 255, tint & 255, (w0 * v0.bOverW() + w1 * v1.bOverW() + w2 * v2.bOverW()) / inverseW);
-    return (a << 24) | (r << 16) | (g << 8) | b;
+    var a = modulateChannel(sample >>> 24, tint >>> 24, opaqueVertex ? 1.0F : vertexScale * (w0 * v0.aOverW() + w1 * v1.aOverW() + w2 * v2.aOverW()) / inverseW);
+    var r = modulateChannel((sample >>> 16) & 255, (tint >>> 16) & 255, vertexScale * (w0 * v0.rOverW() + w1 * v1.rOverW() + w2 * v2.rOverW()) / inverseW);
+    var g = modulateChannel((sample >>> 8) & 255, (tint >>> 8) & 255, vertexScale * (w0 * v0.gOverW() + w1 * v1.gOverW() + w2 * v2.gOverW()) / inverseW);
+    var b = modulateChannel(sample & 255, tint & 255, vertexScale * (w0 * v0.bOverW() + w1 * v1.bOverW() + w2 * v2.bOverW()) / inverseW);
+    return new FragmentColor(r, g, b, a);
   }
 
-  private static int modulateChannel(int sample, int tint, float vertex) {
-    return colorChannel(sample * (tint / 255.0F) * (vertex / 255.0F));
+  private static float modulateChannel(int sample, int tint, float vertex) {
+    return (sample * (1.0F / 255.0F)) * (vertex * (tint * (1.0F / 255.0F)));
   }
 
-  private static int modulate(int sample, int multiplier) {
-    var a = ((sample >>> 24) & 0xFF) * ((multiplier >>> 24) & 0xFF) / 255;
-    var r = ((sample >> 16) & 0xFF) * ((multiplier >> 16) & 0xFF) / 255;
-    var g = ((sample >> 8) & 0xFF) * ((multiplier >> 8) & 0xFF) / 255;
-    var b = (sample & 0xFF) * (multiplier & 0xFF) / 255;
-    return (a << 24) | (r << 16) | (g << 8) | b;
+  private record FragmentColor(float r, float g, float b, float a) {
+    int packed() {
+      return (colorChannel(a * 255.0F) << 24) | (colorChannel(r * 255.0F) << 16) | (colorChannel(g * 255.0F) << 8) | colorChannel(b * 255.0F);
+    }
   }
 
   private static int forceOpaque(int color) {
@@ -620,14 +653,18 @@ final class SoftwareRasterizer {
   }
 
   private static int blend(int dstColor, int srcColor, RenderMaterial.BlendState blendState) {
-    var dstR = (dstColor >> 16) & 0xFF;
-    var dstG = (dstColor >> 8) & 0xFF;
-    var dstB = dstColor & 0xFF;
-    var dstA = (dstColor >>> 24) & 0xFF;
-    var srcA = (srcColor >>> 24) & 0xFF;
-    var srcR = (srcColor >> 16) & 0xFF;
-    var srcG = (srcColor >> 8) & 0xFF;
-    var srcB = srcColor & 0xFF;
+    return blend(dstColor, (srcColor >>> 16) & 255, (srcColor >>> 8) & 255, srcColor & 255, srcColor >>> 24, blendState);
+  }
+
+  private static int blend(int dstColor, float srcR, float srcG, float srcB, float srcA, RenderMaterial.BlendState blendState) {
+    srcR = colorChannel(srcR);
+    srcG = colorChannel(srcG);
+    srcB = colorChannel(srcB);
+    srcA = colorChannel(srcA);
+    var dstR = (dstColor >>> 16) & 255;
+    var dstG = (dstColor >>> 8) & 255;
+    var dstB = dstColor & 255;
+    var dstA = dstColor >>> 24;
     var outR = blendChannel(srcR, dstR, srcR, dstR, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
     var outG = blendChannel(srcG, dstG, srcG, dstG, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
     var outB = blendChannel(srcB, dstB, srcB, dstB, srcA, dstA, blendState.sourceColor(), blendState.destColor(), false);
@@ -636,22 +673,22 @@ final class SoftwareRasterizer {
   }
 
   private static int blendChannel(
-    int srcChannel,
-    int dstChannel,
-    int srcColorChannel,
-    int dstColorChannel,
-    int srcAlpha,
-    int dstAlpha,
+    float srcChannel,
+    float dstChannel,
+    float srcColorChannel,
+    float dstColorChannel,
+    float srcAlpha,
+    float dstAlpha,
     BlendFactor sourceFactor,
     BlendFactor destFactor,
     boolean alphaChannel
   ) {
     var srcScale = sourceFactor(sourceFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha, alphaChannel);
     var dstScale = destFactor(destFactor, srcColorChannel, dstColorChannel, srcAlpha, dstAlpha);
-    return Math.clamp(Math.round(srcChannel * srcScale + dstChannel * dstScale), 0, 255);
+    return Math.clamp((int) Math.rint(srcChannel * srcScale) + (int) Math.rint(dstChannel * dstScale), 0, 255);
   }
 
-  private static float sourceFactor(BlendFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha, boolean alphaChannel) {
+  private static float sourceFactor(BlendFactor factor, float srcColor, float dstColor, float srcAlpha, float dstAlpha, boolean alphaChannel) {
     return switch (factor) {
       case ZERO -> 0.0F;
       case ONE -> 1.0F;
@@ -669,7 +706,7 @@ final class SoftwareRasterizer {
     };
   }
 
-  private static float destFactor(BlendFactor factor, int srcColor, int dstColor, int srcAlpha, int dstAlpha) {
+  private static float destFactor(BlendFactor factor, float srcColor, float dstColor, float srcAlpha, float dstAlpha) {
     return switch (factor) {
       case ZERO -> 0.0F;
       case ONE -> 1.0F;
@@ -687,26 +724,29 @@ final class SoftwareRasterizer {
     };
   }
 
-  private static boolean isInside(boolean positiveArea, float w0, float w1, float w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
-    var epsilon = 1.0E-5F;
+  private static boolean isInside(boolean positiveArea, long w0, long w1, long w2, boolean topLeft0, boolean topLeft1, boolean topLeft2) {
     if (positiveArea) {
-      return edgeInclusive(w0, topLeft0, epsilon) && edgeInclusive(w1, topLeft1, epsilon) && edgeInclusive(w2, topLeft2, epsilon);
+      return edgeInclusive(w0, topLeft0) && edgeInclusive(w1, topLeft1) && edgeInclusive(w2, topLeft2);
     }
-    return edgeInclusive(-w0, topLeft0, epsilon) && edgeInclusive(-w1, topLeft1, epsilon) && edgeInclusive(-w2, topLeft2, epsilon);
+    return edgeInclusive(-w0, topLeft0) && edgeInclusive(-w1, topLeft1) && edgeInclusive(-w2, topLeft2);
+  }
+
+  private static long fixedEdge(long ax, long ay, long bx, long by, long px, long py) {
+    return (px - ax) * (by - ay) - (py - ay) * (bx - ax);
   }
 
   private static float edge(float ax, float ay, float bx, float by, float px, float py) {
     return (px - ax) * (by - ay) - (py - ay) * (bx - ax);
   }
 
-  private static boolean edgeInclusive(float edgeValue, boolean topLeft, float epsilon) {
-    return edgeValue > epsilon || (Math.abs(edgeValue) <= epsilon && topLeft);
+  private static boolean edgeInclusive(long edgeValue, boolean topLeft) {
+    return edgeValue > 0 || (edgeValue == 0 && topLeft);
   }
 
-  private static boolean isTopLeft(float ax, float ay, float bx, float by) {
+  private static boolean isTopLeft(long ax, long ay, long bx, long by) {
     var dy = by - ay;
     var dx = bx - ax;
-    return dy < 0.0F || (dy == 0.0F && dx > 0.0F);
+    return dy > 0 || (dy == 0 && dx < 0);
   }
 
   private enum RasterFrontend {

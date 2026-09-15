@@ -420,7 +420,7 @@ public record RenderMaterial(
     String fragmentShader
   ) {
     var sampler = RendererAssets.sampler(samplerSupplier(renderType, "Sampler0"));
-    return sampler != null ? RendererAssets.withSamplerAddressMode(texture, sampler) : textureWithShaderAddressMode(texture, fragmentShader);
+    return sampler != null ? RendererAssets.withSampler(texture, sampler) : textureWithShaderAddressMode(texture, fragmentShader);
   }
 
   @Nullable
@@ -620,54 +620,54 @@ public record RenderMaterial(
   public enum DepthTest {
     ALWAYS_PASS {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return true;
       }
     },
     LESS_THAN {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming < stored;
       }
     },
     LESS_THAN_OR_EQUAL {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming <= stored;
       }
     },
     EQUAL {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming == stored;
       }
     },
     NOT_EQUAL {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming != stored;
       }
     },
     GREATER_THAN_OR_EQUAL {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming >= stored;
       }
     },
     GREATER_THAN {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return incoming > stored;
       }
     },
     NEVER_PASS {
       @Override
-      public boolean passes(float incoming, float stored) {
+      public boolean passes(double incoming, double stored) {
         return false;
       }
     };
 
-    public abstract boolean passes(float incoming, float stored);
+    public abstract boolean passes(double incoming, double stored);
 
     private static DepthTest fromCompareOp(CompareOp compareOp) {
       return switch (compareOp) {
@@ -699,6 +699,7 @@ public record RenderMaterial(
     COLOR_MIX,
     DEPTH_COLOR_MIX,
     ALPHA_FADE,
+    CLOUD_ALPHA,
     RGB_FADE
   }
 

@@ -111,7 +111,7 @@ final class GuiPictureRenderer {
       triangles.sort(Comparator.comparingDouble(ProjectedTriangle::sortDepth).reversed());
     }
     for (var triangle : triangles) {
-      SoftwareRasterizer.rasterizeGuiItemTriangle(tick, triangle, buffers, depth);
+      SoftwareRasterizer.rasterizeGuiItemTriangle(tick, triangle, buffers, depth || triangle.material().depthWrite());
     }
   }
 

@@ -24,12 +24,12 @@ import java.util.Arrays;
 public final class RasterBuffers {
   private final BufferedImage image;
   private final int[] colorBuffer;
-  private final float[] depthBuffer;
+  private final double[] depthBuffer;
 
   public RasterBuffers(int width, int height) {
     this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
     this.colorBuffer = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
-    this.depthBuffer = new float[width * height];
+    this.depthBuffer = new double[width * height];
     clearDepth();
   }
 
@@ -49,7 +49,7 @@ public final class RasterBuffers {
     return colorBuffer;
   }
 
-  public float[] depthBuffer() {
+  public double[] depthBuffer() {
     return depthBuffer;
   }
 }

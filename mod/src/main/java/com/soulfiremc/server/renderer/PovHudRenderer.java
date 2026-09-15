@@ -172,7 +172,7 @@ final class PovHudRenderer {
     if (texture == null) {
       return null;
     }
-    return RendererAssets.withSamplerAddressMode(texture, setup.sampler0());
+    return RendererAssets.withSampler(texture, setup.sampler0());
   }
 
   @Nullable

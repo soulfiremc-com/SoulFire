@@ -21,7 +21,7 @@ package com.soulfiremc.server.renderer;
 public record ProjectedVertex(
   float x,
   float y,
-  float depth,
+  double depth,
   float inverseW,
   float uOverW,
   float vOverW,
@@ -39,7 +39,7 @@ public record ProjectedVertex(
   public ProjectedVertex(
     float x,
     float y,
-    float depth,
+    double depth,
     float inverseW,
     float uOverW,
     float vOverW,

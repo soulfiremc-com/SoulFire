@@ -27,6 +27,7 @@ public record SceneData(
   RenderQuad[] translucent,
   RenderQuad[] terrainTranslucent,
   RenderQuad[] translucentParticles,
+  // Clouds retain camera-relative coordinates to preserve precision at large world positions.
   RenderQuad[] clouds,
   RenderQuad[] weather
 ) {

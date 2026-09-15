@@ -65,7 +65,7 @@ class CloudMeshCollectorTest {
     var textureData = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
     var camera = new Camera(new Vec3(0.0, 64.0, 0.0), 0.0F, 0.0F, 64, 64, 70.0, 256.0F);
 
-    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xFFFFFFFF, 96.0F, 2, 0L, 0, 128.0F);
+    var scene = CloudMeshCollector.collect(camera, textureData, CloudStatus.FANCY, 0xFFFFFFFF, 96.0F, 2, 0L, 0);
 
     assertEquals(0, scene.opaque().length);
     assertEquals(0, scene.cutout().length);
@@ -80,13 +80,30 @@ class CloudMeshCollectorTest {
   void cloudMotionIncludesTheFractionalTick() {
     var texture = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
     var camera = new Camera(new Vec3(0, 64, 0), 0, 0, 64, 64, 70, 256);
-    var before = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0, 128);
-    var after = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0.5F, 128);
+    var before = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0);
+    var after = CloudMeshCollector.collect(camera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0.5F);
 
     assertEquals(before.clouds().length, after.clouds().length);
     for (var i = 0; i < before.clouds().length; i++) {
       assertEquals(before.clouds()[i].v0().x() - 0.015F, after.clouds()[i].v0().x(), 0.00001F);
       assertEquals(before.clouds()[i].v0().z(), after.clouds()[i].v0().z());
+    }
+  }
+
+  @Test
+  void cloudVerticesKeepSubpixelMotionFarFromTheWorldOrigin() {
+    var texture = CloudMeshCollector.buildTextureData(solidTexture(0xFFFFFFFF));
+    var nearCamera = new Camera(new Vec3(0.25, 64, 0), 0, 0, 64, 64, 70, 256);
+    var farCamera = new Camera(new Vec3(12000000.25, 64, 0), 0, 0, 64, 64, 70, 256);
+    var near = CloudMeshCollector.collect(nearCamera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0.5F);
+    var far = CloudMeshCollector.collect(farCamera, texture, CloudStatus.FANCY, -1, 96, 2, 10L, 0.5F);
+
+    assertEquals(near.clouds().length, far.clouds().length);
+    for (var i = 0; i < near.clouds().length; i++) {
+      assertEquals(near.clouds()[i].v0(), far.clouds()[i].v0());
+      assertEquals(near.clouds()[i].v1(), far.clouds()[i].v1());
+      assertEquals(near.clouds()[i].v2(), far.clouds()[i].v2());
+      assertEquals(near.clouds()[i].v3(), far.clouds()[i].v3());
     }
   }
 

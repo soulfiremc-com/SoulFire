@@ -52,7 +52,7 @@ public final class RasterPipeline {
     rasterPass(camera, animationTick, sceneData.translucent(), buffers, true, RasterPassKind.TRANSLUCENT, fogState);
     rasterPass(camera, animationTick, sceneData.terrainTranslucent(), buffers, true, RasterPassKind.TRANSLUCENT, fogState);
     rasterPass(camera, animationTick, sceneData.translucentParticles(), buffers, true, RasterPassKind.TRANSLUCENT, fogState);
-    rasterPass(camera, animationTick, sceneData.clouds(), buffers, false, RasterPassKind.TRANSLUCENT, RasterFogState.DISABLED);
+    rasterPass(camera.atOrigin(), animationTick, sceneData.clouds(), buffers, false, RasterPassKind.TRANSLUCENT, fogState);
     rasterPass(camera, animationTick, sceneData.weather(), buffers, false, RasterPassKind.TRANSLUCENT, fogState);
   }
 
@@ -138,12 +138,13 @@ public final class RasterPipeline {
   private void emitProjectedTriangles(Camera camera, RenderQuad quad, ArrayList<ProjectedTriangle> out) {
     var viewRotation = camera.viewRotationMatrix();
     var projection = camera.projectionMatrix();
+    var clipTransform = new Matrix4f(projection).mul(viewRotation);
     var material = quad.material();
     var viewVertices = new ClipVertex[]{
-      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v0()),
-      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v1()),
-      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v2()),
-      toClipVertex(camera, viewRotation, projection, material.viewScale(), quad.v3())
+      toClipVertex(camera, clipTransform, material.viewScale(), quad.v0()),
+      toClipVertex(camera, clipTransform, material.viewScale(), quad.v1()),
+      toClipVertex(camera, clipTransform, material.viewScale(), quad.v2()),
+      toClipVertex(camera, clipTransform, material.viewScale(), quad.v3())
     };
     for (var vertex : viewVertices) {
       if (!isFinite(vertex)) {
@@ -152,11 +153,16 @@ public final class RasterPipeline {
     }
 
     var sortDepth = sortDepth(camera, quad);
-    var clipped = clipQuadToViewFrustum(viewVertices);
+    emitClippedTriangle(camera, viewVertices[0], viewVertices[1], viewVertices[2], material, sortDepth, out);
+    emitClippedTriangle(camera, viewVertices[0], viewVertices[2], viewVertices[3], material, sortDepth, out);
+  }
+
+  private void emitClippedTriangle(Camera camera, ClipVertex v0, ClipVertex v1, ClipVertex v2,
+                                   RenderMaterial material, float sortDepth, ArrayList<ProjectedTriangle> out) {
+    var clipped = clipToViewFrustum(new ClipVertex[]{v0, v1, v2});
     if (clipped.length < 3) {
       return;
     }
-
     var projected = new ProjectedVertex[clipped.length];
     for (var i = 0; i < clipped.length; i++) {
       projected[i] = projectVertex(camera, clipped[i]);
@@ -165,13 +171,7 @@ public final class RasterPipeline {
       }
     }
     for (var i = 1; i < projected.length - 1; i++) {
-      out.add(new ProjectedTriangle(
-        projected[0],
-        projected[i],
-        projected[i + 1],
-        material,
-        sortDepth
-      ));
+      out.add(new ProjectedTriangle(projected[0], projected[i], projected[i + 1], material, sortDepth));
     }
   }
 
@@ -195,7 +195,7 @@ public final class RasterPipeline {
     }
   }
 
-  private ClipVertex[] clipQuadToViewFrustum(ClipVertex[] quad) {
+  private ClipVertex[] clipToViewFrustum(ClipVertex[] quad) {
     var vertices = new ArrayList<ClipVertex>(8);
     vertices.addAll(java.util.List.of(quad));
 
@@ -263,22 +263,27 @@ public final class RasterPipeline {
     );
   }
 
-  private ClipVertex toClipVertex(Camera camera, Matrix4f viewRotation, Matrix4f projection, float viewScale, RenderVertex vertex) {
+  private ClipVertex toClipVertex(Camera camera, Matrix4f transform, float viewScale, RenderVertex vertex) {
     var relativeX = (float) (vertex.x() - camera.eyeX());
     var relativeY = (float) (vertex.y() - camera.eyeY());
     var relativeZ = (float) (vertex.z() - camera.eyeZ());
     var sphericalFogDistance = (float) Math.sqrt(relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ);
     var cylindricalFogDistance = Math.max((float) Math.sqrt(relativeX * relativeX + relativeZ * relativeZ), Math.abs(relativeY));
-    var view = viewRotation.transform(new Vector4f(
+    var position = new Vector4f(
       relativeX,
       relativeY,
       relativeZ,
       1.0F
-    ));
+    );
     if (viewScale != 1.0F) {
-      view.mul(viewScale, viewScale, viewScale, 1.0F);
+      position.mul(viewScale, viewScale, viewScale, 1.0F);
     }
-    var clip = projection.transform(view);
+    var clip = new Vector4f(
+      Math.fma(transform.m00(), position.x, Math.fma(transform.m10(), position.y, Math.fma(transform.m20(), position.z, transform.m30()))),
+      Math.fma(transform.m01(), position.x, Math.fma(transform.m11(), position.y, Math.fma(transform.m21(), position.z, transform.m31()))),
+      Math.fma(transform.m02(), position.x, Math.fma(transform.m12(), position.y, Math.fma(transform.m22(), position.z, transform.m32()))),
+      Math.fma(transform.m03(), position.x, Math.fma(transform.m13(), position.y, Math.fma(transform.m23(), position.z, transform.m33())))
+    );
     var color = vertex.color();
     var overlayColor = vertex.overlayColor();
     return new ClipVertex(
@@ -290,10 +295,10 @@ public final class RasterPipeline {
       cylindricalFogDistance,
       vertex.u(),
       vertex.v(),
-      (color >>> 24) & 0xFF,
-      ((color >>> 16) & 0xFF) * vertex.shade(),
-      ((color >>> 8) & 0xFF) * vertex.shade(),
-      (color & 0xFF) * vertex.shade(),
+      ((color >>> 24) & 0xFF) * (1.0F / 255.0F),
+      ((color >>> 16) & 0xFF) * (1.0F / 255.0F) * vertex.shade() * (((vertex.lightColor() >>> 16) & 255) * (1.0F / 255.0F)),
+      ((color >>> 8) & 0xFF) * (1.0F / 255.0F) * vertex.shade() * (((vertex.lightColor() >>> 8) & 255) * (1.0F / 255.0F)),
+      (color & 0xFF) * (1.0F / 255.0F) * vertex.shade() * ((vertex.lightColor() & 255) * (1.0F / 255.0F)),
       (overlayColor >>> 24) & 0xFF,
       (overlayColor >>> 16) & 0xFF,
       (overlayColor >>> 8) & 0xFF,
@@ -305,10 +310,11 @@ public final class RasterPipeline {
     var inverseW = 1.0F / vertex.w();
     var ndcX = vertex.x() * inverseW;
     var ndcY = vertex.y() * inverseW;
-    var ndcZ = vertex.z() * inverseW;
-    var screenX = (ndcX * 0.5F + 0.5F) * camera.width();
-    var screenY = (0.5F - ndcY * 0.5F) * camera.height();
-    var depth = Math.clamp(ndcZ * 0.5F + 0.5F, 0.0F, 1.0F);
+    var screenX = Math.fma(ndcX, camera.width() * 0.5F, camera.width() * 0.5F);
+    var screenY = Math.fma(-ndcY, camera.height() * 0.5F, camera.height() * 0.5F);
+    // Keep depth precision through projection instead of rounding clip Z before the divide.
+    var projection = camera.projectionMatrix();
+    var depth = Math.clamp((-projection.m22() + projection.m32() / (double) vertex.w()) * 0.5 + 0.5, 0.0, 1.0);
     return new ProjectedVertex(
       screenX,
       screenY,
@@ -351,7 +357,7 @@ public final class RasterPipeline {
   private boolean isFinite(ProjectedVertex vertex) {
     return Float.isFinite(vertex.x())
       && Float.isFinite(vertex.y())
-      && Float.isFinite(vertex.depth())
+      && Double.isFinite(vertex.depth())
       && Float.isFinite(vertex.inverseW())
       && Float.isFinite(vertex.uOverW())
       && Float.isFinite(vertex.vOverW())

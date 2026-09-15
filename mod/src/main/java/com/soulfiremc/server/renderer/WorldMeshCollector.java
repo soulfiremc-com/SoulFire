@@ -29,7 +29,6 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
@@ -196,7 +195,8 @@ public class WorldMeshCollector {
 
     var materialInfo = quad.materialInfo();
     var sprite = materialInfo.sprite();
-    var texture = RendererAssets.instance().texture(sprite.contents().name());
+    var texture = RendererAssets.instance().texture(sprite.contents().name())
+      .withTerrainFiltering(sprite.contents().byMipLevel);
     var alphaMode = RendererAssets.alphaModeForVanillaLayer(layer);
     var material = RenderMaterial
       .create(texture, alphaMode, 0xFFFFFFFF, false, 0.0F, RenderMaterial.defaultAlphaCutoutThreshold(alphaMode))
@@ -209,7 +209,7 @@ public class WorldMeshCollector {
       }
 
       var packedUv = quad.packedUV(i);
-      var color = ARGB.multiply(instance.getColor(i), VanillaLightmap.color(ctx, instance.getLightCoords(i), materialInfo.lightEmission()));
+      var color = instance.getColor(i);
       vertices[i] = new RenderVertex(
         position.x() + x,
         position.y() + y,
@@ -217,7 +217,7 @@ public class WorldMeshCollector {
         BakedQuadUv.localU(sprite, packedUv),
         BakedQuadUv.localV(sprite, packedUv),
         color
-      );
+      ).withLightColor(VanillaLightmap.color(ctx, instance.getLightCoords(i), materialInfo.lightEmission()));
     }
 
     builder.addTerrain(new RenderQuad(vertices[0], vertices[1], vertices[2], vertices[3], material));

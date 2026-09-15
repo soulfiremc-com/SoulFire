@@ -60,6 +60,22 @@ class RasterPipelineTest {
   }
 
   @Test
+  void distantSurfacesRetainTheirDepthOrder() {
+    var pipeline = new RasterPipeline();
+    var camera = new Camera(Vec3.ZERO, 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 2048.0F);
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+    var scene = SceneData.builder();
+    scene.add(quad(-500.0F, -500.0F, 1000.0F, 500.0F, 500.0F,
+      solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+    scene.add(quad(-500.0F, -500.0F, 1000.01F, 500.0F, 500.0F,
+      solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
+
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
+
+    assertEquals(0xFFFF0000, buffers.image().getRGB(WIDTH / 2, HEIGHT / 2));
+  }
+
+  @Test
   void firstPersonOverlayClearsDepthBeforeRasterizing() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
@@ -76,6 +92,27 @@ class RasterPipelineTest {
     pipeline.renderFirstPersonOverlay(camera, overlayScene.build(), buffers, 0L);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void rasterCoverageIncludesTopAndLeftEdgesAtPixelCenters() {
+    var buffers = new RasterBuffers(4, 4);
+    buffers.clearColor(0xFF000000);
+    buffers.clearDepth();
+    var material = RenderMaterial.create(solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0.0F);
+    var topLeft = screenVertex(0.5F, 0.5F);
+    var topRight = screenVertex(3.5F, 0.5F);
+    var bottomLeft = screenVertex(0.5F, 3.5F);
+    var bottomRight = screenVertex(3.5F, 3.5F);
+
+    SoftwareRasterizer.rasterizeScreenTriangle(0L, new ProjectedTriangle(topLeft, bottomLeft, bottomRight, material, 0.0), buffers, 0, 0, 3, 3);
+    SoftwareRasterizer.rasterizeScreenTriangle(0L, new ProjectedTriangle(topLeft, bottomRight, topRight, material, 0.0), buffers, 0, 0, 3, 3);
+
+    for (var y = 0; y < 4; y++) {
+      for (var x = 0; x < 4; x++) {
+        assertEquals(x < 3 && y < 3 ? 0xFFFF0000 : 0xFF000000, buffers.image().getRGB(x, y));
+      }
+    }
   }
 
   @Test

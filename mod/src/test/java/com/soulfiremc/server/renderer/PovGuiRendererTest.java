@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.renderer;
 
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.CompareOp;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -40,6 +42,37 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PovGuiRendererTest {
+  @Test
+  void translucentPreviewSurfacesHonorMaterialDepthWrites() {
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{-1}, null);
+    var material = RenderMaterial.create(texture, RendererAssets.AlphaMode.TRANSLUCENT, -1, true, 0)
+      .withDepthState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true, 0, 0));
+    var scene = SceneData.builder();
+    scene.add(new RenderQuad(
+      new RenderVertex(0, 0, 100, 0, 0, 0xFFFF0000), new RenderVertex(8, 0, -100, 1, 0, 0xFFFF0000),
+      new RenderVertex(8, 8, -100, 1, 1, 0xFFFF0000), new RenderVertex(0, 8, 100, 0, 1, 0xFFFF0000), material));
+    scene.add(new RenderQuad(
+      new RenderVertex(0, 0, -10, 0, 0, 0xFF0000FF), new RenderVertex(8, 0, -10, 1, 0, 0xFF0000FF),
+      new RenderVertex(8, 8, -10, 1, 1, 0xFF0000FF), new RenderVertex(0, 8, -10, 0, 1, 0xFF0000FF), material));
+    var image = GuiPictureRenderer.rasterize(scene.build(), 8, 8, new Matrix4f(), 0);
+    assertEquals(0xFFFF0000, image.getRGB(1, 6));
+    assertEquals(0xFF0000FF, image.getRGB(6, 7));
+  }
+
+  @Test
+  void screenConvertsFractionalAlphaToUnormBeforeBlending() {
+    var buffers = new RasterBuffers(8, 8);
+    buffers.clearColor(-1);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{-1}, null);
+    var material = RenderMaterial.create(texture, RendererAssets.AlphaMode.TRANSLUCENT, -1, true, 0)
+      .withPipelineState(RenderPipelines.GUI);
+    SoftwareRasterizer.rasterizeScreenTriangle(0, new ProjectedTriangle(
+      new ProjectedVertex(0, 0, 0, 1, 0, 0, 127.5F, 0, 0, 0),
+      new ProjectedVertex(8, 0, 0, 1, 1, 0, 127.5F, 0, 0, 0),
+      new ProjectedVertex(0, 8, 0, 1, 0, 1, 127.5F, 0, 0, 0), material, 0), buffers, 0, 0, 7, 7);
+    assertEquals(0xFF7F7F7F, buffers.image().getRGB(2, 2));
+  }
+
   @Test
   void exportedOversizedIconFitsWithoutLosingItsEdges() {
     var source = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);

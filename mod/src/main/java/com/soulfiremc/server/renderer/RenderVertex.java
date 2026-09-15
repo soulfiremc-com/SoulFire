@@ -18,15 +18,23 @@
 package com.soulfiremc.server.renderer;
 
 /// A textured vertex with packed tint and a floating-point RGB lighting multiplier.
-public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade) {
+public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor) {
   public static final int NO_OVERLAY_COLOR = 0xFFFFFFFF;
 
   public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor) {
     this(x, y, z, u, v, color, overlayColor, 1.0F);
   }
 
+  public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade) {
+    this(x, y, z, u, v, color, overlayColor, shade, 0xFFFFFFFF);
+  }
+
   public RenderVertex withShade(float shade) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor);
+  }
+
+  public RenderVertex withLightColor(int lightColor) {
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor);
   }
 
   public RenderVertex(float x, float y, float z, float u, float v, int color) {

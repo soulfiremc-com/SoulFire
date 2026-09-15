@@ -722,7 +722,8 @@ class VanillaSubmitCollectorTextTest {
 
     var scene = sceneData(collector);
     assertEquals(1, scene.opaque().length);
-    assertEquals(0xFFBDBDBD, scene.opaque()[0].material().color());
+    assertEquals(0xFFFFFFFF, scene.opaque()[0].material().color());
+    assertEquals(0.7395499F, scene.opaque()[0].v0().shade(), 0.000001F);
   }
 
   @Test

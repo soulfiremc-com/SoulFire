@@ -209,3 +209,5 @@ mutable field net/minecraft/client/renderer/GameRenderer guiRenderer Lnet/minecr
 
 accessible field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;
 mutable field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;
+
+accessible field net/minecraft/client/renderer/texture/SpriteContents byMipLevel [Lcom/mojang/blaze3d/platform/NativeImage;

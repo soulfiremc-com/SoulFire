@@ -23,6 +23,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.math.Quadrant;
 import com.soulfiremc.mod.util.TexturePixels;
@@ -150,16 +151,18 @@ public final class RendererAssets {
     return isAtlasTextureLocation(textureLocation) ? texture.withAddressMode(TextureAddressMode.CLAMP_TO_EDGE) : texture;
   }
 
-  static TextureImage withSamplerAddressMode(TextureImage texture, @Nullable GpuSampler sampler) {
+  static TextureImage withSampler(TextureImage texture, @Nullable GpuSampler sampler) {
     if (sampler == null) {
       return texture;
     }
 
-    return texture.withAddressModes(textureAddressMode(sampler.getAddressModeU()), textureAddressMode(sampler.getAddressModeV()));
+    var sampled = texture.withAddressModes(textureAddressMode(sampler.getAddressModeU()), textureAddressMode(sampler.getAddressModeV()));
+    return sampler.getMinFilter() == FilterMode.LINEAR && sampler.getMagFilter() == FilterMode.LINEAR
+      ? sampled.withLinearFiltering() : sampled;
   }
 
-  static TextureImage withSamplerAddressMode(TextureImage texture, @Nullable Supplier<GpuSampler> samplerSupplier) {
-    return withSamplerAddressMode(texture, sampler(samplerSupplier));
+  static TextureImage withSampler(TextureImage texture, @Nullable Supplier<GpuSampler> samplerSupplier) {
+    return withSampler(texture, sampler(samplerSupplier));
   }
 
   @Nullable
@@ -1168,6 +1171,10 @@ public final class RendererAssets {
     private final boolean hasTranslucentPixels;
     private final TextureAddressMode addressModeU;
     private final TextureAddressMode addressModeV;
+    private final boolean linearFiltering;
+    private volatile TextureImage linearFiltered;
+    private volatile TextureImage terrainFiltered;
+    private TextureImage[] mipLevels;
     @Nullable
     private BufferedImage bufferedImage;
 
@@ -1182,7 +1189,7 @@ public final class RendererAssets {
       boolean hasAlpha,
       boolean hasTranslucentPixels,
       TextureAddressMode addressModeU,
-      TextureAddressMode addressModeV) {
+      TextureAddressMode addressModeV, boolean linearFiltering) {
       this.width = width;
       this.height = height;
       this.frameHeight = frameHeight;
@@ -1194,6 +1201,7 @@ public final class RendererAssets {
       this.hasTranslucentPixels = hasTranslucentPixels;
       this.addressModeU = addressModeU;
       this.addressModeV = addressModeV;
+      this.linearFiltering = linearFiltering;
     }
 
     public static TextureImage from(@Nullable BufferedImage image, @Nullable JsonObject metadata) {
@@ -1267,7 +1275,7 @@ public final class RendererAssets {
         hasAlpha,
         hasTranslucentPixels,
         TextureAddressMode.REPEAT,
-        TextureAddressMode.REPEAT
+        TextureAddressMode.REPEAT, false
       );
       return textureImage;
     }
@@ -1296,9 +1304,101 @@ public final class RendererAssets {
       var frameOrderIndex = (int) ((tick / frameTime) % frameOrder.length);
       var frameIndex = Math.floorMod(frameOrder[frameOrderIndex], availableFrameCount);
       var yOffset = frameIndex * clampedFrameHeight;
+      if (linearFiltering) {
+        var texelX = ((float) Math.rint(sampledU * width * 256.0F) - 128) / 256.0F;
+        var texelY = ((float) Math.rint(sampledV * clampedFrameHeight * 256.0F) - 128) / 256.0F;
+        var x0 = (int) Math.floor(texelX);
+        var y0 = (int) Math.floor(texelY);
+        var fx = texelX - x0;
+        var fy = texelY - y0;
+        var c00 = texel(x0, y0, yOffset, clampedFrameHeight);
+        var c10 = texel(x0 + 1, y0, yOffset, clampedFrameHeight);
+        var c01 = texel(x0, y0 + 1, yOffset, clampedFrameHeight);
+        var c11 = texel(x0 + 1, y0 + 1, yOffset, clampedFrameHeight);
+        var result = 0;
+        for (var shift = 0; shift < 32; shift += 8) {
+          var top = ((c00 >>> shift) & 255) + (int) Math.rint((((c10 >>> shift) & 255) - ((c00 >>> shift) & 255)) * fx);
+          var bottom = ((c01 >>> shift) & 255) + (int) Math.rint((((c11 >>> shift) & 255) - ((c01 >>> shift) & 255)) * fx);
+          result |= Math.clamp(top + (int) Math.rint((bottom - top) * fy), 0, 255) << shift;
+        }
+        return result;
+      }
       var x = Math.clamp((int) (sampledU * width), 0, width - 1);
       var y = Math.clamp((int) (sampledV * clampedFrameHeight), 0, clampedFrameHeight - 1) + yOffset;
       return pixels[x + y * width];
+    }
+
+    private int texel(int x, int y, int frameOffset, int frameHeight) {
+      x = addressModeU == TextureAddressMode.REPEAT ? Math.floorMod(x, width) : Math.clamp(x, 0, width - 1);
+      y = addressModeV == TextureAddressMode.REPEAT ? Math.floorMod(y, frameHeight) : Math.clamp(y, 0, frameHeight - 1);
+      return pixels[x + (frameOffset + y) * width];
+    }
+
+    public TextureImage withLinearFiltering() {
+      if (linearFiltering) {
+        return this;
+      }
+      var filtered = linearFiltered;
+      if (filtered == null) {
+        filtered = new TextureImage(width, height, frameHeight, frameCount, frameTime, frameOrder, pixels,
+          hasAlpha, hasTranslucentPixels, addressModeU, addressModeV, true);
+        linearFiltered = filtered;
+      }
+      return filtered;
+    }
+
+    public TextureImage withTerrainFiltering(NativeImage[] nativeMips) {
+      var filtered = terrainFiltered;
+      if (filtered == null) {
+        var levels = new TextureImage[nativeMips.length];
+        for (var level = 0; level < levels.length; level++) {
+          var image = nativeMips[level];
+          var data = new int[image.getWidth() * image.getHeight()];
+          for (var y = 0; y < image.getHeight(); y++) {
+            for (var x = 0; x < image.getWidth(); x++) {
+              data[x + y * image.getWidth()] = image.getPixel(x, y);
+            }
+          }
+          levels[level] = new TextureImage(image.getWidth(), image.getHeight(), Math.max(1, frameHeight >> level),
+            frameCount, frameTime, frameOrder, data, hasAlpha, hasTranslucentPixels,
+            TextureAddressMode.CLAMP_TO_EDGE, TextureAddressMode.CLAMP_TO_EDGE, true);
+        }
+        filtered = levels[0];
+        filtered.mipLevels = levels;
+        terrainFiltered = filtered;
+      }
+      return filtered;
+    }
+
+    boolean usesTerrainFiltering() {
+      return mipLevels != null;
+    }
+
+    int sampleTerrain(float u, float v, long tick, float duDx, float duDy, float dvDx, float dvDy) {
+      var texelU = u * width;
+      var texelV = v * frameHeight;
+      var sizeU = (float) Math.sqrt(duDx * duDx + duDy * duDy) * width;
+      var sizeV = (float) Math.sqrt(dvDx * dvDx + dvDy * dvDy) * frameHeight;
+      var adjustedU = antialiasedTexel(texelU, sizeU) / width;
+      var adjustedV = antialiasedTexel(texelV, sizeV) / frameHeight;
+      var dx = duDx * duDx * width * width + dvDx * dvDx * frameHeight * frameHeight;
+      var dy = duDy * duDy * width * width + dvDy * dvDy * frameHeight * frameHeight;
+      var lod = Math.clamp((float) (Math.log(Math.max(dx, dy)) / (2 * Math.log(2))), 0, mipLevels.length - 1);
+      var lower = (int) lod;
+      var upper = Math.min(lower + 1, mipLevels.length - 1);
+      var a = mipLevels[lower].sample(adjustedU, adjustedV, tick);
+      var b = mipLevels[upper].sample(adjustedU, adjustedV, tick);
+      var result = 0;
+      for (var shift = 0; shift < 32; shift += 8) {
+        result |= Math.round(((a >>> shift) & 255) * (1 - (lod - lower)) + ((b >>> shift) & 255) * (lod - lower)) << shift;
+      }
+      return result;
+    }
+
+    private static float antialiasedTexel(float coordinate, float footprint) {
+      var center = (float) Math.floor(coordinate + 0.5F) - 0.5F;
+      var offset = footprint > 0 ? (coordinate - center - 0.5F) / footprint + 0.5F : 0.5F;
+      return center + Math.clamp(offset, 0, 1);
     }
 
     public TextureImage withAddressMode(TextureAddressMode addressMode) {
@@ -1324,7 +1424,7 @@ public final class RendererAssets {
         hasAlpha,
         hasTranslucentPixels,
         requiredAddressModeU,
-        requiredAddressModeV
+        requiredAddressModeV, linearFiltering
       );
       textureImage.bufferedImage = bufferedImage;
       return textureImage;
