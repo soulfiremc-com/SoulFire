@@ -149,6 +149,12 @@ public class SoftwareRenderer {
       }
     }
 
+    if (options.includeHands()) {
+      var effects = VanillaSubmitCollector.collectScreenEffects(ctx, partialTick());
+      var screenCamera = new Camera(Vec3.ZERO, 180, 0, options.width(), options.height(), hudFov(options.fov()), 100);
+      RASTER_PIPELINE.renderScene(screenCamera, effects, buffers, ctx.animationTick(), RasterFogState.from(ctx));
+    }
+
     if (options.includeHud()) {
       PovHudRenderer.render(ctx, buffers);
     }

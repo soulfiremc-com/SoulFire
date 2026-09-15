@@ -241,43 +241,17 @@ final class PovHudRenderer {
       return;
     }
 
-    var v0 = project(a, geometry);
-    var v1 = project(b, geometry);
-    var v2 = project(c, geometry);
-    var v3 = project(d, geometry);
-    SoftwareRasterizer.rasterizeScreenTriangle(
-      animationTick,
-      new ProjectedTriangle(v0, v1, v2, material, 0.0F),
-      buffers,
-      clip.minX(),
-      clip.minY(),
-      clip.maxX(),
-      clip.maxY()
-    );
-    SoftwareRasterizer.rasterizeScreenTriangle(
-      animationTick,
-      new ProjectedTriangle(v0, v2, v3, material, 0.0F),
-      buffers,
-      clip.minX(),
-      clip.minY(),
-      clip.maxX(),
-      clip.maxY()
-    );
+    var vertices = new RenderVertex[]{project(a, geometry), project(b, geometry), project(c, geometry), project(d, geometry)};
+    for (var triangle : RasterPipeline.projectScreenQuad(vertices, geometry.targetWidth(), geometry.targetHeight(), material)) {
+      SoftwareRasterizer.rasterizeScreenTriangle(animationTick, triangle, buffers,
+        clip.minX(), clip.minY(), clip.maxX(), clip.maxY());
+    }
   }
 
-  private static ProjectedVertex project(GuiVertex vertex, GuiGeometry geometry) {
-    return new ProjectedVertex(
-      vertex.x() * geometry.scaleX(),
-      vertex.y() * geometry.scaleY(),
-      vertex.z(),
-      1.0F,
-      vertex.u(),
-      vertex.v(),
-      (vertex.color() >>> 24) & 0xFF,
-      (vertex.color() >>> 16) & 0xFF,
-      (vertex.color() >>> 8) & 0xFF,
-      vertex.color() & 0xFF
-    );
+  private static RenderVertex project(GuiVertex vertex, GuiGeometry geometry) {
+    var clipX = (2.0F / geometry.guiWidth()) * vertex.x() - 1.0F;
+    var clipY = (-2.0F / geometry.guiHeight()) * vertex.y() + 1.0F;
+    return new RenderVertex(clipX, clipY, 0, vertex.u(), vertex.v(), vertex.color());
   }
 
   private record GuiGeometry(float guiWidth, float guiHeight, int targetWidth, int targetHeight) {

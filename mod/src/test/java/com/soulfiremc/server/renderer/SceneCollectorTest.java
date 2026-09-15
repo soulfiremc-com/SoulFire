@@ -90,6 +90,7 @@ class SceneCollectorTest {
       256,
       0L,
       null,
+      null,
       null
     );
     var renderState = new WeatherRenderState();
@@ -134,6 +135,7 @@ class SceneCollectorTest {
       0,
       256,
       0L,
+      null,
       null,
       null
     );

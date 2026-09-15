@@ -29,9 +29,11 @@ public record SceneData(
   RenderQuad[] translucentParticles,
   // Clouds retain camera-relative coordinates to preserve precision at large world positions.
   RenderQuad[] clouds,
-  RenderQuad[] weather
+  RenderQuad[] weather,
+  RenderQuad[] outlines
 ) {
   public static final SceneData EMPTY = new SceneData(
+    new RenderQuad[0],
     new RenderQuad[0],
     new RenderQuad[0],
     new RenderQuad[0],
@@ -60,7 +62,8 @@ public record SceneData(
       concat(terrainTranslucent, other.terrainTranslucent),
       concat(translucentParticles, other.translucentParticles),
       concat(clouds, other.clouds),
-      concat(weather, other.weather)
+      concat(weather, other.weather),
+      concat(outlines, other.outlines)
     );
   }
 
@@ -71,7 +74,8 @@ public record SceneData(
       + terrainTranslucent.length
       + translucentParticles.length
       + clouds.length
-      + weather.length;
+      + weather.length
+      + outlines.length;
   }
 
   private static RenderQuad[] concat(RenderQuad[] left, RenderQuad[] right) {
@@ -88,6 +92,11 @@ public record SceneData(
     private final ArrayList<RenderQuad> translucentParticles = new ArrayList<>();
     private final ArrayList<RenderQuad> clouds = new ArrayList<>();
     private final ArrayList<RenderQuad> weather = new ArrayList<>();
+    private final ArrayList<RenderQuad> outlines = new ArrayList<>();
+
+    public void addOutline(RenderQuad quad) {
+      outlines.add(quad);
+    }
 
     public void add(RenderQuad quad) {
       switch (quad.material().alphaMode()) {
@@ -105,6 +114,7 @@ public record SceneData(
       translucentParticles.addAll(Arrays.asList(sceneData.translucentParticles()));
       clouds.addAll(Arrays.asList(sceneData.clouds()));
       weather.addAll(Arrays.asList(sceneData.weather()));
+      outlines.addAll(Arrays.asList(sceneData.outlines()));
     }
 
     public void addTerrain(RenderQuad quad) {
@@ -125,6 +135,7 @@ public record SceneData(
       translucentParticles.addAll(Arrays.asList(sceneData.translucentParticles()));
       clouds.addAll(Arrays.asList(sceneData.clouds()));
       weather.addAll(Arrays.asList(sceneData.weather()));
+      outlines.addAll(Arrays.asList(sceneData.outlines()));
     }
 
     public void addTranslucentParticle(RenderQuad quad) {
@@ -146,7 +157,8 @@ public record SceneData(
         && terrainTranslucent.isEmpty()
         && translucentParticles.isEmpty()
         && clouds.isEmpty()
-        && weather.isEmpty()) {
+        && weather.isEmpty()
+        && outlines.isEmpty()) {
         return EMPTY;
       }
 
@@ -157,7 +169,8 @@ public record SceneData(
         terrainTranslucent.toArray(RenderQuad[]::new),
         translucentParticles.toArray(RenderQuad[]::new),
         clouds.toArray(RenderQuad[]::new),
-        weather.toArray(RenderQuad[]::new)
+        weather.toArray(RenderQuad[]::new),
+        outlines.toArray(RenderQuad[]::new)
       );
     }
   }

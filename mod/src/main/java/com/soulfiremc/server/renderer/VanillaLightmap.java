@@ -32,16 +32,29 @@ final class VanillaLightmap {
 
   static int color(RenderContext ctx, int lightCoords, int emission) {
     var litCoords = LightCoordsUtil.lightCoordsWithEmission(lightCoords, Math.clamp(emission, 0, 15));
-    if (litCoords == LightCoordsUtil.FULL_BRIGHT) {
-      return 0xFFFFFFFF;
-    }
-
-    var renderState = ctx.lightmapRenderState();
-    if (renderState != null && hasExtractedState(renderState)) {
-      return shaderColor(renderState, litCoords);
+    var texture = ctx.lightmapTexture();
+    if (texture != null) {
+      var block = Math.clamp(LightCoordsUtil.smoothBlock(litCoords), 0, 240);
+      var sky = Math.clamp(LightCoordsUtil.smoothSky(litCoords), 0, 240);
+      return texture.sample((block + 8) / 256.0F, (sky + 8) / 256.0F, 0);
     }
 
     return fallbackColor(ctx, litCoords);
+  }
+
+  @Nullable
+  static RendererAssets.TextureImage texture(@Nullable LightmapRenderState renderState) {
+    if (renderState == null || !hasExtractedState(renderState)) {
+      return null;
+    }
+    var pixels = new int[16 * 16];
+    for (var sky = 0; sky < 16; sky++) {
+      for (var block = 0; block < 16; block++) {
+        pixels[sky * 16 + block] = shaderColor(renderState, LightCoordsUtil.pack(block, sky));
+      }
+    }
+    return RendererAssets.TextureImage.fromArgb(16, 16, pixels, null)
+      .withAddressMode(RendererAssets.TextureAddressMode.CLAMP_TO_EDGE).withLinearFiltering();
   }
 
   private static boolean hasExtractedState(LightmapRenderState renderState) {

@@ -55,8 +55,36 @@ public record RenderMaterial(
   float viewScale,
   @Nullable RendererAssets.TextureImage dissolveMaskTexture,
   @Nullable RendererAssets.TextureImage secondaryTexture,
-  int portalLayers
+  int portalLayers,
+  float glintAlpha
 ) {
+  public RenderMaterial(
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    boolean doubleSided,
+    float depthBias,
+    float polygonOffsetFactor,
+    float polygonOffsetUnits,
+    int alphaCutoutThreshold,
+    AlphaCutoutSource alphaCutoutSource,
+    DepthTest depthTest,
+    boolean depthWrite,
+    BlendState blendState,
+    int colorWriteMask,
+    UvTransform uvTransform,
+    TextureSampleMode textureSampleMode,
+    FogMode fogMode,
+    boolean sortOnUpload,
+    int sortGroup,
+    float viewScale,
+    @Nullable RendererAssets.TextureImage dissolveMaskTexture,
+    @Nullable RendererAssets.TextureImage secondaryTexture,
+    int portalLayers
+  ) {
+    this(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, 1.0F);
+  }
+
   private static final float PERSPECTIVE_LAYERING_UNIT = 1.0F / 4096.0F;
   private static final int DEFAULT_END_PORTAL_LAYERS = 15;
   static final int ONE_TENTH_ALPHA_CUTOUT_THRESHOLD = Math.clamp((int) Math.ceil(0.1F * 255.0F), 0, 255);
@@ -151,6 +179,10 @@ public record RenderMaterial(
     );
   }
 
+  public RenderMaterial withGlintAlpha(float alpha) {
+    return new RenderMaterial(texture, alphaMode, color, doubleSided, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha);
+  }
+
   public RenderMaterial withDepthState(@Nullable DepthStencilState depthStencilState) {
     return new RenderMaterial(
       texture,
@@ -174,7 +206,8 @@ public record RenderMaterial(
       viewScale,
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayers
+      portalLayers,
+      glintAlpha
     );
   }
 
@@ -201,7 +234,8 @@ public record RenderMaterial(
       viewScale,
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayers
+      portalLayers,
+      glintAlpha
     );
   }
 
@@ -238,7 +272,8 @@ public record RenderMaterial(
       viewScale(renderType),
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayerCount(pipeline)
+      portalLayerCount(pipeline),
+      glintAlpha
     );
   }
 
@@ -270,7 +305,8 @@ public record RenderMaterial(
       viewScale,
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayerCount(pipeline)
+      portalLayerCount(pipeline),
+      glintAlpha
     );
   }
 
@@ -297,7 +333,8 @@ public record RenderMaterial(
       viewScale,
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayers
+      portalLayers,
+      glintAlpha
     );
   }
 
@@ -324,7 +361,8 @@ public record RenderMaterial(
       viewScale,
       dissolveMaskTexture,
       secondaryTexture,
-      portalLayers
+      portalLayers,
+      glintAlpha
     );
   }
 
@@ -403,6 +441,7 @@ public record RenderMaterial(
            "core/rendertype_text_intensity",
            "core/rendertype_text_intensity_see_through" -> TextureSampleMode.INTENSITY;
       case "core/rendertype_end_portal" -> TextureSampleMode.END_PORTAL;
+      case "core/rendertype_outline" -> TextureSampleMode.OUTLINE;
       default -> TextureSampleMode.COLOR;
     };
   }
@@ -691,7 +730,8 @@ public record RenderMaterial(
   public enum TextureSampleMode {
     COLOR,
     INTENSITY,
-    END_PORTAL
+    END_PORTAL,
+    OUTLINE
   }
 
   public enum FogMode {
@@ -731,30 +771,9 @@ public record RenderMaterial(
     float vFromU,
     float vFromV,
     float uOffsetScale,
-    float vOffsetScale,
-    long uPeriodTicks,
-    long vPeriodTicks
+    float vOffsetScale
   ) {
-    public static final UvTransform IDENTITY = new UvTransform(1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0L, 0L);
-    private static final long GLINT_U_PERIOD_TICKS = 275L;
-    private static final long GLINT_V_PERIOD_TICKS = 75L;
-
-    public static UvTransform glint(float scale) {
-      var angle = (float) (Math.PI / 18.0);
-      var sin = (float) Math.sin(angle);
-      var cos = (float) Math.cos(angle);
-      return new UvTransform(
-        cos * scale,
-        -sin * scale,
-        sin * scale,
-        cos * scale,
-        -1.0F,
-        1.0F,
-        GLINT_U_PERIOD_TICKS,
-        GLINT_V_PERIOD_TICKS
-      );
-    }
-
+    public static final UvTransform IDENTITY = new UvTransform(1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F);
     public static UvTransform fromMatrix(Matrix4fc matrix) {
       return new UvTransform(
         matrix.m00(),
@@ -762,26 +781,16 @@ public record RenderMaterial(
         matrix.m01(),
         matrix.m11(),
         matrix.m30(),
-        matrix.m31(),
-        0L,
-        0L
+        matrix.m31()
       );
     }
 
-    public float u(float u, float v, long animationTick) {
-      return u * uFromU + v * uFromV + animatedOffset(uOffsetScale, animationTick, uPeriodTicks);
+    public float u(float u, float v) {
+      return u * uFromU + v * uFromV + uOffsetScale;
     }
 
-    public float v(float u, float v, long animationTick) {
-      return u * vFromU + v * vFromV + animatedOffset(vOffsetScale, animationTick, vPeriodTicks);
-    }
-
-    private static float animatedOffset(float offsetScale, long animationTick, long periodTicks) {
-      if (periodTicks <= 0L) {
-        return offsetScale;
-      }
-
-      return offsetScale * Math.floorMod(animationTick, periodTicks) / (float) periodTicks;
+    public float v(float u, float v) {
+      return u * vFromU + v * vFromV + vOffsetScale;
     }
   }
 }

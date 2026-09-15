@@ -196,10 +196,7 @@ public class WorldMeshCollector {
 
     var materialInfo = quad.materialInfo();
     var sprite = materialInfo.sprite();
-    var atlas = RendererAssets.instance().renderTexture(sprite.atlasLocation());
-    var texture = RendererAssets.instance().texture(sprite.contents().name())
-      .withTerrainFiltering(sprite.contents().byMipLevel, atlas.width(), atlas.height(),
-        Math.round(sprite.getU0() * atlas.width()), Math.round(sprite.getV0() * atlas.height()));
+    var texture = RendererAssets.instance().terrainTexture(sprite);
     var alphaMode = RendererAssets.alphaModeForVanillaLayer(layer);
     var material = RenderMaterial
       .create(texture, alphaMode, 0xFFFFFFFF, false, 0.0F, RenderMaterial.defaultAlphaCutoutThreshold(alphaMode))

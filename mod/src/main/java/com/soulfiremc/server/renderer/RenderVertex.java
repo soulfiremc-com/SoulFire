@@ -18,7 +18,15 @@
 package com.soulfiremc.server.renderer;
 
 /// A textured vertex with packed tint and a floating-point RGB lighting multiplier.
-public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource) {
+public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource, int fragmentLightColor) {
+  public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource) {
+    this(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, 0xFFFFFFFF);
+  }
+
+  public RenderVertex withFragmentLightColor(int fragmentLightColor) {
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
+  }
+
   public static final int NO_OVERLAY_COLOR = 0xFFFFFFFF;
 
   public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor) {
@@ -34,7 +42,7 @@ public record RenderVertex(float x, float y, float z, float u, float v, int colo
   }
 
   public RenderVertex withUniformColor(int color) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.UNIFORM);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.UNIFORM, fragmentLightColor);
   }
 
   float colorChannel(int shift) {
@@ -44,11 +52,11 @@ public record RenderVertex(float x, float y, float z, float u, float v, int colo
   }
 
   public RenderVertex withShade(float shade) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
   }
 
   public RenderVertex withLightColor(int lightColor) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
   }
 
   public RenderVertex(float x, float y, float z, float u, float v, int color) {

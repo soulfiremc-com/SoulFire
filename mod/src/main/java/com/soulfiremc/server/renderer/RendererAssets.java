@@ -970,6 +970,28 @@ public final class RendererAssets {
     return textureLocation.getPath().startsWith("textures/atlas/");
   }
 
+  TextureImage terrainTexture(TextureAtlasSprite sprite) {
+    var atlas = (TextureAtlas) Minecraft.getInstance().getTextureManager().getTexture(sprite.atlasLocation());
+    var contents = sprite.contents();
+    var source = texture(contents.name());
+    var originX = Math.round(sprite.getU0() * atlas.getWidth());
+    var originY = Math.round(sprite.getV0() * atlas.getHeight());
+    if (contents.animatedTexture != null) {
+      for (var state : atlas.animatedTexturesStates) {
+        if (state.animationInfo == contents.animatedTexture) {
+          var frames = state.animationInfo.frames;
+          var current = frames.get(state.frame);
+          var next = frames.get((state.frame + 1) % frames.size());
+          var progress = state.animationInfo.interpolateFrames
+            ? (int) (state.subFrame / (float) current.time() * 1000.0F) / 1000.0F : 0.0F;
+          return source.withTerrainFrame(contents.byMipLevel, atlas.getWidth(), atlas.getHeight(), originX, originY,
+            contents.width(), contents.height(), state.animationInfo.frameRowSize, current.index(), next.index(), progress);
+        }
+      }
+    }
+    return source.withTerrainFiltering(contents.byMipLevel, atlas.getWidth(), atlas.getHeight(), originX, originY);
+  }
+
   private TextureImage loadAtlasTexture(Identifier atlasLocation) {
     var runtimeTexture = runtimeTexture(atlasLocation);
     if (runtimeTexture != null) {
@@ -1348,6 +1370,46 @@ public final class RendererAssets {
         linearFiltered = filtered;
       }
       return filtered;
+    }
+
+    private volatile TerrainFrameSnapshot terrainFrameSnapshot;
+
+    private record TerrainFrame(AtlasRegion region, int current, int next, float progress) {}
+
+    private record TerrainFrameSnapshot(TerrainFrame frame, TextureImage image) {}
+
+    TextureImage withTerrainFrame(NativeImage[] nativeMips, int atlasWidth, int atlasHeight, int originX, int originY,
+                                          int spriteWidth, int spriteHeight, int frameRowSize, int current, int next, float progress) {
+      var frame = new TerrainFrame(new AtlasRegion(atlasWidth, atlasHeight, originX, originY), current, next, progress);
+      var snapshot = terrainFrameSnapshot;
+      if (snapshot != null && frame.equals(snapshot.frame())) {
+        return snapshot.image();
+      }
+      var levels = new TextureImage[nativeMips.length];
+      for (var level = 0; level < levels.length; level++) {
+        var image = nativeMips[level];
+        var width = Math.max(1, spriteWidth >> level);
+        var height = Math.max(1, spriteHeight >> level);
+        var data = new int[width * height];
+        for (var y = 0; y < height; y++) {
+          for (var x = 0; x < width; x++) {
+            var a = image.getPixel(current % frameRowSize * width + x, current / frameRowSize * height + y);
+            var b = image.getPixel(next % frameRowSize * width + x, next / frameRowSize * height + y);
+            var color = 0;
+            for (var shift = 0; shift < 32; shift += 8) {
+              color |= Math.clamp((int) Math.rint(((a >>> shift) & 255) * (1.0F - progress) + ((b >>> shift) & 255) * progress), 0, 255) << shift;
+            }
+            data[y * width + x] = color;
+          }
+        }
+        levels[level] = new TextureImage(width, height, height, 1, 1, new int[]{0}, data, hasAlpha, hasTranslucentPixels,
+          TextureAddressMode.CLAMP_TO_EDGE, TextureAddressMode.CLAMP_TO_EDGE, true);
+        levels[level].atlasRegion = new AtlasRegion(Math.max(1, atlasWidth >> level), Math.max(1, atlasHeight >> level), originX >> level, originY >> level);
+      }
+      var result = levels[0];
+      result.mipLevels = levels;
+      terrainFrameSnapshot = new TerrainFrameSnapshot(frame, result);
+      return result;
     }
 
     public TextureImage withTerrainFiltering(NativeImage[] nativeMips, int atlasWidth, int atlasHeight, int originX, int originY) {

@@ -211,3 +211,20 @@ accessible field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/bla
 mutable field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;
 
 accessible field net/minecraft/client/renderer/texture/SpriteContents byMipLevel [Lcom/mojang/blaze3d/platform/NativeImage;
+
+accessible field net/minecraft/client/renderer/GameRenderer fogRenderer Lnet/minecraft/client/renderer/fog/FogRenderer;
+
+accessible method net/minecraft/client/Camera setupPerspective (FFFFF)V
+
+accessible class net/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture
+accessible class net/minecraft/client/renderer/texture/SpriteContents$FrameInfo
+accessible field net/minecraft/client/renderer/texture/SpriteContents animatedTexture Lnet/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture;
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture frames Ljava/util/List;
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture frameRowSize I
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture interpolateFrames Z
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimationState animationInfo Lnet/minecraft/client/renderer/texture/SpriteContents$AnimatedTexture;
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimationState frame I
+accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimationState subFrame I
+accessible field net/minecraft/client/renderer/texture/TextureAtlas animatedTexturesStates Ljava/util/List;
+
+accessible field net/minecraft/client/renderer/LightmapRenderStateExtractor needsUpdate Z

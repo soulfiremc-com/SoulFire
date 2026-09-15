@@ -162,6 +162,7 @@ final class SoftwareRasterizer {
     var v1 = triangle.v1();
     var v2 = triangle.v2();
     var material = triangle.material();
+    var fragmentLighting = hasFragmentLighting(v0) || hasFragmentLighting(v1) || hasFragmentLighting(v2);
     var area = edge(v0.x(), v0.y(), v1.x(), v1.y(), v2.x(), v2.y());
     if (Math.abs(area) < 1.0E-5F) {
       return;
@@ -170,34 +171,44 @@ final class SoftwareRasterizer {
       return;
     }
 
-    var planes = frontend == RasterFrontend.WORLD ? new AttributePlane[]{
-      AttributePlane.of(v0, v1, v2, v0.inverseW(), v1.inverseW(), v2.inverseW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.uOverW(), v1.uOverW(), v2.uOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.vOverW(), v1.vOverW(), v2.vOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.aOverW(), v1.aOverW(), v2.aOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.rOverW(), v1.rOverW(), v2.rOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.gOverW(), v1.gOverW(), v2.gOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.bOverW(), v1.bOverW(), v2.bOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.sphericalFogDistanceOverW(), v1.sphericalFogDistanceOverW(), v2.sphericalFogDistanceOverW(), viewport.height()),
-      AttributePlane.of(v0, v1, v2, v0.cylindricalFogDistanceOverW(), v1.cylindricalFogDistanceOverW(), v2.cylindricalFogDistanceOverW(), viewport.height())
+    var planeHeight = viewport.height();
+    var planes = frontend != RasterFrontend.GUI_ITEM ? new AttributePlane[]{
+      AttributePlane.of(v0, v1, v2, v0.inverseW(), v1.inverseW(), v2.inverseW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.uOverW(), v1.uOverW(), v2.uOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.vOverW(), v1.vOverW(), v2.vOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.aOverW(), v1.aOverW(), v2.aOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.rOverW(), v1.rOverW(), v2.rOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.gOverW(), v1.gOverW(), v2.gOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.bOverW(), v1.bOverW(), v2.bOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.sphericalFogDistanceOverW(), v1.sphericalFogDistanceOverW(), v2.sphericalFogDistanceOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.cylindricalFogDistanceOverW(), v1.cylindricalFogDistanceOverW(), v2.cylindricalFogDistanceOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.lightROverW(), v1.lightROverW(), v2.lightROverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.lightGOverW(), v1.lightGOverW(), v2.lightGOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.lightBOverW(), v1.lightBOverW(), v2.lightBOverW(), planeHeight)
     } : null;
+    var depthPlane = frontend == RasterFrontend.WORLD
+      ? AttributePlane.of(v0, v1, v2, (float) (1.0 - v0.depth()), (float) (1.0 - v1.depth()), (float) (1.0 - v2.depth()), viewport.height()) : null;
     var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, material) : 0.0F;
     var depthFogProjection = depthFogProjection(viewport, material);
     // GPU raster coverage uses fixed-point subpixel coordinates; interpolation retains the original plane.
     var x0 = (int) Math.rint(v0.x() * 256.0F);
-    var y0 = (int) Math.rint(v0.y() * 256.0F);
+    var y0 = frontend != RasterFrontend.WORLD ? (int) Math.rint(v0.y() * 256.0F)
+      : viewport.height() * 256 - (int) Math.rint(v0.interpolationY() * 256.0F);
     var x1 = (int) Math.rint(v1.x() * 256.0F);
-    var y1 = (int) Math.rint(v1.y() * 256.0F);
+    var y1 = frontend != RasterFrontend.WORLD ? (int) Math.rint(v1.y() * 256.0F)
+      : viewport.height() * 256 - (int) Math.rint(v1.interpolationY() * 256.0F);
     var x2 = (int) Math.rint(v2.x() * 256.0F);
-    var y2 = (int) Math.rint(v2.y() * 256.0F);
+    var y2 = frontend != RasterFrontend.WORLD ? (int) Math.rint(v2.y() * 256.0F)
+      : viewport.height() * 256 - (int) Math.rint(v2.interpolationY() * 256.0F);
     var coverageArea = fixedEdge(x0, y0, x1, y1, x2, y2);
     if (coverageArea == 0) {
       return;
     }
     var positiveArea = coverageArea > 0;
-    var topLeft0 = positiveArea ? isTopLeft(x1, y1, x2, y2) : isTopLeft(x2, y2, x1, y1);
-    var topLeft1 = positiveArea ? isTopLeft(x2, y2, x0, y0) : isTopLeft(x0, y0, x2, y2);
-    var topLeft2 = positiveArea ? isTopLeft(x0, y0, x1, y1) : isTopLeft(x1, y1, x0, y0);
+    // Native framebuffer rows run opposite to the output image. Its top edge becomes the image's bottom edge.
+    var topLeft0 = positiveArea ? isInclusiveEdge(x1, y1, x2, y2, frontend == RasterFrontend.WORLD) : isInclusiveEdge(x2, y2, x1, y1, frontend == RasterFrontend.WORLD);
+    var topLeft1 = positiveArea ? isInclusiveEdge(x2, y2, x0, y0, frontend == RasterFrontend.WORLD) : isInclusiveEdge(x0, y0, x2, y2, frontend == RasterFrontend.WORLD);
+    var topLeft2 = positiveArea ? isInclusiveEdge(x0, y0, x1, y1, frontend == RasterFrontend.WORLD) : isInclusiveEdge(x1, y1, x0, y0, frontend == RasterFrontend.WORLD);
 
     var colorBuffer = buffers.colorBuffer();
     var depthBuffer = buffers.depthBuffer();
@@ -223,7 +234,7 @@ final class SoftwareRasterizer {
         var normalizedW0 = w0 / area;
         var normalizedW1 = w1 / area;
         var normalizedW2 = w2 / area;
-        var depth = Math.fma(normalizedW1, v1.depth() - v0.depth(), Math.fma(normalizedW2, v2.depth() - v0.depth(), v0.depth())) + fragmentDepthBias;
+        var depth = (depthPlane == null ? Math.fma(normalizedW1, v1.depth() - v0.depth(), Math.fma(normalizedW2, v2.depth() - v0.depth(), v0.depth())) : 1.0 - depthPlane.at(x, y)) + fragmentDepthBias;
         if (frontend == RasterFrontend.WORLD) {
           depth = Math.clamp(depth, 0.0F, 1.0F);
         }
@@ -247,8 +258,8 @@ final class SoftwareRasterizer {
           continue;
         }
 
-        var sampleU = frontend == RasterFrontend.WORLD ? material.uvTransform().u(u, v, animationTick) : u;
-        var sampleV = frontend == RasterFrontend.WORLD ? material.uvTransform().v(u, v, animationTick) : v;
+        var sampleU = u;
+        var sampleV = v;
         int sampled;
         if (frontend == RasterFrontend.WORLD && material.texture().usesTerrainFiltering()) {
           var leftW = 1.0F / planes[0].at(x & ~1, y);
@@ -262,6 +273,12 @@ final class SoftwareRasterizer {
           sampled = material.texture().sampleTerrain(sampleU, sampleV, animationTick, duDx, duDy, dvDx, dvDy);
         } else {
           sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
+        }
+        if (material.textureSampleMode() == RenderMaterial.TextureSampleMode.OUTLINE) {
+          if ((sampled >>> 24) == 0) {
+            continue;
+          }
+          sampled = 0xFFFFFFFF;
         }
         if (frontend == RasterFrontend.GUI_SCREEN) {
           writeGuiScreenFragment(colorBuffer, rasterIndex, sampled, material, normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2);
@@ -284,6 +301,11 @@ final class SoftwareRasterizer {
             color,
             interpolatedOverlayColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
           );
+          if (fragmentLighting) {
+            color = new FragmentColor(color.r() * (planes[9].at(x, y) * (1.0F / inverseW)),
+              color.g() * (planes[10].at(x, y) * (1.0F / inverseW)),
+              color.b() * (planes[11].at(x, y) * (1.0F / inverseW)), color.a());
+          }
         }
         var alpha = color.a() * 255.0F;
         if (alpha == 0) {
@@ -299,14 +321,15 @@ final class SoftwareRasterizer {
         if (frontend == RasterFrontend.WORLD && material.fogMode() != RenderMaterial.FogMode.NONE) {
           if (material.fogMode() == RenderMaterial.FogMode.DEPTH_COLOR_MIX && depthFogProjection != null) {
             var fogDistance = depthFogDistance(depth, depthFogProjection);
-            color = applyFog(color, fogDistance, fogDistance, fogState, material.fogMode());
+            color = applyFog(color, fogDistance, fogDistance, fogState, material.fogMode(), material.glintAlpha());
           } else {
             color = applyFog(
               color,
               planes[7].at(x, y) * (1.0F / inverseW),
               planes[8].at(x, y) * (1.0F / inverseW),
               fogState,
-              material.fogMode()
+              material.fogMode(),
+              material.glintAlpha()
             );
           }
         }
@@ -446,6 +469,12 @@ final class SoftwareRasterizer {
     return (weight0 * v0.cylindricalFogDistanceOverW() + weight1 * v1.cylindricalFogDistanceOverW() + weight2 * v2.cylindricalFogDistanceOverW()) / inverseW;
   }
 
+  private static boolean hasFragmentLighting(ProjectedVertex vertex) {
+    return vertex.lightROverW() != vertex.inverseW()
+      || vertex.lightGOverW() != vertex.inverseW()
+      || vertex.lightBOverW() != vertex.inverseW();
+  }
+
   private static int interpolatedOverlayColor(
     float weight0,
     float weight1,
@@ -481,9 +510,10 @@ final class SoftwareRasterizer {
     float sphericalFogDistance,
     float cylindricalFogDistance,
     RasterFogState fogState,
-    RenderMaterial.FogMode fogMode
+    RenderMaterial.FogMode fogMode,
+    float glintAlpha
   ) {
-    if (!fogState.enabled()) {
+    if (!fogState.enabled() && fogMode != RenderMaterial.FogMode.RGB_FADE) {
       return color;
     }
 
@@ -496,7 +526,7 @@ final class SoftwareRasterizer {
       linearFogValue(cylindricalFogDistance, fogState.renderDistanceStart(), fogState.renderDistanceEnd())
     );
     rawFogAmount = Math.clamp(rawFogAmount, 0.0F, 1.0F);
-    if (rawFogAmount <= 0.0F) {
+    if (rawFogAmount <= 0.0F && fogMode != RenderMaterial.FogMode.RGB_FADE) {
       return color;
     }
 
@@ -504,20 +534,20 @@ final class SoftwareRasterizer {
       case NONE, CLOUD_ALPHA -> color;
       case COLOR_MIX, DEPTH_COLOR_MIX -> applyColorMixFog(color, fogState, rawFogAmount);
       case ALPHA_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, true);
-      case RGB_FADE -> multiplyChannels(color, 1.0F - rawFogAmount, false);
+      case RGB_FADE -> multiplyChannels(color, (1.0F - rawFogAmount) * glintAlpha, false);
     };
   }
 
   private static FragmentColor applyColorMixFog(FragmentColor color, RasterFogState fogState, float rawFogAmount) {
-    var fogAmount = Math.clamp(rawFogAmount * ARGB.alphaFloat(fogState.color()), 0.0F, 1.0F);
+    var fogAmount = Math.clamp(rawFogAmount * fogState.color().w(), 0.0F, 1.0F);
     if (fogAmount <= 0.0F) {
       return color;
     }
 
     // Preserve GLSL mix evaluation: rewriting this as start + t * (end - start) changes rounding.
-    var r = color.r() * (1.0F - fogAmount) + ARGB.redFloat(fogState.color()) * fogAmount;
-    var g = color.g() * (1.0F - fogAmount) + ARGB.greenFloat(fogState.color()) * fogAmount;
-    var b = color.b() * (1.0F - fogAmount) + ARGB.blueFloat(fogState.color()) * fogAmount;
+    var r = color.r() * (1.0F - fogAmount) + fogState.color().x() * fogAmount;
+    var g = color.g() * (1.0F - fogAmount) + fogState.color().y() * fogAmount;
+    var b = color.b() * (1.0F - fogAmount) + fogState.color().z() * fogAmount;
     return new FragmentColor(r, g, b, color.a());
   }
 
@@ -555,7 +585,7 @@ final class SoftwareRasterizer {
     }
 
     return switch (material.textureSampleMode()) {
-      case COLOR -> sample;
+      case COLOR, OUTLINE -> sample;
       case INTENSITY -> {
         var intensity = (sample >> 16) & 0xFF;
         yield (intensity << 24) | (intensity << 16) | (intensity << 8) | intensity;
@@ -787,10 +817,10 @@ final class SoftwareRasterizer {
     return edgeValue > 0 || (edgeValue == 0 && topLeft);
   }
 
-  private static boolean isTopLeft(long ax, long ay, long bx, long by) {
+  private static boolean isInclusiveEdge(long ax, long ay, long bx, long by, boolean bottomEdge) {
     var dy = by - ay;
     var dx = bx - ax;
-    return dy > 0 || (dy == 0 && dx < 0);
+    return dy > 0 || (dy == 0 && (bottomEdge ? dx > 0 : dx < 0));
   }
 
   private enum RasterFrontend {

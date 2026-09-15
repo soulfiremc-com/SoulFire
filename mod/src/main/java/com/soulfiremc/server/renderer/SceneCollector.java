@@ -36,6 +36,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
@@ -57,6 +58,7 @@ public class SceneCollector {
     var options = Minecraft.getInstance().options;
     Entity.setViewScale(Mth.clamp(options.getEffectiveRenderDistance() / 8.0, 1.0, 2.5) * options.entityDistanceScaling().get());
 
+    var visibleEntities = new ArrayList<Entity>();
     VanillaSubmitCollector.prepareEntityDispatcher(ctx, localPlayer);
     try {
       for (var entity : level.entitiesForRendering()) {
@@ -79,8 +81,9 @@ public class SceneCollector {
         }
         trace.entityVisible();
 
-        collectGenericEntity(ctx, entity, builder);
+        visibleEntities.add(entity);
       }
+      builder.addAll(VanillaSubmitCollector.collectEntities(ctx, visibleEntities));
     } finally {
       VanillaSubmitCollector.resetEntityDispatcher();
     }
@@ -93,13 +96,6 @@ public class SceneCollector {
 
   private static boolean shouldSkipCameraEntity(RenderContext ctx, LocalPlayer localPlayer, Entity entity) {
     return entity == localPlayer && !ctx.cameraDetached() && !localPlayer.isSleeping();
-  }
-
-  private static void collectGenericEntity(RenderContext ctx, Entity entity, SceneData.Builder builder) {
-    var vanillaScene = VanillaSubmitCollector.collectEntity(ctx, entity);
-    if (vanillaScene.totalQuadCount() > 0) {
-      builder.addAll(vanillaScene);
-    }
   }
 
   public static SceneData collectBlockEntities(RenderContext ctx) {

@@ -30,9 +30,27 @@ import java.util.OptionalDouble;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RendererAssetsTest {
+  @Test
+  void terrainAnimationUsesCapturedFramesAndKeepsEarlierSnapshotsStable() {
+    try (var frames = new NativeImage(2, 1, true)) {
+      frames.setPixel(0, 0, 0xFFFF0000);
+      frames.setPixel(1, 0, 0xFF0000FF);
+      var source = RendererAssets.TextureImage.fromArgb(2, 1, new int[]{0xFFFF0000, 0xFF0000FF}, null);
+      var mips = new NativeImage[]{frames};
+      var first = source.withTerrainFrame(mips, 1, 1, 0, 0, 1, 1, 2, 0, 1, 0);
+      assertSame(first, source.withTerrainFrame(mips, 1, 1, 0, 0, 1, 1, 2, 0, 1, 0));
+      var blended = source.withTerrainFrame(mips, 1, 1, 0, 0, 1, 1, 2, 0, 1, 0.5F);
+      var second = source.withTerrainFrame(mips, 1, 1, 0, 0, 1, 1, 2, 1, 0, 0);
+      assertEquals(0xFFFF0000, first.sampleTerrain(0.5F, 0.5F, 6000, 0, 0, 0, 0));
+      assertEquals(0xFF800080, blended.sampleTerrain(0.5F, 0.5F, 6000, 0, 0, 0, 0));
+      assertEquals(0xFF0000FF, second.sampleTerrain(0.5F, 0.5F, 6000, 0, 0, 0, 0));
+    }
+  }
+
   @Test
   void terrainSamplingSelectsAndBlendsMipLevelsFromThePixelFootprint() {
     try (var base = new NativeImage(2, 2, true); var mip = new NativeImage(1, 1, true)) {

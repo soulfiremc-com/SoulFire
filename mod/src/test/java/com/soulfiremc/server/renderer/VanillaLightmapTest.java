@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VanillaLightmapTest {
   @Test
-  void fullBrightBypassesLightmapState() {
+  void fullBrightSamplesMaximumLightLevels() {
     assertEquals(0xFFFFFFFF, VanillaLightmap.color(context(lightmapState()), LightCoordsUtil.FULL_BRIGHT, 0));
   }
 
@@ -43,6 +43,20 @@ class VanillaLightmapTest {
     assertTrue(ARGB.red(lit) > ARGB.red(dark));
     assertTrue(ARGB.green(lit) > ARGB.green(dark));
     assertTrue(ARGB.blue(lit) > ARGB.blue(dark));
+  }
+
+  @Test
+  void smoothLightCoordinatesInterpolateBetweenAdjacentTexels() {
+    var ctx = context(lightmapState());
+    var dark = VanillaLightmap.color(ctx, LightCoordsUtil.pack(0, 10), 0);
+    var bright = VanillaLightmap.color(ctx, LightCoordsUtil.pack(0, 11), 0);
+    var smooth = VanillaLightmap.color(ctx, LightCoordsUtil.smoothPack(0, 10 * 16 + 8), 0);
+    for (var shift = 0; shift < 24; shift += 8) {
+      var lower = (dark >>> shift) & 255;
+      var upper = (bright >>> shift) & 255;
+      var interpolated = (smooth >>> shift) & 255;
+      assertTrue(interpolated > lower && interpolated < upper);
+    }
   }
 
   @Test
@@ -81,6 +95,7 @@ class VanillaLightmapTest {
       0,
       0L,
       lightmapRenderState,
+      VanillaLightmap.texture(lightmapRenderState),
       null
     );
   }

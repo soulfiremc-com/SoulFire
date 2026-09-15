@@ -45,7 +45,9 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.feature.CustomFeatureRenderer;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.feature.phase.SimpleFeatureRenderPhase;
 import net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.OutputTarget;
@@ -104,7 +106,6 @@ import java.util.function.Consumer;
 final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmitNodeCollector {
   private static final Identifier ENCHANTED_GLINT_ITEM = Identifier.withDefaultNamespace("textures/misc/enchanted_glint_item.png");
   private static final Identifier SHADOW_TEXTURE = Identifier.withDefaultNamespace("textures/misc/shadow.png");
-  private static final int GLINT_TINT = 0x99A070FF;
   private static final int LEASH_RENDER_STEPS = 24;
   private static final float LEASH_WIDTH = 0.05F;
   private static final float LINE_SHADER_VIEW_SCALE = 1.0F - 1.0F / 256.0F;
@@ -154,6 +155,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     preparedCamera.setEntity(activeCameraEntity);
     preparedCamera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
     preparedCamera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
+    preparedCamera.setupPerspective(0.05F, ctx.camera().farPlane(), (float) ctx.camera().fov(), ctx.camera().width(), ctx.camera().height());
     dispatcher.prepare(preparedCamera, activeCameraEntity);
   }
 
@@ -166,12 +168,14 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return dispatcher.shouldRender(entity, createFrustum(ctx), ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
   }
 
-  static SceneData collectEntity(RenderContext ctx, Entity entity) {
+  static SceneData collectEntities(RenderContext ctx, Iterable<Entity> entities) {
     var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
-    var renderState = dispatcher.extractEntity(entity, 1.0F);
     var collector = new VanillaSubmitCollector(ctx);
-    var poseStack = new PoseStack();
-    dispatcher.submit(renderState, collector.cameraRenderState(), renderState.x, renderState.y, renderState.z, poseStack, collector);
+    for (var entity : entities) {
+      var renderState = dispatcher.extractEntity(entity, 1.0F);
+      var poseStack = new PoseStack();
+      dispatcher.submit(renderState, collector.cameraRenderState(), renderState.x, renderState.y, renderState.z, poseStack, collector);
+    }
     return collector.buildScene();
   }
 
@@ -197,6 +201,17 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     } finally {
       poseStack.popPose();
     }
+    return collector.buildScene();
+  }
+
+  static SceneData collectScreenEffects(RenderContext ctx, float partialTick) {
+    if (ctx.localPlayer() == null || ctx.cameraDetached()) {
+      return SceneData.EMPTY;
+    }
+    var minecraft = Minecraft.getInstance();
+    var collector = new VanillaSubmitCollector(ctx);
+    minecraft.gameRenderer.screenEffectRenderer.submit(minecraft.options.getCameraType().isFirstPerson(),
+      ctx.localPlayer().isSleeping(), partialTick, collector, minecraft.gui.hud.isHidden());
     return collector.buildScene();
   }
 
@@ -266,7 +281,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   static SceneData collectFluid(RenderContext ctx, FluidRenderer fluidRenderer, BlockPos blockPos, BlockState blockState, FluidState fluidState) {
     var collector = new VanillaSubmitCollector(ctx);
-    var output = collector.new FluidOutput(blockPos);
+    var output = collector.new FluidOutput(blockPos, fluidState);
     fluidRenderer.tesselate(ctx.level(), blockPos, output, blockState, fluidState);
     output.flush();
     return collector.buildScene();
@@ -274,6 +289,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   SceneData buildScene() {
     for (var orderedBuckets : bucketsByOrder.values()) {
+      orderedBuckets.flushCustomGeometry(this);
       orderedBuckets.flushNameTags(this);
       orderedBuckets.flushSortedModelDraws();
     }
@@ -328,7 +344,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private void addRenderTypeQuad(RenderQuad quad, @Nullable RenderType renderType) {
-    if (renderType != null && renderType.outputTarget() == OutputTarget.WEATHER_TARGET) {
+    if (renderType != null && renderType.isOutline()) {
+      builder().addOutline(quad);
+    } else if (renderType != null && renderType.outputTarget() == OutputTarget.WEATHER_TARGET) {
       builder().addWeather(quad);
     } else {
       builder().add(quad);
@@ -386,10 +404,10 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         var y = piece.relativeY() + (float) bounds.minY;
         var z0 = piece.relativeZ() + (float) bounds.minZ;
         var z1 = piece.relativeZ() + (float) bounds.maxZ;
-        var u0 = -x0 / (2.0F * radius) + 0.5F;
-        var u1 = -x1 / (2.0F * radius) + 0.5F;
-        var v0 = -z0 / (2.0F * radius) + 0.5F;
-        var v1 = -z1 / (2.0F * radius) + 0.5F;
+        var u0 = -x0 / 2.0F / radius + 0.5F;
+        var u1 = -x1 / 2.0F / radius + 0.5F;
+        var v0 = -z0 / 2.0F / radius + 0.5F;
+        var v1 = -z1 / 2.0F / radius + 0.5F;
         var color = ARGB.white(piece.alpha());
         shadowVertex(consumer, color, x0, y, z0, u0, v0);
         shadowVertex(consumer, color, x0, y, z1, u0, v1);
@@ -698,7 +716,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var stage = model.hasMaterialFlag(1) ? FeatureStage.TRANSLUCENT_BLOCK : FeatureStage.SOLID_BLOCK;
     withStage(stage, () -> {
       var basePose = poseStack.last().copy();
-      var consumers = new EnumMap<ChunkSectionLayer, CapturingVertexConsumer>(ChunkSectionLayer.class);
+      var consumers = new LinkedHashMap<RenderType, CapturingVertexConsumer>();
       BlockQuadOutput output = (x, y, z, quad, instance) -> {
         var materialInfo = quad.materialInfo();
         var layer = materialInfo != null ? materialInfo.layer() : ChunkSectionLayer.SOLID;
@@ -834,7 +852,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         appendBakedQuad(quad, poseStack.last(), itemRenderType, 0xFFFFFFFF, tints, light, overlay);
         appendBakedQuadOutline(quad, poseStack.last(), itemRenderType, outlineColor, overlay);
         if (foilType != ItemStackRenderState.FoilType.NONE) {
-          appendBakedQuadGlint(quad, poseStack.last(), itemRenderType, displayContext, foilType);
+          appendBakedQuadGlint(quad, poseStack.last(), displayContext, foilType);
         }
       }
     });
@@ -842,22 +860,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public void submitCustomGeometry(PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer renderer) {
-    withStage(stageForRenderType(renderType, FeatureStage.SOLID_CUSTOM, FeatureStage.TRANSLUCENT_CUSTOM), () -> {
+    var stage = stageForRenderType(renderType, FeatureStage.SOLID_CUSTOM, FeatureStage.TRANSLUCENT_CUSTOM);
+    buckets.customGeometry.computeIfAbsent(stage, _ -> new SimpleFeatureRenderPhase())
+      .submit(new CustomFeatureRenderer.Submit(poseStack.last().copy(), renderType, renderer));
+  }
+
+  private void captureCustomGeometry(FeatureBuckets target, FeatureStage stage, CustomFeatureRenderer.Submit submit) {
+    withBucketStage(target, stage, () -> {
+      var renderType = submit.renderType();
       var texture = textureFromRenderType(renderType);
       var alphaMode = alphaMode(renderType, texture, 0xFFFFFFFF);
-      var submittedPose = poseStack.last().copy();
-      var consumer = new CapturingVertexConsumer(
-        submittedPose,
-        renderType.primitiveTopology(),
-        texture,
-        alphaMode,
-        alphaCutoutThreshold(renderType, alphaMode),
-        renderType,
-        null,
-        null,
-        true
-      );
-      renderer.render(submittedPose, consumer);
+      var consumer = new CapturingVertexConsumer(submit.pose(), renderType.primitiveTopology(), texture,
+        alphaMode, alphaCutoutThreshold(renderType, alphaMode), renderType, null, null, true);
+      submit.customGeometryRenderer().render(submit.pose(), consumer);
       consumer.flush();
     });
   }
@@ -1132,7 +1147,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   private void putMovingBlockQuad(
     PoseStack.Pose basePose,
-    EnumMap<ChunkSectionLayer, CapturingVertexConsumer> consumers,
+    Map<RenderType, CapturingVertexConsumer> consumers,
     float x,
     float y,
     float z,
@@ -1143,26 +1158,21 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   ) {
     var pose = basePose.copy();
     pose.translate(x, y, z);
-    putQuad(pose, quad, instance, movingBlockConsumer(consumers, layer), color);
+    var renderType = movingBlockRenderType(layer);
+    if (color != 0 && renderType.outline().isPresent()) {
+      instance.setColor(color);
+      renderType = renderType.outline().orElseThrow();
+    }
+    movingBlockConsumer(consumers, renderType).putBakedQuad(pose, quad, instance);
   }
 
-  private CapturingVertexConsumer movingBlockConsumer(EnumMap<ChunkSectionLayer, CapturingVertexConsumer> consumers, ChunkSectionLayer layer) {
-    return consumers.computeIfAbsent(layer, currentLayer -> {
-      var renderType = movingBlockRenderType(currentLayer);
+  private CapturingVertexConsumer movingBlockConsumer(Map<RenderType, CapturingVertexConsumer> consumers, RenderType renderType) {
+    return consumers.computeIfAbsent(renderType, currentRenderType -> {
       var texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
-      var alphaMode = switch (currentLayer) {
-        case SOLID -> RendererAssets.AlphaMode.OPAQUE;
-        case CUTOUT -> RendererAssets.AlphaMode.CUTOUT;
-        case TRANSLUCENT -> RendererAssets.AlphaMode.TRANSLUCENT;
-      };
+      var alphaMode = alphaMode(currentRenderType, texture, 0xFFFFFFFF);
       return new CapturingVertexConsumer(
-        new Matrix4f(),
-        renderType.primitiveTopology(),
-        texture,
-        alphaMode,
-        alphaCutoutThreshold(renderType, alphaMode),
-        renderType,
-        null
+        new Matrix4f(), currentRenderType.primitiveTopology(), texture, alphaMode,
+        alphaCutoutThreshold(currentRenderType, alphaMode), currentRenderType, null
       );
     });
   }
@@ -1368,7 +1378,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private void appendBakedQuadGlint(
     BakedQuad quad,
     PoseStack.Pose pose,
-    @Nullable RenderType renderType,
     ItemDisplayContext displayContext,
     ItemStackRenderState.FoilType foilType
   ) {
@@ -1377,7 +1386,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     var glintTexture = glintTexture();
-    var glintRenderType = foilRenderType(renderType, true);
+    var glintRenderType = RenderTypes.glint();
     var consumer = new CapturingVertexConsumer(
       new Matrix4f(),
       glintRenderType.primitiveTopology(),
@@ -1386,7 +1395,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       alphaCutoutThreshold(glintRenderType, RendererAssets.AlphaMode.TRANSLUCENT),
       glintRenderType,
       null,
-      glintMaterial(glintTexture, glintRenderType)
+      RenderMaterial.create(glintTexture, RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF, false, 0)
+        .withRenderType(glintRenderType, sortGroups.group(glintRenderType))
     );
     var output = foilType == ItemStackRenderState.FoilType.SPECIAL
       ? new SheetedDecalTextureGenerator(consumer, specialFoilDecalPose(displayContext, pose), 0.0078125F)
@@ -1648,7 +1658,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private RenderVertex withOverlay(RenderVertex vertex, int overlayColor) {
-    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor, vertex.shade(), vertex.lightColor(), vertex.colorSource());
+    return new RenderVertex(vertex.x(), vertex.y(), vertex.z(), vertex.u(), vertex.v(), vertex.color(), overlayColor, vertex.shade(), vertex.lightColor(), vertex.colorSource(), vertex.fragmentLightColor());
   }
 
   private RenderQuad withMaterial(RenderQuad quad, RenderMaterial material) {
@@ -1659,10 +1669,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return renderType != null && !renderType.pipeline().isCull();
   }
 
-  private RenderType foilRenderType(@Nullable RenderType renderType, boolean sheeted) {
-    return sheeted ? RenderTypes.glint() : RenderTypes.entityGlint();
-  }
-
   private static PoseStack.Pose specialFoilDecalPose(ItemDisplayContext displayContext, PoseStack.Pose pose) {
     var foilDecalPose = pose.copy();
     if (displayContext == ItemDisplayContext.GUI) {
@@ -1671,53 +1677,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       MatrixUtil.mulComponentWise(foilDecalPose.pose(), 0.75F);
     }
     return foilDecalPose;
-  }
-
-  private RenderMaterial glintMaterial(RendererAssets.TextureImage texture, RenderType renderType) {
-    var material = RenderMaterial
-      .create(
-        texture,
-        RendererAssets.AlphaMode.TRANSLUCENT,
-        GLINT_TINT,
-        true,
-        0.0F,
-        alphaCutoutThreshold(renderType, RendererAssets.AlphaMode.TRANSLUCENT)
-      )
-      .withPipelineState(renderType.pipeline());
-    return new RenderMaterial(
-      material.texture(),
-      material.alphaMode(),
-      material.color(),
-      material.doubleSided(),
-      material.depthBias(),
-      material.polygonOffsetFactor(),
-      material.polygonOffsetUnits(),
-      material.alphaCutoutThreshold(),
-      material.alphaCutoutSource(),
-      material.depthTest(),
-      material.depthWrite(),
-      material.blendState(),
-      material.colorWriteMask(),
-      RenderMaterial.UvTransform.glint(glintScale(renderType)),
-      material.textureSampleMode(),
-      material.fogMode(),
-      false,
-      sortGroups.group(renderType),
-      material.viewScale(),
-      material.dissolveMaskTexture(),
-      material.secondaryTexture(),
-      material.portalLayers()
-    );
-  }
-
-  private static float glintScale(RenderType renderType) {
-    if (renderType == RenderTypes.entityGlint()) {
-      return 0.5F;
-    }
-    if (renderType == RenderTypes.armorEntityGlint()) {
-      return 0.16F;
-    }
-    return 8.0F;
   }
 
   private RendererAssets.TextureImage glintTexture() {
@@ -2008,7 +1967,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
               if ((i & 1) == 0) {
                 emitTriangle(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2));
               } else {
-                emitTriangle(vertices.get(i + 1), vertices.get(i), vertices.get(i + 2));
+                emitTriangle(vertices.get(i), vertices.get(i + 2), vertices.get(i + 1));
               }
             }
           }
@@ -2058,12 +2017,12 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var lightB = b.light();
       var lightC = c.light();
       if (usesFlatVertexColor(renderType)) {
-        colorA = c.color();
-        colorB = c.color();
-        colorC = c.color();
-        lightA = c.light();
-        lightB = c.light();
-        lightC = c.light();
+        colorA = a.color();
+        colorB = a.color();
+        colorC = a.color();
+        lightA = a.light();
+        lightB = a.light();
+        lightC = a.light();
       }
       addCapturedFace(
         new Vector3f[]{a.position(), b.position(), c.position(), c.position()},
@@ -2227,6 +2186,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         : RenderMaterial.create(texture, faceAlphaMode, 0xFFFFFFFF, isTextRenderType(renderType), 0.0F, faceAlphaCutoutThreshold).withDepthState(depthStencilState);
       if (materialOverride == null && renderType != null) {
         material = applyExtendedRenderState(material.withRenderType(renderType, sortGroups.group(renderType)), renderType);
+      }
+      if (material.fogMode() == RenderMaterial.FogMode.RGB_FADE) {
+        material = material.withGlintAlpha(Minecraft.getInstance().options.glintStrength().get().floatValue());
       }
       return material;
     }
@@ -2405,33 +2367,19 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       boolean applyOverlay,
       FaceLighting faceLighting
     ) {
+      if (renderType != null && renderType.pipeline().getFragmentShader().getPath().equals("core/glint")) {
+        return new RenderVertex(position.x(), position.y(), position.z(), u, v, 0xFFFFFFFF);
+      }
+      if (usesFlatVertexColor(renderType)) {
+        return new RenderVertex(position.x(), position.y(), position.z(), u, v, color)
+          .withLightColor(lightColor(light, 0, renderType));
+      }
       var shadingRenderType = shadingRenderType();
-      var shadedColor = color;
-      var shadedOverlayColor = applyOverlay ? overlayColor : RenderVertex.NO_OVERLAY_COLOR;
-      if (materialOverride == null) {
-        var lightColor = lightColor(light, 0, shadingRenderType);
-        shadedColor = modulateColor(shadedColor, lightColor);
-        if (applyOverlay) {
-          shadedOverlayColor = modulateColor(shadedOverlayColor, lightColor);
-        }
-      }
       return new RenderVertex(
-        position.x(),
-        position.y(),
-        position.z(),
-        u,
-        v,
-        shadedColor,
-        shadedOverlayColor,
+        position.x(), position.y(), position.z(), u, v, color,
+        applyOverlay ? overlayColor : RenderVertex.NO_OVERLAY_COLOR,
         directionalLight(normal, shadingRenderType, faceLighting)
-      );
-    }
-
-    private void offsetCurrentPosition(float x, float y, float z) {
-      if (current != null) {
-        current = current.withPosition(new Vector3f(current.position()).add(x, y, z));
-        vertices.set(vertices.size() - 1, current);
-      }
+      ).withFragmentLightColor(materialOverride == null ? lightColor(light, 0, shadingRenderType) : 0xFFFFFFFF);
     }
 
     @Override
@@ -2591,7 +2539,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private final class OutlineVertexConsumer implements VertexConsumer {
-    private static final float OUTLINE_NORMAL_OFFSET = 0.03F;
     private final CapturingVertexConsumer delegate;
     private final int color;
 
@@ -2635,7 +2582,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
     @Override
     public VertexConsumer setNormal(float x, float y, float z) {
-      delegate.offsetCurrentPosition(x * OUTLINE_NORMAL_OFFSET, y * OUTLINE_NORMAL_OFFSET, z * OUTLINE_NORMAL_OFFSET);
       return this;
     }
 
@@ -2651,7 +2597,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final RendererAssets.TextureImage texture = assets.textureAtlas(TextureAtlas.LOCATION_BLOCKS);
     private final Matrix4f sectionOrigin;
 
-    private FluidOutput(BlockPos blockPos) {
+    private final List<TextureAtlasSprite> sprites;
+
+    private FluidOutput(BlockPos blockPos, FluidState fluidState) {
+      var model = Minecraft.getInstance().getModelManager().getFluidStateModelSet().get(fluidState);
+      this.sprites = new ArrayList<>();
+      sprites.add(model.stillMaterial().sprite());
+      sprites.add(model.flowingMaterial().sprite());
+      if (model.overlayMaterial() != null) {
+        sprites.add(model.overlayMaterial().sprite());
+      }
       this.sectionOrigin = new Matrix4f().translation(
         SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getX())),
         SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(blockPos.getY())),
@@ -2670,13 +2625,41 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
           currentLayer.translucent() ? RendererAssets.AlphaMode.TRANSLUCENT : RendererAssets.AlphaMode.OPAQUE,
           currentLayer.translucent() ? RenderMaterial.defaultAlphaCutoutThreshold(RendererAssets.AlphaMode.TRANSLUCENT) : 0,
           null,
-          new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, !currentLayer.translucent())
+          currentLayer.pipeline().getDepthStencilState()
         )
       );
     }
 
     private void flush() {
-      consumers.values().forEach(CapturingVertexConsumer::flush);
+      consumers.forEach((layer, consumer) -> {
+        var alphaMode = RendererAssets.alphaModeForVanillaLayer(layer);
+        for (var i = 0; i + 3 < consumer.vertices.size(); i += 4) {
+          var captured = consumer.vertices.subList(i, i + 4);
+          var u = 0.0F;
+          var v = 0.0F;
+          for (var vertex : captured) {
+            u += vertex.u() * 0.25F;
+            v += vertex.v() * 0.25F;
+          }
+          var faceTexture = texture;
+          for (var sprite : sprites) {
+            if (u >= sprite.getU0() && u <= sprite.getU1() && v >= sprite.getV0() && v <= sprite.getV1()) {
+              faceTexture = assets.terrainTexture(sprite);
+              break;
+            }
+          }
+          var material = RenderMaterial.create(faceTexture, alphaMode, 0xFFFFFFFF, false, 0.0F)
+            .withPipelineState(layer.pipeline());
+          var vertices = new RenderVertex[4];
+          for (var j = 0; j < 4; j++) {
+            var vertex = captured.get(j);
+            vertices[j] = new RenderVertex(vertex.position().x, vertex.position().y, vertex.position().z,
+              vertex.u(), vertex.v(), vertex.color())
+              .withLightColor(VanillaLightmap.color(ctx, vertex.light(), 0));
+          }
+          activeBuilder.add(new RenderQuad(vertices[0], vertices[1], vertices[2], vertices[3], material));
+        }
+      });
       consumers.clear();
     }
   }
@@ -2794,6 +2777,13 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     private final ArrayList<NameTagDraw> nameTagSeeThrough = new ArrayList<>();
     private final ArrayList<NameTagDraw> nameTagNormal = new ArrayList<>();
     private final ArrayList<SortedScene> translucentModelDraws = new ArrayList<>();
+    private final EnumMap<FeatureStage, SimpleFeatureRenderPhase> customGeometry = new EnumMap<>(FeatureStage.class);
+
+    private void flushCustomGeometry(VanillaSubmitCollector collector) {
+      customGeometry.forEach((stage, phase) -> phase.sortInto((submit, _) ->
+        collector.captureCustomGeometry(this, stage, (CustomFeatureRenderer.Submit) submit)));
+    }
+
 
     private SceneData.Builder builder(FeatureStage stage) {
       return builders.computeIfAbsent(stage, _ -> SceneData.builder());

@@ -35,8 +35,20 @@ public record ProjectedVertex(
   float overlayROverW,
   float overlayGOverW,
   float overlayBOverW,
-  float interpolationY
+  float interpolationY,
+  float lightROverW,
+  float lightGOverW,
+  float lightBOverW
 ) {
+  public ProjectedVertex(float x, float y, double depth, float inverseW, float uOverW, float vOverW,
+                         float sphericalFogDistanceOverW, float cylindricalFogDistanceOverW,
+                         float aOverW, float rOverW, float gOverW, float bOverW,
+                         float overlayAOverW, float overlayROverW, float overlayGOverW, float overlayBOverW, float interpolationY) {
+    this(x, y, depth, inverseW, uOverW, vOverW, sphericalFogDistanceOverW, cylindricalFogDistanceOverW,
+      aOverW, rOverW, gOverW, bOverW, overlayAOverW, overlayROverW, overlayGOverW, overlayBOverW, interpolationY,
+      inverseW, inverseW, inverseW);
+  }
+
   public ProjectedVertex(
     float x,
     float y,

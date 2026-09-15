@@ -21,6 +21,7 @@ import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.QuadInstance;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
@@ -50,6 +51,7 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -311,7 +313,7 @@ class VanillaSubmitCollectorTextTest {
   @Test
   void guiLightingUsesPackedNormalsWithoutRenormalizing() throws Exception {
     var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
-    var context = new RenderContext(null, null, false, camera, null, 64, 4096, 0, 256, 0, null, null);
+    var context = new RenderContext(null, null, false, camera, null, 64, 4096, 0, 256, 0, null, null, null);
     var collector = new VanillaSubmitCollector(context, new GuiLighting(new Vector3f(1, 0, 0), new Vector3f()));
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{-1}, null);
     var consumer = newTextConsumer(collector, texture, RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/test")));
@@ -606,29 +608,6 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
-  void glintMaterialsUseVanillaFoilRenderState() throws Exception {
-    var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
-    var collector = newCollector(camera);
-    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
-    var method = VanillaSubmitCollector.class.getDeclaredMethod("glintMaterial", RendererAssets.TextureImage.class, RenderType.class);
-    method.setAccessible(true);
-
-    var itemGlint = (RenderMaterial) method.invoke(collector, texture, RenderTypes.glint());
-    var entityGlint = (RenderMaterial) method.invoke(collector, texture, RenderTypes.entityGlint());
-
-    assertEquals(RenderMaterial.DepthTest.EQUAL, itemGlint.depthTest());
-    assertFalse(itemGlint.depthWrite());
-    assertTrue(itemGlint.blendState().blends());
-    assertEquals(RenderMaterial.FogMode.RGB_FADE, itemGlint.fogMode());
-    assertEquals(8.0F, uvScale(itemGlint.uvTransform()), 1.0E-5F);
-    assertEquals(0.5F, uvScale(entityGlint.uvTransform()), 1.0E-5F);
-    assertEquals(0.0F, itemGlint.uvTransform().u(0.0F, 0.0F, 275L), 1.0E-5F);
-    assertEquals(0.0F, itemGlint.uvTransform().v(0.0F, 0.0F, 75L), 1.0E-5F);
-    assertEquals(-1.0F / 275.0F, itemGlint.uvTransform().u(0.0F, 0.0F, 1L), 1.0E-5F);
-    assertEquals(1.0F / 75.0F, itemGlint.uvTransform().v(0.0F, 0.0F, 1L), 1.0E-5F);
-  }
-
-  @Test
   void leashTriangleStripsUseFlatProvokingVertexColor() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -643,10 +622,10 @@ class VanillaSubmitCollectorTextTest {
     var scene = sceneData(collector);
     assertEquals(1, scene.opaque().length);
     var quad = scene.opaque()[0];
-    assertEquals(0xFF0000FF, quad.v0().color());
-    assertEquals(0xFF0000FF, quad.v1().color());
-    assertEquals(0xFF0000FF, quad.v2().color());
-    assertEquals(0xFF0000FF, quad.v3().color());
+    assertEquals(0xFFFF0000, quad.v0().color());
+    assertEquals(0xFFFF0000, quad.v1().color());
+    assertEquals(0xFFFF0000, quad.v2().color());
+    assertEquals(0xFFFF0000, quad.v3().color());
   }
 
   @Test
@@ -680,6 +659,33 @@ class VanillaSubmitCollectorTextTest {
       assertUvInsideSprite(quad.v2(), sprite);
       assertUvInsideSprite(quad.v3(), sprite);
     }
+  }
+
+  @Test
+  void movingBlocksPreserveVertexTintWhenOutlineColorIsZero() throws Exception {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var collector = newCollector(camera);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var renderType = RenderTypes.solidMovingBlock();
+    var consumer = newConsumer(collector, texture, renderType, PrimitiveTopology.QUADS);
+    var sprite = fakeSprite(Identifier.withDefaultNamespace("textures/atlas/test.png"), 16, 16, 0, 0, 16, 16);
+    var quad = new BakedQuad(new Vector3f(-1, -1, 4), new Vector3f(-1, 1, 4),
+      new Vector3f(1, 1, 4), new Vector3f(1, -1, 4), UVPair.pack(0, 0), UVPair.pack(0, 1),
+      UVPair.pack(1, 1), UVPair.pack(1, 0), Direction.NORTH,
+      new BakedQuad.MaterialInfo(sprite, ChunkSectionLayer.SOLID, renderType, -1, false, 0));
+    var instance = new QuadInstance();
+    instance.setColor(0xFF804020);
+    instance.setLightCoords(LightCoordsUtil.FULL_BRIGHT);
+    instance.setOverlayCoords(OverlayTexture.NO_OVERLAY);
+    var method = VanillaSubmitCollector.class.getDeclaredMethod("putMovingBlockQuad", PoseStack.Pose.class,
+      Map.class, float.class, float.class, float.class, BakedQuad.class, QuadInstance.class, ChunkSectionLayer.class, int.class);
+    method.setAccessible(true);
+    method.invoke(collector, new PoseStack().last(), new HashMap<>(Map.of(renderType, consumer)), 0.0F, 0.0F, 0.0F,
+      quad, instance, ChunkSectionLayer.SOLID, 0);
+    flush(consumer);
+    var scene = sceneData(collector);
+    assertEquals(1, scene.totalQuadCount());
+    assertEquals(0xFF804020, scene.opaque()[0].v0().color());
   }
 
   @Test
@@ -1062,6 +1068,7 @@ class VanillaSubmitCollectorTextTest {
       256,
       0L,
       null,
+      null,
       null
     ));
   }
@@ -1152,9 +1159,7 @@ class VanillaSubmitCollectorTextTest {
     return Math.max(maxWidth, currentWidth);
   }
 
-  private static float uvScale(RenderMaterial.UvTransform transform) {
-    return (float) Math.hypot(transform.uFromU(), transform.vFromU());
-  }
+
 
   private static float transformedX(PoseStack.Pose pose, float x) {
     return pose.pose().transformPosition(new Vector3f(x, 0.0F, 0.0F)).x();

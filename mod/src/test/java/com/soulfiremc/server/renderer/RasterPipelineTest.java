@@ -35,6 +35,7 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,6 +93,49 @@ class RasterPipelineTest {
     pipeline.renderFirstPersonOverlay(camera, overlayScene.build(), buffers, 0L);
 
     assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF00FF00, 3);
+  }
+
+  @Test
+  void worldCoverageIncludesBottomAndLeftEdgesAfterFramebufferFlip() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
+    var buffers = new RasterBuffers(4, 4);
+    buffers.clearColor(0xFF000000);
+    var material = RenderMaterial.create(solidTexture(0xFFFF0000), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0);
+    var vertices = new ProjectedVertex[4];
+    var positions = new float[][]{{0.5F, 0.5F}, {0.5F, 3.5F}, {3.5F, 3.5F}, {3.5F, 0.5F}};
+    for (var i = 0; i < vertices.length; i++) {
+      var x = positions[i][0];
+      var y = positions[i][1];
+      vertices[i] = new ProjectedVertex(x, y, 0.5, 1, 0, 0, 0, 0,
+        1, 1, 1, 1, 255, 255, 255, 255, 4 - y);
+    }
+    for (var triangle : List.of(new ProjectedTriangle(vertices[0], vertices[1], vertices[2], material, 0),
+      new ProjectedTriangle(vertices[2], vertices[3], vertices[0], material, 0))) {
+      SoftwareRasterizer.rasterizeWorldTriangle(camera, 0, triangle, buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
+    }
+    for (var y = 0; y < 4; y++) {
+      for (var x = 0; x < 4; x++) {
+        assertEquals(x < 3 && y > 0 ? 0xFFFF0000 : 0xFF000000, buffers.image().getRGB(x, y));
+      }
+    }
+  }
+
+  @Test
+  void fragmentLightingInterpolatesAndModulatesTheOverlayAfterTextureSampling() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
+    var buffers = new RasterBuffers(4, 4);
+    buffers.clearColor(0xFF000000);
+    var material = RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0);
+    var topLeft = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0,
+      1, 1, 1, 1, 128, 255, 0, 0, 4, 0, 1, 1);
+    var topRight = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0,
+      1, 1, 1, 1, 128, 255, 0, 0, 4, 1, 1, 1);
+    var bottomLeft = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0,
+      1, 1, 1, 1, 128, 255, 0, 0, 0, 0, 0, 1);
+    SoftwareRasterizer.rasterizeWorldTriangle(camera, 0,
+      new ProjectedTriangle(topLeft, topRight, bottomLeft, material, 0), buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
+    assertEquals(0xFF107000, buffers.image().getRGB(0, 0));
+    assertEquals(0xFF305000, buffers.image().getRGB(1, 1));
   }
 
   @Test
@@ -523,7 +567,7 @@ class RasterPipelineTest {
         0,
         1.0F,
         null
-      )
+      ).withGlintAlpha(0.5F).withDoubleSided(true)
     ));
 
     renderSynthetic(
@@ -539,6 +583,9 @@ class RasterPipelineTest {
     var color = buffers.image().getRGB(WIDTH / 2, HEIGHT / 2);
     assertColorNear(color, 0x80000000, 3);
     assertChannelNear((color >>> 24) & 0xFF, 128, 3);
+    renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0x00000000, RasterFogState.DISABLED);
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0x80502010, 1);
+
     assertEquals(
       RenderMaterial.FogMode.RGB_FADE,
       RenderMaterial
@@ -746,7 +793,7 @@ class RasterPipelineTest {
     identityScene.add(quad(-1.0F, -1.0F, 4.0F, 1.0F, 1.0F, texture, RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF));
     var transformedMaterial = materialWithUvTransform(
       RenderMaterial.create(texture, RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F),
-      new RenderMaterial.UvTransform(1.0F, 0.0F, 0.0F, 1.0F, 1.0F, 0.0F, 2L, 0L)
+      new RenderMaterial.UvTransform(1.0F, 0.0F, 0.0F, 1.0F, 0.5F, 0.0F)
     );
     var transformedScene = SceneData.builder();
     transformedScene.add(customQuad(

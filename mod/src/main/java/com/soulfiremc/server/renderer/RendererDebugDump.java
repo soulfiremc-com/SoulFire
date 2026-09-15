@@ -207,6 +207,7 @@ public final class RendererDebugDump {
       passes.add("translucentParticles", quadsJson(sceneData.translucentParticles(), "translucentParticles"));
       passes.add("clouds", quadsJson(sceneData.clouds(), "clouds"));
       passes.add("weather", quadsJson(sceneData.weather(), "weather"));
+      passes.add("outlines", quadsJson(sceneData.outlines(), "outlines"));
       root.add("passes", passes);
 
       writeAtlases();
@@ -298,6 +299,7 @@ public final class RendererDebugDump {
       json.addProperty("translucentParticles", sceneData.translucentParticles().length);
       json.addProperty("clouds", sceneData.clouds().length);
       json.addProperty("weather", sceneData.weather().length);
+      json.addProperty("outlines", sceneData.outlines().length);
       json.addProperty("total", sceneData.totalQuadCount());
       return json;
     }
@@ -352,6 +354,9 @@ public final class RendererDebugDump {
       json.addProperty("color", hexArgb(vertex.color()));
       json.addProperty("overlayColor", hexArgb(vertex.overlayColor()));
       json.addProperty("shade", vertex.shade());
+      json.addProperty("lightColor", hexArgb(vertex.lightColor()));
+      json.addProperty("fragmentLightColor", hexArgb(vertex.fragmentLightColor()));
+      json.addProperty("colorSource", vertex.colorSource().name());
       json.addProperty("sampleArgb", hexArgb(material.texture().sample(vertex.u(), vertex.v(), ctx.animationTick())));
       return json;
     }
@@ -386,6 +391,7 @@ public final class RendererDebugDump {
       json.add("debugFlags", materialDebugFlagsJson(material));
       json.addProperty("colorWriteMask", hexMask(material.colorWriteMask()));
       json.add("uvTransform", uvTransformJson(material.uvTransform()));
+      json.addProperty("glintAlpha", material.glintAlpha());
       json.addProperty("sortOnUpload", material.sortOnUpload());
       json.addProperty("sortGroup", material.sortGroup());
       json.addProperty("viewScale", material.viewScale());
@@ -432,8 +438,6 @@ public final class RendererDebugDump {
       json.addProperty("vFromV", transform.vFromV());
       json.addProperty("uOffsetScale", transform.uOffsetScale());
       json.addProperty("vOffsetScale", transform.vOffsetScale());
-      json.addProperty("uPeriodTicks", transform.uPeriodTicks());
-      json.addProperty("vPeriodTicks", transform.vPeriodTicks());
       return json;
     }
 
