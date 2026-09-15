@@ -121,7 +121,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private final FeatureBuckets buckets;
   private SceneData.Builder activeBuilder;
 
-  private VanillaSubmitCollector(RenderContext ctx) {
+  VanillaSubmitCollector(RenderContext ctx) {
     this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0);
   }
 
@@ -265,7 +265,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return collector.buildScene();
   }
 
-  private SceneData buildScene() {
+  SceneData buildScene() {
     for (var orderedBuckets : bucketsByOrder.values()) {
       orderedBuckets.flushNameTags(this);
       orderedBuckets.flushSortedModelDraws();

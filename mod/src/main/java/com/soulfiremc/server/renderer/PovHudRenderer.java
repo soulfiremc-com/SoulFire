@@ -20,23 +20,28 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.soulfiremc.mod.util.SFModHelpers;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.state.gui.GlyphRenderState;
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
-import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
-import net.minecraft.client.renderer.state.gui.GuiTextRenderState;
+import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fc;
 import org.joml.Matrix4fc;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 final class PovHudRenderer {
   private static final int GUI_ITEM_SIZE = 16;
@@ -50,50 +55,95 @@ final class PovHudRenderer {
       return;
     }
 
-    var guiState = extractGuiRenderState(minecraft);
-    if (guiState == null) {
-      return;
-    }
-
-    var window = minecraft.getWindow();
-    var geometry = new GuiGeometry(
-      Math.max(1, window.getGuiScaledWidth()),
-      Math.max(1, window.getGuiScaledHeight()),
-      buffers.image().getWidth(),
-      buffers.image().getHeight()
-    );
-    var animationTick = ctx.animationTick();
-
-    guiState.forEachElement(element -> renderElement(element, geometry, buffers, animationTick), GuiRenderState.TraverseRange.ALL);
-    guiState.forEachItem(item -> renderItem(item, geometry, buffers, animationTick));
-    guiState.forEachText(text -> renderText(text, geometry, buffers, animationTick));
-  }
-
-  @Nullable
-  private static GuiRenderState extractGuiRenderState(Minecraft minecraft) {
+    var originalWindow = minecraft.getWindow();
+    var window = SFModHelpers.deepCopy(originalWindow);
+    window.setWidth(buffers.image().getWidth());
+    window.setHeight(buffers.image().getHeight());
+    window.setGuiScale(window.calculateScale(minecraft.options.guiScale().get(), minecraft.isEnforceUnicode()));
+    var screen = minecraft.gui.screen();
+    var windowState = minecraft.gameRenderer.gameRenderState().windowRenderState;
+    minecraft.window = window;
     try {
+      windowState.width = window.getWidth();
+      windowState.height = window.getHeight();
+      windowState.guiScale = window.getGuiScale();
+      if (screen != null && (screen.width != window.getGuiScaledWidth() || screen.height != window.getGuiScaledHeight())) {
+        screen.resize(window.getGuiScaledWidth(), window.getGuiScaledHeight());
+      }
       var deltaTracker = minecraft.getDeltaTracker() != null ? minecraft.getDeltaTracker() : DeltaTracker.ONE;
-      minecraft.gui.extractRenderState(deltaTracker, minecraft.level != null, minecraft.isGameLoadFinished());
-      return minecraft.gameRenderer.gameRenderState().guiRenderState;
-    } catch (Throwable t) {
-      RenderDebugTrace.current().inventoryIconIgnored("hud-extract:" + t.getClass().getSimpleName());
-      return null;
+      // POV runs after resources and the bot world load; the headless loop never completes a graphical frame.
+      minecraft.gui.extractRenderState(deltaTracker, minecraft.level != null, true);
+      var guiState = minecraft.gameRenderer.gameRenderState().guiRenderState;
+      renderState(ctx, guiState, buffers, window.getGuiScaledWidth(), window.getGuiScaledHeight(),
+        window.getGuiScale(), minecraft.options.getMenuBackgroundBlurriness());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Failed to render POV GUI" + (screen == null ? " HUD" : " screen " + screen.getClass().getName()), e);
     }
   }
 
-  private static void renderText(GuiTextRenderState text, GuiGeometry geometry, RasterBuffers buffers, long animationTick) {
-    text.ensurePrepared().visit(new Font.GlyphVisitor() {
-      @Override
-      public void acceptRenderable(net.minecraft.client.gui.font.TextRenderable renderable) {
-        renderElement(new GlyphRenderState(text.pose, renderable, text.scissor), geometry, buffers, animationTick);
+  static void renderState(RenderContext ctx, GuiRenderState state, RasterBuffers buffers,
+                          int width, int height, int scale, float blurRadius) {
+    var images = new IdentityHashMap<GuiElementRenderState, RendererAssets.TextureImage>();
+    state.forEachPictureInPicture(pip -> {
+      var image = GuiPictureRenderer.render(ctx, pip, scale);
+      addImage(state, images, image, pip.pose(), pip.x0(), pip.y0(), pip.x1(), pip.y1(), pip.scissorArea());
+    });
+    state.forEachItem(item -> {
+      var bounds = item.oversizedItemBounds();
+      if (bounds != null) {
+        var pip = new OversizedItemRenderState(item, bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
+        addImage(state, images, GuiPictureRenderer.render(ctx, pip, scale), item.pose(),
+          pip.x0(), pip.y0(), pip.x1(), pip.y1(), item.scissorArea());
+      } else {
+        var image = InventoryItemIconRenderer.renderGuiItemIcon(item.itemStackRenderState(), ctx.animationTick());
+        if (image != null) {
+          addImage(state, images, image, item.pose(), item.x(), item.y(), item.x() + GUI_ITEM_SIZE, item.y() + GUI_ITEM_SIZE, item.scissorArea());
+        }
       }
     });
+    prepareText(state);
+    renderPreparedState(state, buffers, width, height, ctx.animationTick(), blurRadius, images);
   }
 
-  private static void renderElement(GuiElementRenderState element, GuiGeometry geometry, RasterBuffers buffers, long animationTick) {
-    var texture = texture(element.textureSetup());
+  static void prepareText(GuiRenderState state) {
+    state.forEachText(text -> text.ensurePrepared().visit(new Font.GlyphVisitor() {
+      @Override
+      public void acceptRenderable(net.minecraft.client.gui.font.TextRenderable renderable) {
+        state.addGlyphToCurrentLayer(new GlyphRenderState(text.pose, renderable, text.scissor));
+      }
+    }));
+  }
+
+  static void addImage(GuiRenderState state, Map<GuiElementRenderState, RendererAssets.TextureImage> images,
+                       BufferedImage image, Matrix3x2fc pose, int x0, int y0, int x1, int y1,
+                       @Nullable ScreenRectangle scissor) {
+    var blit = new BlitRenderState(RenderPipelines.GUI_TEXTURED, TextureSetup.noTexture(), pose,
+      x0, y0, x1, y1, 0, 1, 0, 1, -1, scissor, null);
+    images.put(blit, RendererAssets.TextureImage.from(image, null));
+    state.addBlitToCurrentLayer(blit);
+  }
+
+  static void renderPreparedState(GuiRenderState state, RasterBuffers buffers, int width, int height,
+                                   long tick, float blurRadius, Map<GuiElementRenderState, RendererAssets.TextureImage> images) {
+    var geometry = new GuiGeometry(width, height, buffers.image().getWidth(), buffers.image().getHeight());
+    state.forEachElement(element -> renderElement(element, geometry, buffers, tick, images), GuiRenderState.TraverseRange.BEFORE_BLUR);
+    var blurred = new boolean[1];
+    state.forEachElement(element -> {
+      if (!blurred[0]) {
+        GuiBlur.apply(buffers, Math.round(blurRadius));
+        blurred[0] = true;
+      }
+      renderElement(element, geometry, buffers, tick, images);
+    }, GuiRenderState.TraverseRange.AFTER_BLUR);
+  }
+
+  private static void renderElement(GuiElementRenderState element, GuiGeometry geometry, RasterBuffers buffers, long animationTick, Map<GuiElementRenderState, RendererAssets.TextureImage> images) {
+    var texture = images.get(element);
     if (texture == null) {
-      return;
+      texture = texture(element.textureSetup());
+    }
+    if (texture == null) {
+      throw new IllegalStateException("Missing CPU texture " + element.textureSetup().texure0().texture().getLabel() + " for GUI element " + element.getClass().getName());
     }
 
     var consumer = new GuiVertexConsumer();
@@ -108,43 +158,6 @@ final class PovHudRenderer {
     for (var i = 0; i + 3 < vertices.size(); i += 4) {
       rasterizeQuad(vertices.get(i), vertices.get(i + 1), vertices.get(i + 2), vertices.get(i + 3), material, clip, geometry, buffers, animationTick);
     }
-  }
-
-  private static void renderItem(GuiItemRenderState item, GuiGeometry geometry, RasterBuffers buffers, long animationTick) {
-    var image = InventoryItemIconRenderer.renderGuiItemIcon(item.itemStackRenderState(), animationTick);
-    if (image == null) {
-      return;
-    }
-
-    var texture = RendererAssets.TextureImage.from(image, null);
-    var material = RenderMaterial.create(
-      texture,
-      RendererAssets.AlphaMode.TRANSLUCENT,
-      0xFFFFFFFF,
-      true,
-      0.0F,
-      1
-    );
-    var topLeft = transform(item.pose(), item.x(), item.y());
-    var bottomLeft = transform(item.pose(), item.x(), item.y() + GUI_ITEM_SIZE);
-    var bottomRight = transform(item.pose(), item.x() + GUI_ITEM_SIZE, item.y() + GUI_ITEM_SIZE);
-    var topRight = transform(item.pose(), item.x() + GUI_ITEM_SIZE, item.y());
-    var clip = clipRect(item.scissorArea(), geometry);
-    rasterizeQuad(
-      new GuiVertex(topLeft.x(), topLeft.y(), 0.0F, 0.0F, 0.0F, 0xFFFFFFFF),
-      new GuiVertex(bottomLeft.x(), bottomLeft.y(), 0.0F, 0.0F, 1.0F, 0xFFFFFFFF),
-      new GuiVertex(bottomRight.x(), bottomRight.y(), 0.0F, 1.0F, 1.0F, 0xFFFFFFFF),
-      new GuiVertex(topRight.x(), topRight.y(), 0.0F, 1.0F, 0.0F, 0xFFFFFFFF),
-      material,
-      clip,
-      geometry,
-      buffers,
-      animationTick
-    );
-  }
-
-  private static Vector2f transform(Matrix3x2fc pose, float x, float y) {
-    return pose.transformPosition(x, y, new Vector2f());
   }
 
   @Nullable
@@ -207,8 +220,8 @@ final class PovHudRenderer {
 
     var minX = Math.max(0, (int) Math.floor(scissor.left() * geometry.scaleX()));
     var minY = Math.max(0, (int) Math.floor(scissor.top() * geometry.scaleY()));
-    var maxX = Math.min(geometry.targetWidth() - 1, (int) Math.ceil((scissor.right() + 1) * geometry.scaleX()) - 1);
-    var maxY = Math.min(geometry.targetHeight() - 1, (int) Math.ceil((scissor.bottom() + 1) * geometry.scaleY()) - 1);
+    var maxX = Math.min(geometry.targetWidth() - 1, (int) Math.ceil(scissor.right() * geometry.scaleX()) - 1);
+    var maxY = Math.min(geometry.targetHeight() - 1, (int) Math.ceil(scissor.bottom() * geometry.scaleY()) - 1);
     return new ClipRect(minX, minY, maxX, maxY);
   }
 

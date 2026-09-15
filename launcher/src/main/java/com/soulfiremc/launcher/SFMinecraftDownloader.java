@@ -23,6 +23,8 @@ import com.google.gson.JsonParser;
 import lombok.SneakyThrows;
 import net.fabricmc.loader.impl.util.SystemProperties;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -30,6 +32,9 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 
 public final class SFMinecraftDownloader {
   private static final String MINECRAFT_VERSION = System.getProperty("sf.mcVersionOverride", "26.2");
@@ -65,6 +70,85 @@ public final class SFMinecraftDownloader {
     }
   }
 
+  private static JsonObject versionInfo() {
+    var versionUrl = getUrl(MANIFEST_URL)
+      .getAsJsonArray("versions")
+      .asList()
+      .stream()
+      .map(JsonElement::getAsJsonObject)
+      .filter(v -> MINECRAFT_VERSION.equals(v.get("id").getAsString()))
+      .map(v -> v.get("url").getAsString())
+      .findFirst()
+      .orElseThrow(() -> new RuntimeException("Minecraft version " + MINECRAFT_VERSION + " not found in manifest"));
+    return getUrl(versionUrl);
+  }
+
+  @SneakyThrows
+  public static String prepareFontAssets(Path basePath) {
+    var assetDirectory = basePath.resolve("assets");
+    var indexId = "soulfire-fonts-" + MINECRAFT_VERSION;
+    var indexPath = assetDirectory.resolve("indexes").resolve(indexId + ".json");
+    JsonObject index;
+    if (Files.exists(indexPath)) {
+      index = JsonParser.parseString(Files.readString(indexPath)).getAsJsonObject();
+    } else {
+      var assetIndex = getUrl(versionInfo().getAsJsonObject("assetIndex").get("url").getAsString());
+      var fonts = new JsonObject();
+      for (var entry : assetIndex.getAsJsonObject("objects").entrySet()) {
+        if (entry.getKey().startsWith("minecraft/font/") || entry.getKey().startsWith("minecraft/textures/font/")) {
+          fonts.add(entry.getKey(), entry.getValue());
+        }
+      }
+      index = new JsonObject();
+      index.add("objects", fonts);
+    }
+
+    for (var entry : index.getAsJsonObject("objects").entrySet()) {
+      var hash = entry.getValue().getAsJsonObject().get("hash").getAsString();
+      if (!hash.matches("[0-9a-f]{40}")) {
+        throw new IOException("Invalid font asset hash for " + entry.getKey());
+      }
+      var objectPath = hash.substring(0, 2) + "/" + hash;
+      var destination = assetDirectory.resolve("objects").resolve(objectPath);
+      if (!Files.exists(destination) || !sha1(destination).equals(hash)) {
+        IO.println("Downloading Minecraft font asset: " + entry.getKey());
+        Files.createDirectories(destination.getParent());
+        var temporary = Files.createTempFile(destination.getParent(), "font-", ".tmp");
+        try {
+          try (var input = URI.create("https://resources.download.minecraft.net/" + objectPath).toURL().openStream()) {
+            Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);
+          }
+          if (!sha1(temporary).equals(hash)) {
+            throw new IOException("Font asset checksum mismatch: " + entry.getKey());
+          }
+          Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+          Files.deleteIfExists(temporary);
+        }
+      }
+    }
+    if (!Files.exists(indexPath)) {
+      Files.createDirectories(indexPath.getParent());
+      var temporary = Files.createTempFile(indexPath.getParent(), "font-index-", ".tmp");
+      try {
+        Files.writeString(temporary, index.toString());
+        Files.move(temporary, indexPath, StandardCopyOption.REPLACE_EXISTING);
+      } finally {
+        Files.deleteIfExists(temporary);
+      }
+    }
+    return indexId;
+  }
+
+  @SneakyThrows
+  private static String sha1(Path path) {
+    var digest = MessageDigest.getInstance("SHA-1");
+    try (var input = new DigestInputStream(Files.newInputStream(path), digest)) {
+      input.transferTo(OutputStream.nullOutputStream());
+    }
+    return HexFormat.of().formatHex(digest.digest());
+  }
+
   @SneakyThrows
   public static void loadAndInjectMinecraftJar(Path basePath) {
     var minecraftJarPath = getMinecraftClientJarPath(basePath);
@@ -72,16 +156,7 @@ public final class SFMinecraftDownloader {
       IO.println("Minecraft already downloaded, continuing");
     } else {
       IO.println("Downloading Minecraft...");
-      var versionUrl = getUrl(MANIFEST_URL)
-        .getAsJsonArray("versions")
-        .asList()
-        .stream()
-        .map(JsonElement::getAsJsonObject)
-        .filter(v -> MINECRAFT_VERSION.equals(v.get("id").getAsString()))
-        .map(v -> v.get("url").getAsString())
-        .findFirst()
-        .orElseThrow(() -> new RuntimeException("Minecraft version " + MINECRAFT_VERSION + " not found in manifest"));
-      var versionInfo = getUrl(versionUrl);
+      var versionInfo = versionInfo();
 
       if (!Files.exists(minecraftJarPath)) {
         var clientUrl = versionInfo

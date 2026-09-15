@@ -17,16 +17,21 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import net.minecraft.client.gui.screens.Screen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(Screen.class)
-public class MixinScreen {
-  @Inject(method = "extractPanorama", at = @At("HEAD"), cancellable = true)
-  private void extractPanoramaHook(CallbackInfo ci) {
-    ci.cancel();
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
+
+@Mixin(targets = "net.minecraft.client.gui.font.providers.UnihexProvider$Glyph$2")
+public class MixinUnihexGlyph {
+  @Redirect(method = "upload", at = @At(value = "INVOKE",
+    target = "Lorg/lwjgl/system/MemoryUtil;memByteBuffer(Ljava/nio/IntBuffer;)Ljava/nio/ByteBuffer;"))
+  private ByteBuffer copyGlyphBytes(IntBuffer pixels) {
+    var bytes = ByteBuffer.allocateDirect(pixels.remaining() * Integer.BYTES).order(ByteOrder.nativeOrder());
+    bytes.asIntBuffer().put(pixels.duplicate());
+    return bytes;
   }
 }

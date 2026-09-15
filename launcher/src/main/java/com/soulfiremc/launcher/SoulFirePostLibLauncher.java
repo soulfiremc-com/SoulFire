@@ -84,7 +84,12 @@ public final class SoulFirePostLibLauncher {
       setupManagedMods(basePath);
       SFMinecraftDownloader.loadAndInjectMinecraftJar(basePath);
 
-      KnotClient.main(new String[]{"--username", "SoulFire"});
+      var assetIndex = SFMinecraftDownloader.prepareFontAssets(basePath);
+      KnotClient.main(new String[]{
+        "--username", "SoulFire",
+        "--assetsDir", basePath.resolve("assets").toAbsolutePath().toString(),
+        "--assetIndex", assetIndex
+      });
     } catch (Throwable t) {
       // Catches fabric errors during launch
       System.err.println("Fatal error during SoulFire launch:");

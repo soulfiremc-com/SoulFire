@@ -17,16 +17,25 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import net.minecraft.client.gui.screens.Screen;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
+import net.minecraft.client.gui.font.providers.BitmapProvider;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(Screen.class)
-public class MixinScreen {
-  @Inject(method = "extractPanorama", at = @At("HEAD"), cancellable = true)
-  private void extractPanoramaHook(CallbackInfo ci) {
-    ci.cancel();
+@Mixin(targets = "net.minecraft.client.gui.font.providers.BitmapProvider$Glyph$1")
+public class MixinBitmapGlyph {
+  @Shadow
+  @Final
+  private BitmapProvider.Glyph this$0;
+
+  @Inject(method = "upload", at = @At("TAIL"))
+  private void mirrorGlyphPixels(int x, int y, GpuTexture texture, CallbackInfo ci) {
+    RendererRuntimeTextureMirror.mirrorWrite(texture, this$0.imageData().image, 0, 0,
+      x, y, this$0.width(), this$0.height(), this$0.offsetX(), this$0.offsetY());
   }
 }

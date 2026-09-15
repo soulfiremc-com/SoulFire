@@ -17,6 +17,12 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.SpriteLoader;
@@ -36,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 @Mixin(TextureAtlas.class)
-public abstract class MixinTextureAtlas {
+public abstract class MixinTextureAtlas extends AbstractTexture {
   @Shadow
   @Final
   @Mutable
@@ -76,6 +82,7 @@ public abstract class MixinTextureAtlas {
 
   @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
   private void uploadHook(SpriteLoader.Preparations preparations, CallbackInfo ci) {
+    this.releaseTextures();
     this.clearTextureData();
     this.texturesByName = Map.copyOf(preparations.regions());
     this.missingSprite = this.texturesByName.get(MissingTextureAtlasSprite.getLocation());
@@ -90,6 +97,36 @@ public abstract class MixinTextureAtlas {
     this.maxMipLevel = preparations.mipLevel();
     this.mipLevelCount = preparations.mipLevel() + 1;
     ci.cancel();
+  }
+
+  @Override
+  protected synchronized void releaseTextures() {
+    if (texture != null) {
+      RendererRuntimeTextureMirror.unregister(((TextureAtlas) (Object) this).location());
+    }
+    super.releaseTextures();
+  }
+
+  @Override
+  public synchronized GpuTextureView getTextureView() {
+    if (textureView == null) {
+      var atlas = (TextureAtlas) (Object) this;
+      var device = RenderSystem.getDevice();
+      texture = device.createTexture(atlas.location()::toString, 5, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
+      textureView = device.createTextureView(texture);
+      try (var pixels = new NativeImage(width, height, true)) {
+        for (var sprite : sprites) {
+          var contents = sprite.contents();
+          for (var y = 0; y < contents.height(); y++) {
+            for (var x = 0; x < contents.width(); x++) {
+              pixels.setPixel(sprite.getX() + x, sprite.getY() + y, contents.originalImage.getPixel(x, y));
+            }
+          }
+        }
+        RendererRuntimeTextureMirror.register(atlas.location(), texture, pixels);
+      }
+    }
+    return textureView;
   }
 
   @Inject(method = "cycleAnimationFrames", at = @At("HEAD"), cancellable = true)

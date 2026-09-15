@@ -48,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -2005,7 +2006,15 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           throw Status.FAILED_PRECONDITION.withDescription("Bot player is not available").asRuntimeException();
         }
 
-        executeAction(activeBot, player::sendOpenInventory);
+        executeAction(activeBot, () -> {
+          var minecraft = activeBot.minecraft();
+          if (minecraft.gameMode.isServerControlledInventory()) {
+            player.sendOpenInventory();
+          } else {
+            minecraft.tutorial.onOpenInventory();
+            minecraft.gui.setScreen(new InventoryScreen(player));
+          }
+        });
         return BotOpenInventoryResponse.newBuilder()
           .setSuccess(true)
           .build();

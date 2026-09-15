@@ -118,7 +118,7 @@ final class SoftwareRasterizer {
       clipMaxY,
       new Viewport(width, height, 0.0F, 0.0F),
       RasterFogState.DISABLED,
-      RasterFrontend.GUI_ITEM,
+      RasterFrontend.GUI_SCREEN,
       false
     );
   }
@@ -280,7 +280,7 @@ final class SoftwareRasterizer {
         }
 
         if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT && !material.blendState().blends()) {
-          if (material.depthWrite()) {
+          if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
             depthBuffer[rasterIndex] = depth;
           }
           writeColor(colorBuffer, rasterIndex, forceOpaque(color), material);
@@ -288,7 +288,7 @@ final class SoftwareRasterizer {
         }
 
         writeColor(colorBuffer, rasterIndex, color, material);
-        if (material.depthWrite()) {
+        if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
           depthBuffer[rasterIndex] = depth;
         }
       }
@@ -299,6 +299,7 @@ final class SoftwareRasterizer {
     return switch (frontend) {
       case WORLD -> material.depthTest().passes(incoming, stored);
       case GUI_ITEM -> incoming <= stored;
+      case GUI_SCREEN -> true;
     };
   }
 
@@ -694,7 +695,8 @@ final class SoftwareRasterizer {
 
   private enum RasterFrontend {
     WORLD,
-    GUI_ITEM
+    GUI_ITEM,
+    GUI_SCREEN
   }
 
   private record Viewport(int width, int height, float projectionM22, float projectionM32) {}

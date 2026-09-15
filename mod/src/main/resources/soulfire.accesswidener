@@ -174,3 +174,14 @@ accessible method net/minecraft/client/renderer/texture/TextureAtlas getWidth ()
 accessible method net/minecraft/client/renderer/texture/TextureAtlas getHeight ()I
 accessible method net/minecraft/client/renderer/texture/SkinTextureDownloader processLegacySkin (Lcom/mojang/blaze3d/platform/NativeImage;Ljava/lang/String;)Lcom/mojang/blaze3d/platform/NativeImage;
 accessible field net/minecraft/client/renderer/texture/SpriteContents originalImage Lcom/mojang/blaze3d/platform/NativeImage;
+
+accessible field net/minecraft/client/Minecraft window Lcom/mojang/blaze3d/platform/Window;
+mutable field net/minecraft/client/Minecraft window Lcom/mojang/blaze3d/platform/Window;
+accessible field net/minecraft/client/renderer/GameRenderer guiRenderer Lnet/minecraft/client/gui/render/GuiRenderer;
+accessible field net/minecraft/client/gui/render/GuiRenderer pictureInPictureRenderers Ljava/util/Map;
+accessible method net/minecraft/client/gui/render/pip/PictureInPictureRenderer renderToTexture (Lnet/minecraft/client/renderer/state/gui/pip/PictureInPictureRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;)V
+accessible method net/minecraft/client/gui/render/pip/PictureInPictureRenderer getTranslateY (II)F
+
+accessible class net/minecraft/client/gui/font/providers/BitmapProvider$Glyph
+accessible class net/minecraft/client/gui/font/providers/BitmapProvider$ImageDataHolder
+accessible field net/minecraft/client/gui/font/providers/BitmapProvider$ImageDataHolder image Lcom/mojang/blaze3d/platform/NativeImage;
