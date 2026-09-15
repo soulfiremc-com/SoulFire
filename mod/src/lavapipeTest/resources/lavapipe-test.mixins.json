@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.soulfiremc.manual.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["LavapipeTestMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -23,13 +23,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.pip.OversizedItemRenderer;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
-import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState;
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.awt.image.BufferedImage;
@@ -81,18 +78,7 @@ final class GuiPictureRenderer {
       modelView.pushMatrix();
       try {
         modelView.identity();
-        if (state instanceof GuiEntityRenderState entity) {
-          var translation = entity.translation();
-          pose.translate(translation.x(), translation.y(), translation.z());
-          pose.mulPose(entity.rotation());
-          var camera = new CameraRenderState();
-          if (entity.overrideCameraAngle() != null) {
-            camera.orientation = entity.overrideCameraAngle().conjugate(new Quaternionf()).rotateY((float) Math.PI);
-          }
-          Minecraft.getInstance().getEntityRenderDispatcher().submit(entity.renderState(), camera, 0, 0, 0, pose, collector);
-        } else {
-          ((PictureInPictureRenderer<PictureInPictureRenderState>) renderer).renderToTexture(state, pose, collector);
-        }
+        ((PictureInPictureRenderer<PictureInPictureRenderState>) renderer).renderToTexture(state, pose, collector);
         return rasterize(collector.buildScene(), width, height, new Matrix4f(modelView), ctx.animationTick());
       } finally {
         modelView.popMatrix();

@@ -20,7 +20,6 @@ package com.soulfiremc.server.renderer;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.soulfiremc.mod.util.SFModHelpers;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -55,14 +54,12 @@ final class PovHudRenderer {
       return;
     }
 
-    var originalWindow = minecraft.getWindow();
-    var window = SFModHelpers.deepCopy(originalWindow);
+    var window = minecraft.getWindow();
     window.setWidth(buffers.image().getWidth());
     window.setHeight(buffers.image().getHeight());
     window.setGuiScale(window.calculateScale(minecraft.options.guiScale().get(), minecraft.isEnforceUnicode()));
     var screen = minecraft.gui.screen();
     var windowState = minecraft.gameRenderer.gameRenderState().windowRenderState;
-    minecraft.window = window;
     try {
       windowState.width = window.getWidth();
       windowState.height = window.getHeight();

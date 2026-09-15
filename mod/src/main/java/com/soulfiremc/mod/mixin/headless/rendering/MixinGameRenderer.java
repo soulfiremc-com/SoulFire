@@ -41,9 +41,4 @@ public class MixinGameRenderer {
     ci.cancel();
   }
 
-  @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
-  private void tickHook(CallbackInfo ci) {
-    ci.cancel();
-  }
-
 }

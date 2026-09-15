@@ -15,12 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.mod.mixin.soulfire.api.event;
+package com.soulfiremc.manual.mixin;
 
-import com.soulfiremc.server.api.SoulFireAPI;
-import com.soulfiremc.server.api.event.bot.BotPostTickEvent;
-import com.soulfiremc.server.api.event.bot.BotPreTickEvent;
-import com.soulfiremc.server.bot.BotConnection;
+import com.soulfiremc.server.renderer.LavapipeComparison;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -28,20 +25,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
-public class MixinMinecraft {
-  @Inject(method = "tick", at = @At("HEAD"))
-  private void onTickPre(CallbackInfo ci) {
-    var connection = BotConnection.currentOptional().orElse(null);
-    if (connection == null) {
-      return;
-    }
-    connection.botControl().tick();
-    SoulFireAPI.postEvent(new BotPreTickEvent(connection));
-  }
-
-  @Inject(method = "tick", at = @At("RETURN"))
-  private void onTickPost(CallbackInfo ci) {
-    BotConnection.currentOptional()
-      .ifPresent(connection -> SoulFireAPI.postEvent(new BotPostTickEvent(connection)));
+public class LavapipeTestMixin {
+  @Inject(method = "runTick", at = @At("TAIL"))
+  private void capture(boolean advanceGameTime, CallbackInfo ci) {
+    LavapipeComparison.afterFrame((Minecraft) (Object) this);
   }
 }

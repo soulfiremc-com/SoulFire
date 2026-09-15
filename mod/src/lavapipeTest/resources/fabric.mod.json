@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "soulfire_lavapipe_test",
+  "version": "1.0.0",
+  "name": "SoulFire manual Lavapipe test",
+  "environment": "client",
+  "accessWidener": "soulfire.accesswidener",
+  "mixins": ["lavapipe-test.mixins.json", "lavapipe-mirror.mixins.json"],
+  "depends": {"fabricloader": "*", "minecraft": "26.2"}
+}

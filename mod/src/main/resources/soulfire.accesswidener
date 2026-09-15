@@ -188,3 +188,24 @@ accessible field net/minecraft/client/gui/font/providers/BitmapProvider$ImageDat
 
 accessible field net/minecraft/client/gui/Hud waypointStyles Lnet/minecraft/client/resources/WaypointStyleManager;
 mutable field net/minecraft/client/gui/Hud waypointStyles Lnet/minecraft/client/resources/WaypointStyleManager;
+
+accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher options Lnet/minecraft/client/Options;
+mutable field net/minecraft/client/renderer/entity/EntityRenderDispatcher options Lnet/minecraft/client/Options;
+
+accessible field net/minecraft/client/renderer/GameRenderer lightmapRenderStateExtractor Lnet/minecraft/client/renderer/LightmapRenderStateExtractor;
+mutable field net/minecraft/client/renderer/GameRenderer lightmapRenderStateExtractor Lnet/minecraft/client/renderer/LightmapRenderStateExtractor;
+
+accessible field net/minecraft/client/renderer/GameRenderer renderBuffers Lnet/minecraft/client/renderer/RenderBuffers;
+
+accessible field net/minecraft/client/renderer/GameRenderer featureRenderDispatcher Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;
+mutable field net/minecraft/client/renderer/GameRenderer featureRenderDispatcher Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;
+
+accessible field net/minecraft/client/renderer/feature/FeatureRenderDispatcher stagedVertexBuffer Lnet/minecraft/client/renderer/StagedVertexBuffer;
+mutable field net/minecraft/client/renderer/feature/FeatureRenderDispatcher stagedVertexBuffer Lnet/minecraft/client/renderer/StagedVertexBuffer;
+
+accessible field net/minecraft/client/resources/SplashManager splashes Ljava/util/List;
+
+mutable field net/minecraft/client/renderer/GameRenderer guiRenderer Lnet/minecraft/client/gui/render/GuiRenderer;
+
+accessible field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;
+mutable field com/mojang/blaze3d/platform/Window eventHandler Lcom/mojang/blaze3d/platform/WindowEventHandler;

@@ -1,3 +1,4 @@
+import java.time.Duration
 import org.gradle.api.file.FileCollection
 import org.gradle.process.CommandLineArgumentProvider
 
@@ -285,4 +286,68 @@ jmh {
   warmupIterations = 2
   iterations = 2
   fork = 2
+}
+
+// Manual native rendering probe. Neither test nor check depends on this source set.
+val lavapipeTest = sourceSets.create("lavapipeTest") {
+  compileClasspath += sourceSets.main.get().output + configurations.compileClasspath.get()
+  runtimeClasspath += sourceSets.main.get().output + configurations.runtimeClasspath.get()
+}
+val lavapipeOutput = layout.buildDirectory.dir("lavapipe-test/output")
+val lavapipeRun = layout.buildDirectory.dir("lavapipe-test/run")
+val lavapipeIcd = providers.gradleProperty("lavapipeIcd")
+  .orElse("/usr/share/vulkan/icd.d/lvp_icd.x86_64.json")
+
+loom {
+  runs {
+    create("lavapipeTest") {
+      client()
+      sourceSet.set(lavapipeTest.name)
+      runDirectory.set(lavapipeRun)
+      systemProperties.put("fabric.debug.disableModIds", "soulfire,viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock,spark")
+      systemProperties.put("sf.lavapipe.output", lavapipeOutput.map { it.asFile.absolutePath })
+      jvmArguments.addAll("--enable-native-access=ALL-UNNAMED", "-Xmx2G")
+      programArguments.addAll("--graphicsBackend", "VULKAN", "--width", "854", "--height", "480", "--username", "LavapipeTest")
+      programArguments.addAll("--quickPlayMultiplayer", providers.gradleProperty("lavapipeServer").getOrElse("127.0.0.1:25640"))
+      environmentVars.put("VK_DRIVER_FILES", lavapipeIcd)
+      environmentVars.put("ALSOFT_DRIVERS", "null")
+    }
+  }
+}
+
+tasks.named<ProcessResources>(lavapipeTest.processResourcesTaskName) {
+  from("src/main/resources/soulfire.accesswidener")
+}
+
+tasks.named("runLavapipeTest") {
+  description = "Manually compare vanilla Vulkan on Lavapipe with the POV GUI renderer. Requires a local Minecraft server."
+  timeout.set(Duration.ofMinutes(3))
+  val output = lavapipeOutput.get().asFile
+  val run = lavapipeRun.get().asFile
+  val icd = lavapipeIcd.get()
+  doFirst {
+    require(File(icd).isFile) { "Lavapipe ICD not found: $icd. Set -PlavapipeIcd=/path/to/lvp_icd.json" }
+    output.mkdirs()
+    listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt").forEach {
+      output.resolve(it).delete()
+    }
+    run.mkdirs()
+    run.resolve("options.txt").writeText("""
+      onboardAccessibility:false
+      pauseOnLostFocus:false
+      guiScale:2
+      renderDistance:2
+      simulationDistance:2
+      maxFps:30
+      enableVsync:false
+      fullscreen:false
+      tutorialStep:none
+      soundCategory_master:0.0
+    """.trimIndent() + "\n")
+  }
+  doLast {
+    check(output.resolve("metrics.json").isFile) {
+      "Lavapipe comparison did not complete. Inspect build/lavapipe-test/run/logs/latest.log."
+    }
+  }
 }
