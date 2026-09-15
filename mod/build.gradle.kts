@@ -329,7 +329,7 @@ tasks.named("runLavapipeTest") {
   val icd = lavapipeIcd.get()
   val scene = lavapipeScene.get()
   doFirst {
-    require(scene in listOf("items", "inventory")) { "Unknown scene: $scene" }
+    require(scene in listOf("items", "inventory", "stress-wide", "stress-transparency", "stress-entities", "stress-hud")) { "Unknown scene: $scene" }
     require(File(icd).isFile) { "Lavapipe ICD not found: $icd. Set -PlavapipeIcd=/path/to/lvp_icd.json" }
     output.mkdirs()
     listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt", "scene.json", "software-trace.json").forEach {
@@ -340,8 +340,8 @@ tasks.named("runLavapipeTest") {
       onboardAccessibility:false
       pauseOnLostFocus:false
       guiScale:2
-      renderDistance:2
-      simulationDistance:2
+      renderDistance:${if (scene.startsWith("stress-")) 4 else 2}
+      simulationDistance:5
       maxFps:30
       enableVsync:false
       fullscreen:false

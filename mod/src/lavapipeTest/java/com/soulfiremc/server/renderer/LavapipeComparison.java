@@ -26,6 +26,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -46,7 +47,11 @@ import java.util.Locale;
 public final class LavapipeComparison {
   private static final long START = System.nanoTime();
   private static final Path OUTPUT = Path.of(System.getProperty("sf.lavapipe.output"));
-  private static final boolean INVENTORY = System.getProperty("sf.lavapipe.scene", "items").equals("inventory");
+  private static final String SCENE = System.getProperty("sf.lavapipe.scene", "items");
+  private static final boolean STRESS = SCENE.startsWith("stress-");
+  private static final boolean INVENTORY = SCENE.equals("inventory");
+  private static long particleSeed;
+  private static long entitySeed;
   private static boolean prepared;
   private static int frames;
   private static boolean capturing;
@@ -55,9 +60,35 @@ public final class LavapipeComparison {
   private LavapipeComparison() {}
 
   public static void beforeExtract(Minecraft minecraft) {
-    if (INVENTORY) {
+    if (STRESS && prepared && !finished) {
+      StressComparisonScene.freeze(minecraft);
+    } else if (INVENTORY) {
       InventoryComparisonScene.freezeEnvironment(minecraft);
     }
+  }
+
+  public static void resetEntitySeed(long seed) {
+    entitySeed = seed;
+  }
+
+  public static RandomSource entityRandom() {
+    return RandomSource.create(entitySeed++);
+  }
+
+  public static void resetParticleSeed(long seed) {
+    particleSeed = seed;
+  }
+
+  public static RandomSource particleRandom() {
+    return RandomSource.create(particleSeed++);
+  }
+
+  public static boolean isStressScene() {
+    return STRESS;
+  }
+
+  public static boolean freezeSimulation() {
+    return STRESS && prepared && !finished;
   }
 
   public static void afterFrame(Minecraft minecraft) {
@@ -72,6 +103,7 @@ public final class LavapipeComparison {
       return;
     }
     if (!prepared) {
+      if (STRESS && !StressComparisonScene.ready(minecraft)) return;
       var info = RenderSystem.getDevice().getDeviceInfo();
       if (!info.backendName().toLowerCase(Locale.ROOT).contains("vulkan")
         || !info.driverInfo().toLowerCase(Locale.ROOT).contains("llvmpipe")) {
@@ -79,7 +111,9 @@ public final class LavapipeComparison {
       }
       minecraft.options.guiScale().set(2);
       minecraft.options.pauseOnLostFocus = false;
-      if (INVENTORY) {
+      if (STRESS) {
+        StressComparisonScene.prepare(minecraft, SCENE);
+      } else if (INVENTORY) {
         InventoryComparisonScene.prepare(minecraft);
       } else {
         minecraft.gui.setScreen(new ComparisonScreen());
@@ -88,7 +122,7 @@ public final class LavapipeComparison {
       return;
     }
     minecraft.gui.toastManager().clear();
-    if (++frames < (INVENTORY ? 60 : 8) || capturing) {
+    if (++frames < (INVENTORY || STRESS ? 60 : 8) || capturing || STRESS && !minecraft.levelRenderer.hasRenderedAllSections()) {
       return;
     }
     capturing = true;
@@ -113,7 +147,8 @@ public final class LavapipeComparison {
     }
   }
 
-  private static BufferedImage renderSoftware(Minecraft minecraft, int width, int height) {
+  private static BufferedImage renderSoftware(Minecraft minecraft, int width, int height) throws IOException {
+    if (STRESS) return StressComparisonScene.renderSoftware(minecraft, width, height, OUTPUT, SCENE);
     if (INVENTORY) {
       return InventoryComparisonScene.renderSoftware(minecraft, width, height, OUTPUT);
     }
@@ -193,7 +228,7 @@ public final class LavapipeComparison {
     }
     Files.writeString(OUTPUT.resolve("metrics.json"), report);
     System.out.println("Lavapipe comparison written to " + OUTPUT + "\n" + report);
-    if (changed != 0) {
+    if (changed != 0 && !STRESS) {
       throw new IllegalStateException("Renderer parity failed: " + changed + " pixels differ; maximum channel error " + maximum);
     }
   }

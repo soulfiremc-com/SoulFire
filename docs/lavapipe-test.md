@@ -64,9 +64,53 @@ The server's world, spawn location, time, weather, and the client's default skin
 The software renderer uses the native camera's position and FOV. Its distance limit is 32 blocks; the native render distance is two chunks.
 Those distance settings do not guarantee identical chunk culling at the scene boundary.
 
+## Compare the stress scenes
+
+The four stress views share a hardcoded stage on the client. Use a flat Overworld server with a view distance of at least three chunks.
+The stage replaces nearby blocks on the client and adds an entity gallery. It does not modify the server's world.
+
+Run one view:
+
+```sh
+./gradlew :mod:runLavapipeTest -PlavapipeScene=stress-wide
+```
+
+Run all four views in sequence:
+
+```sh
+for scene in stress-wide stress-transparency stress-entities stress-hud; do
+  ./gradlew :mod:runLavapipeTest -PlavapipeScene="$scene" || break
+done
+```
+
+| Scene | Camera and main features |
+| --- | --- |
+| `stress-wide` | Elevated view of the entity gallery, block models, beacon, portals, displays, particles, and HUD |
+| `stress-transparency` | View through water, glass, stained glass, ice, slime, honey, leaves, and a portal |
+| `stress-entities` | Close view of armor poses, enchanted equipment, glow, invisibility, passengers, leashes, and a guardian beam |
+| `stress-hud` | Underwater view at sunset with rain, fire, freezing, pumpkin overlay, title, subtitle, effects, and HUD |
+
+The gallery creates every registered entity type with a client factory. A remote player and an owned fishing hook cover the types that need special construction.
+The stage also adds 20 posed armor stands, eight leashed sheep, a passenger stack, and block, item, and text displays.
+Display transforms include nonuniform and mirrored scales. Text displays use all four billboard modes.
+Particles include smoke, flame, portals, explosions, dust, block fragments, and items.
+
+Each `scene.json` lists the actual entity, block, and particle counts. It also lists entity types without a usable factory.
+These counts describe stage contents, not visibility. Dense geometry hides some objects; inspect the native image before claiming coverage of a feature.
+The fixture does not cover every entity variant, container screen, display interpolation phase, or combination of effects.
+
+The test fixes the camera, world clocks, entity ticks, particle generators, lightning seed, and light intensity.
+Texture atlas animations stay on their first frame. Glint remains visible with its motion stopped.
+The test freezes simulation after construction and uses the same state for both renderers.
+The software distance uses the client's effective render distance, including the server's limit.
+Chunk boundary culling can still differ between renderers.
+
+These scenes are exploratory: pixel differences do not fail the task. A successful run means that both images and metrics were produced.
+The original `items` and `inventory` scenes still fail on any RGB pixel difference.
+
 ## Read the results
 
-Outputs are separated under `mod/build/lavapipe-test/output/items` and `mod/build/lavapipe-test/output/inventory`:
+Each scene writes its outputs under `mod/build/lavapipe-test/output/<scene>`:
 
 | File | Contents |
 | --- | --- |
@@ -76,13 +120,13 @@ Outputs are separated under `mod/build/lavapipe-test/output/items` and `mod/buil
 | `comparison.png` | Lavapipe, SoulFire, and diff, from left to right |
 | `metrics.json` | Changed pixels, pixels with channel error above two, maximum error, and mean absolute channel error |
 | `device.txt` | Graphics backend, driver, and device details |
-| `scene.json` | Inventory scene camera and world metadata |
-| `software-trace.json` | Inventory scene software renderer diagnostics |
+| `scene.json` | Camera metadata and stress-stage coverage counts |
+| `software-trace.json` | World scene software renderer diagnostics |
 
 Inventory mode also reports errors inside the inventory rectangle and outside it. These regions help separate UI differences from the world and HUD.
 
 The task rejects an unexpected backend or driver, missing output, and a blank reference image.
-It has a three-minute process timeout. Pixel differences are reported without a pass threshold because this test establishes a reference.
+It has a three-minute process timeout. Stress scenes report differences; the item and inventory baselines require exact RGB parity.
 
 For startup or connection failures, inspect `mod/build/lavapipe-test/run/logs/latest.log`.
 Lavapipe's device name contains `llvmpipe`; `backendName=Vulkan` distinguishes it from the OpenGL driver.
@@ -93,6 +137,6 @@ The default `items` fixture covers flat items, block models, special models, fon
 Both renderers use the same item list and coordinates. Vanilla performs its own geometry submission, shader execution, and rasterization.
 The software image is captured before asynchronous framebuffer readback completes, avoiding additional world ticks during that wait.
 
-The `inventory` fixture includes the world, nearby player, held items, inventory preview, and HUD. It exposes differences without asserting visual parity.
-Neither fixture covers all locator markers or every container.
+The `inventory` fixture includes the world, nearby player, held items, inventory preview, and HUD. It requires exact RGB pixel parity.
+The stress fixtures add locator markers, but these tests do not cover every container.
 It also does not measure production performance or prove that native rendering works with SoulFire's concurrent bot instances.
