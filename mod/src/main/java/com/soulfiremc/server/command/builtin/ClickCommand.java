@@ -48,7 +48,7 @@ public final class ClickCommand {
                         return;
                       }
 
-                      MouseClickHelper.performLeftClick(player, level, gameMode);
+                      MouseClickHelper.performLeftClick(player, gameMode);
                     }));
                     return Command.SINGLE_SUCCESS;
                   }))))

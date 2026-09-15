@@ -2050,7 +2050,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           case LEFT_BUTTON -> {
             executeAction(
               activeBot,
-              () -> MouseClickHelper.performLeftClick(player, level, gameMode));
+              () -> MouseClickHelper.performLeftClick(player, gameMode));
             yield BotMouseClickResponse.newBuilder()
               .setSuccess(true)
               .build();

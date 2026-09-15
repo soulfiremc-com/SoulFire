@@ -54,7 +54,7 @@ public final class AttackNode extends AbstractScriptNode {
       var gameMode = minecraft.gameMode;
 
       if (player != null && level != null && gameMode != null) {
-        MouseClickHelper.performLeftClick(player, level, gameMode);
+        MouseClickHelper.performLeftClick(player, gameMode);
       }
     });
 

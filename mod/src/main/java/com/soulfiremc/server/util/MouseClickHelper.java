@@ -23,142 +23,53 @@ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
-import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
-import org.jspecify.annotations.Nullable;
 
-/**
- * Helper class for simulating mouse click actions (left/right click).
- * Shared between gRPC service and server commands.
- */
+/// Simulates mouse clicks using Minecraft's item, entity, and block targeting rules.
 public final class MouseClickHelper {
-  private static final double PICK_RANGE = 4.5; // Standard Minecraft reach distance
-
   private MouseClickHelper() {
   }
 
-  /**
-   * Performs a left mouse button click action.
-   * Attacks an entity if looking at one, otherwise starts breaking a block.
-   *
-   * @param player   The player performing the action
-   * @param level    The level/world
-   * @param gameMode The game mode controller
-   */
-  public static void performLeftClick(LocalPlayer player, ClientLevel level, MultiPlayerGameMode gameMode) {
-    var eyePos = player.getEyePosition();
-    var lookVec = player.getLookAngle();
-    var reachVec = eyePos.add(lookVec.scale(PICK_RANGE));
-
-    // Check for entity hit first
-    var entityHitResult = findEntityHit(player, eyePos, reachVec);
-
-    if (entityHitResult != null && entityHitResult.getEntity() != null) {
-      // Attack entity
+  /// Attacks the targeted entity, starts breaking the targeted block, or swings on a miss.
+  public static void performLeftClick(LocalPlayer player, MultiPlayerGameMode gameMode) {
+    var hitResult = player.raycastHitResult(1.0F, player);
+    if (hitResult instanceof EntityHitResult entityHitResult) {
       gameMode.attack(player, entityHitResult.getEntity());
-      player.swing(InteractionHand.MAIN_HAND);
-    } else {
-      // Check for block hit
-      var blockHitResult = level.clip(new ClipContext(
-        eyePos,
-        reachVec,
-        ClipContext.Block.OUTLINE,
-        ClipContext.Fluid.NONE,
-        player
-      ));
-
-      if (blockHitResult.getType() == HitResult.Type.BLOCK) {
-        // Start breaking block
-        gameMode.startDestroyBlock(blockHitResult.getBlockPos(), blockHitResult.getDirection());
-        player.swing(InteractionHand.MAIN_HAND);
-      } else {
-        // Just swing (miss)
-        player.swing(InteractionHand.MAIN_HAND);
-      }
+    } else if (hitResult instanceof BlockHitResult blockHitResult && hitResult.getType() == HitResult.Type.BLOCK) {
+      gameMode.startDestroyBlock(blockHitResult.getBlockPos(), blockHitResult.getDirection());
     }
+    player.swing(InteractionHand.MAIN_HAND);
   }
 
-  /**
-   * Performs a right mouse button click action.
-   * Interacts with an entity, uses item on a block, or uses the item in hand.
-   *
-   * @param player   The player performing the action
-   * @param level    The level/world
-   * @param gameMode The game mode controller
-   */
+  /// Interacts with the target or uses the main-hand item when the block interaction passes.
   public static void performRightClick(LocalPlayer player, ClientLevel level, MultiPlayerGameMode gameMode) {
     var hand = InteractionHand.MAIN_HAND;
-    var eyePos = player.getEyePosition();
-    var lookVec = player.getLookAngle();
-    var reachVec = eyePos.add(lookVec.scale(PICK_RANGE));
+    var hitResult = player.raycastHitResult(1.0F, player);
 
-    // Check for entity hit first
-    var entityHitResult = findEntityHit(player, eyePos, reachVec);
-
-    if (entityHitResult != null && entityHitResult.getEntity() != null) {
-      // Interact with entity
-      if (gameMode.interact(player, entityHitResult.getEntity(), entityHitResult, hand) instanceof InteractionResult.Success success) {
-        if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-          player.swing(hand);
-        }
-      }
+    InteractionResult result;
+    if (hitResult instanceof EntityHitResult entityHitResult) {
+      result = gameMode.interact(player, entityHitResult.getEntity(), entityHitResult, hand);
+    } else if (hitResult instanceof BlockHitResult blockHitResult && hitResult.getType() == HitResult.Type.BLOCK) {
+      result = BotInteractionSupport.withItemUseFallback(
+        gameMode.useItemOn(player, hand, blockHitResult),
+        () -> useItem(player, level, gameMode)
+      );
     } else {
-      // Check for block hit
-      var blockHitResult = level.clip(new ClipContext(
-        eyePos,
-        reachVec,
-        ClipContext.Block.OUTLINE,
-        ClipContext.Fluid.NONE,
-        player
-      ));
+      result = useItem(player, level, gameMode);
+    }
 
-      if (blockHitResult.getType() == HitResult.Type.BLOCK) {
-        // Use item on block
-        var result = BotInteractionSupport.withItemUseFallback(
-          gameMode.useItemOn(player, hand, blockHitResult),
-          () -> {
-            var itemStack = player.getItemInHand(hand);
-            return !itemStack.isEmpty()
-              && itemStack.isItemEnabled(level.enabledFeatures())
-              ? gameMode.useItem(player, hand)
-              : InteractionResult.PASS;
-          }
-        );
-        if (result instanceof InteractionResult.Success success) {
-          if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-            player.swing(hand);
-          }
-        }
-      } else {
-        // Just use item in hand
-        var itemStack = player.getItemInHand(hand);
-        if (!itemStack.isEmpty() && itemStack.isItemEnabled(level.enabledFeatures())) {
-          if (gameMode.useItem(player, hand) instanceof InteractionResult.Success success) {
-            if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-              player.swing(hand);
-            }
-          }
-        }
-      }
+    if (result instanceof InteractionResult.Success success && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
+      player.swing(hand);
     }
   }
 
-  /**
-   * Finds an entity that the player is looking at within the pick range.
-   */
-  private static @Nullable EntityHitResult findEntityHit(LocalPlayer player, Vec3 eyePos, Vec3 reachVec) {
-    var aabb = player.getBoundingBox().expandTowards(player.getLookAngle().scale(PICK_RANGE)).inflate(1.0);
-
-    return ProjectileUtil.getEntityHitResult(
-      player,
-      eyePos,
-      reachVec,
-      aabb,
-      entity -> !entity.isSpectator() && entity.isPickable(),
-      PICK_RANGE * PICK_RANGE
-    );
+  private static InteractionResult useItem(LocalPlayer player, ClientLevel level, MultiPlayerGameMode gameMode) {
+    var hand = InteractionHand.MAIN_HAND;
+    var itemStack = player.getItemInHand(hand);
+    return !itemStack.isEmpty() && itemStack.isItemEnabled(level.enabledFeatures())
+      ? gameMode.useItem(player, hand)
+      : InteractionResult.PASS;
   }
 }
