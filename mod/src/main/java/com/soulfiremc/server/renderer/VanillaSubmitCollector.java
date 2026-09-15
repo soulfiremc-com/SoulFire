@@ -115,6 +115,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private static final Direction[] DIRECTIONS = Direction.values();
   private static final RendererAssets.TextureImage WHITE_TEXTURE = createSolidTexture(0xFFFFFFFF);
   private final RenderContext ctx;
+  private final @Nullable GuiLighting guiLighting;
   private final RendererAssets assets;
   private final NavigableMap<Integer, FeatureBuckets> bucketsByOrder;
   private final SortGroupRegistry sortGroups;
@@ -122,11 +123,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   private SceneData.Builder activeBuilder;
 
   VanillaSubmitCollector(RenderContext ctx) {
-    this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0);
+    this(ctx, null);
   }
 
-  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, FeatureBuckets> bucketsByOrder, SortGroupRegistry sortGroups, int order) {
+  VanillaSubmitCollector(RenderContext ctx, @Nullable GuiLighting guiLighting) {
+    this(ctx, new TreeMap<>(), new SortGroupRegistry(), 0, guiLighting);
+  }
+
+  private VanillaSubmitCollector(RenderContext ctx, NavigableMap<Integer, FeatureBuckets> bucketsByOrder, SortGroupRegistry sortGroups, int order, @Nullable GuiLighting guiLighting) {
     this.ctx = ctx;
+    this.guiLighting = guiLighting;
     this.assets = RendererAssets.instance();
     this.bucketsByOrder = bucketsByOrder;
     this.sortGroups = sortGroups;
@@ -346,7 +352,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
 
   @Override
   public OrderedSubmitNodeCollector order(int order) {
-    return buckets == bucketsByOrder.get(order) ? this : new VanillaSubmitCollector(ctx, bucketsByOrder, sortGroups, order);
+    return buckets == bucketsByOrder.get(order) ? this : new VanillaSubmitCollector(ctx, bucketsByOrder, sortGroups, order, guiLighting);
   }
 
   @Override
@@ -1190,6 +1196,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     @Nullable RenderMaterial materialOverride,
     Consumer<VertexConsumer> renderer
   ) {
+    // Model UVs are local to the supplied sprite, so sample its pixels directly.
+    // This also preserves animated sprite frames instead of freezing the atlas copy.
+    if (guiLighting != null && sprite != null) {
+      texture = assets.texture(sprite.contents().name());
+    }
     var consumer = new CapturingVertexConsumer(
       new Matrix4f(),
       renderType.primitiveTopology(),
@@ -1200,7 +1211,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       null,
       materialOverride
     );
-    renderer.accept(wrapSprite(consumer, sprite));
+    renderer.accept(guiLighting != null ? consumer : wrapSprite(consumer, sprite));
     consumer.flush();
   }
 
@@ -1751,10 +1762,16 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   }
 
   private Vector3f levelLight0() {
+    if (guiLighting != null) {
+      return guiLighting.light0();
+    }
     return cardinalLightType() == CardinalLighting.Type.NETHER ? NETHER_LEVEL_LIGHT_0 : LEVEL_LIGHT_0;
   }
 
   private Vector3f levelLight1() {
+    if (guiLighting != null) {
+      return guiLighting.light1();
+    }
     return cardinalLightType() == CardinalLighting.Type.NETHER ? NETHER_LEVEL_LIGHT_1 : LEVEL_LIGHT_1;
   }
 

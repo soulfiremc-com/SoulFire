@@ -28,15 +28,51 @@ import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import org.joml.Matrix3x2f;
 import org.joml.Matrix4f;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.awt.image.BufferedImage;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PovGuiRendererTest {
+  @Test
+  void exportedOversizedIconFitsWithoutLosingItsEdges() {
+    var source = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+    for (var y = 8; y < 40; y++) {
+      for (var x = 4; x < 60; x++) {
+        source.setRGB(x, y, x < 32 ? 0xFFFF0000 : 0xFF00FF00);
+      }
+    }
+    var image = InventoryItemIconRenderer.fitFramesToSlot(List.of(source)).getFirst();
+    assertEquals(0, image.getRGB(1, 16));
+    assertEquals(0xFFFF0000, image.getRGB(2, 16));
+    assertEquals(0xFF00FF00, image.getRGB(29, 16));
+    assertEquals(0, image.getRGB(30, 16));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 3, 4})
+  void itemProjectionPreservesModelOffsetsAtGuiScale(int scale) {
+    var vertex = new RenderVertex(-0.25F, 0.125F, 0, 0, 0, -1);
+    var projected = InventoryItemIconRenderer.projectVertex(vertex, 0, 16 * scale, 16 * scale, 16 * scale);
+    assertEquals(4 * scale, projected.x());
+    assertEquals(10 * scale, projected.y());
+  }
+
+  @Test
+  void itemProjectionKeepsBothSidesInsideDepthRange() {
+    var near = InventoryItemIconRenderer.projectVertex(new RenderVertex(0, 0, 2, 0, 0, -1), 0, 16, 16, 16);
+    var far = InventoryItemIconRenderer.projectVertex(new RenderVertex(0, 0, -2, 0, 0, -1), 0, 16, 16, 16);
+    assertTrue(near.depth() > 0);
+    assertTrue(near.depth() < far.depth());
+    assertTrue(far.depth() < 1);
+  }
+
   @Test
   void preparedItemStaysBelowOverlappingTooltip() {
     var state = new GuiRenderState();
@@ -59,6 +95,17 @@ class PovGuiRendererTest {
     var buffers = new RasterBuffers(16, 16);
     PovHudRenderer.renderPreparedState(state, buffers, 8, 8, 0, 0, Map.of());
     assertEquals(0xFFFFFFFF, buffers.image().getRGB(7, 7));
+    assertEquals(0, buffers.image().getRGB(8, 7));
+    assertEquals(0, buffers.image().getRGB(7, 8));
+  }
+
+  @Test
+  void fractionalViewportDoesNotStretchGuiPixels() {
+    var state = new GuiRenderState();
+    state.addGuiElement(rect(2, 2, 4, 4, -1, null));
+    var buffers = new RasterBuffers(17, 17);
+    PovHudRenderer.renderPreparedState(state, buffers, 8.5F, 8.5F, 0, 0, Map.of());
+    assertEquals(-1, buffers.image().getRGB(7, 7));
     assertEquals(0, buffers.image().getRGB(8, 7));
     assertEquals(0, buffers.image().getRGB(7, 8));
   }

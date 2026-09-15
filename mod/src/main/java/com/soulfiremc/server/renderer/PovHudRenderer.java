@@ -71,18 +71,23 @@ final class PovHudRenderer {
         screen.resize(window.getGuiScaledWidth(), window.getGuiScaledHeight());
       }
       var deltaTracker = minecraft.getDeltaTracker() != null ? minecraft.getDeltaTracker() : DeltaTracker.ONE;
+      var camera = minecraft.gameRenderer.mainCamera();
+      camera.setLevel(ctx.level());
+      camera.setEntity(ctx.localPlayer());
+      camera.update(deltaTracker);
+      camera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
+      camera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
       // POV runs after resources and the bot world load; the headless loop never completes a graphical frame.
       minecraft.gui.extractRenderState(deltaTracker, minecraft.level != null, true);
       var guiState = minecraft.gameRenderer.gameRenderState().guiRenderState;
-      renderState(ctx, guiState, buffers, window.getGuiScaledWidth(), window.getGuiScaledHeight(),
-        window.getGuiScale(), minecraft.options.getMenuBackgroundBlurriness());
+      renderState(ctx, guiState, buffers, window.getGuiScale(), minecraft.options.getMenuBackgroundBlurriness());
     } catch (RuntimeException e) {
       throw new IllegalStateException("Failed to render POV GUI" + (screen == null ? " HUD" : " screen " + screen.getClass().getName()), e);
     }
   }
 
   static void renderState(RenderContext ctx, GuiRenderState state, RasterBuffers buffers,
-                          int width, int height, int scale, float blurRadius) {
+                          int scale, float blurRadius) {
     var images = new IdentityHashMap<GuiElementRenderState, RendererAssets.TextureImage>();
     state.forEachPictureInPicture(pip -> {
       var image = GuiPictureRenderer.render(ctx, pip, scale);
@@ -95,14 +100,13 @@ final class PovHudRenderer {
         addImage(state, images, GuiPictureRenderer.render(ctx, pip, scale), item.pose(),
           pip.x0(), pip.y0(), pip.x1(), pip.y1(), item.scissorArea());
       } else {
-        var image = InventoryItemIconRenderer.renderGuiItemIcon(item.itemStackRenderState(), ctx.animationTick());
-        if (image != null) {
-          addImage(state, images, image, item.pose(), item.x(), item.y(), item.x() + GUI_ITEM_SIZE, item.y() + GUI_ITEM_SIZE, item.scissorArea());
-        }
+        var image = GuiPictureRenderer.renderItem(ctx, item.itemStackRenderState(), scale);
+        addImage(state, images, image, item.pose(), item.x(), item.y(), item.x() + GUI_ITEM_SIZE, item.y() + GUI_ITEM_SIZE, item.scissorArea());
       }
     });
     prepareText(state);
-    renderPreparedState(state, buffers, width, height, ctx.animationTick(), blurRadius, images);
+    renderPreparedState(state, buffers, buffers.image().getWidth() / (float) scale,
+      buffers.image().getHeight() / (float) scale, ctx.animationTick(), blurRadius, images);
   }
 
   static void prepareText(GuiRenderState state) {
@@ -123,7 +127,7 @@ final class PovHudRenderer {
     state.addBlitToCurrentLayer(blit);
   }
 
-  static void renderPreparedState(GuiRenderState state, RasterBuffers buffers, int width, int height,
+  static void renderPreparedState(GuiRenderState state, RasterBuffers buffers, float width, float height,
                                    long tick, float blurRadius, Map<GuiElementRenderState, RendererAssets.TextureImage> images) {
     var geometry = new GuiGeometry(width, height, buffers.image().getWidth(), buffers.image().getHeight());
     state.forEachElement(element -> renderElement(element, geometry, buffers, tick, images), GuiRenderState.TraverseRange.BEFORE_BLUR);
@@ -279,7 +283,7 @@ final class PovHudRenderer {
     );
   }
 
-  private record GuiGeometry(int guiWidth, int guiHeight, int targetWidth, int targetHeight) {
+  private record GuiGeometry(float guiWidth, float guiHeight, int targetWidth, int targetHeight) {
     private float scaleX() {
       return targetWidth / (float) guiWidth;
     }

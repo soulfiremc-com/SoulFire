@@ -375,9 +375,12 @@ public final class BotConnection {
       minecraft,
       gameRenderer.gameRenderState().levelRenderState,
       minecraft.levelRenderer);
+    var hud = new Hud(minecraft);
+    // Bots join after resource reload; reuse the loaded styles from the original HUD.
+    hud.waypointStyles = minecraft.gui.hud.getWaypointStyles();
     minecraft.gui = new Gui(
       minecraft,
-      new Hud(minecraft),
+      hud,
       gameRenderer.gameRenderState().guiRenderState);
 
     shutdownHooks.add(minecraft.tutorial::stop);

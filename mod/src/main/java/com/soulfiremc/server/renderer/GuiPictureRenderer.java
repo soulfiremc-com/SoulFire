@@ -22,10 +22,12 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.pip.OversizedItemRenderer;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
+import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState;
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -37,6 +39,16 @@ import java.util.List;
 
 final class GuiPictureRenderer {
   private GuiPictureRenderer() {}
+
+  static BufferedImage renderItem(RenderContext ctx, TrackingItemStackRenderState state, int scale) {
+    var size = 16 * scale;
+    var pose = new PoseStack();
+    pose.translate(size / 2.0F, size / 2.0F, 0);
+    pose.scale(size, -size, size);
+    var collector = new VanillaSubmitCollector(ctx, state.usesBlockLight() ? GuiLighting.BLOCK : GuiLighting.FLAT);
+    state.submit(pose, collector, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0);
+    return rasterize(collector.buildScene(), size, size, new Matrix4f(), ctx.animationTick());
+  }
 
   static BufferedImage render(RenderContext ctx, PictureInPictureRenderState state, int scale) {
     if (state instanceof OversizedItemRenderState) {
@@ -60,7 +72,10 @@ final class GuiPictureRenderer {
     pose.translate(width / 2.0F, renderer.getTranslateY(height, scale), 0);
     var modelScale = scale * state.scale();
     pose.scale(modelScale, modelScale, -modelScale);
-    var collector = new VanillaSubmitCollector(ctx);
+    var lighting = state instanceof OversizedItemRenderState item
+      ? (item.guiItemRenderState().itemStackRenderState().usesBlockLight() ? GuiLighting.BLOCK : GuiLighting.FLAT)
+      : GuiLighting.ENTITY;
+    var collector = new VanillaSubmitCollector(ctx, lighting);
     var modelView = RenderSystem.getModelViewStack();
     synchronized (modelView) {
       modelView.pushMatrix();

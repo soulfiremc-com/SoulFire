@@ -185,3 +185,6 @@ accessible method net/minecraft/client/gui/render/pip/PictureInPictureRenderer g
 accessible class net/minecraft/client/gui/font/providers/BitmapProvider$Glyph
 accessible class net/minecraft/client/gui/font/providers/BitmapProvider$ImageDataHolder
 accessible field net/minecraft/client/gui/font/providers/BitmapProvider$ImageDataHolder image Lcom/mojang/blaze3d/platform/NativeImage;
+
+accessible field net/minecraft/client/gui/Hud waypointStyles Lnet/minecraft/client/resources/WaypointStyleManager;
+mutable field net/minecraft/client/gui/Hud waypointStyles Lnet/minecraft/client/resources/WaypointStyleManager;

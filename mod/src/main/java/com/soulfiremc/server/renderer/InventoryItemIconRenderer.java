@@ -157,21 +157,6 @@ public final class InventoryItemIconRenderer {
     return encodedImage != null ? encodedImage : missingImage();
   }
 
-  static @Nullable BufferedImage renderGuiItemIcon(TrackingItemStackRenderState renderState, long animationTick) {
-    try {
-      var scene = buildVanillaResolvedScene(renderState);
-      if (scene == null || scene.quads().isEmpty()) {
-        return null;
-      }
-
-      var normalizedFrames = fitFramesToSlot(List.of(renderFrame(scene, animationTick)));
-      return normalizedFrames.isEmpty() ? null : normalizedFrames.getFirst();
-    } catch (Throwable t) {
-      log.debug("Failed to render vanilla HUD item icon", t);
-      return null;
-    }
-  }
-
   private static @Nullable TrackingItemStackRenderState resolveVanillaState(
     @Nullable Minecraft minecraft,
     @Nullable ClientLevel level,
@@ -217,7 +202,7 @@ public final class InventoryItemIconRenderer {
       }
 
       var poseStack = new PoseStack();
-      poseStack.scale(1.0F, -1.0F, -1.0F);
+      poseStack.scale(1.0F, -1.0F, 1.0F);
       var guiItemRenderState = new GuiItemRenderState(new Matrix3x2f(), renderState, 0, 0, null);
       var oversizedBounds = guiItemRenderState.oversizedItemBounds();
       if (oversizedBounds != null) {
@@ -437,13 +422,17 @@ public final class InventoryItemIconRenderer {
 
   private static BufferedImage renderFrame(IconScene scene, long animationTick) {
     var renderSize = Math.max(ICON_RENDER_SIZE, requiredRenderSize(scene));
+    return renderFrame(scene, animationTick, renderSize, GUI_PIXELS_PER_UNIT);
+  }
+
+  private static BufferedImage renderFrame(IconScene scene, long animationTick, int renderSize, float pixelsPerUnit) {
     var buffers = new RasterBuffers(renderSize, renderSize);
     buffers.clearColor(0x00000000);
     buffers.clearDepth();
 
-    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.OPAQUE, true);
-    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.CUTOUT, true);
-    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.TRANSLUCENT, false);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.OPAQUE, true, pixelsPerUnit);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.CUTOUT, true, pixelsPerUnit);
+    rasterPass(animationTick, scene.quads(), buffers, RendererAssets.AlphaMode.TRANSLUCENT, false, pixelsPerUnit);
 
     if (scene.hasFoil()) {
       applyFoil(buffers, animationTick);
@@ -471,7 +460,7 @@ public final class InventoryItemIconRenderer {
     );
   }
 
-  private static List<BufferedImage> fitFramesToSlot(List<BufferedImage> frames) {
+  static List<BufferedImage> fitFramesToSlot(List<BufferedImage> frames) {
     if (frames.isEmpty()) {
       return List.of();
     }
@@ -484,7 +473,7 @@ public final class InventoryItemIconRenderer {
     var croppedWidth = Math.max(1, union.width);
     var croppedHeight = Math.max(1, union.height);
     var available = Math.max(1, ICON_OUTPUT_SIZE - ICON_PADDING * 2);
-    var scale = Math.max(1.0, available / (double) Math.max(croppedWidth, croppedHeight));
+    var scale = available / (double) Math.max(croppedWidth, croppedHeight);
     var scaledWidth = Math.max(1, (int) Math.round(croppedWidth * scale));
     var scaledHeight = Math.max(1, (int) Math.round(croppedHeight * scale));
     var targetX = (ICON_OUTPUT_SIZE - scaledWidth) / 2;
@@ -576,14 +565,15 @@ public final class InventoryItemIconRenderer {
     List<RenderQuad> quads,
     RasterBuffers buffers,
     RendererAssets.AlphaMode alphaMode,
-    boolean writeDepth
+    boolean writeDepth,
+    float pixelsPerUnit
   ) {
     var projectedTriangles = new ArrayList<ProjectedTriangle>();
     for (var quad : quads) {
       if (quad.material().alphaMode() != alphaMode) {
         continue;
       }
-      emitProjectedTriangles(quad, projectedTriangles, buffers.image().getWidth(), buffers.image().getHeight());
+      emitProjectedTriangles(quad, projectedTriangles, buffers.image().getWidth(), buffers.image().getHeight(), pixelsPerUnit);
     }
 
     if (projectedTriangles.isEmpty()) {
@@ -599,12 +589,12 @@ public final class InventoryItemIconRenderer {
     }
   }
 
-  private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out, int width, int height) {
+  private static void emitProjectedTriangles(RenderQuad quad, ArrayList<ProjectedTriangle> out, int width, int height, float pixelsPerUnit) {
     var projected = new ProjectedVertex[]{
-      projectVertex(quad.v0(), quad.material().depthBias(), width, height),
-      projectVertex(quad.v1(), quad.material().depthBias(), width, height),
-      projectVertex(quad.v2(), quad.material().depthBias(), width, height),
-      projectVertex(quad.v3(), quad.material().depthBias(), width, height)
+      projectVertex(quad.v0(), quad.material().depthBias(), width, height, pixelsPerUnit),
+      projectVertex(quad.v1(), quad.material().depthBias(), width, height, pixelsPerUnit),
+      projectVertex(quad.v2(), quad.material().depthBias(), width, height, pixelsPerUnit),
+      projectVertex(quad.v3(), quad.material().depthBias(), width, height, pixelsPerUnit)
     };
     var sortDepth =
       (projected[0].depth() + projected[1].depth() + projected[2].depth() + projected[3].depth()) / 4.0F;
@@ -624,12 +614,12 @@ public final class InventoryItemIconRenderer {
     ));
   }
 
-  private static ProjectedVertex projectVertex(RenderVertex vertex, float depthBias, int width, int height) {
+  static ProjectedVertex projectVertex(RenderVertex vertex, float depthBias, int width, int height, float pixelsPerUnit) {
     var centerX = width * 0.5F;
     var centerY = height * 0.5F;
-    var screenX = centerX + vertex.x() * GUI_PIXELS_PER_UNIT;
-    var screenY = centerY + vertex.y() * GUI_PIXELS_PER_UNIT;
-    var depth = -vertex.z() + depthBias;
+    var screenX = centerX + vertex.x() * pixelsPerUnit;
+    var screenY = centerY + vertex.y() * pixelsPerUnit;
+    var depth = (1000.0F - vertex.z() + depthBias) / 2000.0F;
     return new ProjectedVertex(
       screenX,
       screenY,
