@@ -31,8 +31,8 @@ message PovInputRequest {
   int32 width = 4;
   int32 height = 5;
   repeated PovInputEvent events = 6;
-  // Escape closes an open Minecraft screen before releasing local capture.
-  bool close_screen = 7;
+  // Forward Escape before releasing local capture, including opening the pause menu.
+  bool escape = 7;
 }
 message PovInputResponse {}
 message PovInputEvent {

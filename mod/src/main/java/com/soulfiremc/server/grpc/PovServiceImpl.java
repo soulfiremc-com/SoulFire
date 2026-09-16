@@ -99,7 +99,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
         session.bot.minecraft().submit(() -> {
           if (session.closed.get()) return;
           VulkanRenderer.resize(session.bot.minecraft(), request.getWidth(), request.getHeight());
-          if (request.getCloseScreen() && session.bot.minecraft().gui.screen() != null) {
+          if (request.getEscape()) {
             var minecraft = session.bot.minecraft();
             minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
             minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
@@ -181,7 +181,8 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
         var frame = bot.minecraft().submit(() -> {
           if (closed.get()) return null;
           var minecraft = bot.minecraft();
-          if (minecraft.player == null || minecraft.level == null) throw Status.FAILED_PRECONDITION.withDescription("Bot disconnected").asRuntimeException();
+          // A respawn or dimension transfer temporarily removes the world and player.
+          if (minecraft.player == null || minecraft.level == null) return null;
           var image = VulkanRenderer.renderInteractive(minecraft, width, height);
           return new Captured(image, minecraft.gui.screen() != null);
         }).get(5, TimeUnit.SECONDS);

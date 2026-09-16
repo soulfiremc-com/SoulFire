@@ -17,6 +17,7 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.botfixes;
 
+import com.soulfiremc.server.bot.BotConnection;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,6 +38,7 @@ public class MixinLocalPlayer extends AbstractClientPlayer {
 
   @Inject(method = "aiStep", at = @At("HEAD"))
   private void onAiStep(CallbackInfo ci) {
+    if (BotConnection.currentOptional().map(bot -> bot.povInput().active()).orElse(false)) return;
     // Reset jump and sprint trigger times to prevent unwanted behavior with controls
     this.jumpTriggerTime = 0;
     this.sprintTriggerTime = 0;

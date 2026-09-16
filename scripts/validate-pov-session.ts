@@ -87,7 +87,42 @@ try {
         streamError = error;
       });
   }, 500);
-  if (mode === "world") {
+  if (mode === "transition") {
+    await writeFile(`${output}/transition-ready`, "");
+    const deadline = performance.now() + 60000;
+    while (
+      (await bots.getBotInfo({ instanceId, botId })).liveState?.dimension !==
+      "minecraft:the_nether"
+    ) {
+      assert.equal(
+        streamError,
+        undefined,
+        "World transfer must not end the stream",
+      );
+      assert.ok(
+        performance.now() < deadline,
+        "Dimension transfer did not complete",
+      );
+      await sleep(100);
+    }
+    const framesAtTransfer = frameCount;
+    await until(
+      () => frameCount > framesAtTransfer + 10,
+      "Frames must continue in the new dimension",
+    );
+    await writeFile(`${output}/interactive-nether.jpg`, latest!.image);
+    assert.equal(
+      streamError,
+      undefined,
+      "Dimension changes must preserve the session",
+    );
+    console.log(
+      JSON.stringify({
+        dimensionTransfer: true,
+        framesAfterTransfer: frameCount - framesAtTransfer,
+      }),
+    );
+  } else if (mode === "world") {
     captured = true;
     await input([{ kind: Kind.SCROLL, y: 1 }]);
     await sleep(200);
@@ -145,8 +180,65 @@ try {
       "minecraft:air",
       "Left click must break the target block",
     );
+    await pov.input({
+      sessionId,
+      sequence: ++sequence,
+      width,
+      height,
+      captured: false,
+      escape: true,
+    });
+    captured = false;
+    await until(
+      () => !!latest?.screenOpen,
+      "Escape must open the pause menu from the world",
+    );
+    await pov.input({
+      sessionId,
+      sequence: ++sequence,
+      width,
+      height,
+      captured: false,
+      escape: true,
+    });
+    await until(
+      () => latest?.screenOpen === false,
+      "Escape must close the pause menu",
+    );
+    captured = true;
+    const tapJump = async () => {
+      await input([{ kind: Kind.KEY, code: 32, action: 1 }]);
+      await sleep(80);
+      await input([{ kind: Kind.KEY, code: 32, action: 0 }]);
+      await sleep(80);
+    };
+    await tapJump();
+    await tapJump();
+    await sleep(400);
+    await input([{ kind: Kind.KEY, code: 32, action: 1 }]);
+    await sleep(600);
+    await input([{ kind: Kind.KEY, code: 32, action: 0 }]);
+    await sleep(600);
+    const airborne = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    await sleep(600);
+    const hovering = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    assert.ok(
+      hovering.y > -58,
+      "Double jump must enable flight and Space must ascend",
+    );
+    assert.ok(
+      Math.abs(hovering.y - airborne.y) < 0.1,
+      "Flying must hover after releasing Space",
+    );
+    await tapJump();
+    await tapJump();
+    await sleep(1500);
+    const landed = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    assert.ok(landed.y < hovering.y - 1, "Double jump must disable flight");
     console.log(
       JSON.stringify({
+        escapeMenu: true,
+        doubleJumpFlight: true,
         middleClick: true,
         rightClick: true,
         leftClick: true,

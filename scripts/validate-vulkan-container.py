@@ -311,6 +311,43 @@ def main():
                 check=True,
                 env={**os.environ, "SF_POV_TEST_TOKEN": token},
             )
+            transition_ready = destination / "transition-ready"
+            transition_ready.unlink(missing_ok=True)
+            transition = subprocess.Popen(
+                [
+                    "bun",
+                    "scripts/validate-pov-session.ts",
+                    f"http://127.0.0.1:{api_port}",
+                    instance,
+                    *bots,
+                    str(destination),
+                    "transition",
+                ],
+                env={**os.environ, "SF_POV_TEST_TOKEN": token},
+            )
+            try:
+                wait_for(
+                    lambda: transition_ready.exists() or transition.poll() is not None
+                )
+                if not transition_ready.exists():
+                    raise AssertionError(
+                        "Dimension transfer probe exited before connecting"
+                    )
+                server.stdin.write(
+                    "execute in minecraft:the_nether run tp NativeProbeA 0.5 100 0.5\n"
+                )
+                server.stdin.flush()
+                if transition.wait(timeout=90) != 0:
+                    raise AssertionError("Dimension transfer interrupted POV")
+            finally:
+                if transition.poll() is None:
+                    transition.terminate()
+                    transition.wait(timeout=10)
+            server.stdin.write(
+                "execute in minecraft:overworld run tp NativeProbeA 0.5 -60 2.5 0 35\n"
+            )
+            server.stdin.flush()
+            time.sleep(1)
         browser_test = os.environ.get("SF_POV_BROWSER_TEST")
         if args.interactive and browser_test:
             subprocess.run(
