@@ -192,7 +192,7 @@ public final class H264VideoEncoder implements AutoCloseable {
               option(options, "x264-params", "repeat-headers=1:annexb=1:scenecut=0");
             }
             case "h264_nvenc" -> {
-              option(options, "preset", "p1"); option(options, "tune", "ull");
+              option(options, "preset", "p4"); option(options, "tune", "ull");
               option(options, "zerolatency", "1"); option(options, "delay", "0"); option(options, "forced-idr", "1");
             }
             case "h264_qsv" -> { option(options, "async_depth", "1"); option(options, "preset", "veryfast"); }
