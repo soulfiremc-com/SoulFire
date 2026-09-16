@@ -211,7 +211,7 @@ aggregate failures instead of losing successful work.
 
 ## Capture cameras and world maps
 
-`bot.camera` exposes the software renderer as a complete SDK surface. Capture
+`bot.camera` exposes the headless Vulkan renderer. Capture
 the bot's current view or place a free camera at an explicit position and
 rotation:
 

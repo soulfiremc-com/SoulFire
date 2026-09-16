@@ -1,7 +1,0 @@
-{
-  "required": true,
-  "package": "com.soulfiremc.mod.mixin.headless.rendering",
-  "compatibilityLevel": "JAVA_25",
-  "client": ["MixinCommandEncoder", "MixinBitmapGlyph", "MixinTextureManager", "MixinReloadableTexture"],
-  "injectors": {"defaultRequire": 1}
-}

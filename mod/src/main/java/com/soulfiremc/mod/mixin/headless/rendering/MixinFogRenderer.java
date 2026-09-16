@@ -15,27 +15,22 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.manual.mixin;
+package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.soulfiremc.server.renderer.LavapipeComparison;
-import net.minecraft.client.DeltaTracker;
+import com.soulfiremc.mod.access.IFogEnvironmentState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.fog.FogRenderer;
+import net.minecraft.client.renderer.fog.environment.FogEnvironment;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(GameRenderer.class)
-public class ComparisonEnvironment {
-  @Inject(method = "update", at = @At("HEAD"))
-  private void freezeBeforeCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-    if (LavapipeComparison.isStressScene()) LavapipeComparison.beforeExtract(Minecraft.getInstance());
+import java.util.List;
+
+@Mixin(FogRenderer.class)
+public class MixinFogRenderer {
+  @Redirect(method = {"computeFogColor", "setupFog"}, at = @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/fog/FogRenderer;FOG_ENVIRONMENTS:Ljava/util/List;"))
+  private List<FogEnvironment> botFogEnvironments() {
+    return ((IFogEnvironmentState) Minecraft.getInstance().gameRenderer.gameRenderState()).soulfire$fogEnvironments();
   }
-
-  @Inject(method = "extract", at = @At("HEAD"))
-  private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    LavapipeComparison.beforeExtract(Minecraft.getInstance());
-  }
-
 }

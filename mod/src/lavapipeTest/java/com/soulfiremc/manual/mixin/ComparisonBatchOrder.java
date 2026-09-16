@@ -17,25 +17,30 @@
  */
 package com.soulfiremc.manual.mixin;
 
-import com.soulfiremc.server.renderer.LavapipeComparison;
-import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(GameRenderer.class)
-public class ComparisonEnvironment {
-  @Inject(method = "update", at = @At("HEAD"))
-  private void freezeBeforeCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-    if (LavapipeComparison.isStressScene()) LavapipeComparison.beforeExtract(Minecraft.getInstance());
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/// Keeps unordered vanilla feature batches reproducible between the two test processes.
+@Mixin(targets = "net.minecraft.client.renderer.feature.phase.SimpleFeatureRenderPhase$FeatureSubmits")
+public class ComparisonBatchOrder {
+  @Shadow @Final private Map<Object, ?> batches;
+
+  @Redirect(method = "<init>", at = @At(value = "NEW", target = "java/util/HashMap"))
+  private HashMap<Object, Object> preserveSubmissionOrder() {
+    return new LinkedHashMap<>();
   }
 
-  @Inject(method = "extract", at = @At("HEAD"))
-  private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    LavapipeComparison.beforeExtract(Minecraft.getInstance());
+  @Inject(method = "clear", at = @At("TAIL"))
+  private void discardPreviousFrameOrder(CallbackInfo ci) {
+    batches.clear();
   }
-
 }

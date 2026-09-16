@@ -724,7 +724,7 @@ export const BotUpdateConfigEntryResponseSchema: GenMessage<BotUpdateConfigEntry
 
 /**
  * Request to render the bot's point-of-view as an image.
- * Uses software rendering to generate a PNG image of what the bot "sees".
+ * Uses headless Vulkan rendering to generate a PNG image of what the bot sees.
  *
  * @generated from message soulfire.v1.BotRenderPovRequest
  */
@@ -4351,7 +4351,7 @@ export const BotService: GenService<{
     output: typeof BotUpdateConfigEntryResponseSchema;
   },
   /**
-   * Renders the bot's point-of-view as a PNG image using software rendering.
+   * Renders the bot's point-of-view as a PNG image using headless Vulkan.
    * The bot must be online with a valid player and level.
    * Uses the bot's current render distance setting.
    * Requires READ_BOT_INFO permission.

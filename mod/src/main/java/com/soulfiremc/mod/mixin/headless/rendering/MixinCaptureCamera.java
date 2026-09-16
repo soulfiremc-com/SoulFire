@@ -15,27 +15,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.manual.mixin;
+package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.soulfiremc.server.renderer.LavapipeComparison;
+import com.soulfiremc.server.renderer.VulkanRenderer;
+import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(GameRenderer.class)
-public class ComparisonEnvironment {
-  @Inject(method = "update", at = @At("HEAD"))
-  private void freezeBeforeCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-    if (LavapipeComparison.isStressScene()) LavapipeComparison.beforeExtract(Minecraft.getInstance());
+@Mixin(Camera.class)
+public class MixinCaptureCamera {
+  @Inject(method = "update", at = @At("RETURN"))
+  private void applyCaptureCamera(DeltaTracker delta, CallbackInfo ci) {
+    VulkanRenderer.configureCamera((Camera) (Object) this);
   }
-
-  @Inject(method = "extract", at = @At("HEAD"))
-  private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    LavapipeComparison.beforeExtract(Minecraft.getInstance());
-  }
-
 }

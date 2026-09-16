@@ -15,20 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.server.renderer;
+package com.soulfiremc.mod.access;
 
-import lombok.experimental.UtilityClass;
+import net.minecraft.client.renderer.fog.environment.FogEnvironment;
 
-/// Constants used throughout the rendering system.
-@UtilityClass
-public class RenderConstants {
-  /// Default render width in pixels.
-  public static final int DEFAULT_WIDTH = 854;
+import java.util.List;
 
-  /// Default render height in pixels.
-  public static final int DEFAULT_HEIGHT = 480;
-
-  /// Default field of view in degrees.
-  public static final double DEFAULT_FOV = 70.0;
-
+public interface IFogEnvironmentState {
+  List<FogEnvironment> soulfire$fogEnvironments();
 }

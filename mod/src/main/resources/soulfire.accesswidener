@@ -231,3 +231,35 @@ accessible field net/minecraft/client/renderer/texture/SpriteContents$AnimationS
 accessible field net/minecraft/client/renderer/texture/TextureAtlas animatedTexturesStates Ljava/util/List;
 
 accessible field net/minecraft/client/renderer/LightmapRenderStateExtractor needsUpdate Z
+
+accessible field net/minecraft/client/Camera fov F
+accessible field net/minecraft/client/Camera depthFar F
+accessible method net/minecraft/client/Camera prepareCullFrustum (Lorg/joml/Matrix4fc;Lorg/joml/Matrix4f;Lnet/minecraft/world/phys/Vec3;)V
+accessible method net/minecraft/client/Camera createProjectionMatrixForCulling ()Lorg/joml/Matrix4f;
+accessible method net/minecraft/client/renderer/GameRenderer extractWindow ()V
+accessible method net/minecraft/client/renderer/GameRenderer extractOptions ()V
+
+accessible field net/minecraft/client/gui/Gui guiRenderState Lnet/minecraft/client/renderer/state/gui/GuiRenderState;
+mutable field net/minecraft/client/gui/Gui guiRenderState Lnet/minecraft/client/renderer/state/gui/GuiRenderState;
+
+accessible field net/minecraft/client/renderer/CloudRenderer texture Lnet/minecraft/client/renderer/CloudRenderer$TextureData;
+
+mutable field net/minecraft/client/Minecraft levelRenderer Lnet/minecraft/client/renderer/LevelRenderer;
+accessible field net/minecraft/client/renderer/GameRenderer spinningEffectTime F
+accessible field net/minecraft/client/renderer/GameRenderer spinningEffectSpeed F
+accessible field net/minecraft/client/renderer/GameRenderer bossOverlayWorldDarkening F
+accessible field net/minecraft/client/renderer/GameRenderer bossOverlayWorldDarkeningO F
+accessible field net/minecraft/client/renderer/GameRenderer renderBlockOutline Z
+accessible field net/minecraft/client/renderer/GameRenderer postEffectId Lnet/minecraft/resources/Identifier;
+accessible field net/minecraft/client/renderer/GameRenderer effectActive Z
+accessible field net/minecraft/client/renderer/LightmapRenderStateExtractor blockLightFlicker F
+accessible field net/minecraft/client/renderer/SectionOcclusionGraph fullUpdateTask Ljava/util/concurrent/Future;
+accessible field net/minecraft/client/renderer/SectionOcclusionGraph needsFullUpdate Z
+accessible field net/minecraft/client/renderer/SectionOcclusionGraph needsFrustumUpdate Ljava/util/concurrent/atomic/AtomicBoolean;
+
+accessible field net/minecraft/client/renderer/extract/LevelExtractor sectionUpdateTracker Lnet/minecraft/client/SectionUpdateTracker;
+accessible field net/minecraft/world/entity/LivingEntity attackStrengthTicker I
+accessible field net/minecraft/world/entity/LivingEntity itemSwapTicker I
+accessible field net/minecraft/client/gui/Hud overlayMessageTime I
+accessible field net/minecraft/client/gui/Hud toolHighlightTimer I
+accessible field net/minecraft/client/gui/Hud titleTime I

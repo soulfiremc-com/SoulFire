@@ -44,6 +44,11 @@ Check it out: [https://enderdash.com](https://enderdash.com/?utm_source=github&u
 
 Follow the [installation guide](https://soulfiremc.com/docs/installation) to install SoulFire.
 
+The server requires a Vulkan loader and a compatible driver at startup. It can use a GPU or Mesa lavapipe for CPU rendering.
+The Docker image includes lavapipe. On Debian or Ubuntu, install `libvulkan1` and `mesa-vulkan-drivers` when running without a GPU driver.
+POV captures and inventory images render on demand without a native window. OpenGL is disabled.
+See [renderer validation](docs/lavapipe-test.md) for the manual comparison tests.
+
 ## 🍿 Version support
 
 You can find an up-to-date list of supported versions in

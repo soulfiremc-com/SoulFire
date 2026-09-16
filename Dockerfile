@@ -5,7 +5,7 @@ ARG VERSION
 # Setup groups and install dumb init
 RUN groupadd --gid 1001 soulfire && \
     useradd --home-dir /soulfire --uid 1001 --gid soulfire --create-home soulfire && \
-    apt-get update && apt-get install -y --no-install-recommends dumb-init curl && \
+    apt-get update && apt-get install -y --no-install-recommends dumb-init curl libvulkan1 mesa-vulkan-drivers && \
     rm -rf /var/lib/apt/lists/* && \
     chmod 755 /soulfire
 

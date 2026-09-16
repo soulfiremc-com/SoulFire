@@ -17,25 +17,17 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.soulfiremc.server.renderer.VulkanRenderer;
+import com.mojang.blaze3d.vulkan.VulkanInstance;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(RenderSystem.class)
-public class MixinRenderSystem {
-  @Inject(method = "isOnRenderThread", at = @At("HEAD"), cancellable = true)
-  private static void isOnRenderThreadHook(CallbackInfoReturnable<Boolean> cir) {
-    if (VulkanRenderer.DEVICE_LOCK.isHeldByCurrentThread()) {
-      cir.setReturnValue(true);
-    }
-  }
-
-  @Inject(method = "isFrozenAtPollEvents", at = @At("HEAD"), cancellable = true)
-  private static void isFrozenAtPollEventsHook(CallbackInfoReturnable<Boolean> cir) {
-    // Used by keepalive to determine whether to reply
-    cir.setReturnValue(false);
+@Mixin(VulkanInstance.class)
+public class MixinHeadlessVulkanInstance {
+  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFWVulkan;glfwGetRequiredInstanceExtensions()Lorg/lwjgl/PointerBuffer;"))
+  private PointerBuffer noSurfaceExtensions() {
+    return MemoryStack.stackGet().callocPointer(0);
   }
 }

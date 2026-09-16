@@ -15,11 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.soulfiremc.manual.mixin;
+package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.soulfiremc.server.renderer.LavapipeComparison;
-import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.soulfiremc.server.renderer.VulkanRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -27,15 +26,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
-public class ComparisonEnvironment {
-  @Inject(method = "update", at = @At("HEAD"))
-  private void freezeBeforeCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-    if (LavapipeComparison.isStressScene()) LavapipeComparison.beforeExtract(Minecraft.getInstance());
+public class MixinCaptureGameRenderer {
+  @Inject(method = {"extract", "render"}, at = @At("HEAD"), cancellable = true)
+  private void demandDrivenOnly(CallbackInfo ci) {
+    if (!VulkanRenderer.isCapturing()) ci.cancel();
   }
 
-  @Inject(method = "extract", at = @At("HEAD"))
-  private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-    LavapipeComparison.beforeExtract(Minecraft.getInstance());
+  @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
+  private void requestedHandsOnly(CallbackInfo ci) {
+    if (!VulkanRenderer.includeHands()) ci.cancel();
   }
-
+  @ModifyExpressionValue(method = "<init>", at = @At(value = "INVOKE", target = "Ljava/lang/Runtime;availableProcessors()I"))
+  private int boundChunkBuilders(int processors) {
+    // Compilation and translucent sorting run synchronously, so one worker buffer suffices.
+    return 1;
+  }
 }

@@ -17,15 +17,12 @@
  */
 package com.soulfiremc.mod.mixin.soulfire.lifecycle;
 
-import com.soulfiremc.mod.util.HeadlessLwjglMemory;
 import com.soulfiremc.mod.util.SFConstants;
 import com.soulfiremc.server.util.log4j.GenericTerminalConsole;
 import com.soulfiremc.shared.Base64Helpers;
 import com.soulfiremc.shared.SoulFireEarlyBootstrap;
 import com.soulfiremc.shared.SoulFirePreMainBootstrap;
-import io.github.headlesshq.headlessmc.lwjgl.agent.LwjglAgent;
 import lombok.SneakyThrows;
-import net.lenni0451.reflect.Agents;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.Main;
@@ -48,8 +45,6 @@ public final class MixinMain {
   private static void init(CallbackInfo cir) {
     SoulFireEarlyBootstrap.earlyBootstrap();
     SoulFirePreMainBootstrap.preMainBootstrap();
-    Agents.getInstrumentation().addTransformer(new LwjglAgent());
-    HeadlessLwjglMemory.register();
     GenericTerminalConsole.setupStreams();
     SharedConstants.CHECK_DATA_FIXER_SCHEMA = false;
     SFConstants.NOT_REGISTRY_INIT_PHASE = false;
@@ -89,12 +84,12 @@ public final class MixinMain {
   @Unique
   private static void soulfireFinishInitialClientLoad(Minecraft instance) {
     var deadline = System.nanoTime() + soulfire$INITIAL_CLIENT_LOAD_TIMEOUT_NANOS;
-    while (!soulfireHasInitializedBlockModels(instance) && System.nanoTime() < deadline) {
+    while ((!instance.isGameLoadFinished() || !soulfireHasInitializedBlockModels(instance)) && System.nanoTime() < deadline) {
       instance.runTick(true);
     }
 
-    if (!soulfireHasInitializedBlockModels(instance)) {
-      throw new IllegalStateException("Timed out while waiting for the base Minecraft instance to initialize block models");
+    if (!instance.isGameLoadFinished() || !soulfireHasInitializedBlockModels(instance)) {
+      throw new IllegalStateException("Timed out while waiting for the base Minecraft instance to finish loading resources");
     }
   }
 

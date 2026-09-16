@@ -1,142 +1,143 @@
-# Compare POV rendering with Lavapipe
+# Compare headless Vulkan rendering with vanilla
 
-This manual test runs Minecraft 26.2's Vulkan backend on Mesa Lavapipe, a CPU Vulkan driver.
-It renders a shared fixture with vanilla and SoulFire's renderer, then saves a pixel diff.
+SoulFire uses the Minecraft Vulkan backend for POV captures and inventory images. A system Vulkan driver supplies hardware rendering or Mesa lavapipe.
+OpenGL is disabled. Production captures use offscreen textures, with no native window or presentation surface.
+Device selection prefers discrete, integrated, and virtual GPUs before CPU devices. Minecraft still checks each candidate for required features and driver compatibility.
 
-The test uses a separate client process and working directory. SoulFire's headless lifecycle and LWJGL interception stay disabled in that process.
-Texture mirror hooks supply font and texture pixels to the POV renderer without replacing native rendering.
+The process shares one Vulkan device and caches one bot scene. Captures run on demand, on the owning bot thread.
+Switching bots releases the previous scene resources. Bots retain their simulation state while another bot owns the cached scene.
+Device access is serialized, including bot ticks that can upload textures. Alternating between bots requires rebuilding their visible geometry.
+Inventory endpoints return transparent PNG snapshots. Animated GIF generation from the former CPU backend is no longer available.
 
-## Run the test
+The manual tests compare a windowed vanilla framebuffer with a separate headless capture of the same deterministic fixture.
+These tests are opt-in. The `test`, `check`, and `build` tasks do not start them.
 
-Requirements:
+## Requirements
 
-- Java 25 and the repository's Gradle wrapper.
-- Mesa Lavapipe and a Vulkan loader.
-- An X11 or Wayland display. On a machine without a display, use Xvfb.
-- A local Minecraft 26.2 server with `online-mode=false` and `enforce-secure-profile=false`.
+- Java 25 and the repository Gradle wrapper.
+- A Vulkan loader and Mesa lavapipe.
+- An X11 or Wayland display for the reference capture, or Xvfb.
+- An isolated Minecraft 26.2 server with an accepted Minecraft EULA.
+- Server configuration: `online-mode=false`, `enforce-secure-profile=false`, and a view distance of at least three chunks.
+- A free player slot for `LavapipeTest`.
 
-The server supplies the world, item components, and registries. The inventory fixture changes equipment and adds a nearby player on the client only.
-Use an isolated server with an accepted Minecraft EULA.
+Run the comparisons without other clients joining or leaving. Server chat messages can change the HUD fixture between captures.
+
+The fixtures change blocks, entities, equipment, and dimensions on the client. They do not modify the server world.
+The tests use a separate client directory under `mod/build/lavapipe-test/run`. Manual-test classes are absent from release jars.
+
+## Run a comparison
 
 1. Start the local server.
-2. Run the manual task:
+2. Run the comparison script:
 
    ```sh
-   ./gradlew :mod:runLavapipeTest -PlavapipeServer=127.0.0.1:25640
+   python3 scripts/compare-renderer-scenes.py --scene items --server 127.0.0.1:25640
    ```
-
-   The task connects as `LavapipeTest`, captures the fixture, then closes the client.
-   It does not start or stop the server.
 
 3. Open `mod/build/lavapipe-test/output/items/comparison.png`.
 
-The default Linux driver path is `/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`.
-To select another installation, pass `-PlavapipeIcd=/absolute/path/to/lvp_icd.json`.
+The script runs the windowed reference first, then the headless capture. It removes `DISPLAY` and `WAYLAND_DISPLAY` from the headless process.
+The headless test also rejects any presentation surface.
 
-For Xvfb, run:
-
-```sh
-xvfb-run -a ./gradlew :mod:runLavapipeTest -PlavapipeServer=127.0.0.1:25640
-```
-
-The task is never invoked by `test`, `check`, or `build`. No manual-test classes are packaged in SoulFire's release jar.
-Each run replaces only the test client's options and comparison artifacts under `mod/build/lavapipe-test`.
-
-## Compare the inventory scene
-
-Use a flat local server for a scene like the Alpha HUD screenshot:
+For a machine without a display, run:
 
 ```sh
-./gradlew :mod:runLavapipeTest -PlavapipeScene=inventory -PlavapipeServer=127.0.0.1:25640
+xvfb-run -a python3 scripts/compare-renderer-scenes.py --scene items
 ```
 
-This mode equips a diamond helmet, elytra, sword, and totem. It fills the inventory, adds a nearby `ProbeB`, and opens the inventory screen.
-It also adds the Alpha HUD boss bar and fixes the inventory preview's mouse coordinates.
-The test holds both world clocks at 6000 ticks, clears rain and thunder, and fixes entity animation time and the fractional tick.
-These client-only settings keep cloud positions and lighting stable while retaining clouds in the comparison.
-After 60 frames, it captures the native framebuffer and runs the complete software renderer against the same live client state.
+The default ICD path is `/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`.
+To select another driver, pass `--icd /absolute/path/to/driver.json` to the script.
+Both processes use the selected driver, and both must report the Vulkan backend.
 
-Open `mod/build/lavapipe-test/output/inventory/comparison.png`.
-The original PNG guides the fixture layout. The new native framebuffer is the reference for pixel comparisons.
-The server's world, spawn location, time, weather, and the client's default skin can differ from the original screenshot.
-
-`scene.json` records the camera position, rotation, FOV, world time, GUI scale, and render distances.
-The software renderer uses the native camera's position and FOV. Its distance limit is 32 blocks; the native render distance is two chunks.
-Those distance settings do not guarantee identical chunk culling at the scene boundary.
-
-## Compare the stress scenes
-
-The four stress views share a hardcoded stage on the client. Use a flat Overworld server with a view distance of at least three chunks.
-The stage replaces nearby blocks on the client and adds an entity gallery. It does not modify the server's world.
-
-Run one view:
+To run the two captures separately, use:
 
 ```sh
-./gradlew :mod:runLavapipeTest -PlavapipeScene=stress-wide
+./gradlew :mod:runLavapipeTest -PlavapipeScene=items
+./gradlew :mod:runLavapipeTest -PlavapipeScene=items -PlavapipeHeadless=true
 ```
 
-Run all four views in sequence:
+Each reference run replaces `lavapipe.png`. The headless run preserves that file and replaces `headless.png` and the comparison outputs.
+Without a saved reference, the headless task writes a capture only. The comparison script requires both images and comparison metrics.
+
+## Select scenes
+
+List the scene catalog:
 
 ```sh
-for scene in stress-wide stress-transparency stress-entities stress-hud; do
-  ./gradlew :mod:runLavapipeTest -PlavapipeScene="$scene" || break
-done
+python3 scripts/compare-renderer-scenes.py --list
 ```
 
-| Scene | Camera and main features |
-| --- | --- |
-| `stress-wide` | Elevated view of the entity gallery, block models, beacon, portals, displays, particles, and HUD |
-| `stress-transparency` | View through water, glass, stained glass, ice, slime, honey, leaves, and a portal |
-| `stress-entities` | Close view of armor poses, enchanted equipment, glow, invisibility, passengers, leashes, and a guardian beam |
-| `stress-hud` | Underwater view at sunset with rain, fire, freezing, pumpkin overlay, title, subtitle, effects, and HUD |
+Run selected scenes:
 
-The gallery creates every registered entity type with a client factory. A remote player and an owned fishing hook cover the types that need special construction.
-The stage also adds 20 posed armor stands, eight leashed sheep, a passenger stack, and block, item, and text displays.
-Display transforms include nonuniform and mirrored scales. Text displays use all four billboard modes.
-Particles include smoke, flame, portals, explosions, dust, block fragments, and items.
+```sh
+python3 scripts/compare-renderer-scenes.py --scene inventory --scene stress-wide --scene stress-hud
+```
 
-Each `scene.json` lists the actual entity, block, and particle counts. It also lists entity types without a usable factory.
-These counts describe stage contents, not visibility. Dense geometry hides some objects; inspect the native image before claiming coverage of a feature.
-The fixture does not cover every entity variant, container screen, display interpolation phase, or combination of effects.
+Run all scenes:
 
-The test fixes the camera, world clocks, entity ticks, particle generators, lightning seed, and light intensity.
-Texture atlas animations stay on their first frame. Glint remains visible with its motion stopped.
-The test freezes simulation after construction and uses the same state for both renderers.
-The software distance uses the client's effective render distance, including the server's limit.
-Chunk boundary culling can still differ between renderers.
+```sh
+python3 scripts/compare-renderer-scenes.py
+```
 
-These scenes are exploratory: pixel differences do not fail the task. A successful run means that both images and metrics were produced.
-The original `items` and `inventory` scenes still fail on any RGB pixel difference.
+The catalog is `mod/src/lavapipeTest/resources/lavapipe-scenes.csv`.
+It includes GUI items, inventory, entity galleries, transparency, HUD effects, dimensions, portals, fog, block entities, and particles.
+
+The fixtures fix camera placement, world clocks, fractional ticks, and animation state.
+Rain fog uses its settled weather value in both processes, since offscreen captures have no continuous frame loop.
+Both test processes use submission order for unordered vanilla feature batches. This removes differences from JVM object identity hashes. Texture atlas animations remain on their first frame.
+Each `scene.json` records the scene configuration and available coverage counts.
+These counts describe stage contents. Objects can obscure other objects, so a count alone does not prove visible coverage.
 
 ## Read the results
 
-Each scene writes its outputs under `mod/build/lavapipe-test/output/<scene>`:
+Each scene writes files under `mod/build/lavapipe-test/output/<scene>`:
 
 | File | Contents |
 | --- | --- |
-| `lavapipe.png` | Vanilla Vulkan framebuffer rendered on the CPU |
-| `software.png` | SoulFire's rendering of the fixture |
-| `diff.png` | Absolute RGB differences, amplified eight times |
-| `comparison.png` | Lavapipe, SoulFire, and diff, from left to right |
-| `metrics.json` | Changed pixels, pixels with channel error above two, maximum error, and mean absolute channel error |
+| `lavapipe.png` | Windowed vanilla reference |
+| `headless.png` | SoulFire offscreen Vulkan capture |
+| `diff.png` | Amplified color differences |
+| `comparison.png` | Reference, headless capture, and diff, from left to right |
+| `metrics.json` | Changed pixels and channel errors |
 | `device.txt` | Graphics backend, driver, and device details |
-| `scene.json` | Camera metadata and stress-stage coverage counts |
-| `software-trace.json` | World scene software renderer diagnostics |
+| `scene.json` | Camera configuration and fixture details |
+| `vulkan-trace.json` | World capture duration and device details |
 
-Inventory mode also reports errors inside the inventory rectangle and outside it. These regions help separate UI differences from the world and HUD.
+The comparison checks all RGBA channels. Any changed pixel fails the comparison.
+Inventory comparisons also report errors inside and outside the inventory rectangle.
+The script retains results after individual failures and writes `mod/build/lavapipe-test/output/suite.json`.
 
-The task rejects an unexpected backend or driver, missing output, and a blank reference image.
-It has a three-minute process timeout. Stress scenes report differences; the item and inventory baselines require exact RGB parity.
+For startup or connection errors, inspect the scene log in `mod/build/lavapipe-test/output`.
+The client has a three-minute timeout. A full server prevents the fixture from loading.
 
-For startup or connection failures, inspect `mod/build/lavapipe-test/run/logs/latest.log`.
-Lavapipe's device name contains `llvmpipe`; `backendName=Vulkan` distinguishes it from the OpenGL driver.
+These fixtures validate rendering output. Production RPC concurrency, bot switching, resource cleanup, and memory use require separate integration checks.
 
-## Scope
+## Benchmark headless captures
 
-The default `items` fixture covers flat items, block models, special models, font rendering, and item scissor clipping at GUI scale two.
-Both renderers use the same item list and coordinates. Vanilla performs its own geometry submission, shader execution, and rasterization.
-The software image is captured before asynchronous framebuffer readback completes, avoiding additional world ticks during that wait.
+The benchmark uses the production capture path, including GPU completion and image readback into a `BufferedImage`.
+Each scene has 30 warm-up captures and 60 measured captures at 854 by 480 pixels.
+Startup, bot switching, PNG encoding, and network time are excluded. The first capture is reported separately.
 
-The `inventory` fixture includes the world, nearby player, held items, inventory preview, and HUD. It requires exact RGB pixel parity.
-The stress fixtures add locator markers, but these tests do not cover every container.
-It also does not measure production performance or prove that native rendering works with SoulFire's concurrent bot instances.
+Start the isolated server, then specify the driver manifests installed on your machine:
+
+```sh
+python3 scripts/benchmark-headless-renderer.py \
+  --driver discrete,DISCRETE=/path/to/nvidia_icd.json \
+  --driver integrated,INTEGRATED=/path/to/intel_icd.json \
+  --driver lavapipe,CPU=/path/to/lvp_icd.json
+```
+
+Use `--scene stress-wide`, `--scene stress-transparency`, or `--scene stress-entities` to select a scene. The default runs all three.
+Join manifest paths with your platform's path separator to test selection with multiple drivers visible.
+The benchmark fails if the selected device type differs from the requested type.
+
+The runner removes display environment variables. The client also rejects a presentation surface.
+These benchmarks only run when requested. Normal tests and builds do not start them.
+
+Results are saved under `mod/build/headless-benchmark/<driver>/<scene>`, with a combined `summary.json` in the parent directory.
+Each result contains the actual device, driver details, cold capture time, median, mean, p95, and all measured samples.
+The saved PNG lets you check that the benchmark rendered the expected scene.
+
+Use `--historical /path/to/benchmark-summary.json` to include earlier CPU-renderer results in the report.
+Historical values are copied from that file; the script does not rerun the removed renderer.

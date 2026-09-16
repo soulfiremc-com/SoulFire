@@ -24,7 +24,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.renderer.RenderConstants;
-import com.soulfiremc.server.renderer.SoftwareRenderer;
+import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.util.SFPathConstants;
 
 import javax.imageio.ImageIO;
@@ -60,7 +60,7 @@ public final class ExportBasicRenderCommand {
 
         var renderStart = System.currentTimeMillis();
 
-        var image = SoftwareRenderer.render(
+        var image = VulkanRenderer.render(
           level,
           player,
           width,

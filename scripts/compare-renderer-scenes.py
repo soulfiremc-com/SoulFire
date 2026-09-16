@@ -4,6 +4,7 @@
 import argparse
 import csv
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -50,9 +51,15 @@ def main():
         started = time.monotonic()
         with log_path.open("w") as log:
             process = subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+            if process.returncode == 0:
+                headless_environment = os.environ.copy()
+                headless_environment.pop("DISPLAY", None)
+                headless_environment.pop("WAYLAND_DISPLAY", None)
+                process = subprocess.run(command + ["-PlavapipeHeadless=true"], cwd=ROOT,
+                                         env=headless_environment, stdout=log, stderr=subprocess.STDOUT)
         result = {"scene": name, "exitCode": process.returncode,
                   "seconds": round(time.monotonic() - started, 2), "log": str(log_path)}
-        if metrics_path.exists():
+        if metrics_path.exists() and "changedPixels" in json.loads(metrics_path.read_text()):
             result["metrics"] = json.loads(metrics_path.read_text())
             changed = result["metrics"]["changedPixels"]
             result["status"] = "exact" if changed == 0 and process.returncode == 0 else "different"

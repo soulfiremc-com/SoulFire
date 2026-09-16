@@ -26,7 +26,7 @@ import com.soulfiremc.server.api.event.bot.ChatMessageReceiveEvent;
 import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEvent;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.renderer.RenderConstants;
-import com.soulfiremc.server.renderer.SoftwareRenderer;
+import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.settings.instance.AISettings;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
@@ -162,7 +162,7 @@ public final class CaptchaSolver extends InternalPlugin {
         var renderDistanceChunks = connection.minecraft().options.getEffectiveRenderDistance();
         var maxDistance = renderDistanceChunks * 16;
 
-        var image = SoftwareRenderer.render(
+        var image = VulkanRenderer.render(
           level,
           player,
           width,

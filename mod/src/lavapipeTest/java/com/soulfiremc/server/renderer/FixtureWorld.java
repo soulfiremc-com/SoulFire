@@ -236,14 +236,18 @@ final class FixtureWorld {
     minecraft.player.setOldPosAndRot();
     minecraft.player.tickCount = scenario.animationTick();
     minecraft.player.setDeltaMovement(Vec3.ZERO);
+    // Both processes sample the frozen weather, without cached values from intervening client ticks.
+    var probe = minecraft.gameRenderer.mainCamera().attributeProbe();
+    probe.reset();
+    probe.tick(level, minecraft.player.getEyePosition());
   }
 
-  BufferedImage renderSoftware(int width, int height, Path output) throws IOException {
+  BufferedImage renderOffscreen(int width, int height, Path output) throws IOException {
     var camera = minecraft.gameRenderer.mainCamera();
     var distance = minecraft.options.getEffectiveRenderDistance() * 16;
-    var options = new SoftwareRenderer.Options(camera.position(), camera.yRot(), camera.xRot(), width, height,
+    var options = new VulkanRenderer.Options(camera.position(), camera.yRot(), camera.xRot(), width, height,
       camera.getFov(), distance, false, false, true);
-    var result = SoftwareRenderer.renderWithResult(level, minecraft.player, options);
+    var result = VulkanRenderer.renderWithResult(level, minecraft.player, options);
     var metadata = new LinkedHashMap<String, Object>();
     metadata.put("scenario", scenario);
     metadata.put("seed", SEED);
@@ -260,7 +264,7 @@ final class FixtureWorld {
     metadata.put("coverageNote", "Placed subjects are recorded separately from pixel visibility; inspect the reference image for occlusion.");
     var gson = new GsonBuilder().setPrettyPrinting().create();
     Files.writeString(output.resolve("scene.json"), gson.toJson(metadata));
-    Files.writeString(output.resolve("software-trace.json"), gson.toJson(result.debugTrace()));
+    Files.writeString(output.resolve("vulkan-trace.json"), gson.toJson(result.debugTrace()));
     return result.image();
   }
 }

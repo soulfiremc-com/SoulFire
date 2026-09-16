@@ -60,17 +60,6 @@ allprojects {
         includeGroup("net.fabricmc.fabric-api")
       }
     }
-    ivy("https://github.com/3arthqu4ke") {
-      patternLayout {
-        artifact("/[organisation]/releases/download/[revision]/[artifact]-[revision](-[classifier])(.[ext])")
-      }
-      metadataSources {
-        artifact()
-      }
-      content {
-        includeGroup("headlessmc")
-      }
-    }
     maven("https://central.sonatype.com/repository/maven-snapshots/") {
       name = "Sonatype Snapshot Repository"
       mavenContent { snapshotsOnly() }

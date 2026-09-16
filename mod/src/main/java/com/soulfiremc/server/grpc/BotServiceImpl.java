@@ -33,8 +33,7 @@ import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.plugins.DialogHandler;
 import com.soulfiremc.server.renderer.InventoryItemIconRenderer;
 import com.soulfiremc.server.renderer.RenderConstants;
-import com.soulfiremc.server.renderer.RenderDebugTrace;
-import com.soulfiremc.server.renderer.SoftwareRenderer;
+import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.settings.lib.InstanceSettingsImpl;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.user.PermissionContext;
@@ -861,7 +860,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         throw Status.FAILED_PRECONDITION.withDescription("Bot player or level is not available").asRuntimeException();
       }
 
-      var options = new SoftwareRenderer.Options(
+      var options = new VulkanRenderer.Options(
         effectiveEyePosition(request, player),
         effectiveYRot(request, player),
         effectiveXRot(request, player),
@@ -873,7 +872,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         includeHud,
         request.getIncludeDebugTrace()
       );
-      var result = SoftwareRenderer.renderWithResult(level, player, options);
+      var result = VulkanRenderer.renderWithResult(level, player, options);
       var response = BotRenderPovResponse.newBuilder()
         .setImageBase64(toBase64PNG(result.image()))
         .setImageMimeType("image/png")
@@ -998,7 +997,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
     return Math.min(Math.max(xRot, -90.0F), 90.0F);
   }
 
-  private static BotRenderPovMetadata buildPovMetadata(SoftwareRenderer.Options options) {
+  private static BotRenderPovMetadata buildPovMetadata(VulkanRenderer.Options options) {
     return BotRenderPovMetadata.newBuilder()
       .setWidth(options.width())
       .setHeight(options.height())
@@ -1014,50 +1013,11 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
       .build();
   }
 
-  private static BotRenderPovDebugTrace buildPovDebugTrace(RenderDebugTrace.Snapshot snapshot) {
-    var builder = BotRenderPovDebugTrace.newBuilder()
-      .setRenderId(snapshot.renderId())
-      .setChunksConsidered(snapshot.chunksConsidered())
-      .setChunksLoaded(snapshot.chunksLoaded())
-      .setSectionsVisible(snapshot.sectionsVisible())
-      .setSectionsMeshed(snapshot.sectionsMeshed())
-      .setSectionCacheHits(snapshot.sectionCacheHits())
-      .setSectionCacheMisses(snapshot.sectionCacheMisses())
-      .setBlockQuads(snapshot.blockQuads())
-      .setEntitiesConsidered(snapshot.entitiesConsidered())
-      .setEntitiesVisible(snapshot.entitiesVisible())
-      .setBillboards(snapshot.billboards())
-      .setWeatherBillboards(snapshot.weatherBillboards())
-      .setVanillaBlockGeometryHits(snapshot.vanillaBlockGeometryHits())
-      .setVanillaBlockGeometryFallbacks(snapshot.vanillaBlockGeometryFallbacks())
-      .setResourceBlockGeometryFallbacks(snapshot.resourceBlockGeometryFallbacks())
-      .setInventoryIconIgnored(snapshot.inventoryIconIgnored())
-      .setUnknownRenderPipelines(snapshot.unknownRenderPipelines())
-      .setRuntimeTextureMirrorSkips(snapshot.runtimeTextureMirrorSkips())
-      .setOpaqueTriangles(snapshot.opaqueTriangles())
-      .setCutoutTriangles(snapshot.cutoutTriangles())
-      .setTranslucentTriangles(snapshot.translucentTriangles())
-      .setWorldCollectNanos(snapshot.worldCollectNanos())
-      .setDynamicCollectNanos(snapshot.dynamicCollectNanos())
-      .setRasterNanos(snapshot.rasterNanos())
+  private static BotRenderPovDebugTrace buildPovDebugTrace(VulkanRenderer.Trace snapshot) {
+    return BotRenderPovDebugTrace.newBuilder()
       .setTotalNanos(snapshot.totalNanos())
-      .setTextSubmissions(snapshot.textSubmissions())
-      .addAllNotableEvents(snapshot.notableEvents())
-      .addAllDetailedFailures(snapshot.detailedFailures());
-    for (var textSample : snapshot.textSamples()) {
-      builder.addTextSamples(BotRenderPovTextSubmission.newBuilder()
-        .setSource(textSample.source())
-        .setText(textSample.text())
-        .setShadow(textSample.shadow())
-        .setDisplayMode(textSample.displayMode())
-        .setLight(textSample.light())
-        .setColor(textSample.color())
-        .setBackgroundColor(textSample.backgroundColor())
-        .setOutlineColor(textSample.outlineColor())
-        .build());
-    }
-
-    return builder.build();
+      .addNotableEvents("Headless Vulkan: " + snapshot.device())
+      .build();
   }
 
   /**

@@ -20,9 +20,7 @@ package com.soulfiremc.mod.mixin.headless.rendering;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.soulfiremc.mod.access.ITextureManager;
-import com.soulfiremc.server.renderer.RendererRuntimeTextureMirror;
 import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Final;
@@ -54,9 +52,6 @@ public class MixinTextureManager implements ITextureManager {
   public void soulfire$initializeBotCopy(TextureManager sharedTextureManager) {
     soulfire$isolated = true;
     soulfire$ownedTextures = Collections.newSetFromMap(new IdentityHashMap<>());
-    RendererRuntimeTextureMirror.registerFallback(
-      (TextureManager) (Object) this,
-      sharedTextureManager);
   }
 
   @Inject(method = "register", at = @At("HEAD"))
@@ -64,34 +59,6 @@ public class MixinTextureManager implements ITextureManager {
     if (soulfire$isolated && byPath.get(location) != texture) {
       soulfire$ownedTextures.add(texture);
     }
-  }
-
-  @Inject(method = "register", at = @At("TAIL"))
-  private void registerTextureHook(Identifier location, AbstractTexture texture, CallbackInfo ci) {
-    var textureManager = (TextureManager) (Object) this;
-    try {
-      if (texture instanceof DynamicTexture dynamicTexture) {
-        RendererRuntimeTextureMirror.register(
-          textureManager,
-          location,
-          texture.getTexture(),
-          dynamicTexture.getPixels());
-      } else {
-        RendererRuntimeTextureMirror.register(textureManager, location, texture.getTexture());
-      }
-    } catch (IllegalStateException _) {
-      RendererRuntimeTextureMirror.unregister(textureManager, location);
-    }
-  }
-
-  @Inject(method = "release", at = @At("HEAD"))
-  private void releaseTextureHook(Identifier location, CallbackInfo ci) {
-    RendererRuntimeTextureMirror.unregister((TextureManager) (Object) this, location);
-  }
-
-  @Inject(method = "close", at = @At("HEAD"))
-  private void closeTextureManagerHook(CallbackInfo ci) {
-    RendererRuntimeTextureMirror.unregisterAll((TextureManager) (Object) this);
   }
 
   @WrapOperation(

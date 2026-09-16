@@ -2,6 +2,25 @@
   "required": true,
   "package": "com.soulfiremc.manual.mixin",
   "compatibilityLevel": "JAVA_25",
-  "client": ["LavapipeTestMixin", "NativeAtlasMirror", "ComparisonEnvironment", "ComparisonPartialTick", "StressEntityFreeze", "StressEntityAccess", "StressParticleFreeze", "StressGuardianAccess", "StressItemAccess", "StressAtlasFreeze", "StressLightFreeze", "StressHudClock", "StressParticleRandom", "StressEntityRandom", "StressBlockEntityFreeze"],
-  "injectors": {"defaultRequire": 1}
+  "client": [
+    "LavapipeTestMixin",
+    "ComparisonEnvironment",
+    "ComparisonPartialTick",
+    "StressEntityFreeze",
+    "StressEntityAccess",
+    "StressParticleFreeze",
+    "StressGuardianAccess",
+    "StressItemAccess",
+    "StressAtlasFreeze",
+    "StressLightFreeze",
+    "StressHudClock",
+    "StressParticleRandom",
+    "StressEntityRandom",
+    "StressBlockEntityFreeze",
+    "ComparisonBatchOrder",
+    "ComparisonRainFog"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

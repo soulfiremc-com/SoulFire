@@ -77,13 +77,6 @@ public final class ExportRenderDebugDumpCommand {
             maxDistance,
             dumpDirectory
           );
-          context.getSource().source().sendInfo(
-            "Renderer debug dump complete: {} quads, {} scene textures, {} runtime textures, {} atlases",
-            result.quadCount(),
-            result.textureCount(),
-            result.runtimeTextureCount(),
-            result.atlasCount()
-          );
           context.getSource().source().sendInfo("PNG: {}", result.frame());
           context.getSource().source().sendInfo("Scene data: {}", result.scene());
         } catch (IOException e) {
@@ -103,7 +96,7 @@ public final class ExportRenderDebugDumpCommand {
       literal("export-render-debug-dump")
         .executes(
           help(
-            "Export a POV image and its scene, material, texture, and runtime texture debug data.",
+            "Export a POV image, camera settings, Vulkan device, and capture timing.",
             c -> exportRenderDebugDump(c, RenderConstants.DEFAULT_WIDTH, RenderConstants.DEFAULT_HEIGHT, -1)))
         .then(
           argument("width", IntegerArgumentType.integer(1, 3840))

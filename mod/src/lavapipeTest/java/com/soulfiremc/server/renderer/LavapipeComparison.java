@@ -45,6 +45,7 @@ import java.util.Locale;
 
 /// Runs only in the separate manual native client, without SoulFire's headless lifecycle.
 public final class LavapipeComparison {
+  private static final boolean HEADLESS = Boolean.getBoolean("sf.lavapipe.headless");
   private static final long START = System.nanoTime();
   private static final Path OUTPUT = Path.of(System.getProperty("sf.lavapipe.output"));
   private static final String SCENE = System.getProperty("sf.lavapipe.scene", "items");
@@ -95,7 +96,7 @@ public final class LavapipeComparison {
   }
 
   public static boolean freezeSimulation() {
-    return STRESS && prepared && !finished;
+    return (STRESS || INVENTORY) && prepared && !finished;
   }
 
   public static void afterFrame(Minecraft minecraft) {
@@ -112,9 +113,8 @@ public final class LavapipeComparison {
     if (!prepared) {
       if (STRESS && !SCENARIO.isolatedWorld() && !StressComparisonScene.ready(minecraft)) return;
       var info = RenderSystem.getDevice().getDeviceInfo();
-      if (!info.backendName().toLowerCase(Locale.ROOT).contains("vulkan")
-        || !info.driverInfo().toLowerCase(Locale.ROOT).contains("llvmpipe")) {
-        throw new IllegalStateException("Expected Vulkan on Lavapipe, got " + info);
+      if (!info.backendName().toLowerCase(Locale.ROOT).contains("vulkan")) {
+        throw new IllegalStateException("Expected Vulkan, got " + info);
       }
       minecraft.options.guiScale().set(2);
       minecraft.options.pauseOnLostFocus = false;
@@ -128,14 +128,16 @@ public final class LavapipeComparison {
         minecraft.gui.setScreen(new ComparisonScreen());
       }
       prepared = true;
+      beforeExtract(minecraft);
       return;
+    }
+    if (HEADLESS) {
+      beforeExtract(minecraft);
+      // Advance the same two seconds of client animation as the 30 FPS reference warm-up.
+      java.util.concurrent.locks.LockSupport.parkNanos(33_333_333L);
     }
     minecraft.gui.toastManager().clear();
-    if (++frames < (INVENTORY || STRESS ? 60 : 8) || capturing || STRESS && !minecraft.levelRenderer.hasRenderedAllSections()) {
-      return;
-    }
-    if (RendererBenchmark.ENABLED) {
-      finished = RendererBenchmark.afterFrame(minecraft, OUTPUT, SCENE, SCENARIO.isolatedWorld());
+    if (++frames < (INVENTORY || STRESS ? 60 : 8) || capturing || !HEADLESS && STRESS && !minecraft.levelRenderer.hasRenderedAllSections()) {
       return;
     }
     capturing = true;
@@ -143,42 +145,48 @@ public final class LavapipeComparison {
       Files.createDirectories(OUTPUT);
       Files.writeString(OUTPUT.resolve("device.txt"), RenderSystem.getDevice().getDeviceInfo().toString());
       var target = minecraft.gameRenderer.mainRenderTarget();
-      var software = renderSoftware(minecraft, target.width, target.height);
-      Screenshot.takeScreenshot(target, nativeImage -> {
-        try (nativeImage) {
-          nativeImage.writeToFile(OUTPUT.resolve("lavapipe.png"));
-          var reference = ImageIO.read(OUTPUT.resolve("lavapipe.png").toFile());
-          ImageIO.write(software, "PNG", OUTPUT.resolve("software.png").toFile());
-          compare(reference, software);
+      if (HEADLESS) {
+        if (minecraft.windowSurface() != null) throw new IllegalStateException("Headless capture created a presentation surface");
+        beforeExtract(minecraft);
+        minecraft.gameRenderer.update(minecraft.getDeltaTracker());
+        if (Boolean.getBoolean("sf.lavapipe.benchmark")) {
+          HeadlessRendererBenchmark.run(minecraft, OUTPUT, SCENE, SCENARIO.isolatedWorld());
           finished = true;
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
+          return;
         }
-      });
+        var actual = renderOffscreen(minecraft, 854, 480);
+        ImageIO.write(actual, "PNG", OUTPUT.resolve("headless.png").toFile());
+        var referencePath = OUTPUT.resolve("lavapipe.png");
+        if (Files.isRegularFile(referencePath)) compare(ImageIO.read(referencePath.toFile()), actual);
+        else Files.writeString(OUTPUT.resolve("metrics.json"), "{\"headlessCapture\":true}");
+        finished = true;
+      } else {
+        Screenshot.takeScreenshot(target, nativeImage -> {
+          try (nativeImage) {
+            nativeImage.writeToFile(OUTPUT.resolve("lavapipe.png"));
+            Files.writeString(OUTPUT.resolve("metrics.json"), "{\"referenceCapture\":true}");
+            finished = true;
+          } catch (IOException e) { throw new UncheckedIOException(e); }
+        });
+      }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
   }
 
-  private static BufferedImage renderSoftware(Minecraft minecraft, int width, int height) throws IOException {
-    if (fixture != null) return fixture.renderSoftware(width, height, OUTPUT);
-    if (STRESS) return StressComparisonScene.renderSoftware(minecraft, width, height, OUTPUT, SCENE);
+  private static BufferedImage renderOffscreen(Minecraft minecraft, int width, int height) throws IOException {
+    if (fixture != null) return fixture.renderOffscreen(width, height, OUTPUT);
+    if (STRESS) return StressComparisonScene.renderOffscreen(minecraft, width, height, OUTPUT, SCENE);
     if (INVENTORY) {
-      return InventoryComparisonScene.renderSoftware(minecraft, width, height, OUTPUT);
+      return InventoryComparisonScene.renderOffscreen(minecraft, width, height, OUTPUT);
     }
-    var state = new GuiRenderState();
-    ComparisonScreen.draw(new GuiGraphicsExtractor(minecraft, state, 0, 0));
-    var camera = new Camera(Vec3.ZERO, 0, 0, width, height, 70, 16);
-    var context = RenderContext.create(minecraft.level, minecraft.player, camera, 16);
-    var buffers = new RasterBuffers(width, height);
-    PovHudRenderer.renderState(context, state, buffers, minecraft.getWindow().getGuiScale(), 0);
-    return buffers.image();
+    return VulkanRenderer.renderGui(minecraft, width, height, 2, ComparisonScreen::draw);
   }
 
-  private static void compare(BufferedImage reference, BufferedImage software) throws IOException {
+  private static void compare(BufferedImage reference, BufferedImage headless) throws IOException {
     var width = reference.getWidth();
     var height = reference.getHeight();
-    if (software.getWidth() != width || software.getHeight() != height) {
+    if (headless.getWidth() != width || headless.getHeight() != height) {
       throw new IllegalStateException("Framebuffer size changed during the comparison");
     }
     var colors = new HashSet<Integer>();
@@ -197,7 +205,7 @@ public final class LavapipeComparison {
       for (var x = 0; x < width; x++) {
         var a = reference.getRGB(x, y);
         colors.add(a);
-        var b = software.getRGB(x, y);
+        var b = headless.getRGB(x, y);
         var largest = 0;
         var color = 0;
         for (var shift : new int[]{24, 16, 8, 0}) {

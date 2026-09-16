@@ -351,7 +351,7 @@ message BotUpdateConfigEntryResponse {
 }
 
 // Request to render the bot's point-of-view as an image.
-// Uses software rendering to generate a PNG image of what the bot "sees".
+// Uses headless Vulkan rendering to generate a PNG image of what the bot sees.
 message BotRenderPovRequest {
   // The UUID of the SoulFire instance containing the bot.
   string instance_id = 1 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uuid"];
@@ -1706,7 +1706,7 @@ service BotService {
     };
   }
 
-  // Renders the bot's point-of-view as a PNG image using software rendering.
+  // Renders the bot's point-of-view as a PNG image using headless Vulkan.
   // The bot must be online with a valid player and level.
   // Uses the bot's current render distance setting.
   // Requires READ_BOT_INFO permission.

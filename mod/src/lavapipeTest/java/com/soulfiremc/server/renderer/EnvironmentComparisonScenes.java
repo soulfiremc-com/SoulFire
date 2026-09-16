@@ -280,10 +280,16 @@ final class EnvironmentComparisonScenes {
         w.box(6, 0, 20, 12, 20, 26, "snow_block");
         w.camera(0, 7, -10, 0, -3);
       }
-      case "blindness" -> w.minecraft.player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 1200));
+      case "blindness" -> {
+        w.minecraft.player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 1200));
+        w.camera(-4, 1, 2, 0, 8);
+        w.put(-2, 0, 4, "lantern");
+      }
       case "darkness" -> w.minecraft.player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 1200));
       case "powder-snow" -> {
         w.box(-2, 0, -10, 2, 4, -6, "powder_snow");
+        w.put(-1, 1, -7, "chiseled_stone_bricks");
+        w.put(0, 1, -7, "oak_log");
         w.camera(0, 0, -8, 0, 0);
         w.minecraft.player.setTicksFrozen(120);
       }

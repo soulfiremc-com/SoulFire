@@ -116,6 +116,8 @@ final class StressComparisonScene {
     hudView = view.equals("stress-hud");
     origin = minecraft.player.blockPosition();
     minecraft.level.getRandom().setSeed(SEED);
+    LavapipeComparison.resetEntitySeed(SEED);
+    LavapipeComparison.resetParticleSeed(SEED);
     // Clear only the local stage; no commands or changes are sent to the server.
     for (var x = -20; x <= 20; x++) {
       for (var z = -20; z <= 28; z++) {
@@ -442,23 +444,30 @@ final class StressComparisonScene {
     minecraft.player.setYRot(yaw);
     minecraft.player.setXRot(pitch);
     minecraft.player.setOldPosAndRot();
+    minecraft.player.xBob = minecraft.player.xBobO = pitch;
+    minecraft.player.yBob = minecraft.player.yBobO = yaw;
     minecraft.player.tickCount = 60;
+    minecraft.player.attackStrengthTicker = 100;
+    minecraft.player.itemSwapTicker = 100;
+    minecraft.gui.hud.overlayMessageTime = 60;
+    minecraft.gui.hud.toolHighlightTimer = 40;
+    minecraft.gui.hud.titleTime = 60;
     minecraft.gui.hud.vignetteBrightness = 0.25F;
   }
 
-  static BufferedImage renderSoftware(Minecraft minecraft, int width, int height, Path output, String view) throws IOException {
+  static BufferedImage renderOffscreen(Minecraft minecraft, int width, int height, Path output, String view) throws IOException {
     var camera = minecraft.gameRenderer.mainCamera();
     var distance = minecraft.options.getEffectiveRenderDistance() * 16;
-    var options = new SoftwareRenderer.Options(camera.position(), camera.yRot(), camera.xRot(), width, height, camera.getFov(), distance, true, true, true);
-    var result = SoftwareRenderer.renderWithResult(minecraft.level, minecraft.player, options);
+    var options = new VulkanRenderer.Options(camera.position(), camera.yRot(), camera.xRot(), width, height, camera.getFov(), distance, true, true, true);
+    var result = VulkanRenderer.renderWithResult(minecraft.level, minecraft.player, options);
     var gson = new GsonBuilder().setPrettyPrinting().create();
     Files.writeString(output.resolve("scene.json"), gson.toJson(Map.of(
       "scene", view, "seed", SEED, "camera", Map.of("position", camera.position(), "yaw", camera.yRot(), "pitch", camera.xRot(), "fov", camera.getFov()),
       "entities", ENTITY_COUNTS, "blocks", BLOCK_COUNTS, "particles", PARTICLE_COUNTS,
-      "excludedEntities", EXCLUSIONS, "softwareMaxDistance", distance,
+      "excludedEntities", EXCLUSIONS, "headlessMaxDistance", distance,
       "glowingEntities", ENTITIES.stream().filter(Entity::isCurrentlyGlowing).count(),
       "coverageNote", "Counts describe stage contents, not visibility. Views deliberately overlap features; inspect the native image for occlusion.")));
-    Files.writeString(output.resolve("software-trace.json"), gson.toJson(result.debugTrace()));
+    Files.writeString(output.resolve("vulkan-trace.json"), gson.toJson(result.debugTrace()));
     return result.image();
   }
 

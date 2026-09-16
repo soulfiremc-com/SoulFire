@@ -57,6 +57,15 @@ final class InventoryComparisonScene {
     level.clockManager().handleUpdates(6000, Map.of(level.registryAccess().get(WorldClocks.OVERWORLD).orElseThrow(), new ClockNetworkState(6000, 0, 0)));
     level.setRainLevel(0);
     level.setThunderLevel(0);
+    minecraft.gui.hud.vignetteBrightness = 0.25F;
+    minecraft.gameRenderer.lightmapRenderStateExtractor.blockLightFlicker = 0;
+    minecraft.gameRenderer.lightmapRenderStateExtractor.needsUpdate = true;
+    if (minecraft.player != null) {
+      minecraft.player.attackStrengthTicker = 100;
+      minecraft.player.itemSwapTicker = 100;
+      minecraft.player.xBob = minecraft.player.xBobO = 0;
+      minecraft.player.yBob = minecraft.player.yBobO = 0;
+    }
     for (var entity : StreamSupport.stream(level.entitiesForRendering().spliterator(), false).toList()) {
       if (entity != minecraft.player && entity.getId() != -1000) {
         entity.discard();
@@ -89,6 +98,9 @@ final class InventoryComparisonScene {
     player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.DIAMOND_HELMET));
     player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.ELYTRA));
     player.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+    for (var tick = 0; tick < 100; tick++) {
+      player.elytraAnimationState.tick();
+    }
     var other = new RemotePlayer(minecraft.level,
       new GameProfile(UUID.nameUUIDFromBytes("OfflinePlayer:ProbeB".getBytes(StandardCharsets.UTF_8)), "ProbeB"));
     other.setId(-1000);
@@ -105,10 +117,10 @@ final class InventoryComparisonScene {
     minecraft.gui.setScreen(new FixedInventoryScreen(minecraft));
   }
 
-  static BufferedImage renderSoftware(Minecraft minecraft, int width, int height, Path output) {
+  static BufferedImage renderOffscreen(Minecraft minecraft, int width, int height, Path output) {
     var camera = minecraft.gameRenderer.mainCamera();
     var position = camera.position();
-    var options = new SoftwareRenderer.Options(position, camera.yRot(), camera.xRot(), width, height,
+    var options = new VulkanRenderer.Options(position, camera.yRot(), camera.xRot(), width, height,
       camera.getFov(), 32, true, true, true);
     var metadata = Map.of(
       "scene", "inventory",
@@ -118,7 +130,7 @@ final class InventoryComparisonScene {
       "dayTime", minecraft.level.getOverworldClockTime(),
       "partialTick", minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false),
       "guiScale", minecraft.getWindow().getGuiScale(),
-      "softwareMaxDistance", 32,
+      "headlessMaxDistance", 32,
       "nativeRenderDistanceChunks", minecraft.options.renderDistance().get()
     );
     try {
@@ -126,9 +138,9 @@ final class InventoryComparisonScene {
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
-    var result = SoftwareRenderer.renderWithResult(minecraft.level, minecraft.player, options);
+    var result = VulkanRenderer.renderWithResult(minecraft.level, minecraft.player, options);
     try {
-      Files.writeString(output.resolve("software-trace.json"), new GsonBuilder().setPrettyPrinting().create().toJson(result.debugTrace()));
+      Files.writeString(output.resolve("vulkan-trace.json"), new GsonBuilder().setPrettyPrinting().create().toJson(result.debugTrace()));
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }

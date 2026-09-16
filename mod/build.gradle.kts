@@ -77,12 +77,6 @@ dependencies {
     exclude("io.netty")
     exclude("org.slf4j")
   }
-  val headlessMcNotation = "headlessmc:headlessmc-lwjgl:2.8.0:no-asm@jar"
-  api(headlessMcNotation) {
-    exclude("io.netty")
-    exclude("org.slf4j")
-  }
-
   testRuntimeOnly(libs.junit.launcher)
   testRuntimeOnly(libs.fabric.loader.junit)
   testImplementation(libs.junit)
@@ -186,6 +180,8 @@ tasks.shadowJar {
   }
   mergeServiceFiles()
   dependencies {
+    // The launcher supplies matching LWJGL bindings and native libraries.
+    exclude(dependency("org.lwjgl:.*:.*"))
     exclude(dependency("io.github.llamalad7:mixinextras-fabric:.*"))
     exclude(dependency("net.fabricmc:dev-launch-injector:.*"))
     exclude(dependency("net.fabricmc:fabric-loader:.*"))
@@ -294,8 +290,10 @@ val lavapipeTest = sourceSets.create("lavapipeTest") {
   runtimeClasspath += sourceSets.main.get().output + configurations.runtimeClasspath.get()
 }
 val lavapipeScene = providers.gradleProperty("lavapipeScene").orElse("items")
+val lavapipeHeadless = providers.gradleProperty("lavapipeHeadless").orElse("false")
 val lavapipeBenchmark = providers.gradleProperty("lavapipeBenchmark").orElse("false")
-val lavapipeOutput = layout.buildDirectory.dir(lavapipeScene.map { "lavapipe-test/output/$it" })
+val lavapipeOutput = layout.buildDirectory.dir(providers.gradleProperty("lavapipeOutput")
+  .orElse(lavapipeScene.map { "lavapipe-test/output/$it" }))
 val lavapipeRun = layout.buildDirectory.dir("lavapipe-test/run")
 val lavapipeIcd = providers.gradleProperty("lavapipeIcd")
   .orElse("/usr/share/vulkan/icd.d/lvp_icd.x86_64.json")
@@ -308,7 +306,9 @@ loom {
       runDirectory.set(lavapipeRun)
       systemProperties.put("fabric.debug.disableModIds", "soulfire,viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock,spark")
       systemProperties.put("sf.lavapipe.scene", lavapipeScene)
+      systemProperties.put("sf.lavapipe.headless", lavapipeHeadless)
       systemProperties.put("sf.lavapipe.benchmark", lavapipeBenchmark)
+      systemProperties.put("sf.lavapipe.expectedDeviceType", providers.gradleProperty("lavapipeExpectedDeviceType").orElse(""))
       systemProperties.put("sf.lavapipe.output", lavapipeOutput.map { it.asFile.absolutePath })
       jvmArguments.addAll("--enable-native-access=ALL-UNNAMED", "-Xmx2G")
       programArguments.addAll("--graphicsBackend", "VULKAN", "--width", "854", "--height", "480", "--username", "LavapipeTest")
@@ -324,20 +324,22 @@ tasks.named<ProcessResources>(lavapipeTest.processResourcesTaskName) {
 }
 
 tasks.named("runLavapipeTest") {
-  description = "Manually compare vanilla Vulkan on Lavapipe with the POV GUI renderer. Requires a local Minecraft server."
+  description = "Manually compare or benchmark headless Vulkan captures. Requires a local Minecraft server."
   timeout.set(Duration.ofMinutes(3))
   val output = lavapipeOutput.get().asFile
   val run = lavapipeRun.get().asFile
   val icd = lavapipeIcd.get()
   val scene = lavapipeScene.get()
+  val headless = lavapipeHeadless.get().toBoolean()
   val benchmark = lavapipeBenchmark.get().toBoolean()
   val scenes = file("src/lavapipeTest/resources/lavapipe-scenes.csv").readLines().drop(1).map { it.substringBefore(',') }
   doFirst {
     require(scene in scenes) { "Unknown scene: $scene. Available scenes: ${scenes.joinToString()}" }
-    require(File(icd).isFile) { "Lavapipe ICD not found: $icd. Set -PlavapipeIcd=/path/to/lvp_icd.json" }
+    require(icd.split(File.pathSeparator).all { File(it).isFile }) { "Vulkan ICD not found: $icd. Set -PlavapipeIcd=/path/to/driver.json" }
+    require(!benchmark || headless) { "Benchmarks must run headlessly with -PlavapipeHeadless=true" }
     output.mkdirs()
-    val outputs = if (benchmark) listOf("benchmark.json") else
-      listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt", "scene.json", "software-trace.json")
+    val outputs = if (benchmark) listOf("headless-benchmark.json", "headless-benchmark.png", "device.txt") else if (headless) listOf("headless.png", "diff.png", "comparison.png", "metrics.json", "vulkan-trace.json") else
+      listOf("lavapipe.png", "metrics.json", "device.txt", "scene.json")
     outputs.forEach {
       output.resolve(it).delete()
     }
@@ -358,7 +360,7 @@ tasks.named("runLavapipeTest") {
     """.trimIndent() + "\n")
   }
   doLast {
-    check(output.resolve(if (benchmark) "benchmark.json" else "metrics.json").isFile) {
+    check(output.resolve(if (benchmark) "headless-benchmark.json" else "metrics.json").isFile) {
       "Lavapipe comparison did not complete. Inspect build/lavapipe-test/run/logs/latest.log."
     }
   }

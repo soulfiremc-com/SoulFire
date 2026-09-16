@@ -64,6 +64,12 @@ dependencies {
   api("org.lwjgl:lwjgl-vma:3.4.3")
   api("org.lwjgl:lwjgl-vulkan:3.4.3")
   api("org.lwjgl:lwjgl:3.4.3:unsafe")
+  // Real native libraries are required for headless Vulkan and texture/font decoding.
+  for (platform in listOf("linux", "linux-arm64", "windows", "windows-arm64", "macos", "macos-arm64")) {
+    for (module in listOf("lwjgl", "lwjgl-freetype", "lwjgl-glfw", "lwjgl-jemalloc", "lwjgl-openal", "lwjgl-shaderc", "lwjgl-spvc", "lwjgl-stb", "lwjgl-tinyfd", "lwjgl-vma")) {
+      runtimeOnly("org.lwjgl:$module:3.4.3:natives-$platform")
+    }
+  }
   api("org.slf4j:slf4j-api:2.0.18")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.5")

@@ -48,6 +48,7 @@ import com.soulfiremc.server.api.metadata.MetadataHolder;
 import com.soulfiremc.server.pathfinding.NavigationWorldState;
 import com.soulfiremc.server.proxy.ProxyAuthenticator;
 import com.soulfiremc.server.proxy.SFProxy;
+import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.settings.lib.BotSettingsDelegate;
 import com.soulfiremc.server.settings.lib.BotSettingsSource;
 import com.soulfiremc.server.util.SFHelpers;
@@ -72,12 +73,6 @@ import net.minecraft.client.ResourceLoadStateTracker;
 import net.minecraft.client.User;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.Hud;
-import net.minecraft.client.gui.render.GuiRenderer;
-import net.minecraft.client.gui.render.pip.GuiBannerResultRenderer;
-import net.minecraft.client.gui.render.pip.GuiBookModelRenderer;
-import net.minecraft.client.gui.render.pip.GuiEntityRenderer;
-import net.minecraft.client.gui.render.pip.GuiProfilerChartRenderer;
-import net.minecraft.client.gui.render.pip.GuiSkinRenderer;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -94,16 +89,13 @@ import net.minecraft.client.multiplayer.chat.report.ReportingContext;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.player.LocalPlayerResolver;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.LightmapRenderStateExtractor;
 import net.minecraft.client.renderer.MapRenderer;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
 import net.minecraft.client.renderer.ScreenEffectRenderer;
-import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.extract.LevelExtractor;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.state.GameRenderState;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.resources.MapTextureManager;
@@ -273,8 +265,11 @@ public final class BotConnection {
     var localProfileResolver = new LocalPlayerResolver(newInstance, newInstance.services().profileResolver());
     newInstance.playerSkinRenderCache = new PlayerSkinRenderCache(newInstance.getTextureManager(), newInstance.getSkinManager(), localProfileResolver);
 
+    VulkanRenderer.DEVICE_LOCK.lock();
     try (var ignored = SFHelpers.smartThreadLocalCloseable(SFConstants.MINECRAFT_INSTANCE, newInstance)) {
       initializeBotClientComponents(newInstance);
+    } finally {
+      VulkanRenderer.DEVICE_LOCK.unlock();
     }
 
     var remoteFriendListUpdateHandler = new RemoteFriendListUpdateHandler(friendsService, newInstance);
@@ -313,12 +308,17 @@ public final class BotConnection {
   }
 
   private static void initializeBotTextureManager(Minecraft minecraft) {
-    var sharedTextureManager = minecraft.getTextureManager();
-    var textureManager = SFModHelpers.deepCopy(sharedTextureManager);
-    textureManager.byPath = new HashMap<>(sharedTextureManager.byPath);
-    textureManager.tickableTextures = new HashSet<>();
-    ((ITextureManager) textureManager).soulfire$initializeBotCopy(sharedTextureManager);
-    minecraft.textureManager = textureManager;
+    VulkanRenderer.DEVICE_LOCK.lock();
+    try {
+      var sharedTextureManager = minecraft.getTextureManager();
+      var textureManager = SFModHelpers.deepCopy(sharedTextureManager);
+      textureManager.byPath = new HashMap<>(sharedTextureManager.byPath);
+      textureManager.tickableTextures = new HashSet<>();
+      ((ITextureManager) textureManager).soulfire$initializeBotCopy(sharedTextureManager);
+      minecraft.textureManager = textureManager;
+    } finally {
+      VulkanRenderer.DEVICE_LOCK.unlock();
+    }
   }
 
   private void initializeBotClientComponents(Minecraft minecraft) {
@@ -374,18 +374,7 @@ public final class BotConnection {
     gameRenderer.mainCamera = new Camera();
     minecraft.gameRenderer = gameRenderer;
     gameRenderer.lightmapRenderStateExtractor = new LightmapRenderStateExtractor(gameRenderer, minecraft);
-    var featureDispatcher = new FeatureRenderDispatcher(gameRenderer.renderBuffers, minecraft.getModelManager(),
-      minecraft.getAtlasManager(), minecraft.font, gameRenderer.gameRenderState);
-    // CPU rendering does not need a per-bot chunk buffer pool, but feature uploads must be isolated.
-    var featureBuffer = new StagedVertexBuffer(() -> "Bot feature buffer", 4194304);
-    featureDispatcher.stagedVertexBuffer = featureBuffer;
-    gameRenderer.featureRenderDispatcher = featureDispatcher;
-    gameRenderer.guiRenderer = new GuiRenderer(gameRenderer.gameRenderState.guiRenderState, featureDispatcher,
-      List.of(new GuiEntityRenderer(entityRenderDispatcher), new GuiSkinRenderer(), new GuiBookModelRenderer(),
-        new GuiBannerResultRenderer(minecraft.getAtlasManager()), new GuiProfilerChartRenderer()));
-    shutdownHooks.add(gameRenderer.guiRenderer::close);
-    shutdownHooks.add(featureDispatcher::close);
-    shutdownHooks.add(featureBuffer::close);
+    shutdownHooks.add(() -> VulkanRenderer.release(minecraft));
 
     var blockEntityRenderDispatcher = SFModHelpers.deepCopy(minecraft.getBlockEntityRenderDispatcher());
     blockEntityRenderDispatcher.cameraPos = Vec3.ZERO;
@@ -655,6 +644,15 @@ public final class BotConnection {
   }
 
   private void runShutdownHooks() {
+    VulkanRenderer.DEVICE_LOCK.lock();
+    try {
+      runShutdownHooksLocked();
+    } finally {
+      VulkanRenderer.DEVICE_LOCK.unlock();
+    }
+  }
+
+  private void runShutdownHooksLocked() {
     for (var shutdownHook : shutdownHooks) {
       try {
         shutdownHook.run();
