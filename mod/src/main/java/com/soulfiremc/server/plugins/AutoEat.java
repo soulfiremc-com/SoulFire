@@ -31,6 +31,7 @@ import com.soulfiremc.server.util.SFInventoryHelpers;
 import com.soulfiremc.server.util.SFItemHelpers;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.ContainerInput;
@@ -38,6 +39,7 @@ import net.minecraft.world.inventory.InventoryMenu;
 
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @InternalPluginClass
 public final class AutoEat extends InternalPlugin {
   public AutoEat() {
@@ -86,28 +88,29 @@ public final class AutoEat extends InternalPlugin {
         }
 
         var gameMode = connection.minecraft().gameMode;
+        ControlTask task;
         if (slot == SFInventoryHelpers.getSelectedSlot(player.getInventory())) {
-          connection.botControl().tryStart(ControlTask.sequence(
+          task = ControlTask.sequence(
             "Auto eat",
             ControlPriority.LOW,
             ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          ));
+          );
         } else if (slot == InventoryMenu.SHIELD_SLOT) {
-          connection.botControl().tryStart(ControlTask.sequence(
+          task = ControlTask.sequence(
             "Auto eat",
             ControlPriority.LOW,
             ControlTask.action(() -> gameMode.useItem(player, InteractionHand.OFF_HAND))
-          ));
+          );
         } else if (SFInventoryHelpers.isSelectableHotbarSlot(slot)) {
-          connection.botControl().tryStart(ControlTask.sequence(
+          task = ControlTask.sequence(
             "Auto eat",
             ControlPriority.LOW,
             ControlTask.action(() -> player.getInventory().setSelectedSlot(SFInventoryHelpers.toHotbarIndex(slot))),
             ControlTask.waitMillis(50L),
             ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          ));
+          );
         } else {
-          connection.botControl().tryStart(ControlTask.sequence(
+          task = ControlTask.sequence(
             "Auto eat",
             ControlPriority.LOW,
             ControlTask.action(player::sendOpenInventory),
@@ -124,7 +127,11 @@ public final class AutoEat extends InternalPlugin {
             ControlTask.action(player::closeContainer),
             ControlTask.waitMillis(50L),
             ControlTask.action(() -> gameMode.useItem(player, InteractionHand.MAIN_HAND))
-          ));
+          );
+        }
+        if (connection.botControl().tryStart(task)) {
+          log.info("Auto Eat: {} is attempting to eat {} from inventory slot {}",
+            connection.accountName(), playerInventory.getSlot(slot).getItem().getHoverName().getString(), slot);
         }
       },
       settingsSource.getRandom(AutoEatSettings.DELAY).asLongSupplier(),
@@ -146,7 +153,7 @@ public final class AutoEat extends InternalPlugin {
         .key("enabled")
         .uiName("Enable Auto Eat")
         .description("Eat available food automatically when hungry")
-        .defaultValue(true)
+        .defaultValue(false)
         .build();
     public static final MinMaxProperty<SettingsSource.Bot> DELAY =
       ImmutableMinMaxProperty.<SettingsSource.Bot>builder()

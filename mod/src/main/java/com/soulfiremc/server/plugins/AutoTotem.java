@@ -30,6 +30,7 @@ import com.soulfiremc.server.settings.property.*;
 import com.soulfiremc.server.util.SFInventoryHelpers;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
@@ -37,6 +38,7 @@ import net.minecraft.world.item.Items;
 
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @InternalPluginClass
 public final class AutoTotem extends InternalPlugin {
   public AutoTotem() {
@@ -84,7 +86,7 @@ public final class AutoTotem extends InternalPlugin {
         }
 
         var gameMode = connection.minecraft().gameMode;
-        connection.botControl().tryStart(ControlTask.sequence(
+        if (connection.botControl().tryStart(ControlTask.sequence(
           "Auto totem",
           ControlPriority.LOW,
           ControlTask.action(player::sendOpenInventory),
@@ -99,7 +101,10 @@ public final class AutoTotem extends InternalPlugin {
           }),
           ControlTask.waitMillis(50L),
           ControlTask.action(player::closeContainer)
-        ));
+        ))) {
+          log.info("Auto Totem: {} is attempting to move a totem from inventory slot {} to the offhand",
+            connection.accountName(), totemSlot.getAsInt());
+        }
       },
       settingsSource.getRandom(AutoTotemSettings.DELAY).asLongSupplier(),
       TimeUnit.SECONDS);
@@ -120,7 +125,7 @@ public final class AutoTotem extends InternalPlugin {
         .key("enabled")
         .uiName("Enable Auto Totem")
         .description("Always put available totems in the offhand slot")
-        .defaultValue(true)
+        .defaultValue(false)
         .build();
     public static final MinMaxProperty<SettingsSource.Bot> DELAY = ImmutableMinMaxProperty.<SettingsSource.Bot>builder()
       .sourceType(SettingsSource.Bot.INSTANCE)

@@ -32,6 +32,7 @@ import com.soulfiremc.server.settings.property.*;
 import com.soulfiremc.server.task.TaskInventorySupport;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.component.DataComponents;
@@ -46,6 +47,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+@Slf4j
 @InternalPluginClass
 public final class AutoArmor extends InternalPlugin {
   private static final Map<EquipmentSlot, Integer> SLOT_VIEW_MAP = Map.of(
@@ -135,7 +137,7 @@ public final class AutoArmor extends InternalPlugin {
       return;
     }
 
-    connection.botControl().tryStart(
+    if (connection.botControl().tryStart(
       TaskInventorySupport.swapSlotsViaSelectedHotbar(
       connection,
       "Auto armor",
@@ -143,7 +145,10 @@ public final class AutoArmor extends InternalPlugin {
       Set.of(ControlResource.INVENTORY, ControlResource.CONTAINER),
       bestItemSlot.index,
       equipmentSlot.index
-    ));
+    ))) {
+      log.info("Auto Armor: {} is attempting to equip {} from inventory slot {} in {}",
+        connection.accountName(), bestItem.getHoverName().getString(), bestItemSlot.index, equipmentSlotEnum.getName());
+    }
   }
 
   @EventHandler
@@ -186,7 +191,7 @@ public final class AutoArmor extends InternalPlugin {
         .key("enabled")
         .uiName("Enable Auto Armor")
         .description("Put on best armor automatically")
-        .defaultValue(true)
+        .defaultValue(false)
         .build();
     public static final MinMaxProperty<SettingsSource.Bot> DELAY =
       ImmutableMinMaxProperty.<SettingsSource.Bot>builder()
