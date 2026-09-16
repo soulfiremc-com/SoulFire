@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /// Serializes vanilla's shared Vulkan device and renders only explicit capture requests.
@@ -102,10 +103,17 @@ public final class VulkanRenderer {
   }
 
   /// Draws one live frame without waiting for all chunk compilation to settle.
-  public static BufferedImage renderInteractive(Minecraft minecraft, int width, int height) {
-    return ScopedValue.where(INTERACTIVE, true).call(() -> renderWithResult(minecraft.level, minecraft.player,
-      Options.defaults(minecraft.player, width, height, minecraft.options.fov().get(),
-        minecraft.options.getEffectiveRenderDistance() * 16)).image());
+  public static RgbaFrame renderInteractive(Minecraft minecraft, int width, int height) {
+    if (!minecraft.isSameThread()) return onGameThread(minecraft, () -> renderInteractive(minecraft, width, height));
+    var options = Options.defaults(minecraft.player, width, height, minecraft.options.fov().get(),
+      minecraft.options.getEffectiveRenderDistance() * 16);
+    DEVICE_LOCK.lock();
+    try {
+      return ScopedValue.where(INTERACTIVE, true).where(CAPTURE, true).where(REQUEST, options)
+        .call(() -> renderWorld(minecraft, options, VulkanRenderer::readRawFrame));
+    } finally {
+      DEVICE_LOCK.unlock();
+    }
   }
 
   public static Result renderWithResult(ClientLevel level, LocalPlayer player, Options options) {
@@ -116,14 +124,16 @@ public final class VulkanRenderer {
     if (minecraft.level != level || minecraft.player != player) throw new IllegalArgumentException("Capture must run in the owning bot context");
     DEVICE_LOCK.lock();
     try {
-      return ScopedValue.where(CAPTURE, true).where(REQUEST, options).call(() -> renderWorld(minecraft, options));
+      var start = System.nanoTime();
+      return ScopedValue.where(CAPTURE, true).where(REQUEST, options).call(() ->
+        renderWorld(minecraft, options, target -> new Result(readback(target, true), options.forceDebugTrace()
+          ? new Trace(System.nanoTime() - start, RenderSystem.getDevice().getDeviceInfo().toString()) : null)));
     } finally {
       DEVICE_LOCK.unlock();
     }
   }
 
-  private static Result renderWorld(Minecraft minecraft, Options options) {
-    var start = System.nanoTime();
+  private static <T> T renderWorld(Minecraft minecraft, Options options, Function<RenderTarget, T> capture) {
     activate(minecraft);
     var window = minecraft.getWindow();
     var oldWidth = window.getWidth();
@@ -166,11 +176,7 @@ public final class VulkanRenderer {
             + ", visibleSections=" + minecraft.levelRenderer.visibleSections().size());
         }
       } while (settled < 2);
-      var image = readback(renderer.mainRenderTarget(), true);
-      var trace = options.forceDebugTrace()
-        ? new Trace(System.nanoTime() - start, RenderSystem.getDevice().getDeviceInfo().toString())
-        : null;
-      return new Result(image, trace);
+      return capture.apply(renderer.mainRenderTarget());
     } finally {
       minecraft.options.renderDistance().set(oldDistance);
       if (!INTERACTIVE.orElse(false)) resize(minecraft, oldWidth, oldHeight);
@@ -265,6 +271,24 @@ public final class VulkanRenderer {
       encoder.submit();
       if (!fence.awaitCompletion(30_000_000_000L)) throw new IllegalStateException("Vulkan capture timed out");
     }
+  }
+
+  /// Packed RGBA rows in Vulkan readback order (bottom to top), owned by the caller.
+  public record RgbaFrame(byte[] pixels, int width, int height) {}
+
+  private static RgbaFrame readRawFrame(RenderTarget target) {
+    var texture = Objects.requireNonNull(target.getColorTexture());
+    var encoder = RenderSystem.getDevice().createCommandEncoder();
+    var pixels = new byte[Math.multiplyExact(Math.multiplyExact(target.width, target.height), 4)];
+    try (var buffer = RenderSystem.getDevice().createBuffer(() -> "SoulFire live video",
+      GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, pixels.length)) {
+      encoder.copyTextureToBuffer(texture, buffer, 0, () -> {}, 0);
+      awaitDevice();
+      try (var mapped = buffer.map(true, false)) {
+        mapped.data().get(pixels);
+      }
+    }
+    return new RgbaFrame(pixels, target.width, target.height);
   }
 
   private static BufferedImage readback(RenderTarget target, boolean opaque) {

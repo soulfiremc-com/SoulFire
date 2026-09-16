@@ -17,12 +17,18 @@ message PovWatchRequest {
   int32 height = 5;
 }
 message PovFrame {
-  bytes image = 1;
-  string mime_type = 2;
+  reserved 1, 2;
+  reserved "image", "mime_type";
   uint64 sequence = 3;
   int32 width = 4;
   int32 height = 5;
   bool screen_open = 6;
+  // One complete Annex B H.264 access unit. Keyframes include SPS and PPS.
+  bytes data = 7;
+  uint64 timestamp_us = 8;
+  bool key_frame = 9;
+  // RFC 6381 codec string derived from the stream's SPS.
+  string codec = 10;
 }
 message PovInputRequest {
   string session_id = 1;
@@ -33,6 +39,8 @@ message PovInputRequest {
   repeated PovInputEvent events = 6;
   // Forward Escape before releasing local capture, including opening the pause menu.
   bool escape = 7;
+  // Recover after dropping dependent frames or resetting the decoder.
+  bool request_key_frame = 8;
 }
 message PovInputResponse {}
 message PovInputEvent {

@@ -1,5 +1,6 @@
 // Opt-in live test, invoked by validate-vulkan-container.py --interactive.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
@@ -31,7 +32,10 @@ const pov = createClient(PovService, transport);
 const sessionId = crypto.randomUUID();
 const abort = new AbortController();
 let latest: PovFrame | undefined;
+let latestKey: PovFrame | undefined;
 let frameCount = 0;
+let encodedBytes = 0;
+let keyFrames = 0;
 let streamError: unknown;
 let sequence = 0n;
 let captured = false;
@@ -53,8 +57,22 @@ const watching = (async () => {
       { instanceId, botId, sessionId, width, height },
       { signal: abort.signal },
     )) {
+      assert.ok(frame.data.length > 0, "Encoded access unit must not be empty");
+      if (
+        !latest ||
+        frame.width !== latest.width ||
+        frame.height !== latest.height
+      )
+        assert.ok(frame.keyFrame, "New dimensions must start with a keyframe");
+      if (latest)
+        assert.ok(
+          frame.timestampUs > latest.timestampUs,
+          "Video timestamps must increase across resize",
+        );
       latest = frame;
       frameCount++;
+      encodedBytes += frame.data.length;
+      if (frame.keyFrame) { keyFrames++; latestKey = frame; }
     }
   } catch (error) {
     if (!abort.signal.aborted) streamError = error;
@@ -62,6 +80,7 @@ const watching = (async () => {
 })();
 async function input(
   events: Parameters<typeof create<typeof PovInputEventSchema>>[1][] = [],
+  requestKeyFrame = false,
 ) {
   while (busy) await sleep(5);
   busy = true;
@@ -70,6 +89,7 @@ async function input(
       sessionId,
       sequence: ++sequence,
       captured,
+      requestKeyFrame,
       width,
       height,
       events: events.map((event) => create(PovInputEventSchema, event)),
@@ -77,6 +97,27 @@ async function input(
   } finally {
     busy = false;
   }
+}
+async function saveFrame(name: string) {
+  const before = latest!.sequence;
+  await input([], true);
+  await until(
+    () => !!latestKey && latestKey.sequence > before,
+    "Requested recovery keyframe must arrive",
+  );
+  const encodedPath = `${output}/${name}.h264`;
+  await writeFile(encodedPath, latestKey!.data);
+  // Decode independently on the validation host. The container needs no FFmpeg packages.
+  execFileSync("ffmpeg", [
+    "-v",
+    "error",
+    "-y",
+    "-i",
+    encodedPath,
+    "-frames:v",
+    "1",
+    `${output}/${name}.jpg`,
+  ]);
 }
 let heartbeat: ReturnType<typeof setInterval> | undefined;
 try {
@@ -110,7 +151,7 @@ try {
       () => frameCount > framesAtTransfer + 10,
       "Frames must continue in the new dimension",
     );
-    await writeFile(`${output}/interactive-nether.jpg`, latest!.image);
+    await saveFrame("interactive-nether");
     assert.equal(
       streamError,
       undefined,
@@ -155,7 +196,7 @@ try {
       { kind: Kind.BUTTON, code: 1, action: 0 },
     ]);
     await until(() => !!latest?.screenOpen, "Right click must open a chest");
-    await writeFile(`${output}/interactive-chest.jpg`, latest!.image);
+    await saveFrame("interactive-chest");
     await input([
       { kind: Kind.KEY, code: 256, action: 1 },
       { kind: Kind.KEY, code: 256, action: 0 },
@@ -280,7 +321,7 @@ try {
       { kind: Kind.KEY, code: 69, action: 0 },
     ]);
     await until(() => !!latest?.screenOpen, "E must open the inventory");
-    await writeFile(`${output}/interactive-inventory.jpg`, latest!.image);
+    await saveFrame("interactive-inventory");
     // At GUI scale 1, the first hotbar slot is at the inventory's (8, 142) offset.
     await input([
       { kind: Kind.MOVE, x: 248 / 640, y: 247 / 360 },
@@ -323,7 +364,7 @@ try {
       () => latest?.width === 800 && latest?.height === 450,
       "Live resize must change the encoded frame dimensions",
     );
-    await writeFile(`${output}/interactive-world.jpg`, latest!.image);
+    await saveFrame("interactive-world");
     // Losing capture while W is held must release it even without a keyup event.
     await input([{ kind: Kind.KEY, code: 87, action: 1 }]);
     captured = false;
@@ -344,7 +385,7 @@ try {
       undefined,
       "An active session must not hit the ordinary RPC timeout",
     );
-    await writeFile(`${output}/interactive-world-settled.jpg`, latest!.image);
+    await saveFrame("interactive-world-settled");
     clearInterval(heartbeat);
     captured = true;
     await input([{ kind: Kind.KEY, code: 87, action: 1 }]);
@@ -365,6 +406,9 @@ try {
     console.log(
       JSON.stringify({
         frameCount,
+        encodedBytes,
+        keyFrames,
+        bytesPerFrame: Math.round(encodedBytes / frameCount),
         movement: true,
         isolatedBots: true,
         mouseLook: true,

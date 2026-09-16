@@ -29,6 +29,7 @@ import com.soulfiremc.grpc.generated.PovWatchRequest;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotControlLeaseManager;
+import com.soulfiremc.server.renderer.H264VideoEncoder;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.user.PermissionContext;
 import io.grpc.Status;
@@ -38,9 +39,6 @@ import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.client.input.KeyEvent;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -98,7 +96,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
         session.leases.renew(session.bot.accountProfileId(), session.owner, session.token, Duration.ofSeconds(10));
         session.bot.minecraft().submit(() -> {
           if (session.closed.get()) return;
-          VulkanRenderer.resize(session.bot.minecraft(), request.getWidth(), request.getHeight());
+          VulkanRenderer.resize(session.bot.minecraft(), even(request.getWidth()), even(request.getHeight()));
           if (request.getEscape()) {
             var minecraft = session.bot.minecraft();
             minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
@@ -108,14 +106,17 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
           for (var event : request.getEventsList()) session.bot.povInput().accept(event);
         }).get(5, TimeUnit.SECONDS);
         session.inputSequence = request.getSequence();
-        session.width = request.getWidth();
-        session.height = request.getHeight();
+        session.width = even(request.getWidth());
+        session.height = even(request.getHeight());
+        if (request.getRequestKeyFrame()) session.keyFrameRequested.set(true);
         session.lastInput = System.nanoTime();
       }
       response.onNext(PovInputResponse.getDefaultInstance());
       response.onCompleted();
     } catch (Throwable error) { response.onError(rpcError(error)); }
   }
+
+  private static int even(int size) { return (size + 1) & ~1; }
 
   private static void dimensions(int width, int height) {
     if (width < 1 || height < 1 || width > 1920 || height > 1080) throw new IllegalArgumentException("Invalid POV dimensions");
@@ -157,6 +158,10 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     private final String token;
     private final ServerCallStreamObserver<PovFrame> observer;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final Object encoderLock = new Object();
+    private final AtomicBoolean keyFrameRequested = new AtomicBoolean(true);
+    private final long startedAt = System.nanoTime();
+    private H264VideoEncoder encoder;
     private volatile long lastInput = System.nanoTime();
     private long inputSequence;
     private long frameSequence;
@@ -166,10 +171,10 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     private Session(UUID id, BotConnection bot, UUID owner, BotControlLeaseManager leases, String token,
                     ServerCallStreamObserver<PovFrame> observer, int width, int height) {
       this.id = id; this.bot = bot; this.owner = owner; this.leases = leases; this.token = token;
-      this.observer = observer; this.width = width; this.height = height;
+      this.observer = observer; this.width = even(width); this.height = even(height);
     }
 
-    private void schedule(long delay) { server.scheduler().schedule(this::frame, delay, TimeUnit.MILLISECONDS); }
+    private void schedule(long delay) { server.scheduler().schedule(this::frame, delay, TimeUnit.NANOSECONDS); }
 
     private void frame() {
       if (closed.get()) return;
@@ -187,32 +192,40 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
           return new Captured(image, minecraft.gui.screen() != null);
         }).get(5, TimeUnit.SECONDS);
         if (frame == null || closed.get()) return;
-        var rgb = new BufferedImage(frame.image.getWidth(), frame.image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        var graphics = rgb.createGraphics();
-        try { graphics.drawImage(frame.image, 0, 0, null); } finally { graphics.dispose(); }
-        try (var bytes = new ByteArrayOutputStream()) {
-          ImageIO.write(rgb, "jpeg", bytes);
+        synchronized (encoderLock) {
+          if (closed.get()) return;
+          var image = frame.image;
+          if (encoder == null || encoder.width() != image.width() || encoder.height() != image.height()) {
+            if (encoder != null) encoder.close();
+            encoder = null;
+            encoder = new H264VideoEncoder(image.width(), image.height());
+          }
+          var encoded = encoder.encode(image.pixels(), (started - startedAt) / 1000, keyFrameRequested.getAndSet(false));
           if (!closed.get() && !observer.isCancelled()) observer.onNext(PovFrame.newBuilder()
-            .setImage(ByteString.copyFrom(bytes.toByteArray())).setMimeType("image/jpeg")
-            .setWidth(rgb.getWidth()).setHeight(rgb.getHeight()).setScreenOpen(frame.screenOpen)
+            .setData(ByteString.copyFrom(encoded.data())).setTimestampUs(encoded.timestampUs())
+            .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
+            .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
             .setSequence(++frameSequence).build());
         }
       } catch (Throwable error) {
         if (!closed.get() && !observer.isCancelled()) observer.onError(rpcError(error));
         close();
       } finally {
-        if (!closed.get()) schedule(Math.max(0, 33 - (System.nanoTime() - started) / 1_000_000));
+        if (!closed.get()) schedule(Math.max(0, 1_000_000_000L / H264VideoEncoder.FPS - (System.nanoTime() - started)));
       }
     }
 
     private void close() {
       if (!closed.compareAndSet(false, true)) return;
       sessions.remove(id, this);
+      synchronized (encoderLock) {
+        if (encoder != null) { encoder.close(); encoder = null; }
+      }
       bot.minecraft().execute(() -> bot.povInput().capture(false));
       try { leases.release(bot.accountProfileId(), owner, token); }
       catch (BotControlLeaseManager.InvalidLeaseException ignored) { /* Expired leases already release ownership. */ }
     }
   }
 
-  private record Captured(BufferedImage image, boolean screenOpen) {}
+  private record Captured(VulkanRenderer.RgbaFrame image, boolean screenOpen) {}
 }

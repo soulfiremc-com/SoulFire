@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file soulfire/pov.proto.
  */
 export const file_soulfire_pov: GenFile = /*@__PURE__*/
-  fileDesc("ChJzb3VsZmlyZS9wb3YucHJvdG8SC3NvdWxmaXJlLnYxImkKD1BvdldhdGNoUmVxdWVzdBITCgtpbnN0YW5jZV9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSEgoKc2Vzc2lvbl9pZBgDIAEoCRINCgV3aWR0aBgEIAEoBRIOCgZoZWlnaHQYBSABKAUicgoIUG92RnJhbWUSDQoFaW1hZ2UYASABKAwSEQoJbWltZV90eXBlGAIgASgJEhAKCHNlcXVlbmNlGAMgASgEEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRITCgtzY3JlZW5fb3BlbhgGIAEoCCKkAQoPUG92SW5wdXRSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSEAoIc2VxdWVuY2UYAiABKAQSEAoIY2FwdHVyZWQYAyABKAgSDQoFd2lkdGgYBCABKAUSDgoGaGVpZ2h0GAUgASgFEioKBmV2ZW50cxgGIAMoCzIaLnNvdWxmaXJlLnYxLlBvdklucHV0RXZlbnQSDgoGZXNjYXBlGAcgASgIIhIKEFBvdklucHV0UmVzcG9uc2Ui2QEKDVBvdklucHV0RXZlbnQSLQoEa2luZBgBIAEoDjIfLnNvdWxmaXJlLnYxLlBvdklucHV0RXZlbnQuS2luZBIMCgRjb2RlGAIgASgFEg4KBmFjdGlvbhgDIAEoBRIRCgltb2RpZmllcnMYBCABKAUSCQoBeBgFIAEoARIJCgF5GAYgASgBEhAKCHJlbGF0aXZlGAcgASgIIkAKBEtpbmQSBwoDS0VZEAASDQoJQ0hBUkFDVEVSEAESCgoGQlVUVE9OEAISCAoETU9WRRADEgoKBlNDUk9MTBAEMpIBCgpQb3ZTZXJ2aWNlEj4KBVdhdGNoEhwuc291bGZpcmUudjEuUG92V2F0Y2hSZXF1ZXN0GhUuc291bGZpcmUudjEuUG92RnJhbWUwARJECgVJbnB1dBIcLnNvdWxmaXJlLnYxLlBvdklucHV0UmVxdWVzdBodLnNvdWxmaXJlLnYxLlBvdklucHV0UmVzcG9uc2VCIQodY29tLnNvdWxmaXJlbWMuZ3JwYy5nZW5lcmF0ZWRQAWIGcHJvdG8z");
+  fileDesc("ChJzb3VsZmlyZS9wb3YucHJvdG8SC3NvdWxmaXJlLnYxImkKD1BvdldhdGNoUmVxdWVzdBITCgtpbnN0YW5jZV9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSEgoKc2Vzc2lvbl9pZBgDIAEoCRINCgV3aWR0aBgEIAEoBRIOCgZoZWlnaHQYBSABKAUitAEKCFBvdkZyYW1lEhAKCHNlcXVlbmNlGAMgASgEEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRITCgtzY3JlZW5fb3BlbhgGIAEoCBIMCgRkYXRhGAcgASgMEhQKDHRpbWVzdGFtcF91cxgIIAEoBBIRCglrZXlfZnJhbWUYCSABKAgSDQoFY29kZWMYCiABKAlKBAgBEAJKBAgCEANSBWltYWdlUgltaW1lX3R5cGUivwEKD1BvdklucHV0UmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJEhAKCHNlcXVlbmNlGAIgASgEEhAKCGNhcHR1cmVkGAMgASgIEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRIqCgZldmVudHMYBiADKAsyGi5zb3VsZmlyZS52MS5Qb3ZJbnB1dEV2ZW50Eg4KBmVzY2FwZRgHIAEoCBIZChFyZXF1ZXN0X2tleV9mcmFtZRgIIAEoCCISChBQb3ZJbnB1dFJlc3BvbnNlItkBCg1Qb3ZJbnB1dEV2ZW50Ei0KBGtpbmQYASABKA4yHy5zb3VsZmlyZS52MS5Qb3ZJbnB1dEV2ZW50LktpbmQSDAoEY29kZRgCIAEoBRIOCgZhY3Rpb24YAyABKAUSEQoJbW9kaWZpZXJzGAQgASgFEgkKAXgYBSABKAESCQoBeRgGIAEoARIQCghyZWxhdGl2ZRgHIAEoCCJACgRLaW5kEgcKA0tFWRAAEg0KCUNIQVJBQ1RFUhABEgoKBkJVVFRPThACEggKBE1PVkUQAxIKCgZTQ1JPTEwQBDKSAQoKUG92U2VydmljZRI+CgVXYXRjaBIcLnNvdWxmaXJlLnYxLlBvdldhdGNoUmVxdWVzdBoVLnNvdWxmaXJlLnYxLlBvdkZyYW1lMAESRAoFSW5wdXQSHC5zb3VsZmlyZS52MS5Qb3ZJbnB1dFJlcXVlc3QaHS5zb3VsZmlyZS52MS5Qb3ZJbnB1dFJlc3BvbnNlQiEKHWNvbS5zb3VsZmlyZW1jLmdycGMuZ2VuZXJhdGVkUAFiBnByb3RvMw");
 
 /**
  * @generated from message soulfire.v1.PovWatchRequest
@@ -54,16 +54,6 @@ export const PovWatchRequestSchema: GenMessage<PovWatchRequest> = /*@__PURE__*/
  */
 export type PovFrame = Message<"soulfire.v1.PovFrame"> & {
   /**
-   * @generated from field: bytes image = 1;
-   */
-  image: Uint8Array;
-
-  /**
-   * @generated from field: string mime_type = 2;
-   */
-  mimeType: string;
-
-  /**
    * @generated from field: uint64 sequence = 3;
    */
   sequence: bigint;
@@ -82,6 +72,30 @@ export type PovFrame = Message<"soulfire.v1.PovFrame"> & {
    * @generated from field: bool screen_open = 6;
    */
   screenOpen: boolean;
+
+  /**
+   * One complete Annex B H.264 access unit. Keyframes include SPS and PPS.
+   *
+   * @generated from field: bytes data = 7;
+   */
+  data: Uint8Array;
+
+  /**
+   * @generated from field: uint64 timestamp_us = 8;
+   */
+  timestampUs: bigint;
+
+  /**
+   * @generated from field: bool key_frame = 9;
+   */
+  keyFrame: boolean;
+
+  /**
+   * RFC 6381 codec string derived from the stream's SPS.
+   *
+   * @generated from field: string codec = 10;
+   */
+  codec: string;
 };
 
 /**
@@ -131,6 +145,13 @@ export type PovInputRequest = Message<"soulfire.v1.PovInputRequest"> & {
    * @generated from field: bool escape = 7;
    */
   escape: boolean;
+
+  /**
+   * Recover after dropping dependent frames or resetting the decoder.
+   *
+   * @generated from field: bool request_key_frame = 8;
+   */
+  requestKeyFrame: boolean;
 };
 
 /**
