@@ -96,7 +96,7 @@ dependencies {
 
   api(projects.buildData)
 
-  api("io.github.classgraph:classgraph:4.8.194")
+  api("io.github.classgraph:classgraph:4.8.195")
 
   // For microsoft account authentication
   api(libs.minecraftauth) {
@@ -129,7 +129,7 @@ dependencies {
   api(libs.fastutil)
   api(libs.caffeine)
   api(libs.jetbrains.annotations)
-  api("org.checkerframework:checker-qual:4.2.2")
+  api("org.checkerframework:checker-qual:4.2.3")
   api(libs.immutables.gson)
 
   api(libs.reflect)
