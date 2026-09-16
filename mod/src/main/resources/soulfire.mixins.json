@@ -48,6 +48,7 @@
     "headless.rendering.MixinRenderSystem",
     "headless.rendering.MixinScreen",
     "headless.rendering.MixinTextureManager",
+    "headless.rendering.MixinPlayerHeadSpecialRenderer",
     "headless.sound.MixinMusicManager",
     "headless.sound.MixinSoundBufferLibrary",
     "headless.sound.MixinSoundEngine",

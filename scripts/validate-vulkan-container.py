@@ -61,6 +61,10 @@ def main():
         action="store_true",
         help="Also exercise live POV streaming and native input",
     )
+    parser.add_argument(
+        "--skin-url",
+        help="Also download and render a player-head skin from this Minecraft texture URL",
+    )
     args = parser.parse_args()
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -222,6 +226,22 @@ def main():
             server.stdin.write(f"tp {name} {index * 4} -60 0 0 10\n")
         for x, block in enumerate(["oak_log", "sea_lantern", "glass", "chest"]):
             server.stdin.write(f"setblock {x} -60 4 minecraft:{block}\n")
+        if args.skin_url:
+            profile_bytes = uuid.uuid4().bytes
+            profile_parts = [
+                str(int.from_bytes(profile_bytes[i:i + 4], "big", signed=True))
+                for i in range(0, 16, 4)
+            ]
+            profile_id = "[I;" + ",".join(profile_parts) + "]"
+            texture = base64.b64encode(json.dumps({
+                "textures": {"SKIN": {"url": args.skin_url}}
+            }).encode()).decode()
+            for name in ["NativeProbeA", "NativeProbeB"]:
+                for slot, properties in [(5, "[]"), (6, f'[{{name:"textures",value:"{texture}"}}]')]:
+                    profile = f'{{id:{profile_id},name:"SkinProbe",properties:{properties}}}'
+                    server.stdin.write(
+                        f'item replace entity {name} hotbar.{slot} with minecraft:player_head[minecraft:profile={profile}]\n'
+                    )
         server.stdin.flush()
 
         def capture(index):
@@ -265,6 +285,23 @@ def main():
                     )
                 (destination / f"icon-{icons}.png").write_bytes(png)
                 icons += 1
+        if args.skin_url:
+            for bot_index, bot in enumerate(bots):
+                def skin_ready():
+                    inventory = api("GET", path + "/bots/" + bot + "/inventory")
+                    heads = {slot["slot"]: slot for slot in inventory["slots"] if slot.get("iconBase64")}
+                    baseline, downloaded = heads.get(41), heads.get(42)
+                    if not baseline or not downloaded:
+                        return False
+                    # Both profiles use the same UUID, so an unresolved skin produces identical default heads.
+                    if baseline["iconBase64"] == downloaded["iconBase64"]:
+                        return False
+                    for label, slot in [("default", baseline), ("downloaded", downloaded)]:
+                        (destination / f"skin-{bot_index}-{label}.png").write_bytes(base64.b64decode(slot["iconBase64"]))
+                    return True
+                wait_for(skin_ready, 60)
+            capture(12)
+            capture(13)
         if args.interactive:
             server.stdin.write("gamemode survival NativeProbeA\n")
             server.stdin.flush()
@@ -373,6 +410,7 @@ def main():
             "inventoryIcons": icons,
             "bots": len(bots),
             "interactivePov": args.interactive,
+            "downloadedHeadSkins": bool(args.skin_url),
         }
         (destination / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
