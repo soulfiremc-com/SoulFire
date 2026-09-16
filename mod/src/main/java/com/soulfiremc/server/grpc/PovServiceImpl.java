@@ -25,10 +25,12 @@ import com.soulfiremc.grpc.generated.PovInputEvent;
 import com.soulfiremc.grpc.generated.PovInputRequest;
 import com.soulfiremc.grpc.generated.PovInputResponse;
 import com.soulfiremc.grpc.generated.PovServiceGrpc;
+import com.soulfiremc.grpc.generated.PovStreamFeedback;
 import com.soulfiremc.grpc.generated.PovWatchRequest;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotControlLeaseManager;
+import com.soulfiremc.server.renderer.AdaptivePovBitrate;
 import com.soulfiremc.server.renderer.H264VideoEncoder;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.user.PermissionContext;
@@ -91,6 +93,12 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
       dimensions(request.getWidth(), request.getHeight());
       if (request.getEventsCount() > 128) throw new IllegalArgumentException("Too many input events");
       for (var event : request.getEventsList()) validate(event);
+      if (request.hasFeedback()) {
+        var feedback = request.getFeedback();
+        if (!Double.isFinite(feedback.getDeliveryDelayMs()) || feedback.getDeliveryDelayMs() < 0
+          || feedback.getDecoderQueueSize() < 0 || feedback.getDecoderRecoveries() < 0
+          || feedback.getReceivedSequence() < 0) throw new IllegalArgumentException("Invalid stream feedback");
+      }
       synchronized (session) {
         if (request.getSequence() <= session.inputSequence) throw Status.ABORTED.withDescription("Stale input batch").asRuntimeException();
         session.leases.renew(session.bot.accountProfileId(), session.owner, session.token, Duration.ofSeconds(10));
@@ -109,6 +117,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
         session.width = even(request.getWidth());
         session.height = even(request.getHeight());
         if (request.getRequestKeyFrame()) session.keyFrameRequested.set(true);
+        session.feedback = request.hasFeedback() ? request.getFeedback() : null;
         session.lastInput = System.nanoTime();
       }
       response.onNext(PovInputResponse.getDefaultInstance());
@@ -162,6 +171,8 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     private final AtomicBoolean keyFrameRequested = new AtomicBoolean(true);
     private final long startedAt = System.nanoTime();
     private H264VideoEncoder encoder;
+    private AdaptivePovBitrate adaptation;
+    private volatile PovStreamFeedback feedback;
     private volatile long lastInput = System.nanoTime();
     private long inputSequence;
     private long frameSequence;
@@ -182,6 +193,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
       try {
         if (observer.isCancelled()) { close(); return; }
         if (started - lastInput > 5_000_000_000L) throw Status.DEADLINE_EXCEEDED.withDescription("POV heartbeat timed out").asRuntimeException();
+        if (adaptation != null) adaptation.update(feedback, observer.isReady(), started);
         if (!observer.isReady()) return;
         var frame = bot.minecraft().submit(() -> {
           if (closed.get()) return null;
@@ -209,13 +221,15 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
             if (encoder != null) encoder.close();
             encoder = null;
             encoder = new H264VideoEncoder(image.width(), image.height());
+            adaptation = new AdaptivePovBitrate(image.width(), image.height(), started);
           }
+          encoder.bitrate(adaptation.bitrate());
           var encoded = encoder.encode(image.pixels(), (started - startedAt) / 1000, keyFrameRequested.getAndSet(false));
           if (!closed.get() && !observer.isCancelled()) observer.onNext(PovFrame.newBuilder()
             .setData(ByteString.copyFrom(encoded.data())).setTimestampUs(encoded.timestampUs())
             .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
             .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
-            .setCursorShape(frame.cursorShape).setSequence(++frameSequence).build());
+            .setTargetBitrate((int) encoder.bitrate()).setCursorShape(frame.cursorShape).setSequence(++frameSequence).build());
         }
       } catch (Throwable error) {
         if (!closed.get() && !observer.isCancelled()) observer.onError(rpcError(error));

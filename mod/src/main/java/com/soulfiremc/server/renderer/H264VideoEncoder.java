@@ -82,6 +82,7 @@ public final class H264VideoEncoder implements AutoCloseable {
   private final int width;
   private final int height;
   private NativeEncoder encoder;
+  private long bitrate;
 
   public H264VideoEncoder(int width, int height) {
     this(width, height, System.getProperty("sf.pov.encoder", "auto"));
@@ -91,13 +92,14 @@ public final class H264VideoEncoder implements AutoCloseable {
     if (width < 2 || height < 2 || width % 2 != 0 || height % 2 != 0) {
       throw new IllegalArgumentException("H.264 dimensions must be positive and even");
     }
+    this.bitrate = initialBitrate(width, height);
     this.width = width;
     this.height = height;
     var candidates = requested.equals("auto")
       ? List.of("h264_nvenc", "h264_qsv", "h264_videotoolbox", "h264_mf", "libx264") : List.of(requested);
     for (var name : candidates) {
       try {
-        encoder = new NativeEncoder(name, width, height);
+        encoder = new NativeEncoder(name, width, height, bitrate);
         log.info("POV video encoder: {} ({}x{}, up to {} FPS)", name, width, height, FPS);
         return;
       } catch (RuntimeException error) {
@@ -105,6 +107,30 @@ public final class H264VideoEncoder implements AutoCloseable {
       }
     }
     throw new IllegalStateException("No H.264 encoder could initialize");
+  }
+
+  public static long initialBitrate(int width, int height) {
+    return Math.max(300_000L, (long) width * height * 4);
+  }
+
+  public long bitrate() { return bitrate; }
+
+  public void bitrate(long value) {
+    if (value < 300_000 || value > 32_000_000) throw new IllegalArgumentException("Invalid POV bitrate");
+    if (value == bitrate) return;
+    // Reopening works across all supported hardware encoders, including those
+    // without runtime rate-control updates. The replacement starts with an IDR.
+    var name = encoder.name;
+    // Release the hardware session first so adaptation needs no extra GPU slots.
+    encoder.close();
+    try {
+      encoder = new NativeEncoder(name, width, height, value);
+    } catch (RuntimeException error) {
+      if (name.equals("libx264") || !System.getProperty("sf.pov.encoder", "auto").equals("auto")) throw error;
+      log.warn("POV encoder {} could not change bitrate; switching to CPU H.264: {}", name, error.getMessage());
+      encoder = new NativeEncoder("libx264", width, height, value);
+    }
+    bitrate = value;
   }
 
   public String name() { return encoder.name; }
@@ -118,7 +144,7 @@ public final class H264VideoEncoder implements AutoCloseable {
       if (encoder.name.equals("libx264") || !System.getProperty("sf.pov.encoder", "auto").equals("auto")) throw error;
       log.warn("POV hardware encoder {} failed; switching to CPU H.264: {}", encoder.name, error.getMessage());
       encoder.close();
-      encoder = new NativeEncoder("libx264", width, height);
+      encoder = new NativeEncoder("libx264", width, height, bitrate);
       return encoder.encode(rgba, timestampUs, true);
     }
   }
@@ -140,7 +166,7 @@ public final class H264VideoEncoder implements AutoCloseable {
     private long frames;
     private String codecString;
 
-    private NativeEncoder(String name, int width, int height) {
+    private NativeEncoder(String name, int width, int height, long bitrate) {
       this.name = name;
       try {
         var codec = avcodec_find_encoder_by_name(name);
@@ -148,7 +174,6 @@ public final class H264VideoEncoder implements AutoCloseable {
         context = avcodec_alloc_context3(codec);
         if (context == null) throw new IllegalStateException("Cannot allocate encoder");
         var pixelFormat = name.equals("h264_qsv") || name.equals("h264_mf") ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P;
-        var bitrate = Math.max(300_000L, (long) width * height * 4);
         context.width(width).height(height).pix_fmt(pixelFormat).max_b_frames(0).gop_size(FPS)
           .bit_rate(bitrate).rc_max_rate(bitrate).rc_buffer_size((int) bitrate / 2)
           .thread_count(Math.min(4, Runtime.getRuntime().availableProcessors())).thread_type(AVCodecContext.FF_THREAD_SLICE)

@@ -42,6 +42,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class H264VideoEncoderTest {
   @Test
+  void bitrateChangesProduceImmediateKeyframesWithContinuousTimestamps() {
+    try (var encoder = new H264VideoEncoder(320, 180, "libx264")) {
+      var pixels = new byte[320 * 180 * 4];
+      encoder.encode(pixels, 0, false);
+      encoder.bitrate(1_000_000);
+      var increased = encoder.encode(pixels, 16_667, false);
+      assertTrue(increased.keyFrame());
+      assertEquals(16_667, increased.timestampUs());
+      assertEquals(1_000_000, encoder.bitrate());
+      encoder.bitrate(300_000);
+      assertTrue(encoder.encode(pixels, 33_334, false).keyFrame());
+      assertEquals(300_000, encoder.bitrate());
+    }
+  }
+
+  @Test
   void encodesImmediateAccessUnitsWithRecoverableKeyframesAndCorrectOrientation() {
     var width = 320;
     var height = 180;

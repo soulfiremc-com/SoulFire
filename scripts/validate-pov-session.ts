@@ -43,6 +43,7 @@ let captured = false;
 let width = 640,
   height = 360;
 let busy = false;
+let deliveryDelayMs = 0;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(check: () => boolean, message: string) {
   const deadline = performance.now() + 15000;
@@ -90,6 +91,12 @@ async function input(
       sessionId,
       sequence: ++sequence,
       captured,
+      feedback: mode === "adaptive" ? {
+        receivedSequence: latest?.sequence ?? 0n,
+        deliveryDelayMs,
+        decoderQueueSize: 0,
+        decoderRecoveries: 0,
+      } : undefined,
       requestKeyFrame,
       width,
       height,
@@ -164,6 +171,18 @@ try {
         framesAfterTransfer: frameCount - framesAtTransfer,
       }),
     );
+  } else if (mode === "adaptive") {
+    const initial = latest!.targetBitrate;
+    assert.ok(initial > 0);
+    await until(() => latest!.targetBitrate > initial, "Healthy delivery must increase target bitrate");
+    const raised = latest!.targetBitrate;
+    deliveryDelayMs = 250;
+    await until(() => latest!.targetBitrate < raised, "Delivery backlog must lower target bitrate");
+    const lowered = latest!.targetBitrate;
+    deliveryDelayMs = 0;
+    await saveFrame("interactive-adaptive-bitrate");
+    await until(() => latest!.targetBitrate > lowered, "Healthy delivery must recover target bitrate");
+    console.log(JSON.stringify({ adaptiveBitrate: true, initial, raised, lowered, recovered: latest!.targetBitrate }));
   } else if (mode === "cursor") {
     captured = true;
     await input([{ kind: Kind.KEY, code: 256, action: 1 }, { kind: Kind.KEY, code: 256, action: 0 }]);
