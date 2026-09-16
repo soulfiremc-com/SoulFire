@@ -65,6 +65,7 @@ class NativeRuntimeBundleTest {
       var first = NativeRuntimeBundle.extract(resources, "test", cache);
       assertArrayEquals(bytes, Files.readAllBytes(first.driver()));
       assertEquals(first, NativeRuntimeBundle.extract(resources, "test", cache));
+      assertEquals(first, NativeRuntimeBundle.extract(resources, "test", temporary.resolve("unused/../cache")));
       Files.write(first.driver(), Arrays.copyOf(bytes, bytes.length / 2));
       var repaired = NativeRuntimeBundle.extract(resources, "test", cache);
       assertArrayEquals(bytes, Files.readAllBytes(repaired.driver()));

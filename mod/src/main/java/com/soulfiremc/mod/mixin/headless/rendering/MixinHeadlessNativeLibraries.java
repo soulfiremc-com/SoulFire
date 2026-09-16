@@ -26,9 +26,10 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(NativeLibrariesBootstrap.class)
-public class MixinNoOpenGL {
+public class MixinHeadlessNativeLibraries {
   @Inject(method = "loadOpenGL", at = @At("HEAD"), cancellable = true)
   private static void skipOpenGL(CallbackInfo ci) { ci.cancel(); }
+
   @Redirect(method = "tryLoadingVulkan", at = @At(value = "INVOKE", target = "Lorg/lwjgl/vulkan/VK;create()V"))
   private static void loadBundledVulkan() {
     BundledVulkanRuntime.initialize();

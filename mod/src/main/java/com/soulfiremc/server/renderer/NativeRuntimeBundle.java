@@ -55,7 +55,7 @@ public record NativeRuntimeBundle(Path loader, Path driver) {
     }
     var properties = new Properties();
     properties.load(new java.io.ByteArrayInputStream(manifest));
-    var directory = cache.resolve(platform).resolve(hash(manifest)).toAbsolutePath();
+    var directory = cache.resolve(platform).resolve(hash(manifest)).toAbsolutePath().normalize();
     Files.createDirectories(directory);
     try (var channel = FileChannel.open(directory.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
          var lock = channel.lock()) {

@@ -298,6 +298,16 @@ def main():
     run("cmake", "--install", work / "glslang-build")
     os.environ["PATH"] = str(prefix / "bin") + os.pathsep + os.environ["PATH"]
     mesa_build = work / "mesa-build"
+    # Mesa compiles external Win32 semaphore handles even when WSI is disabled.
+    # Their Vulkan declarations still need the platform define in headless builds.
+    platform_flags = (
+        [
+            "-Dc_args=-DVK_USE_PLATFORM_WIN32_KHR",
+            "-Dcpp_args=-DVK_USE_PLATFORM_WIN32_KHR",
+        ]
+        if system == "windows"
+        else []
+    )
     run(
         "meson",
         "setup",
@@ -330,6 +340,7 @@ def main():
         "-Dbuild-tests=false",
         "-Dtools=",
         "-Dvideo-codecs=",
+        *platform_flags,
     )
     run("meson", "compile", "-C", mesa_build, "-j", args.jobs)
     run("meson", "install", "-C", mesa_build)

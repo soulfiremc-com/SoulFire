@@ -31,7 +31,7 @@
     "headless.rendering.MixinCaptureCamera",
     "headless.rendering.MixinCaptureGameRenderer",
     "headless.rendering.MixinCaptureGui",
-    "headless.rendering.MixinNoOpenGL",
+    "headless.rendering.MixinHeadlessNativeLibraries",
     "headless.rendering.MixinLoadingOverlay",
     "headless.rendering.MixinCaptureChunks",
     "headless.rendering.MixinCaptureChunkBuffers",

@@ -45,6 +45,7 @@ public class MixinHeadlessVulkanInstance {
     }
     return MemoryStack.stackGet().callocPointer(0);
   }
+
   @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/vulkan/VK12;vkCreateInstance(Lorg/lwjgl/vulkan/VkInstanceCreateInfo;Lorg/lwjgl/vulkan/VkAllocationCallbacks;Lorg/lwjgl/PointerBuffer;)I"))
   private int includeBundledDrivers(VkInstanceCreateInfo info, @Nullable VkAllocationCallbacks allocator, PointerBuffer instance) {
     BundledVulkanRuntime.includeDrivers(info, MemoryStack.stackGet());
