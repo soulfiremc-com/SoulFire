@@ -1,6 +1,6 @@
 # Compare headless Vulkan rendering with vanilla
 
-SoulFire uses the Minecraft Vulkan backend for POV captures and inventory images. A system Vulkan driver supplies hardware rendering or Mesa lavapipe.
+SoulFire uses the Minecraft Vulkan backend for POV captures and inventory images. Release JARs bundle Mesa lavapipe for CPU rendering and can also use installed GPU drivers. See [native runtime packaging](vulkan-runtime.md).
 OpenGL is disabled. Production captures use offscreen textures, with no native window or presentation surface.
 Device selection prefers discrete, integrated, and virtual GPUs before CPU devices. Minecraft still checks each candidate for required features and driver compatibility.
 

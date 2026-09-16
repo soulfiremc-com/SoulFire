@@ -5,12 +5,13 @@ ARG VERSION
 # Setup groups and install dumb init
 RUN groupadd --gid 1001 soulfire && \
     useradd --home-dir /soulfire --uid 1001 --gid soulfire --create-home soulfire && \
-    apt-get update && apt-get install -y --no-install-recommends dumb-init curl libvulkan1 mesa-vulkan-drivers && \
+    apt-get update && apt-get install -y --no-install-recommends dumb-init curl && \
     rm -rf /var/lib/apt/lists/* && \
     chmod 755 /soulfire
 
-# Download JAR from GitHub releases
-ADD --chown=soulfire:soulfire https://github.com/soulfiremc-com/SoulFire/releases/download/${VERSION}/SoulFireDedicated-${VERSION}.jar /soulfire/soulfire.jar
+# Download a release, or pass a local JAR path when validating an unpublished build.
+ARG JAR_SOURCE=https://github.com/soulfiremc-com/SoulFire/releases/download/${VERSION}/SoulFireDedicated-${VERSION}.jar
+ADD --chown=soulfire:soulfire ${JAR_SOURCE} /soulfire/soulfire.jar
 RUN chmod 644 /soulfire/soulfire.jar
 
 # Use the soulfire's home directory as our work directory

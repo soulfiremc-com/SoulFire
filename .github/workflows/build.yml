@@ -5,7 +5,13 @@ permissions:
   contents: read
 
 jobs:
+  native-runtime:
+    uses: ./.github/workflows/vulkan-runtime.yml
+    permissions:
+      contents: read
+
   build:
+    needs: native-runtime
     # Only run on PRs if the source branch is on someone else's repo
     if: "${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}"
 
@@ -16,6 +22,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Download native Vulkan runtimes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: vulkan-*
+          merge-multiple: true
+          path: build/vulkan-runtime
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Set up JDK 25

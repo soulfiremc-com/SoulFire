@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
   `sf-project-conventions`
 }
@@ -63,6 +65,9 @@ dependencies {
   api("org.lwjgl:lwjgl-tinyfd:3.4.3")
   api("org.lwjgl:lwjgl-vma:3.4.3")
   api("org.lwjgl:lwjgl-vulkan:3.4.3")
+  runtimeOnly("org.lwjgl:lwjgl-vulkan:3.4.3:natives-macos")
+  runtimeOnly("org.lwjgl:lwjgl-vulkan:3.4.3:natives-macos-arm64")
+  runtimeOnly(fileTree(rootProject.layout.buildDirectory.dir("vulkan-runtime")) { include("soulfire-vulkan-*.jar") })
   api("org.lwjgl:lwjgl:3.4.3:unsafe")
   // Real native libraries are required for headless Vulkan and texture/font decoding.
   for (platform in listOf("linux", "linux-arm64", "windows", "windows-arm64", "macos", "macos-arm64")) {
@@ -92,5 +97,26 @@ afterEvaluate {
     }
 
     dependsOn(modJarConfiguration)
+  }
+}
+
+// Release JARs must never silently omit a platform's CPU fallback.
+val verifyVulkanRuntime = tasks.register("verifyVulkanRuntime") {
+  val platforms = providers.gradleProperty("vulkanPlatforms")
+    .orElse("linux-x86_64,linux-arm64,windows-x86_64,windows-arm64,macos-x86_64,macos-arm64").get().split(',')
+  val directory = rootProject.layout.buildDirectory.dir("vulkan-runtime").get().asFile
+  inputs.dir(directory)
+  doLast {
+    for (platform in platforms) {
+      val artifact = directory.resolve("soulfire-vulkan-$platform.jar")
+      check(artifact.isFile) {
+        "Missing $artifact. Build native runtimes first; see docs/vulkan-runtime.md. For a local host-only JAR, set -PvulkanPlatforms=<platform>."
+      }
+      ZipFile(artifact).use { jar ->
+        check(jar.getEntry("soulfire-vulkan/$platform/runtime.properties") != null) {
+          "Invalid native runtime JAR: $artifact"
+        }
+      }
+    }
   }
 }

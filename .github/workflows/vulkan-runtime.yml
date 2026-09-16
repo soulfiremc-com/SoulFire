@@ -1,0 +1,70 @@
+name: Native Vulkan runtime
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, platform: linux-x86_64, os: linux }
+          - { runner: ubuntu-24.04-arm, platform: linux-arm64, os: linux }
+          - { runner: windows-2025, platform: windows-x86_64, os: windows, msystem: CLANG64, prefix: clang-x86_64 }
+          - { runner: windows-11-arm, platform: windows-arm64, os: windows, msystem: CLANGARM64, prefix: clang-aarch64 }
+          - { runner: macos-15-intel, platform: macos-x86_64, os: macos }
+          - { runner: macos-15, platform: macos-arm64, os: macos }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        id: cache
+        with:
+          path: build/vulkan-runtime
+          key: vulkan-${{ matrix.platform }}-${{ hashFiles('scripts/build-vulkan-runtime.py', 'build-data/vulkan/**') }}
+      - name: Build Linux runtime
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'linux'
+        run: |
+          docker build -t soulfire-vulkan-builder -f build-data/vulkan/Dockerfile .
+          docker run --rm -v "$PWD:/work" soulfire-vulkan-builder --jobs 3
+          sudo chown -R "$(id -u):$(id -g)" build/vulkan-runtime
+      - name: Set up Windows build tools
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows'
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: >-
+            bison flex
+            mingw-w64-${{ matrix.prefix }}-toolchain
+            mingw-w64-${{ matrix.prefix }}-cmake
+            mingw-w64-${{ matrix.prefix }}-meson
+            mingw-w64-${{ matrix.prefix }}-python-mako
+            mingw-w64-${{ matrix.prefix }}-python-yaml
+            mingw-w64-${{ matrix.prefix }}-python-packaging
+            mingw-w64-${{ matrix.prefix }}-llvm
+            mingw-w64-${{ matrix.prefix }}-zlib
+      - name: Build Windows runtime
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows'
+        shell: msys2 {0}
+        run: python scripts/build-vulkan-runtime.py --jobs 3
+      - name: Build macOS runtime
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'macos'
+        run: |
+          brew install cmake ninja llvm bison flex meson
+          python3 -m venv build/native-tools
+          build/native-tools/bin/pip install mako==1.3.10 packaging==25.0 pyyaml==6.0.3 meson==1.9.2
+          export PATH="$PWD/build/native-tools/bin:$(brew --prefix llvm)/bin:$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          python3 scripts/build-vulkan-runtime.py --jobs 3
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vulkan-${{ matrix.platform }}
+          path: build/vulkan-runtime/*.jar
+          if-no-files-found: error

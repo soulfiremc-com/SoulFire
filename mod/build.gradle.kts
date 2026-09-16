@@ -36,6 +36,7 @@ dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
 
   minecraft("com.mojang:minecraft:26.2")
+  runtimeOnly(fileTree(rootProject.layout.buildDirectory.dir("vulkan-runtime")) { include("soulfire-vulkan-*.jar") })
   implementation("net.fabricmc:fabric-loader:0.19.3")
 
   val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.0.1"
@@ -161,6 +162,7 @@ loom {
 }
 
 tasks.shadowJar {
+  exclude("soulfire-vulkan/**")
   val mainOutputDirectories = sourceSets.main.get().output.files.map { it.toPath().toAbsolutePath().normalize() }
 
   dependsOn(tasks.jar)
@@ -305,6 +307,7 @@ loom {
       sourceSet.set(lavapipeTest.name)
       runDirectory.set(lavapipeRun)
       systemProperties.put("fabric.debug.disableModIds", "soulfire,viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock,spark")
+      systemProperties.put("sf.baseDir", lavapipeRun.map { it.asFile.absolutePath })
       systemProperties.put("sf.lavapipe.scene", lavapipeScene)
       systemProperties.put("sf.lavapipe.headless", lavapipeHeadless)
       systemProperties.put("sf.lavapipe.benchmark", lavapipeBenchmark)

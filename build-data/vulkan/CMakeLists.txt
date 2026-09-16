@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(SoulFireVulkanSmoke C)
+find_package(VulkanHeaders CONFIG REQUIRED)
+add_executable(vulkan-smoke smoke.c)
+target_compile_features(vulkan-smoke PRIVATE c_std_11)
+target_link_libraries(vulkan-smoke PRIVATE Vulkan::Headers ${CMAKE_DL_LIBS})

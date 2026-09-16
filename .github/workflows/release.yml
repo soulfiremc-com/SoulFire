@@ -13,6 +13,11 @@ on:
 # FIXME: Entire secret keys should not be inherited, Use specific set of secrets explicitly instead.
 # See this issue to learn more: https://github.com/zizmorcore/zizmor/issues/360
 jobs:
+  native-runtime:
+    uses: ./.github/workflows/vulkan-runtime.yml
+    permissions:
+      contents: read
+
   set-release-version:
     uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@main
     permissions:
@@ -23,7 +28,7 @@ jobs:
     secrets: inherit
 
   build:
-    needs: set-release-version
+    needs: [set-release-version, native-runtime]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -39,6 +44,12 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           check-latest: true
+      - name: Download native Vulkan runtimes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: vulkan-*
+          merge-multiple: true
+          path: build/vulkan-runtime
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Build with Gradle
