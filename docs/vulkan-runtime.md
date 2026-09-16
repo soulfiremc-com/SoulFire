@@ -11,8 +11,8 @@ On macOS, the JAR also includes LWJGL's MoltenVK libraries for Metal hardware re
 The release build requires all six packages:
 
 - Linux x86-64 and ARM64, built against Debian 12 glibc.
-- Windows x86-64 and ARM64.
-- macOS Intel and Apple Silicon.
+- Windows x86-64 and ARM64, with the OS version required by Java 25.
+- macOS 15 or newer, on Intel and Apple Silicon.
 
 The Java runtime and baseline OS libraries remain prerequisites. Linux packages target glibc, not Alpine's musl ABI.
 Hardware rendering still requires the host's GPU driver. Containers also need explicit GPU access to use that driver.

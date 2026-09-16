@@ -200,12 +200,9 @@ def copy_licenses(stage, system, mesa, loader):
     licenses = stage / "licenses"
     licenses.mkdir()
     shutil.copy2(mesa / "docs/license.rst", licenses / "mesa.txt")
-    shutil.copytree(mesa / "docs/license", licenses / "mesa", dirs_exist_ok=True) if (
-        mesa / "docs/license"
-    ).exists() else None
     shutil.copy2(loader / "LICENSE.txt", licenses / "vulkan-loader.txt")
     if system == "linux":
-        # Include notices for statically linked LLVM and every packaged distro dependency.
+        # Include notices for LLVM and every packaged distro dependency.
         for package in Path("/usr/share/doc").iterdir():
             copyright_file = package / "copyright"
             if copyright_file.is_file():
@@ -307,7 +304,9 @@ def main():
         f"--prefix={prefix}",
         "--libdir=lib",
         "--buildtype=release",
-        "--prefer-static",
+        # MSYS2's static regex wrapper omits its transitive TRE dependency.
+        # Use its shared libraries on Windows and bundle the complete DLL closure.
+        *(["--prefer-static"] if system != "windows" else []),
         "-Db_ndebug=true",
         "-Dgallium-drivers=llvmpipe",
         "-Dvulkan-drivers=swrast",
