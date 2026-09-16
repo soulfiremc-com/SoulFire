@@ -61,6 +61,13 @@ public final class BundledVulkanRuntime {
       var loader = load(bundle.loader().toString());
       LIBRARIES.add(loader);
       VK.create(loader);
+      // Driver-file overrides are explicit selections, including the manual comparison harness.
+      // Keep the packaged loader, but let those manifests control the available devices.
+      if (!System.getenv().getOrDefault("VK_DRIVER_FILES", "").isBlank()
+        || !System.getenv().getOrDefault("VK_ICD_FILENAMES", "").isBlank()) {
+        log.info("Loaded bundled Vulkan loader with explicitly selected driver manifests");
+        return;
+      }
       addDriver(load(bundle.driver().toString()));
       if (Platform.get() == Platform.MACOSX) {
         // Match vanilla's bundled MoltenVK path while keeping lavapipe available on Macs without a usable GPU.

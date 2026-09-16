@@ -51,6 +51,7 @@ jobs:
             mingw-w64-${{ matrix.prefix }}-python-packaging
             mingw-w64-${{ matrix.prefix }}-llvm
             mingw-w64-${{ matrix.prefix }}-zlib
+            mingw-w64-${{ matrix.prefix }}-directx-headers
       - name: Build Windows runtime
         if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows'
         shell: msys2 {0}

@@ -23,6 +23,7 @@ Extraction uses a file lock, verifies hashes, and replaces corrupt cache files b
 
 The loader uses `VK_LUNARG_direct_driver_loading` in inclusive mode to add lavapipe alongside normal driver discovery.
 This also works when running as root. It does not change Vulkan environment variables or register drivers with the OS.
+Explicit `VK_DRIVER_FILES` or `VK_ICD_FILENAMES` selections use the bundled loader with only the selected driver manifests.
 An explicit `org.lwjgl.vulkan.libname` override retains LWJGL's normal behavior and bypasses the bundled runtime.
 
 ## Build a Linux package locally
@@ -35,11 +36,12 @@ docker run --rm -v "$PWD:/work" soulfire-vulkan-builder
 ./gradlew :dedicated-launcher:uberJar -PvulkanPlatforms=linux-x86_64
 ```
 
-Use `linux-arm64` on an ARM64 host. The property permits a local build containing only the specified platform.
+Use `linux-arm64` on an ARM64 host. The property permits a local build without all six platforms. All available native packages are included.
 Without this property, packaging fails if any release platform is missing.
 
 The native build downloads checksum-pinned Mesa, Vulkan loader, Vulkan headers, and glslang sources.
-It disables window-system integrations and bundles non-system native dependencies.
+It disables X11 and Wayland integrations and bundles non-system native dependencies.
+Windows retains Mesa's Win32 support, but SoulFire creates no native window or presentation surface.
 Before packaging, a native smoke test creates a CPU device, submits work, and verifies buffer readback.
 
 The reusable `vulkan-runtime.yml` workflow builds all six platforms, caches the packages, and supplies them to build and release jobs.
