@@ -18,6 +18,7 @@
 package com.soulfiremc.manual.mixin;
 
 import com.soulfiremc.server.renderer.LavapipeComparison;
+import com.soulfiremc.server.renderer.RendererBenchmark;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -36,5 +37,11 @@ public class ComparisonEnvironment {
   @Inject(method = "extract", at = @At("HEAD"))
   private void freezeEnvironment(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
     LavapipeComparison.beforeExtract(Minecraft.getInstance());
+    RendererBenchmark.beginNative();
+  }
+
+  @Inject(method = "render", at = @At("TAIL"))
+  private void finishNativeFrame(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+    RendererBenchmark.endNative();
   }
 }

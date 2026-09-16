@@ -427,21 +427,21 @@ public final class SkyRenderer {
       var shouldRenderSky = skybox != DimensionType.Skybox.NONE && fluid != FogType.LAVA && fluid != FogType.POWDER_SNOW
         && !doesMobEffectBlockSky(ctx);
       var endFlashState = ctx.level().endFlashState();
-      var endFlashIntensity = endFlashState != null ? endFlashState.getIntensity(1.0F) : 0.0F;
+      var endFlashIntensity = endFlashState != null ? endFlashState.getIntensity(ctx.partialTick()) : 0.0F;
       var endFlashXAngle = endFlashState != null ? endFlashState.getXAngle() : 0.0F;
       var endFlashYAngle = endFlashState != null ? endFlashState.getYAngle() : 0.0F;
       return new SkyState(
         skybox,
         shouldRenderSky,
         shouldRenderSky && ctx.camera().eyeY() - ctx.level().getLevelData().getHorizonHeight(ctx.level()) < 0.0,
-        probe.getValue(EnvironmentAttributes.SUN_ANGLE, 1.0F) * (float) (Math.PI / 180.0),
-        probe.getValue(EnvironmentAttributes.MOON_ANGLE, 1.0F) * (float) (Math.PI / 180.0),
-        probe.getValue(EnvironmentAttributes.STAR_ANGLE, 1.0F) * (float) (Math.PI / 180.0),
-        1.0F - ctx.level().getRainLevel(1.0F),
-        probe.getValue(EnvironmentAttributes.STAR_BRIGHTNESS, 1.0F),
-        probe.getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, 1.0F),
-        probe.getValue(EnvironmentAttributes.MOON_PHASE, 1.0F),
-        ARGB.opaque(probe.getValue(EnvironmentAttributes.SKY_COLOR, 1.0F)),
+        probe.getValue(EnvironmentAttributes.SUN_ANGLE, ctx.partialTick()) * (float) (Math.PI / 180.0),
+        probe.getValue(EnvironmentAttributes.MOON_ANGLE, ctx.partialTick()) * (float) (Math.PI / 180.0),
+        probe.getValue(EnvironmentAttributes.STAR_ANGLE, ctx.partialTick()) * (float) (Math.PI / 180.0),
+        1.0F - ctx.level().getRainLevel(ctx.partialTick()),
+        probe.getValue(EnvironmentAttributes.STAR_BRIGHTNESS, ctx.partialTick()),
+        probe.getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, ctx.partialTick()),
+        probe.getValue(EnvironmentAttributes.MOON_PHASE, ctx.partialTick()),
+        ARGB.opaque(probe.getValue(EnvironmentAttributes.SKY_COLOR, ctx.partialTick())),
         ARGB.colorFromFloat(1.0F, fog.color().x(), fog.color().y(), fog.color().z()),
         fog.skyEnd(),
         endFlashIntensity,

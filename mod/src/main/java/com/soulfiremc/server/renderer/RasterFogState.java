@@ -47,11 +47,12 @@ record RasterFogState(
     var camera = minecraft.gameRenderer.mainCamera();
     camera.setLevel(ctx.level());
     camera.setEntity(ctx.localPlayer());
-    camera.update(DeltaTracker.ONE);
+    var deltaTracker = minecraft.getDeltaTracker() != null ? minecraft.getDeltaTracker() : DeltaTracker.ONE;
+    camera.update(deltaTracker);
     camera.setPosition(ctx.camera().eyeX(), ctx.camera().eyeY(), ctx.camera().eyeZ());
     camera.setRotation(ctx.camera().yRot(), ctx.camera().xRot());
     camera.attributeProbe().tick(ctx.level(), camera.position());
-    var fog = minecraft.gameRenderer.fogRenderer.setupFog(camera, Math.max(1, ctx.maxDistance() / 16), DeltaTracker.ONE,
+    var fog = minecraft.gameRenderer.fogRenderer.setupFog(camera, Math.max(1, ctx.maxDistance() / 16), deltaTracker,
       ctx.lightmapRenderState().bossOverlayWorldDarkening, ctx.level());
     return new RasterFogState(true, new Vector4f(fog.color), fog.environmentalStart, fog.environmentalEnd,
       fog.renderDistanceStart, fog.renderDistanceEnd, fog.cloudEnd, fog.skyEnd);

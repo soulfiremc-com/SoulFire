@@ -52,7 +52,7 @@ public final class CloudMeshCollector {
       return SceneData.EMPTY;
     }
 
-    var cloudColor = ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_COLOR, 1.0F);
+    var cloudColor = ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_COLOR, ctx.partialTick());
     if (ARGB.alpha(cloudColor) == 0) {
       return SceneData.EMPTY;
     }
@@ -63,7 +63,7 @@ public final class CloudMeshCollector {
       texture,
       cloudStatus,
       cloudColor,
-      ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, 1.0F),
+      ctx.environmentProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, ctx.partialTick()),
       range,
       ctx.level().getGameTime(),
       Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false)

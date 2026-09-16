@@ -294,6 +294,7 @@ val lavapipeTest = sourceSets.create("lavapipeTest") {
   runtimeClasspath += sourceSets.main.get().output + configurations.runtimeClasspath.get()
 }
 val lavapipeScene = providers.gradleProperty("lavapipeScene").orElse("items")
+val lavapipeBenchmark = providers.gradleProperty("lavapipeBenchmark").orElse("false")
 val lavapipeOutput = layout.buildDirectory.dir(lavapipeScene.map { "lavapipe-test/output/$it" })
 val lavapipeRun = layout.buildDirectory.dir("lavapipe-test/run")
 val lavapipeIcd = providers.gradleProperty("lavapipeIcd")
@@ -307,6 +308,7 @@ loom {
       runDirectory.set(lavapipeRun)
       systemProperties.put("fabric.debug.disableModIds", "soulfire,viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock,spark")
       systemProperties.put("sf.lavapipe.scene", lavapipeScene)
+      systemProperties.put("sf.lavapipe.benchmark", lavapipeBenchmark)
       systemProperties.put("sf.lavapipe.output", lavapipeOutput.map { it.asFile.absolutePath })
       jvmArguments.addAll("--enable-native-access=ALL-UNNAMED", "-Xmx2G")
       programArguments.addAll("--graphicsBackend", "VULKAN", "--width", "854", "--height", "480", "--username", "LavapipeTest")
@@ -328,11 +330,15 @@ tasks.named("runLavapipeTest") {
   val run = lavapipeRun.get().asFile
   val icd = lavapipeIcd.get()
   val scene = lavapipeScene.get()
+  val benchmark = lavapipeBenchmark.get().toBoolean()
+  val scenes = file("src/lavapipeTest/resources/lavapipe-scenes.csv").readLines().drop(1).map { it.substringBefore(',') }
   doFirst {
-    require(scene in listOf("items", "inventory", "stress-wide", "stress-transparency", "stress-entities", "stress-hud")) { "Unknown scene: $scene" }
+    require(scene in scenes) { "Unknown scene: $scene. Available scenes: ${scenes.joinToString()}" }
     require(File(icd).isFile) { "Lavapipe ICD not found: $icd. Set -PlavapipeIcd=/path/to/lvp_icd.json" }
     output.mkdirs()
-    listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt", "scene.json", "software-trace.json").forEach {
+    val outputs = if (benchmark) listOf("benchmark.json") else
+      listOf("lavapipe.png", "software.png", "diff.png", "comparison.png", "metrics.json", "device.txt", "scene.json", "software-trace.json")
+    outputs.forEach {
       output.resolve(it).delete()
     }
     run.mkdirs()
@@ -352,7 +358,7 @@ tasks.named("runLavapipeTest") {
     """.trimIndent() + "\n")
   }
   doLast {
-    check(output.resolve("metrics.json").isFile) {
+    check(output.resolve(if (benchmark) "benchmark.json" else "metrics.json").isFile) {
       "Lavapipe comparison did not complete. Inspect build/lavapipe-test/run/logs/latest.log."
     }
   }

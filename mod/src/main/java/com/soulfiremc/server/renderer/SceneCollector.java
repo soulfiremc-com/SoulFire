@@ -212,7 +212,7 @@ public class SceneCollector {
     var camera = ctx.camera();
     VANILLA_WEATHER.extractRenderState(
       level,
-      1.0F,
+      ctx.partialTick(),
       new Vec3(camera.eyeX(), camera.eyeY(), camera.eyeZ()),
       renderState
     );

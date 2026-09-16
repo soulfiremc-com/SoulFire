@@ -61,8 +61,12 @@ public record RenderContext(
     );
   }
 
+  public float partialTick() {
+    return SoftwareRenderer.partialTick();
+  }
+
   public double interpolatedGameTime() {
-    return level.getGameTime() + (double) Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+    return level.getGameTime() + (double) partialTick();
   }
 
   private static LightmapRenderState createLightmapRenderState(ClientLevel level, LocalPlayer localPlayer, Camera camera) {
@@ -79,7 +83,7 @@ public record RenderContext(
     var renderState = new LightmapRenderState();
     try {
       extractor.needsUpdate = true;
-      extractor.extract(renderState, 1.0F);
+      extractor.extract(renderState, SoftwareRenderer.partialTick());
     } finally {
       extractor.needsUpdate = needsUpdate;
     }

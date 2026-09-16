@@ -181,7 +181,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
   void submitEntities(Iterable<Entity> entities) {
     var dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
     for (var entity : entities) {
-      var renderState = dispatcher.extractEntity(entity, 1.0F);
+      var renderState = dispatcher.extractEntity(entity, ctx.partialTick());
       var poseStack = new PoseStack();
       dispatcher.submit(renderState, cameraRenderState(), renderState.x - origin.x, renderState.y - origin.y, renderState.z - origin.z, poseStack, this);
     }
@@ -230,7 +230,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     var blockPos = blockEntity.getBlockPos();
     poseStack.translate(blockPos.getX() - origin.x, blockPos.getY() - origin.y, blockPos.getZ() - origin.z);
     var crumblingOverlay = crumblingProgress != null ? new ModelFeatureRenderer.CrumblingOverlay(crumblingProgress, poseStack.last()) : null;
-    var renderState = dispatcher.tryExtractRenderState(blockEntity, 1.0F, crumblingOverlay, globallyRendered);
+    var renderState = dispatcher.tryExtractRenderState(blockEntity, ctx.partialTick(), crumblingOverlay, globallyRendered);
     if (renderState != null) {
       dispatcher.submit(renderState, poseStack, this, cameraRenderState());
     }
@@ -276,7 +276,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       }
     }
     try {
-      engine.extract(particlesState, frustum, camera, 1.0F);
+      engine.extract(particlesState, frustum, camera, SoftwareRenderer.partialTick());
       return particlesState;
     } finally {
       cachedStates.forEach((group, state) -> group.particleTypeRenderState = state);

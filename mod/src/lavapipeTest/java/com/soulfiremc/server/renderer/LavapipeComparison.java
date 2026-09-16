@@ -48,6 +48,8 @@ public final class LavapipeComparison {
   private static final long START = System.nanoTime();
   private static final Path OUTPUT = Path.of(System.getProperty("sf.lavapipe.output"));
   private static final String SCENE = System.getProperty("sf.lavapipe.scene", "items");
+  private static final ComparisonScenario SCENARIO = ComparisonScenario.named(SCENE);
+  private static FixtureWorld fixture;
   private static final boolean STRESS = SCENE.startsWith("stress-");
   private static final boolean INVENTORY = SCENE.equals("inventory");
   private static long particleSeed;
@@ -61,7 +63,8 @@ public final class LavapipeComparison {
 
   public static void beforeExtract(Minecraft minecraft) {
     if (STRESS && prepared && !finished) {
-      StressComparisonScene.freeze(minecraft);
+      if (fixture != null) fixture.freeze();
+      else StressComparisonScene.freeze(minecraft);
     } else if (INVENTORY) {
       InventoryComparisonScene.freezeEnvironment(minecraft);
     }
@@ -81,6 +84,10 @@ public final class LavapipeComparison {
 
   public static RandomSource particleRandom() {
     return RandomSource.create(particleSeed++);
+  }
+
+  public static float partialTick() {
+    return SCENARIO.partialTick();
   }
 
   public static boolean isStressScene() {
@@ -103,7 +110,7 @@ public final class LavapipeComparison {
       return;
     }
     if (!prepared) {
-      if (STRESS && !StressComparisonScene.ready(minecraft)) return;
+      if (STRESS && !SCENARIO.isolatedWorld() && !StressComparisonScene.ready(minecraft)) return;
       var info = RenderSystem.getDevice().getDeviceInfo();
       if (!info.backendName().toLowerCase(Locale.ROOT).contains("vulkan")
         || !info.driverInfo().toLowerCase(Locale.ROOT).contains("llvmpipe")) {
@@ -111,7 +118,9 @@ public final class LavapipeComparison {
       }
       minecraft.options.guiScale().set(2);
       minecraft.options.pauseOnLostFocus = false;
-      if (STRESS) {
+      if (SCENARIO.isolatedWorld()) {
+        fixture = EnvironmentComparisonScenes.prepare(minecraft, SCENARIO);
+      } else if (STRESS) {
         StressComparisonScene.prepare(minecraft, SCENE);
       } else if (INVENTORY) {
         InventoryComparisonScene.prepare(minecraft);
@@ -123,6 +132,10 @@ public final class LavapipeComparison {
     }
     minecraft.gui.toastManager().clear();
     if (++frames < (INVENTORY || STRESS ? 60 : 8) || capturing || STRESS && !minecraft.levelRenderer.hasRenderedAllSections()) {
+      return;
+    }
+    if (RendererBenchmark.ENABLED) {
+      finished = RendererBenchmark.afterFrame(minecraft, OUTPUT, SCENE, SCENARIO.isolatedWorld());
       return;
     }
     capturing = true;
@@ -148,6 +161,7 @@ public final class LavapipeComparison {
   }
 
   private static BufferedImage renderSoftware(Minecraft minecraft, int width, int height) throws IOException {
+    if (fixture != null) return fixture.renderSoftware(width, height, OUTPUT);
     if (STRESS) return StressComparisonScene.renderSoftware(minecraft, width, height, OUTPUT, SCENE);
     if (INVENTORY) {
       return InventoryComparisonScene.renderSoftware(minecraft, width, height, OUTPUT);

@@ -159,7 +159,7 @@ public class SoftwareRenderer {
     }
   }
 
-  private static float partialTick() {
+  static float partialTick() {
     try {
       var deltaTracker = Minecraft.getInstance().getDeltaTracker();
       return deltaTracker != null ? deltaTracker.getGameTimeDeltaPartialTick(false) : 1.0F;
