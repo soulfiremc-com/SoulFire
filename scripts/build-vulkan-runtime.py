@@ -369,6 +369,11 @@ def main():
     smoke_env = {
         key: value for key, value in os.environ.items() if not key.startswith("VK_")
     }
+    print(
+        "Packaged libraries:",
+        ", ".join(sorted(file.name for file in stage.iterdir())),
+        flush=True,
+    )
     run(smoke, stage / loader_file.name, stage / driver_file.name, env=smoke_env)
     copy_licenses(stage, system, mesa, loader)
     (stage / "sources.json").write_text(json.dumps(SOURCES, indent=2) + "\n")

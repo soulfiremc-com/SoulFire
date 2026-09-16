@@ -7,7 +7,15 @@
 #ifdef _WIN32
 #include <windows.h>
 static void *open_library(const char *path) {
-  return (void *)LoadLibraryExA(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  char absolute[32768];
+  DWORD length = GetFullPathNameA(path, sizeof(absolute), absolute, NULL);
+  if (!length || length >= sizeof(absolute)) {
+    fprintf(stderr, "Cannot resolve %s: Windows error %lu\n", path, GetLastError());
+    return NULL;
+  }
+  void *library = (void *)LoadLibraryExA(absolute, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  if (!library) fprintf(stderr, "Cannot load %s: Windows error %lu\n", absolute, GetLastError());
+  return library;
 }
 static void *symbol(void *library, const char *name) { return (void *)GetProcAddress((HMODULE)library, name); }
 #else

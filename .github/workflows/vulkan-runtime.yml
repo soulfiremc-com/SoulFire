@@ -69,3 +69,13 @@ jobs:
           name: vulkan-${{ matrix.platform }}
           path: build/vulkan-runtime/*.jar
           if-no-files-found: error
+      - name: Preserve failed native runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-debug-${{ matrix.platform }}
+          retention-days: 3
+          path: |
+            build/vulkan-work/*/runtime
+            build/vulkan-work/*/smoke-build/vulkan-smoke*
+            build/vulkan-work/*/mesa-build/meson-logs
