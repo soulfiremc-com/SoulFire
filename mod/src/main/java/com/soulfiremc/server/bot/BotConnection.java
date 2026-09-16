@@ -66,9 +66,11 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.FramerateLimiter;
 import net.minecraft.client.GameNarrator;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
+import net.minecraft.client.Options;
 import net.minecraft.client.ResourceLoadStateTracker;
 import net.minecraft.client.User;
 import net.minecraft.client.gui.Gui;
@@ -113,11 +115,13 @@ import net.minecraft.util.profiling.ContinuousProfiler;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.lang.reflect.Modifier;
 import java.net.Proxy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -140,6 +144,7 @@ public final class BotConnection {
   private final Queue<Runnable> preTickHooks = new ConcurrentLinkedQueue<>();
   private final MetadataHolder<Object> metadata = new MetadataHolder<>();
   private final MetadataHolder<JsonElement> persistentMetadata;
+  private final PovInputController povInput = new PovInputController(this);
   private final ControlState controlState = new ControlState();
   private final BotControlAPI botControl = new BotControlAPI();
   private final NavigationWorldState navigationWorldState =
@@ -303,6 +308,26 @@ public final class BotConnection {
 
   private static void initializeBotOptions(Minecraft minecraft) {
     var options = SFModHelpers.deepCopy(minecraft.options);
+    // Options are copied shallowly; key mappings contain mutable pressed/click state.
+    var mappings = new IdentityHashMap<KeyMapping, KeyMapping>();
+    try {
+      for (var field : Options.class.getDeclaredFields()) {
+        if (Modifier.isStatic(field.getModifiers())) continue;
+        if (field.getType() == KeyMapping.class) {
+          field.setAccessible(true);
+          var original = (KeyMapping) field.get(options);
+          field.set(options, mappings.computeIfAbsent(original, SFModHelpers::deepCopy));
+        } else if (field.getType() == KeyMapping[].class) {
+          field.setAccessible(true);
+          var originals = (KeyMapping[]) field.get(options);
+          var copies = new KeyMapping[originals.length];
+          for (var i = 0; i < originals.length; i++) copies[i] = mappings.computeIfAbsent(originals[i], SFModHelpers::deepCopy);
+          field.set(options, copies);
+        }
+      }
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException("Cannot isolate bot key bindings", e);
+    }
     options.minecraft = minecraft;
     minecraft.options = options;
   }

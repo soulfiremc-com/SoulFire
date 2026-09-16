@@ -22,6 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.core.SectionPos;
 import org.jspecify.annotations.Nullable;
 
 /// One cached bot owns the native scene. Switching bots releases all previous scene resources.
@@ -53,6 +54,23 @@ final class VulkanRenderSession implements AutoCloseable {
       minecraft.levelRenderer = levelRenderer;
       minecraft.levelExtractor = extractor;
       minecraft.gui.guiRenderState = renderer.gameRenderState().guiRenderState;
+      if (minecraft.level != null) {
+        // A new scene has not seen chunk notifications consumed by the previous scene.
+        // Replay the current cache through vanilla's normal extraction path.
+        var chunkCache = minecraft.level.getChunkSource();
+        var chunks = chunkCache.storage.chunks;
+        for (var index = 0; index < chunks.length(); index++) {
+          var chunk = chunks.get(index);
+          if (chunk == null) continue;
+          var pos = chunk.getPos();
+          chunkCache.addedLoadedChunks().add(pos.pack());
+          for (var sectionIndex = 0; sectionIndex < chunk.getSections().length; sectionIndex++) {
+            if (chunk.getSections()[sectionIndex].hasOnlyAir()) {
+              chunkCache.addedEmptySections().add(SectionPos.asLong(pos.x(), chunk.getSectionYFromSectionIndex(sectionIndex), pos.z()));
+            }
+          }
+        }
+      }
     } catch (RuntimeException | Error error) {
       try {
         closeResources(renderer, levelRenderer);

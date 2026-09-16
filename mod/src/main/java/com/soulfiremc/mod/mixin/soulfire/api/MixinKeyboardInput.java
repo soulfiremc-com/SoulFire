@@ -30,7 +30,7 @@ public class MixinKeyboardInput {
   @WrapOperation(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/world/entity/player/Input;"))
   private Input soulfireUpdatePlayerMoveState(boolean forward, boolean backward, boolean left, boolean right, boolean jump, boolean shift, boolean sprint, Operation<Input> original) {
     var connection = BotConnection.currentOptional().orElse(null);
-    if (connection == null) {
+    if (connection == null || connection.povInput().active()) {
       return original.call(forward, backward, left, right, jump, shift, sprint);
     }
 

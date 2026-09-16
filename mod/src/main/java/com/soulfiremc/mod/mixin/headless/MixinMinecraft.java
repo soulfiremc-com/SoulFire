@@ -36,6 +36,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
+  @Inject(method = "isWindowActive", at = @At("HEAD"), cancellable = true)
+  private void remoteFocus(CallbackInfoReturnable<Boolean> cir) {
+    com.soulfiremc.server.bot.BotConnection.currentOptional().ifPresent(bot -> {
+      if (bot.povInput().active()) cir.setReturnValue(true);
+    });
+  }
+
   @Inject(method = "fillSystemReport", at = @At("HEAD"), cancellable = true)
   private static void preventFillSystemReport(SystemReport report, Minecraft minecraft, LanguageManager languageManager, String launchVersion, Options options, CallbackInfoReturnable<SystemReport> cir) {
     cir.setReturnValue(report);

@@ -5,6 +5,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import re
 import shutil
 import socket
@@ -55,6 +56,11 @@ def main():
         help="Minecraft server JAR; this test accepts its EULA for an isolated local server",
     )
     parser.add_argument("--output", type=Path, default=ROOT / "build/vulkan-container")
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Also exercise live POV streaming and native input",
+    )
     args = parser.parse_args()
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -259,6 +265,66 @@ def main():
                     )
                 (destination / f"icon-{icons}.png").write_bytes(png)
                 icons += 1
+        if args.interactive:
+            server.stdin.write("gamemode survival NativeProbeA\n")
+            server.stdin.flush()
+            time.sleep(0.5)
+            subprocess.run(
+                [
+                    "bun",
+                    "scripts/validate-pov-session.ts",
+                    f"http://127.0.0.1:{api_port}",
+                    instance,
+                    *bots,
+                    str(destination),
+                ],
+                check=True,
+                env={**os.environ, "SF_POV_TEST_TOKEN": token},
+            )
+            # The flat world's grass must survive switching from snapshot scenes to streaming.
+            with Image.open(destination / "interactive-world-settled.jpg") as frame:
+                terrain = frame.convert("RGB").crop(
+                    (0, frame.height // 2, frame.width, frame.height * 3 // 4)
+                )
+                green_pixels = sum(
+                    g > r * 1.1 and g > b * 1.2 for r, g, b in terrain.getdata()
+                )
+                if green_pixels < terrain.width * terrain.height // 4:
+                    raise AssertionError(
+                        "Live POV lost terrain after switching render scenes"
+                    )
+            server.stdin.write("gamemode creative NativeProbeA\n")
+            server.stdin.write("tp NativeProbeA 0.5 -60 2.5 0 35\n")
+            server.stdin.write("setblock 0 -60 4 minecraft:chest\n")
+            server.stdin.flush()
+            time.sleep(0.5)
+            subprocess.run(
+                [
+                    "bun",
+                    "scripts/validate-pov-session.ts",
+                    f"http://127.0.0.1:{api_port}",
+                    instance,
+                    *bots,
+                    str(destination),
+                    "world",
+                ],
+                check=True,
+                env={**os.environ, "SF_POV_TEST_TOKEN": token},
+            )
+        browser_test = os.environ.get("SF_POV_BROWSER_TEST")
+        if args.interactive and browser_test:
+            subprocess.run(
+                [
+                    "node",
+                    browser_test,
+                    f"http://127.0.0.1:{api_port}",
+                    instance,
+                    bots[0],
+                    str(destination),
+                ],
+                check=True,
+                env={**os.environ, "SF_POV_TEST_TOKEN": token},
+            )
         log = run("docker", "logs", container)
         if "Loaded bundled headless Vulkan runtime" not in log or "llvmpipe" not in log:
             raise AssertionError("Bundled CPU Vulkan was not selected")
@@ -269,6 +335,7 @@ def main():
             "concurrentPovCaptures": 12,
             "inventoryIcons": icons,
             "bots": len(bots),
+            "interactivePov": args.interactive,
         }
         (destination / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))

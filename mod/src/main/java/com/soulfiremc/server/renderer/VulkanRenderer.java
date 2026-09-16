@@ -46,6 +46,7 @@ public final class VulkanRenderer {
   private static VulkanRenderSession session;
   private static long lastTextureTickNanos = System.nanoTime();
   private static final ScopedValue<Options> REQUEST = ScopedValue.newInstance();
+  private static final ScopedValue<Boolean> INTERACTIVE = ScopedValue.newInstance();
   private static final ScopedValue<Boolean> CAPTURE = ScopedValue.newInstance();
 
   private VulkanRenderer() {}
@@ -100,6 +101,13 @@ public final class VulkanRenderer {
     return renderWithResult(level, player, new Options(eyePos, yRot, xRot, width, height, fov, maxDistance, true, true, false)).image();
   }
 
+  /// Draws one live frame without waiting for all chunk compilation to settle.
+  public static BufferedImage renderInteractive(Minecraft minecraft, int width, int height) {
+    return ScopedValue.where(INTERACTIVE, true).call(() -> renderWithResult(minecraft.level, minecraft.player,
+      Options.defaults(minecraft.player, width, height, minecraft.options.fov().get(),
+        minecraft.options.getEffectiveRenderDistance() * 16)).image());
+  }
+
   public static Result renderWithResult(ClientLevel level, LocalPlayer player, Options options) {
     var minecraft = Minecraft.getInstance();
     if (!minecraft.isSameThread()) {
@@ -141,6 +149,9 @@ public final class VulkanRenderer {
         RenderSystem.executePendingTasks();
         renderer.render(delta, true);
         finishFrame(minecraft);
+        if (INTERACTIVE.orElse(false)) {
+          break;
+        }
         var graph = minecraft.levelRenderer.sectionOcclusionGraph();
         var graphReady = (graph.fullUpdateTask == null || graph.fullUpdateTask.isDone())
           && !graph.needsFullUpdate && !graph.needsFrustumUpdate.get();
@@ -162,7 +173,7 @@ public final class VulkanRenderer {
       return new Result(image, trace);
     } finally {
       minecraft.options.renderDistance().set(oldDistance);
-      resize(minecraft, oldWidth, oldHeight);
+      if (!INTERACTIVE.orElse(false)) resize(minecraft, oldWidth, oldHeight);
     }
   }
 
@@ -231,9 +242,10 @@ public final class VulkanRenderer {
     }
   }
 
-  private static void resize(Minecraft minecraft, int width, int height) {
+  public static void resize(Minecraft minecraft, int width, int height) {
     if (width < 1 || height < 1) throw new IllegalArgumentException("Image dimensions must be positive");
     var window = minecraft.getWindow();
+    if (window.getWidth() == width && window.getHeight() == height) return;
     window.setWidth(width);
     window.setHeight(height);
     window.setGuiScale(window.calculateScale(minecraft.options.guiScale().get(), minecraft.isEnforceUnicode()));

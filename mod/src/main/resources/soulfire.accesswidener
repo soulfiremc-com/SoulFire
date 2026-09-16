@@ -263,3 +263,16 @@ accessible field net/minecraft/world/entity/LivingEntity itemSwapTicker I
 accessible field net/minecraft/client/gui/Hud overlayMessageTime I
 accessible field net/minecraft/client/gui/Hud toolHighlightTimer I
 accessible field net/minecraft/client/gui/Hud titleTime I
+
+accessible method net/minecraft/client/KeyboardHandler keyPress (JILnet/minecraft/client/input/KeyEvent;)V
+accessible method net/minecraft/client/KeyboardHandler charTyped (JLnet/minecraft/client/input/CharacterEvent;)V
+accessible method net/minecraft/client/MouseHandler onButton (JLnet/minecraft/client/input/MouseButtonInfo;I)V
+accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
+accessible method net/minecraft/client/MouseHandler onMove (JDD)V
+accessible field net/minecraft/client/MouseHandler mouseGrabbed Z
+accessible field net/minecraft/client/KeyMapping key Lcom/mojang/blaze3d/platform/InputConstants$Key;
+accessible method net/minecraft/client/KeyMapping release ()V
+
+accessible class net/minecraft/client/multiplayer/ClientChunkCache$Storage
+accessible field net/minecraft/client/multiplayer/ClientChunkCache storage Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;
+accessible field net/minecraft/client/multiplayer/ClientChunkCache$Storage chunks Ljava/util/concurrent/atomic/AtomicReferenceArray;

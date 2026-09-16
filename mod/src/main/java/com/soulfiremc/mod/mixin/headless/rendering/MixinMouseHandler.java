@@ -41,6 +41,16 @@ public class MixinMouseHandler implements IMouseHandler {
 
   @Inject(method = "grabMouse", at = @At("HEAD"), cancellable = true)
   private void grabMouseHook(CallbackInfo ci) {
+    var connection = BotConnection.currentOptional().orElse(null);
+    if (connection != null && connection.povInput().active()) {
+      ((MouseHandler) (Object) this).mouseGrabbed = connection.minecraft().gui.screen() == null;
+    }
+    ci.cancel();
+  }
+
+  @Inject(method = "releaseMouse", at = @At("HEAD"), cancellable = true)
+  private void releaseMouseHook(CallbackInfo ci) {
+    ((MouseHandler) (Object) this).mouseGrabbed = false;
     ci.cancel();
   }
 

@@ -1,0 +1,56 @@
+syntax = "proto3";
+package soulfire.v1;
+option java_package = "com.soulfiremc.grpc.generated";
+option java_multiple_files = true;
+
+// An exclusive, authenticated interactive view. Input heartbeats are required
+// every second; a stalled client loses control after five seconds.
+service PovService {
+  rpc Watch (PovWatchRequest) returns (stream PovFrame);
+  rpc Input (PovInputRequest) returns (PovInputResponse);
+}
+message PovWatchRequest {
+  string instance_id = 1;
+  string bot_id = 2;
+  string session_id = 3;
+  int32 width = 4;
+  int32 height = 5;
+}
+message PovFrame {
+  bytes image = 1;
+  string mime_type = 2;
+  uint64 sequence = 3;
+  int32 width = 4;
+  int32 height = 5;
+  bool screen_open = 6;
+}
+message PovInputRequest {
+  string session_id = 1;
+  uint64 sequence = 2;
+  bool captured = 3;
+  int32 width = 4;
+  int32 height = 5;
+  repeated PovInputEvent events = 6;
+  // Escape closes an open Minecraft screen before releasing local capture.
+  bool close_screen = 7;
+}
+message PovInputResponse {}
+message PovInputEvent {
+  enum Kind {
+    KEY = 0;
+    CHARACTER = 1;
+    BUTTON = 2;
+    MOVE = 3;
+    SCROLL = 4;
+  }
+  Kind kind = 1;
+  // GLFW key/button number, or Unicode code point for CHARACTER.
+  int32 code = 2;
+  // GLFW release (0), press (1), or repeat (2).
+  int32 action = 3;
+  int32 modifiers = 4;
+  // Normalized cursor position for screens; relative pixels for mouse look.
+  double x = 5;
+  double y = 6;
+  bool relative = 7;
+}

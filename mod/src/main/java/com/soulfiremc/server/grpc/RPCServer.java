@@ -89,6 +89,7 @@ public final class RPCServer {
         .allowRequestHeaders(
           HttpHeaderNames.CONTENT_TYPE,
           HttpHeaderNames.of("X-GRPC-WEB"),
+          HttpHeaderNames.of("grpc-timeout"),
           HttpHeaderNames.of("X-User-Agent"),
           HttpHeaderNames.of("X-SoulFire-Control-Token"),
           HttpHeaderNames.AUTHORIZATION
@@ -107,6 +108,7 @@ public final class RPCServer {
           new JwtServerInterceptor(soulFireServer)
         ))
         .addService(new BotServiceImpl(soulFireServer))
+        .addService(new PovServiceImpl(soulFireServer))
         .addService(new BotLiveServiceImpl(soulFireServer))
         .addService(new BotProtocolServiceImpl(soulFireServer))
         .addService(new BotTaskServiceImpl(soulFireServer))
