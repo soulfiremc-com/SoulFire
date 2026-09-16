@@ -370,7 +370,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     cameraState.initialized = true;
     cameraState.orientation = ctx.camera().orientation();
     cameraState.cullFrustum = createFrustum(ctx);
-    cameraState.projectionMatrix = new Matrix4f(ctx.camera().projectionMatrix());
+    cameraState.projectionMatrix = new Matrix4f(ctx.camera().rasterProjectionMatrix());
     cameraState.viewRotationMatrix = new Matrix4f(ctx.camera().viewRotationMatrix());
     cameraState.depthFar = ctx.camera().farPlane();
     cameraState.entityRenderState = new CameraEntityRenderState();
@@ -639,6 +639,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     int outlineColor,
     ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
   ) {
+    if (renderType == RenderTypes.waterMask()) {
+      withStage(FeatureStage.WATER_MASK, () -> captureModelSubmit(model, state, poseStack, renderType,
+        light, overlay, color, sprite, outlineColor, crumblingOverlay));
+      return;
+    }
     if (renderType.hasBlending()) {
       var scene = captureScene(() -> captureModelSubmit(
         model,
@@ -2061,14 +2066,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       var shaderScale = material.viewScale() * LINE_SHADER_VIEW_SCALE;
       var aClip = clipPosition(a.position(), shaderScale);
       var bClip = clipPosition(b.position(), shaderScale);
-      var line = clipLine(a, b, aClip, bClip);
-      if (line == null) {
+      if (!isUsableClip(aClip) || !isUsableClip(bClip)) {
         return;
       }
-      a = line.a();
-      b = line.b();
-      aClip = line.aClip();
-      bClip = line.bClip();
 
       var aSegmentOffset = lineOffset(aClip, bClip, a.lineWidth());
       var bSegmentOffset = lineOffset(aClip, bClip, b.lineWidth());
@@ -2076,30 +2076,24 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         return;
       }
 
-      var clipToWorld = clipToWorld(shaderScale);
       var aOffset = lineOffset(a, aClip, shaderScale, aSegmentOffset);
       var bOffset = lineOffset(b, bClip, shaderScale, bSegmentOffset);
-      var positions = new Vector3f[]{
-        unprojectClipOffset(aClip, -aOffset.x(), -aOffset.y(), clipToWorld),
-        unprojectClipOffset(aClip, aOffset.x(), aOffset.y(), clipToWorld),
-        unprojectClipOffset(bClip, bOffset.x(), bOffset.y(), clipToWorld),
-        unprojectClipOffset(bClip, -bOffset.x(), -bOffset.y(), clipToWorld)
-      };
-      for (var position : positions) {
-        if (position == null) {
-          return;
-        }
-      }
+      var aPlus = expandedLineVertex(a, aClip, aOffset.x(), aOffset.y());
+      var aMinus = expandedLineVertex(a, aClip, -aOffset.x(), -aOffset.y());
+      var bPlus = expandedLineVertex(b, bClip, bOffset.x(), bOffset.y());
+      var bMinus = expandedLineVertex(b, bClip, -bOffset.x(), -bOffset.y());
+      addRenderTypeQuad(new RenderQuad(aPlus, aMinus, bPlus, bPlus, material), renderType);
+      addRenderTypeQuad(new RenderQuad(bMinus, bPlus, aMinus, aMinus, material), renderType);
+    }
 
-      addCapturedFace(
-        positions,
-        zeroNormals(),
-        new int[]{a.color(), a.color(), b.color(), b.color()},
-        new float[]{a.u(), a.v(), a.u(), a.v(), b.u(), b.v(), b.u(), b.v()},
-        new int[]{a.light(), a.light(), b.light(), b.light()},
-        new int[]{a.overlayColor(), a.overlayColor(), b.overlayColor(), b.overlayColor()},
-        material
-      );
+    private RenderVertex expandedLineVertex(CapturedVertex vertex, Vector4f clip, float offsetX, float offsetY) {
+      var inverseW = 1.0F / clip.w;
+      return renderVertex(vertex.position(), new Vector3f(), vertex.u(), vertex.v(), vertex.color(), vertex.light(),
+        vertex.overlayColor(), false, FaceLighting.FRONT).withClipPosition(
+        (clip.x * inverseW + offsetX) * clip.w,
+        (clip.y * inverseW + offsetY) * clip.w,
+        clip.z * inverseW * clip.w,
+        clip.w);
     }
 
     private void emitPoint(CapturedVertex vertex) {
@@ -2219,22 +2213,22 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     }
 
     private Vector4f clipPosition(Vector3f position, float viewScale) {
-      var view = ctx.camera().viewRotationMatrix().transform(new Vector4f(
-        (float) (position.x() - (ctx.camera().eyeX() - origin.x)),
-        (float) (position.y() - (ctx.camera().eyeY() - origin.y)),
-        (float) (position.z() - (ctx.camera().eyeZ() - origin.z)),
-        1.0F
-      ));
-      if (viewScale != 1.0F) {
-        view.mul(viewScale, viewScale, viewScale, 1.0F);
-      }
-      return ctx.camera().projectionMatrix().transform(view);
+      var transform = new Matrix4f(ctx.camera().rasterProjectionMatrix())
+        .scale(viewScale, viewScale, viewScale).mul(ctx.camera().viewRotationMatrix());
+      var x = (float) (position.x() - (ctx.camera().eyeX() - origin.x));
+      var y = (float) (position.y() - (ctx.camera().eyeY() - origin.y));
+      var z = (float) (position.z() - (ctx.camera().eyeZ() - origin.z));
+      return new Vector4f(
+        transform.m00() * x + (transform.m10() * y + (transform.m20() * z + transform.m30())),
+        transform.m01() * x + (transform.m11() * y + (transform.m21() * z + transform.m31())),
+        transform.m02() * x + (transform.m12() * y + (transform.m22() * z + transform.m32())),
+        transform.m03() * x + (transform.m13() * y + (transform.m23() * z + transform.m33())));
     }
 
     private Matrix4f clipToWorld(float viewScale) {
       var view = ctx.camera().viewRotationMatrix();
       view.translate((float) (origin.x - ctx.camera().eyeX()), (float) (origin.y - ctx.camera().eyeY()), (float) (origin.z - ctx.camera().eyeZ()));
-      return new Matrix4f(ctx.camera().projectionMatrix())
+      return new Matrix4f(ctx.camera().rasterProjectionMatrix())
         .scale(viewScale, viewScale, viewScale)
         .mul(view)
         .invert();
@@ -2258,74 +2252,11 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         && clip.x <= clip.w + epsilon
         && clip.y >= -clip.w - epsilon
         && clip.y <= clip.w + epsilon
-        && clip.z >= -clip.w - epsilon
+        && clip.z >= -epsilon
         && clip.z <= clip.w + epsilon;
     }
 
     @Nullable
-    private ClippedLine clipLine(CapturedVertex a, CapturedVertex b, Vector4f aClip, Vector4f bClip) {
-      if (!isUsableClip(aClip) || !isUsableClip(bClip)) {
-        return null;
-      }
-
-      var line = new ClippedLine(a, b, aClip, bClip);
-      for (var plane : ClipPlane.values()) {
-        line = clipLine(line, plane);
-        if (line == null) {
-          return null;
-        }
-      }
-
-      return isUsableClip(line.aClip()) && isUsableClip(line.bClip()) ? line : null;
-    }
-
-    @Nullable
-    private ClippedLine clipLine(ClippedLine line, ClipPlane plane) {
-      var aDistance = clipDistance(line.aClip(), plane);
-      var bDistance = clipDistance(line.bClip(), plane);
-      var aInside = aDistance >= 0.0F;
-      var bInside = bDistance >= 0.0F;
-      if (aInside && bInside) {
-        return line;
-      }
-      if (!aInside && !bInside) {
-        return null;
-      }
-
-      var delta = aDistance - bDistance;
-      if (Math.abs(delta) <= 1.0E-8F) {
-        return null;
-      }
-
-      var t = Math.clamp(aDistance / delta, 0.0F, 1.0F);
-      var vertex = line.a().interpolate(line.b(), t);
-      var clip = interpolateClip(line.aClip(), line.bClip(), t);
-      if (aInside) {
-        return new ClippedLine(line.a(), vertex, line.aClip(), clip);
-      }
-      return new ClippedLine(vertex, line.b(), clip, line.bClip());
-    }
-
-    private float clipDistance(Vector4f clip, ClipPlane plane) {
-      return switch (plane) {
-        case LEFT -> clip.x + clip.w;
-        case RIGHT -> clip.w - clip.x;
-        case BOTTOM -> clip.y + clip.w;
-        case TOP -> clip.w - clip.y;
-        case NEAR -> clip.z + clip.w;
-        case FAR -> clip.w - clip.z;
-      };
-    }
-
-    private Vector4f interpolateClip(Vector4f a, Vector4f b, float t) {
-      return new Vector4f(
-        Mth.lerp(t, a.x, b.x),
-        Mth.lerp(t, a.y, b.y),
-        Mth.lerp(t, a.z, b.z),
-        Mth.lerp(t, a.w, b.w)
-      );
-    }
-
     private ScreenOffset lineOffset(CapturedVertex vertex, Vector4f clip, float shaderScale, ScreenOffset fallback) {
       var normal = vertex.normal();
       if (normal.lengthSquared() <= 1.0E-8F) {
@@ -2351,8 +2282,8 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         return ScreenOffset.UNUSABLE;
       }
 
-      var offsetX = -dy / length * lineWidth / ctx.camera().width();
-      var offsetY = dx / length * lineWidth / ctx.camera().height();
+      var offsetX = -dy * (1.0F / length) * lineWidth / ctx.camera().width();
+      var offsetY = dx * (1.0F / length) * lineWidth / ctx.camera().height();
       if (offsetX < 0.0F) {
         offsetX = -offsetX;
         offsetY = -offsetY;
@@ -2533,18 +2464,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     return (alpha << 24) | 0x00FFFFFF;
   }
 
-  private static int interpolateArgb(int left, int right, float t) {
-    var a = interpolateChannel(left >>> 24, right >>> 24, t);
-    var r = interpolateChannel(left >>> 16, right >>> 16, t);
-    var g = interpolateChannel(left >>> 8, right >>> 8, t);
-    var b = interpolateChannel(left, right, t);
-    return (a << 24) | (r << 16) | (g << 8) | b;
-  }
-
-  private static int interpolateChannel(int left, int right, float t) {
-    return Math.clamp(Math.round(Mth.lerp(t, left & 0xFF, right & 0xFF)), 0, 255);
-  }
-
   private static boolean isTextRenderType(@Nullable RenderType renderType) {
     if (renderType == null) {
       return false;
@@ -2716,23 +2635,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       return new CapturedVertex(position, color, u, v, light, overlayColor, normal, lineWidth);
     }
 
-    private CapturedVertex interpolate(CapturedVertex next, float t) {
-      var blockLight = Math.clamp(Math.round(Mth.lerp(t, LightCoordsUtil.block(light), LightCoordsUtil.block(next.light()))), 0, 15);
-      var skyLight = Math.clamp(Math.round(Mth.lerp(t, LightCoordsUtil.sky(light), LightCoordsUtil.sky(next.light()))), 0, 15);
-      return new CapturedVertex(
-        new Vector3f(position).lerp(next.position(), t),
-        interpolateArgb(color, next.color(), t),
-        Mth.lerp(t, u, next.u()),
-        Mth.lerp(t, v, next.v()),
-        LightCoordsUtil.pack(blockLight, skyLight),
-        interpolateArgb(overlayColor, next.overlayColor(), t),
-        new Vector3f(normal).lerp(next.normal(), t),
-        Mth.lerp(t, lineWidth, next.lineWidth())
-      );
-    }
   }
-
-  private record ClippedLine(CapturedVertex a, CapturedVertex b, Vector4f aClip, Vector4f bClip) {}
 
   private record ScreenOffset(float x, float y, boolean usable) {
     private static final ScreenOffset UNUSABLE = new ScreenOffset(0.0F, 0.0F, false);
@@ -2762,15 +2665,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     BACK
   }
 
-  private enum ClipPlane {
-    LEFT,
-    RIGHT,
-    BOTTOM,
-    TOP,
-    NEAR,
-    FAR
-  }
-
   private enum FeatureStage {
     SOLID_MODEL,
     SOLID_FLAME,
@@ -2786,6 +2680,7 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
     TRANSLUCENT_ITEM,
     TRANSLUCENT_BLOCK,
     TRANSLUCENT_CUSTOM,
+    WATER_MASK,
     TRANSLUCENT_PARTICLE
   }
 
@@ -2802,7 +2697,6 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
         collector.captureCustomGeometry(this, stage, (CustomFeatureRenderer.Submit) submit)));
     }
 
-
     private SceneData.Builder builder(FeatureStage stage) {
       return builders.computeIfAbsent(stage, _ -> SceneData.builder());
     }
@@ -2812,7 +2706,9 @@ final class VanillaSubmitCollector implements SubmitNodeCollector, OrderedSubmit
       for (var stage : FeatureStage.values()) {
         var builder = builders.get(stage);
         if (builder != null) {
-          sceneData = sceneData.merge(builder.build());
+          var scene = builder.build();
+          sceneData = sceneData.merge(stage.ordinal() >= FeatureStage.TRANSLUCENT_SHADOW.ordinal()
+            ? scene.inTranslucentPass() : scene);
         }
       }
       return sceneData;

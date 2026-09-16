@@ -24,7 +24,6 @@ import net.minecraft.util.Mth;
 
 /// Shared projected-triangle raster backend for world and GUI item render frontends.
 final class SoftwareRasterizer {
-  private static final float POLYGON_OFFSET_UNIT_DEPTH = 1.0E-5F;
   private static final float[][] END_PORTAL_COLORS = {
     {0.022087F, 0.098399F, 0.110818F},
     {0.011892F, 0.095924F, 0.089485F},
@@ -160,7 +159,8 @@ final class SoftwareRasterizer {
     var v1 = triangle.v1();
     var v2 = triangle.v2();
     var material = triangle.material();
-    var fragmentLighting = hasFragmentLighting(v0) || hasFragmentLighting(v1) || hasFragmentLighting(v2);
+    // Custom captured geometry can supply a light multiplier without an entity shader.
+    var fragmentLighting = material.fragmentShading().lightmap() || hasFragmentLighting(v0) || hasFragmentLighting(v1) || hasFragmentLighting(v2);
     var area = edge(v0.x(), v0.y(), v1.x(), v1.y(), v2.x(), v2.y());
     if (Math.abs(area) < 1.0E-5F) {
       return;
@@ -184,11 +184,15 @@ final class SoftwareRasterizer {
       AttributePlane.of(v0, v1, v2, v0.lightROverW(), v1.lightROverW(), v2.lightROverW(), planeHeight),
       AttributePlane.of(v0, v1, v2, v0.lightGOverW(), v1.lightGOverW(), v2.lightGOverW(), planeHeight),
       AttributePlane.of(v0, v1, v2, v0.lightBOverW(), v1.lightBOverW(), v2.lightBOverW(), planeHeight),
-      AttributePlane.of(v0, v1, v2, v0.projectionQOverW(), v1.projectionQOverW(), v2.projectionQOverW(), planeHeight)
+      AttributePlane.of(v0, v1, v2, v0.projectionQOverW(), v1.projectionQOverW(), v2.projectionQOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.overlayAOverW(), v1.overlayAOverW(), v2.overlayAOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.overlayROverW(), v1.overlayROverW(), v2.overlayROverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.overlayGOverW(), v1.overlayGOverW(), v2.overlayGOverW(), planeHeight),
+      AttributePlane.of(v0, v1, v2, v0.overlayBOverW(), v1.overlayBOverW(), v2.overlayBOverW(), planeHeight)
     } : null;
     var depthPlane = frontend == RasterFrontend.WORLD
       ? AttributePlane.of(v0, v1, v2, (float) (1.0 - v0.depth()), (float) (1.0 - v1.depth()), (float) (1.0 - v2.depth()), viewport.height()) : null;
-    var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, material) : 0.0F;
+    var fragmentDepthBias = frontend == RasterFrontend.WORLD ? fragmentDepthBias(triangle, depthPlane, material) : 0.0F;
     // GPU raster coverage uses fixed-point subpixel coordinates; interpolation retains the original plane.
     var x0 = (int) Math.rint(v0.x() * 256.0F);
     var y0 = frontend != RasterFrontend.WORLD ? (int) Math.rint(v0.y() * 256.0F)
@@ -233,7 +237,7 @@ final class SoftwareRasterizer {
         var normalizedW0 = w0 / area;
         var normalizedW1 = w1 / area;
         var normalizedW2 = w2 / area;
-        var depth = (depthPlane == null ? Math.fma(normalizedW1, v1.depth() - v0.depth(), Math.fma(normalizedW2, v2.depth() - v0.depth(), v0.depth())) : 1.0 - depthPlane.at(x, y)) + fragmentDepthBias;
+        var depth = (depthPlane == null ? Math.fma(normalizedW1, v1.depth() - v0.depth(), Math.fma(normalizedW2, v2.depth() - v0.depth(), v0.depth())) : 1.0 - (depthPlane.at(x, y) + fragmentDepthBias)) + (frontend == RasterFrontend.WORLD ? material.depthBias() : 0.0F);
         if (frontend == RasterFrontend.WORLD) {
           depth = Math.clamp(depth, 0.0F, 1.0F);
         }
@@ -261,15 +265,23 @@ final class SoftwareRasterizer {
         var sampleV = v;
         int sampled;
         if (frontend == RasterFrontend.WORLD && material.texture().usesGradientSampling()) {
-          var leftW = 1.0F / planes[0].at(x & ~1, y);
-          var rightW = 1.0F / planes[0].at(x | 1, y);
-          var topW = 1.0F / planes[0].at(x, y & ~1);
-          var bottomW = 1.0F / planes[0].at(x, y | 1);
-          var duDx = planes[1].at(x | 1, y) * rightW - planes[1].at(x & ~1, y) * leftW;
-          var duDy = planes[1].at(x, y & ~1) * topW - planes[1].at(x, y | 1) * bottomW;
-          var dvDx = planes[2].at(x | 1, y) * rightW - planes[2].at(x & ~1, y) * leftW;
-          var dvDy = planes[2].at(x, y & ~1) * topW - planes[2].at(x, y | 1) * bottomW;
+          // Implicit texture LOD uses one derivative pair per quad. The native
+          // framebuffer origin is at the bottom, so lane zero is our lower-left pixel.
+          // Terrain shaders explicitly request derivatives at each fragment.
+          var bottomY = viewport.height() - 1 - ((viewport.height() - 1 - y) & ~1);
+          var topY = bottomY - 1;
+          var derivativeX = material.texture().usesTerrainFiltering() ? x : x & ~1;
+          var derivativeY = material.texture().usesTerrainFiltering() ? y : bottomY;
+          var leftW = 1.0F / planes[0].at(x & ~1, derivativeY);
+          var rightW = 1.0F / planes[0].at(x | 1, derivativeY);
+          var topW = 1.0F / planes[0].at(derivativeX, topY);
+          var bottomW = 1.0F / planes[0].at(derivativeX, bottomY);
+          var duDx = planes[1].at(x | 1, derivativeY) * rightW - planes[1].at(x & ~1, derivativeY) * leftW;
+          var duDy = planes[1].at(derivativeX, topY) * topW - planes[1].at(derivativeX, bottomY) * bottomW;
+          var dvDx = planes[2].at(x | 1, derivativeY) * rightW - planes[2].at(x & ~1, derivativeY) * leftW;
+          var dvDy = planes[2].at(derivativeX, topY) * topW - planes[2].at(derivativeX, bottomY) * bottomW;
           sampled = material.texture().sampleGrad(sampleU, sampleV, (long) animationTick, duDx, duDy, dvDx, dvDy);
+
         } else {
           sampled = sampleTexture(frontend, material, sampleU, sampleV, x, y, viewport, animationTick);
         }
@@ -299,14 +311,19 @@ final class SoftwareRasterizer {
           color = sampleEndPortal(material, u, v, planes[12].at(x, y) * (1.0F / inverseW), animationTick);
         }
         if (frontend == RasterFrontend.WORLD) {
-          color = applyOverlay(
-            color,
-            interpolatedOverlayColor(normalizedW0, normalizedW1, normalizedW2, inverseW, v0, v1, v2)
-          );
+          if (material.fragmentShading().overlay()) {
+            var alpha = planes[13].at(x, y) * (1.0F / inverseW);
+            var overlayWeight = 1.0F - alpha;
+            color = new FragmentColor(
+              planes[14].at(x, y) * (1.0F / inverseW) * overlayWeight + color.r() * alpha,
+              planes[15].at(x, y) * (1.0F / inverseW) * overlayWeight + color.g() * alpha,
+              planes[16].at(x, y) * (1.0F / inverseW) * overlayWeight + color.b() * alpha,
+              color.a());
+          }
           if (fragmentLighting) {
             color = new FragmentColor(color.r() * (planes[9].at(x, y) * (1.0F / inverseW)),
               color.g() * (planes[10].at(x, y) * (1.0F / inverseW)),
-              color.b() * (planes[11].at(x, y) * (1.0F / inverseW)), color.a());
+              color.b() * (planes[11].at(x, y) * (1.0F / inverseW)), material.fragmentShading().lightmap() ? color.a() * (planes[0].at(x, y) * (1.0F / inverseW)) : color.a());
           }
         }
         var alpha = color.a() * 255.0F;
@@ -341,10 +358,6 @@ final class SoftwareRasterizer {
           continue;
         }
 
-        if ((x == 240 && y == 252) || (x == 312 && y == 294) || (x == 524 && y == 235)) {
-          System.out.println("FINAL_PIXEL " + x + "," + y + " source=" + color + " destination=" + Integer.toHexString(colorBuffer[rasterIndex])
-            + " depth=" + depth + " material=" + material);
-        }
         if (material.alphaMode() != RendererAssets.AlphaMode.TRANSLUCENT && !material.blendState().blends()) {
           if (frontend != RasterFrontend.GUI_SCREEN && material.depthWrite()) {
             depthBuffer[rasterIndex] = depth;
@@ -414,66 +427,23 @@ final class SoftwareRasterizer {
     }
   }
 
-  private static double fragmentDepthBias(ProjectedTriangle triangle, RenderMaterial material) {
-    var bias = material.depthBias() + material.polygonOffsetUnits() * POLYGON_OFFSET_UNIT_DEPTH;
-    var factor = material.polygonOffsetFactor();
-    if (factor == 0.0F) {
-      return bias;
+  private static float fragmentDepthBias(ProjectedTriangle triangle, AttributePlane depthPlane, RenderMaterial material) {
+    if (material.polygonOffsetFactor() == 0.0F && material.polygonOffsetUnits() == 0.0F) {
+      return 0.0F;
     }
-
-    var v0 = triangle.v0();
-    var v1 = triangle.v1();
-    var v2 = triangle.v2();
-    var x1 = v1.x() - v0.x();
-    var y1 = v1.y() - v0.y();
-    var z1 = v1.depth() - v0.depth();
-    var x2 = v2.x() - v0.x();
-    var y2 = v2.y() - v0.y();
-    var z2 = v2.depth() - v0.depth();
-    var denominator = x1 * y2 - x2 * y1;
-    if (Math.abs(denominator) < 1.0E-5F) {
-      return bias;
-    }
-
-    var dzDx = (z1 * y2 - z2 * y1) / denominator;
-    var dzDy = (x1 * z2 - x2 * z1) / denominator;
-    return bias + Math.max(Math.abs(dzDx), Math.abs(dzDy)) * factor;
+    // Vulkan offsets reverse-Z before the depth test. Floating-point depth uses the
+    // primitive's largest depth exponent to determine one resolvable depth unit.
+    var maximumDepth = Math.max((float) (1.0 - triangle.v0().depth()),
+      Math.max((float) (1.0 - triangle.v1().depth()), (float) (1.0 - triangle.v2().depth())));
+    var constant = material.polygonOffsetUnits() * Math.ulp(maximumDepth);
+    var slope = Math.max(Math.abs(depthPlane.dx()), Math.abs(depthPlane.dy()));
+    return constant + material.polygonOffsetFactor() * slope;
   }
 
   private static boolean hasFragmentLighting(ProjectedVertex vertex) {
     return vertex.lightROverW() != vertex.inverseW()
       || vertex.lightGOverW() != vertex.inverseW()
       || vertex.lightBOverW() != vertex.inverseW();
-  }
-
-  private static int interpolatedOverlayColor(
-    float weight0,
-    float weight1,
-    float weight2,
-    float inverseW,
-    ProjectedVertex v0,
-    ProjectedVertex v1,
-    ProjectedVertex v2
-  ) {
-    var a = colorChannel((weight0 * v0.overlayAOverW() + weight1 * v1.overlayAOverW() + weight2 * v2.overlayAOverW()) / inverseW);
-    var r = colorChannel((weight0 * v0.overlayROverW() + weight1 * v1.overlayROverW() + weight2 * v2.overlayROverW()) / inverseW);
-    var g = colorChannel((weight0 * v0.overlayGOverW() + weight1 * v1.overlayGOverW() + weight2 * v2.overlayGOverW()) / inverseW);
-    var b = colorChannel((weight0 * v0.overlayBOverW() + weight1 * v1.overlayBOverW() + weight2 * v2.overlayBOverW()) / inverseW);
-    return (a << 24) | (r << 16) | (g << 8) | b;
-  }
-
-  private static FragmentColor applyOverlay(FragmentColor color, int overlayColor) {
-    var overlayAlpha = (overlayColor >>> 24) & 0xFF;
-    if (overlayAlpha == 255) {
-      return color;
-    }
-
-    var baseWeight = overlayAlpha / 255.0F;
-    var overlayWeight = 1.0F - baseWeight;
-    var r = ((overlayColor >> 16) & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.r() * baseWeight;
-    var g = ((overlayColor >> 8) & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.g() * baseWeight;
-    var b = (overlayColor & 0xFF) * (1.0F / 255.0F) * overlayWeight + color.b() * baseWeight;
-    return new FragmentColor(r, g, b, color.a());
   }
 
   private static FragmentColor applyFog(
@@ -799,7 +769,6 @@ final class SoftwareRasterizer {
   }
 
   private record Viewport(int width, int height) {}
-
 
   private record TextureCoord(float u, float v) {}
 }

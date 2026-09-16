@@ -75,7 +75,7 @@ public final class RasterPipeline {
 
   private void renderSky(RenderContext ctx, RasterBuffers buffers, RasterFogState fog) {
     SkyRenderer.renderBackground(ctx, buffers, fog);
-    rasterPass(ctx.camera(), ctx.interpolatedGameTime(), SkyRenderer.collectSkyQuads(ctx, fog), buffers, false, RasterPassKind.UNTRACKED, RasterFogState.DISABLED);
+    rasterPass(ctx.camera().atOrigin(), ctx.interpolatedGameTime(), SkyRenderer.collectSkyQuads(ctx, fog), buffers, false, RasterPassKind.UNTRACKED, RasterFogState.DISABLED);
     buffers.clearDepth();
   }
 
@@ -183,7 +183,7 @@ public final class RasterPipeline {
       var color = vertex.color();
       clip[i] = new ClipVertex(vertex.x(), vertex.y(), 0, 1, 0, 0,
         vertex.u(), vertex.v(), (color >>> 24) & 255, (color >>> 16) & 255,
-        (color >>> 8) & 255, color & 255, 255, 255, 255, 255, 1, 1, 1);
+        (color >>> 8) & 255, color & 255, 1, 1, 1, 1, 1, 1, 1);
     }
     for (var indices : new int[][]{{0, 1, 2}, {2, 3, 0}}) {
       var original = new ClipVertex[]{clip[indices[0]], clip[indices[1]], clip[indices[2]]};
@@ -195,7 +195,7 @@ public final class RasterPipeline {
         var x = generated ? vertex.x() * (width * 0.5F) + width * 0.5F : Math.fma(vertex.x(), width * 0.5F, width * 0.5F);
         var windowY = generated ? vertex.y() * (height * 0.5F) + height * 0.5F : Math.fma(vertex.y(), height * 0.5F, height * 0.5F);
         projected[i] = new ProjectedVertex(x, height - windowY, 0, 1, vertex.u(), vertex.v(), 0, 0,
-          vertex.a(), vertex.r(), vertex.g(), vertex.b(), 255, 255, 255, 255, windowY);
+          vertex.a(), vertex.r(), vertex.g(), vertex.b(), 1, 1, 1, 1, windowY);
       }
       for (var i = 1; i < projected.length - 1; i++) {
         out.add(new ProjectedTriangle(projected[0], projected[i], projected[i + 1], material, 0));
@@ -343,6 +343,10 @@ public final class RasterPipeline {
       transform.m02() * position.x + (transform.m12() * position.y + (transform.m22() * position.z + transform.m32())),
       transform.m03() * position.x + (transform.m13() * position.y + (transform.m23() * position.z + transform.m33()))
     );
+    if (vertex.clipPosition() != null) {
+      var expanded = vertex.clipPosition();
+      clip.set(expanded.x(), expanded.y(), expanded.z(), expanded.w());
+    }
     var overlayColor = vertex.overlayColor();
     return new ClipVertex(
       clip.x,
@@ -357,10 +361,10 @@ public final class RasterPipeline {
       vertex.colorChannel(16) * vertex.shade() * (((vertex.lightColor() >>> 16) & 255) * (1.0F / 255.0F)),
       vertex.colorChannel(8) * vertex.shade() * (((vertex.lightColor() >>> 8) & 255) * (1.0F / 255.0F)),
       vertex.colorChannel(0) * vertex.shade() * ((vertex.lightColor() & 255) * (1.0F / 255.0F)),
-      (overlayColor >>> 24) & 0xFF,
-      (overlayColor >>> 16) & 0xFF,
-      (overlayColor >>> 8) & 0xFF,
-      overlayColor & 0xFF,
+      ((overlayColor >>> 24) & 0xFF) * (1.0F / 255.0F),
+      ((overlayColor >>> 16) & 0xFF) * (1.0F / 255.0F),
+      ((overlayColor >>> 8) & 0xFF) * (1.0F / 255.0F),
+      (overlayColor & 0xFF) * (1.0F / 255.0F),
       ((vertex.fragmentLightColor() >>> 16) & 255) * (1.0F / 255.0F),
       ((vertex.fragmentLightColor() >>> 8) & 255) * (1.0F / 255.0F),
       ((vertex.fragmentLightColor() >>> 0) & 255) * (1.0F / 255.0F)

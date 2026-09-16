@@ -32,6 +32,7 @@ import net.minecraft.world.level.MoonPhase;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.material.FogType;
 import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 
@@ -176,7 +177,7 @@ public final class SkyRenderer {
     poseStack.translate(0.0F, CELESTIAL_HEIGHT, 0.0F);
     poseStack.scale(size, 1.0F, size);
     var pose = poseStack.last().pose();
-    var material = skyMaterial(texture, color, RenderMaterial.BlendState.from(BlendFunction.OVERLAY), 1);
+    var material = skyMaterial(texture, color, RenderMaterial.BlendState.from(BlendFunction.OVERLAY));
     quads.add(new RenderQuad(
       skyVertex(camera, pose, -1.0F, 0.0F, -1.0F, moonUv ? 1.0F : 0.0F, moonUv ? 1.0F : 0.0F, 0xFFFFFFFF),
       skyVertex(camera, pose, 1.0F, 0.0F, -1.0F, moonUv ? 0.0F : 1.0F, moonUv ? 1.0F : 0.0F, 0xFFFFFFFF),
@@ -189,7 +190,7 @@ public final class SkyRenderer {
 
   private static void addStars(Camera camera, ArrayList<RenderQuad> quads, Matrix4fc pose, float starBrightness) {
     var starColor = ARGB.colorFromFloat(starBrightness, starBrightness, starBrightness, starBrightness);
-    var material = skyMaterial(WHITE_TEXTURE, starColor, RenderMaterial.BlendState.from(BlendFunction.OVERLAY), 0);
+    var material = skyMaterial(WHITE_TEXTURE, starColor, RenderMaterial.BlendState.from(BlendFunction.OVERLAY));
     for (var star : STAR_QUADS) {
       quads.add(new RenderQuad(
         skyVertex(camera, pose, star.v0(), 0xFFFFFFFF),
@@ -212,7 +213,7 @@ public final class SkyRenderer {
     poseStack.mulPose(Axis.ZP.rotationDegrees((Mth.sin(state.sunAngle()) < 0.0F ? 180.0F : 0.0F) + 90.0F));
     poseStack.scale(1.0F, 1.0F, alpha);
     var pose = poseStack.last().pose();
-    var material = skyMaterial(WHITE_TEXTURE, state.sunriseAndSunsetColor(), RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), 1);
+    var material = skyMaterial(WHITE_TEXTURE, state.sunriseAndSunsetColor(), RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT));
     var center = skyVertex(camera, pose, 0.0F, 100.0F, 0.0F, 0.0F, 0.0F, ARGB.white(1.0F));
 
     var ring = new RenderVertex[17];
@@ -232,7 +233,7 @@ public final class SkyRenderer {
     var poseStack = new PoseStack();
     poseStack.translate(0.0F, 12.0F, 0.0F);
     var pose = poseStack.last().pose();
-    var material = skyMaterial(WHITE_TEXTURE, 0xFF000000, RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), 0);
+    var material = skyMaterial(WHITE_TEXTURE, 0xFF000000, RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT));
     addSkyDisc(camera, quads, pose, -16.0F, material);
   }
 
@@ -252,7 +253,7 @@ public final class SkyRenderer {
 
   private static void addEndSky(Camera camera, ArrayList<RenderQuad> quads) {
     var texture = RendererAssets.instance().texture(END_SKY_TEXTURE);
-    var material = skyMaterial(texture, -14145496, RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT), 0);
+    var material = skyMaterial(texture, -14145496, RenderMaterial.BlendState.from(BlendFunction.TRANSLUCENT));
     for (var side = 0; side < 6; side++) {
       var poseStack = new PoseStack();
       switch (side) {
@@ -306,15 +307,18 @@ public final class SkyRenderer {
 
   private static RenderVertex skyVertex(Camera camera, Matrix4fc pose, float x, float y, float z, float u, float v, int color) {
     var transformed = pose.transformPosition(new Vector3f(x, y, z));
-    return new RenderVertex((float) (camera.eyeX() + transformed.x()), (float) (camera.eyeY() + transformed.y()),
-      (float) (camera.eyeZ() + transformed.z()), u, v, color);
+    var transform = new Matrix4f(camera.rasterProjectionMatrix()).mul(new Matrix4f(camera.viewRotationMatrix()).mul(pose));
+    return new RenderVertex(transformed.x(), transformed.y(), transformed.z(), u, v, color).withClipPosition(
+      transform.m00() * x + (transform.m10() * y + (transform.m20() * z + transform.m30())),
+      transform.m01() * x + (transform.m11() * y + (transform.m21() * z + transform.m31())),
+      transform.m02() * x + (transform.m12() * y + (transform.m22() * z + transform.m32())),
+      transform.m03() * x + (transform.m13() * y + (transform.m23() * z + transform.m33())));
   }
 
   private static RenderMaterial skyMaterial(
     RendererAssets.TextureImage texture,
     int color,
-    RenderMaterial.BlendState blendState,
-    float alphaCutoutThreshold
+    RenderMaterial.BlendState blendState
   ) {
     return new RenderMaterial(
       texture,
@@ -324,7 +328,7 @@ public final class SkyRenderer {
       0.0F,
       0.0F,
       0.0F,
-      alphaCutoutThreshold,
+      0.0F,
       RenderMaterial.AlphaCutoutSource.FINAL_COLOR,
       RenderMaterial.DepthTest.ALWAYS_PASS,
       false,

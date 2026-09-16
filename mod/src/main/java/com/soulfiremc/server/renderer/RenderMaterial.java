@@ -56,8 +56,50 @@ public record RenderMaterial(
   @Nullable RendererAssets.TextureImage dissolveMaskTexture,
   @Nullable RendererAssets.TextureImage secondaryTexture,
   int portalLayers,
-  float glintAlpha
+  float glintAlpha,
+  FragmentShading fragmentShading
 ) {
+  public RenderMaterial(
+    RendererAssets.TextureImage texture,
+    RendererAssets.AlphaMode alphaMode,
+    int color,
+    CullMode cullMode,
+    float depthBias,
+    float polygonOffsetFactor,
+    float polygonOffsetUnits,
+    float alphaCutoutThreshold,
+    AlphaCutoutSource alphaCutoutSource,
+    DepthTest depthTest,
+    boolean depthWrite,
+    BlendState blendState,
+    int colorWriteMask,
+    UvTransform uvTransform,
+    TextureSampleMode textureSampleMode,
+    FogMode fogMode,
+    boolean sortOnUpload,
+    int sortGroup,
+    float viewScale,
+    @Nullable RendererAssets.TextureImage dissolveMaskTexture,
+    @Nullable RendererAssets.TextureImage secondaryTexture,
+    int portalLayers,
+    float glintAlpha
+  ) {
+    this(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha, FragmentShading.NONE);
+  }
+
+  public record FragmentShading(boolean overlay, boolean lightmap) {
+    private static final FragmentShading NONE = new FragmentShading(false, false);
+
+    private static FragmentShading from(RenderPipeline pipeline) {
+      var shader = pipeline.getFragmentShader().getPath();
+      if (!shader.equals("core/entity") && !shader.equals("core/item")) {
+        return NONE;
+      }
+      var flags = pipeline.getShaderDefines().flags();
+      return new FragmentShading(!flags.contains("NO_OVERLAY"), !flags.contains("EMISSIVE"));
+    }
+  }
+
   public RenderMaterial(
     RendererAssets.TextureImage texture,
     RendererAssets.AlphaMode alphaMode,
@@ -180,11 +222,11 @@ public record RenderMaterial(
   }
 
   public RenderMaterial withSortOnUpload(boolean sortOnUpload) {
-    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha);
+    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, glintAlpha, fragmentShading);
   }
 
   public RenderMaterial withGlintAlpha(float alpha) {
-    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha);
+    return new RenderMaterial(texture, alphaMode, color, cullMode, depthBias, polygonOffsetFactor, polygonOffsetUnits, alphaCutoutThreshold, alphaCutoutSource, depthTest, depthWrite, blendState, colorWriteMask, uvTransform, textureSampleMode, fogMode, sortOnUpload, sortGroup, viewScale, dissolveMaskTexture, secondaryTexture, portalLayers, alpha, fragmentShading);
   }
 
   public RenderMaterial withDepthState(@Nullable DepthStencilState depthStencilState) {
@@ -211,7 +253,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayers,
-      glintAlpha
+      glintAlpha,
+      fragmentShading
     );
   }
 
@@ -239,7 +282,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayers,
-      glintAlpha
+      glintAlpha,
+      fragmentShading
     );
   }
 
@@ -277,7 +321,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayerCount(pipeline),
-      glintAlpha
+      glintAlpha,
+      FragmentShading.from(pipeline)
     );
   }
 
@@ -310,7 +355,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayerCount(pipeline),
-      glintAlpha
+      glintAlpha,
+      FragmentShading.from(pipeline)
     );
   }
 
@@ -338,7 +384,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayers,
-      glintAlpha
+      glintAlpha,
+      fragmentShading
     );
   }
 
@@ -366,7 +413,8 @@ public record RenderMaterial(
       dissolveMaskTexture,
       secondaryTexture,
       portalLayers,
-      glintAlpha
+      glintAlpha,
+      fragmentShading
     );
   }
 
@@ -406,7 +454,6 @@ public record RenderMaterial(
            "core/rendertype_text_intensity",
            "core/rendertype_text_intensity_see_through",
            "core/rendertype_text_see_through" -> ONE_TENTH_ALPHA_CUTOUT_THRESHOLD;
-      case "core/position_color" -> 1;
       default -> 0;
     };
   }

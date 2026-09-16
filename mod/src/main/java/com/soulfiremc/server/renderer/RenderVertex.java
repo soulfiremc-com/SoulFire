@@ -17,14 +17,27 @@
  */
 package com.soulfiremc.server.renderer;
 
+import org.jetbrains.annotations.Nullable;
+
 /// A textured vertex with packed tint and a floating-point RGB lighting multiplier.
-public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource, int fragmentLightColor) {
+public record RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource, int fragmentLightColor, @Nullable ClipPosition clipPosition) {
+  public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource, int fragmentLightColor) {
+    this(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor, null);
+  }
+
+  public RenderVertex withClipPosition(float x, float y, float z, float w) {
+    return new RenderVertex(this.x, this.y, this.z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor, new ClipPosition(x, y, z, w));
+  }
+
+  /// Shader-expanded position. World coordinates remain available for fog and sorting.
+  public record ClipPosition(float x, float y, float z, float w) {}
+
   public RenderVertex(float x, float y, float z, float u, float v, int color, int overlayColor, float shade, int lightColor, ColorSource colorSource) {
     this(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, 0xFFFFFFFF);
   }
 
   public RenderVertex withFragmentLightColor(int fragmentLightColor) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor, clipPosition);
   }
 
   public static final int NO_OVERLAY_COLOR = 0xFFFFFFFF;
@@ -42,7 +55,7 @@ public record RenderVertex(float x, float y, float z, float u, float v, int colo
   }
 
   public RenderVertex withUniformColor(int color) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.UNIFORM, fragmentLightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, ColorSource.UNIFORM, fragmentLightColor, clipPosition);
   }
 
   float colorChannel(int shift) {
@@ -52,11 +65,11 @@ public record RenderVertex(float x, float y, float z, float u, float v, int colo
   }
 
   public RenderVertex withShade(float shade) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor, clipPosition);
   }
 
   public RenderVertex withLightColor(int lightColor) {
-    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor);
+    return new RenderVertex(x, y, z, u, v, color, overlayColor, shade, lightColor, colorSource, fragmentLightColor, clipPosition);
   }
 
   public RenderVertex(float x, float y, float z, float u, float v, int color) {

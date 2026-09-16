@@ -24,6 +24,7 @@ import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.BlendFactor;
 import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -79,6 +80,48 @@ class RasterPipelineTest {
   }
 
   @Test
+  void sunsetBlendsFaintFragmentsAfterApplyingItsUniformOpacity() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var texture = solidTexture(0xFFFFFFFF);
+    var material = RenderMaterial.create(texture, RendererAssets.AlphaMode.TRANSLUCENT, 0xBFFF0000, true, 0)
+      .withPipelineState(RenderPipelines.SUNRISE_SUNSET);
+    var scene = SceneData.builder();
+    scene.add(new RenderQuad(
+      new RenderVertex(-1, -1, 4, 0, 0, 0x01FFFFFF),
+      new RenderVertex(1, -1, 4, 1, 0, 0x01FFFFFF),
+      new RenderVertex(1, 1, 4, 1, 1, 0x01FFFFFF),
+      new RenderVertex(-1, 1, 4, 0, 1, 0x01FFFFFF), material));
+    var buffers = new RasterBuffers(WIDTH, HEIGHT);
+
+    renderSynthetic(new RasterPipeline(), camera, scene.build(), buffers, 0, 0xFF0000FF);
+
+    assertEquals(0xFF0100FE, buffers.image().getRGB(WIDTH / 2, HEIGHT / 2));
+  }
+
+  @Test
+  void opaqueLayersOfLateFeaturesDoNotRenderBehindEarlierTranslucentSurfaces() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var foreground = SceneData.builder();
+    var surface = quad(-1, -1, 4, 1, 1,
+      solidTexture(0x80FF0000), RendererAssets.AlphaMode.TRANSLUCENT, 0xFFFFFFFF);
+    foreground.add(new RenderQuad(surface.v0(), surface.v1(), surface.v2(), surface.v3(),
+      surface.material().withDepthState(DepthStencilState.DEFAULT)));
+    var lateFeature = SceneData.builder();
+    lateFeature.add(quad(-1, -1, 8, 1, 1,
+      solidTexture(0xFF0000FF), RendererAssets.AlphaMode.CUTOUT, 0xFFFFFFFF));
+    var expected = new RasterBuffers(WIDTH, HEIGHT);
+    var actual = new RasterBuffers(WIDTH, HEIGHT);
+    var pipeline = new RasterPipeline();
+
+    renderSynthetic(pipeline, camera, foreground.build(), expected, 0, 0xFF000000);
+    renderSynthetic(pipeline, camera, foreground.build().merge(lateFeature.build().inTranslucentPass()), actual, 0, 0xFF000000);
+
+    assertArrayEquals(expected.colorBuffer(), actual.colorBuffer());
+    assertArrayEquals(expected.depthBuffer(), actual.depthBuffer());
+    assertTrue(Arrays.stream(actual.colorBuffer()).anyMatch(color -> color != 0xFF000000));
+  }
+
+  @Test
   void localOriginsPreserveSubpixelGeometryAtLargeWorldCoordinates() {
     var origin = new Vec3(29_999_999.25, -59.38, -29_999_999.75);
     var pipeline = new RasterPipeline();
@@ -129,7 +172,7 @@ class RasterPipelineTest {
       var x = positions[i][0];
       var y = positions[i][1];
       vertices[i] = new ProjectedVertex(x, y, 0.5, 1, 0, 0, 0, 0,
-        1, 1, 1, 1, 255, 255, 255, 255, 4 - y);
+        1, 1, 1, 1, 1, 1, 1, 1, 4 - y);
     }
     for (var triangle : List.of(new ProjectedTriangle(vertices[0], vertices[1], vertices[2], material, 0),
       new ProjectedTriangle(vertices[2], vertices[3], vertices[0], material, 0))) {
@@ -143,17 +186,78 @@ class RasterPipelineTest {
   }
 
   @Test
+  void implicitMipSelectionIsSharedByEachNativePixelQuad() {
+    try (var base = new NativeImage(4, 4, true);
+         var middle = new NativeImage(2, 2, true);
+         var last = new NativeImage(1, 1, true)) {
+      var levels = new NativeImage[]{base, middle, last};
+      var colors = new int[]{0xFFFF0000, 0xFF00FF00, 0xFF0000FF};
+      for (var level = 0; level < levels.length; level++) {
+        var image = levels[level];
+        for (var y = 0; y < image.getHeight(); y++) {
+          for (var x = 0; x < image.getWidth(); x++) image.setPixel(x, y, colors[level]);
+        }
+      }
+      var texture = solidTexture(0xFFFF0000).withTerrainFiltering(levels, 4, 4, 0, 0).withStandardSampling();
+      var material = RenderMaterial.create(texture, RendererAssets.AlphaMode.OPAQUE, -1, true, 0);
+      for (var height : new int[]{8, 9}) {
+        var camera = new Camera(Vec3.ZERO, 0, 0, 8, height, 70, 64);
+        var buffers = new RasterBuffers(8, height);
+        var vertices = new ProjectedVertex[3];
+        var positions = new float[][]{{0, 0}, {16, 0}, {0, 16}};
+        for (var i = 0; i < vertices.length; i++) {
+          var x = positions[i][0];
+          var y = positions[i][1];
+          var inverseW = 1 + x * 0.1F + y * 0.2F;
+          vertices[i] = new ProjectedVertex(x, y, 0.5, inverseW, x * 0.6F, y * 0.5F,
+            0, 0, inverseW, inverseW, inverseW, inverseW,
+            inverseW, inverseW, inverseW, inverseW, height - y);
+        }
+        SoftwareRasterizer.rasterizeWorldTriangle(camera, 0,
+          new ProjectedTriangle(vertices[0], vertices[1], vertices[2], material, 0),
+          buffers, 0, 0, 7, height - 1, RasterFogState.DISABLED);
+        var bottom = height % 2 + 1;
+        var color = buffers.image().getRGB(0, bottom);
+        assertTrue((color & 0x00FF00) != 0);
+        assertEquals(color, buffers.image().getRGB(1, bottom));
+        assertEquals(color, buffers.image().getRGB(0, bottom - 1));
+        assertEquals(color, buffers.image().getRGB(1, bottom - 1));
+      }
+    }
+  }
+
+  @Test
+  void overlayBlendingRetainsFractionalChannelValues() {
+    var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
+    var buffers = new RasterBuffers(4, 4);
+    var material = RenderMaterial.create(solidTexture(0xFF000000), RendererAssets.AlphaMode.OPAQUE, -1, true, 0)
+      .withPipelineState(RenderPipelines.ENTITY_SOLID);
+    var vertices = new ProjectedVertex[3];
+    var positions = new float[][]{{0, 0}, {4, 0}, {0, 4}};
+    for (var i = 0; i < vertices.length; i++) {
+      var x = positions[i][0];
+      var y = positions[i][1];
+      vertices[i] = new ProjectedVertex(x, y, 0.5, 1, 0, 0, 0, 0,
+        1, 1, 1, 1, 0.5F, 1, 0, 0, 4 - y);
+    }
+    SoftwareRasterizer.rasterizeWorldTriangle(camera, 0,
+      new ProjectedTriangle(vertices[0], vertices[1], vertices[2], material, 0),
+      buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
+    assertEquals(0xFF800000, buffers.image().getRGB(1, 1));
+  }
+
+  @Test
   void fragmentLightingInterpolatesAndModulatesTheOverlayAfterTextureSampling() {
     var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
     var buffers = new RasterBuffers(4, 4);
     buffers.clearColor(0xFF000000);
-    var material = RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0);
+    var material = RenderMaterial.create(solidTexture(0xFF00FF00), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, true, 0).withPipelineState(RenderPipelines.ENTITY_SOLID);
     var topLeft = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 4, 0, 1, 1, 1);
+      1, 1, 1, 1, 128.0F / 255.0F, 1, 0, 0, 4, 0, 1, 1, 1);
     var topRight = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 4, 1, 1, 1, 1);
+      1, 1, 1, 1, 128.0F / 255.0F, 1, 0, 0, 4, 1, 1, 1, 1);
     var bottomLeft = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0,
-      1, 1, 1, 1, 128, 255, 0, 0, 0, 0, 0, 1, 1);
+      1, 1, 1, 1, 128.0F / 255.0F, 1, 0, 0, 0, 0, 0, 1, 1);
     SoftwareRasterizer.rasterizeWorldTriangle(camera, 0,
       new ProjectedTriangle(topLeft, topRight, bottomLeft, material, 0), buffers, 0, 0, 3, 3, RasterFogState.DISABLED);
     assertEquals(0xFF107000, buffers.image().getRGB(0, 0));
@@ -397,7 +501,7 @@ class RasterPipelineTest {
       new RenderVertex(-1.0F, 1.0F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
       new RenderVertex(1.0F, 1.0F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, 0xB2FF0000),
       new RenderVertex(1.0F, -1.0F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, 0xB2FF0000),
-      RenderMaterial.create(solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F)
+      RenderMaterial.create(solidTexture(0xFF0000FF), RendererAssets.AlphaMode.OPAQUE, 0xFFFFFFFF, false, 0.0F).withPipelineState(RenderPipelines.ENTITY_SOLID)
     ));
 
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
@@ -1092,9 +1196,9 @@ class RasterPipelineTest {
   void cutoutKeepsHalfOpaqueTexelsWithInterpolatedVertexAlpha() {
     var camera = new Camera(Vec3.ZERO, 0, 0, 4, 4, 70, 64);
     var alpha = Math.nextDown(1.0F);
-    var v0 = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 4);
-    var v1 = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 4);
-    var v2 = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 255, 255, 255, 255, 0);
+    var v0 = new ProjectedVertex(0, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 1, 1, 1, 1, 4);
+    var v1 = new ProjectedVertex(4, 0, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 1, 1, 1, 1, 4);
+    var v2 = new ProjectedVertex(0, 4, 0.5, 1, 0, 0, 0, 0, alpha, 1, 1, 1, 1, 1, 1, 1, 0);
     for (var texelAlpha : new int[]{127, 128}) {
       var buffers = new RasterBuffers(4, 4);
       buffers.clearColor(0xFF000000);
@@ -1430,7 +1534,7 @@ class RasterPipelineTest {
   }
 
   @Test
-  void polygonOffsetTextEscapesSignFaceDepthPrecision() {
+  void polygonOffsetDoesNotPullTextThroughASeparateSurface() {
     var pipeline = new RasterPipeline();
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
@@ -1446,7 +1550,7 @@ class RasterPipelineTest {
 
     renderSynthetic(pipeline, camera, scene.build(), buffers, 0L, 0xFF000000);
 
-    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFF201000, 3);
+    assertColorNear(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2), 0xFFB98B3A, 3);
   }
 
   @Test
@@ -1701,7 +1805,7 @@ class RasterPipelineTest {
   private static RenderMaterial polygonOffsetTextMaterial() {
     return RenderMaterial
       .create(solidTexture(0xFFFFFFFF), RendererAssets.AlphaMode.TRANSLUCENT, 0xFF201000, false, 0.0F)
-      .withDepthState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true, -1.0F, -10.0F));
+      .withDepthState(RenderPipelines.TEXT_POLYGON_OFFSET.getDepthStencilState());
   }
 
   private static RenderMaterial materialWithBlendState(RenderMaterial material, RenderMaterial.BlendState blendState) {

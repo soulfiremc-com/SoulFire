@@ -56,6 +56,7 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -400,13 +402,13 @@ class VanillaSubmitCollectorTextTest {
       var consumer = newTextConsumer(collector, texture, renderType);
       var darkLight = LightCoordsUtil.pack(0, 0);
       var hurtOverlay = OverlayTexture.pack(0.0F, true);
-  
+
       addVertex(consumer, -0.75F, 0.4F, 4.0F, 0.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
       addVertex(consumer, -0.75F, -0.4F, 4.0F, 0.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
       addVertex(consumer, 0.75F, -0.4F, 4.0F, 1.0F, 1.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
       addVertex(consumer, 0.75F, 0.4F, 4.0F, 1.0F, 0.0F, 0xFFFFFFFF, darkLight, hurtOverlay);
       flush(consumer);
-  
+
       var scene = sceneData(collector);
       assertEquals(1, scene.translucent().length);
       assertEquals(0xFFFFFFFF, scene.translucent()[0].v0().color());
@@ -622,6 +624,27 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
+  void lineWidthDoesNotChangeFogAtTheCenterOfTheLine() throws Exception {
+    var camera = new Camera(Vec3.ZERO, 0, 0, WIDTH, HEIGHT, 70, 64);
+    var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
+    var fog = new RasterFogState(true, 0xFF000000, 0, 8, 64, 128);
+    var centers = new ArrayList<Integer>();
+    for (var width : new float[]{4, 24}) {
+      var collector = newCollector(camera);
+      var consumer = newConsumer(collector, texture, RenderTypes.lines(), PrimitiveTopology.LINES);
+      addLineVertex(consumer, 0, -1, 4, 0, 1, 0, width);
+      addLineVertex(consumer, 0, 1, 4, 0, -1, 0, width);
+      flush(consumer);
+      var buffers = new RasterBuffers(WIDTH, HEIGHT);
+      buffers.clearColor(0xFF000000);
+      new RasterPipeline().renderScene(camera, sceneData(collector), buffers, 0, fog);
+      centers.add(buffers.image().getRGB(WIDTH / 2, HEIGHT / 2));
+    }
+    assertNotEquals(0xFF000000, centers.getFirst());
+    assertEquals(centers.getFirst(), centers.getLast());
+  }
+
+  @Test
   void lineFallbackUsesEachEndpointLineWidth() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
@@ -648,7 +671,7 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
-  void linesCrossingNearPlaneAreClippedBeforeScreenExpansion() throws Exception {
+  void expandedLinesCrossingNearPlaneRemainBounded() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var texture = RendererAssets.TextureImage.fromArgb(1, 1, new int[]{0xFFFFFFFF}, null);
@@ -864,7 +887,7 @@ class VanillaSubmitCollectorTextTest {
   }
 
   @Test
-  void shapeOutlinesSubmitVoxelEdgesAsLineQuads() throws Exception {
+  void shapeOutlinesSubmitTwoTrianglesPerVoxelEdge() throws Exception {
     var camera = new Camera(new Vec3(0.0, 0.0, 0.0), 0.0F, 0.0F, WIDTH, HEIGHT, 70.0, 64.0F);
     var collector = newCollector(camera);
     var poseStack = new PoseStack();
@@ -879,7 +902,7 @@ class VanillaSubmitCollectorTextTest {
     );
 
     var scene = sceneData(collector);
-    assertEquals(12, scene.translucent().length);
+    assertEquals(24, scene.translucent().length);
 
     var buffers = new RasterBuffers(WIDTH, HEIGHT);
     renderSynthetic(new RasterPipeline(), camera, scene, buffers, 0L, 0xFF000000);

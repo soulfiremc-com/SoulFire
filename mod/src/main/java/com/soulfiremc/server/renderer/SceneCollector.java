@@ -28,6 +28,7 @@ import net.minecraft.client.renderer.state.level.WeatherRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -116,18 +117,13 @@ public class SceneCollector {
       }
     }
 
-    var chunkRadius = Mth.ceil(ctx.maxDistance() / 16.0) + 1;
+    var chunkRadius = Mth.ceil(ctx.maxDistance() / 16.0);
     var centerChunkX = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeX()));
     var centerChunkZ = SectionPos.blockToSectionCoord(Mth.floor(camera.eyeZ()));
-    var sectionMargin = 16.0;
     var probeY = Mth.floor(camera.eyeY());
     for (var chunkX = centerChunkX - chunkRadius; chunkX <= centerChunkX + chunkRadius; chunkX++) {
       for (var chunkZ = centerChunkZ - chunkRadius; chunkZ <= centerChunkZ + chunkRadius; chunkZ++) {
-        var chunkCenterX = chunkX * 16.0 + 8.0;
-        var chunkCenterZ = chunkZ * 16.0 + 8.0;
-        var dx = chunkCenterX - camera.eyeX();
-        var dz = chunkCenterZ - camera.eyeZ();
-        if (dx * dx + dz * dz > (ctx.maxDistance() + sectionMargin) * (ctx.maxDistance() + sectionMargin)) {
+        if (!ChunkTrackingView.isInViewDistance(centerChunkX, centerChunkZ, chunkRadius, chunkX, chunkZ)) {
           continue;
         }
         if (!level.hasChunkAt(new BlockPos(chunkX << 4, probeY, chunkZ << 4))) {

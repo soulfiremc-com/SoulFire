@@ -75,10 +75,10 @@ public record ProjectedVertex(
       rOverW,
       gOverW,
       bOverW,
-      255.0F * inverseW,
-      255.0F * inverseW,
-      255.0F * inverseW,
-      255.0F * inverseW,
+      inverseW,
+      inverseW,
+      inverseW,
+      inverseW,
       y
     );
   }

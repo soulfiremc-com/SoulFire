@@ -69,6 +69,12 @@ public record SceneData(
     );
   }
 
+  /// Keep opaque layers of a translucent feature in the same draw phase as the feature.
+  public SceneData inTranslucentPass() {
+    return new SceneData(new RenderQuad[0], new RenderQuad[0], concat(concat(opaque, cutout), translucent),
+      terrainTranslucent, translucentParticles, clouds, weather, outlines);
+  }
+
   public SceneData withOrigin(Vec3 origin) {
     if (origin.equals(Vec3.ZERO)) {
       return this;
