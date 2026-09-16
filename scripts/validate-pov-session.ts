@@ -9,6 +9,7 @@ import { WorldService } from "../sdk/typescript/src/generated/soulfire/world_pb"
 import { BotService } from "../sdk/typescript/src/generated/soulfire/bot_pb";
 import {
   PovService,
+  PovFrame_CursorShape as CursorShape,
   PovInputEventSchema,
   PovInputEvent_Kind as Kind,
   type PovFrame,
@@ -163,6 +164,27 @@ try {
         framesAfterTransfer: frameCount - framesAtTransfer,
       }),
     );
+  } else if (mode === "cursor") {
+    captured = true;
+    await input([{ kind: Kind.KEY, code: 256, action: 1 }, { kind: Kind.KEY, code: 256, action: 0 }]);
+    await until(() => !!latest?.screenOpen, "Escape must open the pause menu");
+    for (let y = 0.2; y <= 0.8 && latest?.cursorShape !== CursorShape.POINTER; y += 0.05) {
+      const before = latest!.sequence;
+      await input([{ kind: Kind.MOVE, x: 0.5, y }]);
+      await until(() => latest!.sequence > before + 2n, "Cursor hover must render");
+    }
+    assert.equal(latest?.cursorShape, CursorShape.POINTER, "Pause buttons must request a pointing hand");
+    await saveFrame("interactive-pointer-cursor");
+    await input([{ kind: Kind.KEY, code: 256, action: 1 }, { kind: Kind.KEY, code: 256, action: 0 }]);
+    await until(() => latest?.screenOpen === false, "Escape must close the pause menu");
+    await input([{ kind: Kind.KEY, code: 84, action: 1 }, { kind: Kind.KEY, code: 84, action: 0 }]);
+    await until(() => !!latest?.screenOpen, "Chat must open");
+    await input([{ kind: Kind.MOVE, x: 0.3, y: 0.975 }]);
+    await until(() => latest?.cursorShape === CursorShape.TEXT, "Chat input must request a text cursor");
+    await saveFrame("interactive-text-cursor");
+    await input([{ kind: Kind.KEY, code: 256, action: 1 }, { kind: Kind.KEY, code: 256, action: 0 }]);
+    await until(() => latest?.screenOpen === false, "Closing chat must hide the cursor");
+    console.log(JSON.stringify({ pointingCursor: true, textCursor: true, hiddenInWorld: true }));
   } else if (mode === "world") {
     captured = true;
     await input([{ kind: Kind.SCROLL, y: 1 }]);

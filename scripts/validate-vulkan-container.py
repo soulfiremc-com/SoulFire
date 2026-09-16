@@ -318,6 +318,12 @@ def main():
                 check=True,
                 env={**os.environ, "SF_POV_TEST_TOKEN": token},
             )
+            subprocess.run(
+                ["bun", "scripts/validate-pov-session.ts", f"http://127.0.0.1:{api_port}",
+                 instance, *bots, str(destination), "cursor"],
+                check=True,
+                env={**os.environ, "SF_POV_TEST_TOKEN": token},
+            )
             # The flat world's grass must survive switching from snapshot scenes to streaming.
             with Image.open(destination / "interactive-world-settled.jpg") as frame:
                 terrain = frame.convert("RGB").crop(

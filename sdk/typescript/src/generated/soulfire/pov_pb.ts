@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file soulfire/pov.proto.
  */
 export const file_soulfire_pov: GenFile = /*@__PURE__*/
-  fileDesc("ChJzb3VsZmlyZS9wb3YucHJvdG8SC3NvdWxmaXJlLnYxImkKD1BvdldhdGNoUmVxdWVzdBITCgtpbnN0YW5jZV9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSEgoKc2Vzc2lvbl9pZBgDIAEoCRINCgV3aWR0aBgEIAEoBRIOCgZoZWlnaHQYBSABKAUitAEKCFBvdkZyYW1lEhAKCHNlcXVlbmNlGAMgASgEEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRITCgtzY3JlZW5fb3BlbhgGIAEoCBIMCgRkYXRhGAcgASgMEhQKDHRpbWVzdGFtcF91cxgIIAEoBBIRCglrZXlfZnJhbWUYCSABKAgSDQoFY29kZWMYCiABKAlKBAgBEAJKBAgCEANSBWltYWdlUgltaW1lX3R5cGUivwEKD1BvdklucHV0UmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJEhAKCHNlcXVlbmNlGAIgASgEEhAKCGNhcHR1cmVkGAMgASgIEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRIqCgZldmVudHMYBiADKAsyGi5zb3VsZmlyZS52MS5Qb3ZJbnB1dEV2ZW50Eg4KBmVzY2FwZRgHIAEoCBIZChFyZXF1ZXN0X2tleV9mcmFtZRgIIAEoCCISChBQb3ZJbnB1dFJlc3BvbnNlItkBCg1Qb3ZJbnB1dEV2ZW50Ei0KBGtpbmQYASABKA4yHy5zb3VsZmlyZS52MS5Qb3ZJbnB1dEV2ZW50LktpbmQSDAoEY29kZRgCIAEoBRIOCgZhY3Rpb24YAyABKAUSEQoJbW9kaWZpZXJzGAQgASgFEgkKAXgYBSABKAESCQoBeRgGIAEoARIQCghyZWxhdGl2ZRgHIAEoCCJACgRLaW5kEgcKA0tFWRAAEg0KCUNIQVJBQ1RFUhABEgoKBkJVVFRPThACEggKBE1PVkUQAxIKCgZTQ1JPTEwQBDKSAQoKUG92U2VydmljZRI+CgVXYXRjaBIcLnNvdWxmaXJlLnYxLlBvdldhdGNoUmVxdWVzdBoVLnNvdWxmaXJlLnYxLlBvdkZyYW1lMAESRAoFSW5wdXQSHC5zb3VsZmlyZS52MS5Qb3ZJbnB1dFJlcXVlc3QaHS5zb3VsZmlyZS52MS5Qb3ZJbnB1dFJlc3BvbnNlQiEKHWNvbS5zb3VsZmlyZW1jLmdycGMuZ2VuZXJhdGVkUAFiBnByb3RvMw");
+  fileDesc("ChJzb3VsZmlyZS9wb3YucHJvdG8SC3NvdWxmaXJlLnYxImkKD1BvdldhdGNoUmVxdWVzdBITCgtpbnN0YW5jZV9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSEgoKc2Vzc2lvbl9pZBgDIAEoCRINCgV3aWR0aBgEIAEoBRIOCgZoZWlnaHQYBSABKAUi7AIKCFBvdkZyYW1lEhAKCHNlcXVlbmNlGAMgASgEEg0KBXdpZHRoGAQgASgFEg4KBmhlaWdodBgFIAEoBRITCgtzY3JlZW5fb3BlbhgGIAEoCBIMCgRkYXRhGAcgASgMEhQKDHRpbWVzdGFtcF91cxgIIAEoBBIRCglrZXlfZnJhbWUYCSABKAgSDQoFY29kZWMYCiABKAkSNwoMY3Vyc29yX3NoYXBlGAsgASgOMiEuc291bGZpcmUudjEuUG92RnJhbWUuQ3Vyc29yU2hhcGUifQoLQ3Vyc29yU2hhcGUSCQoFQVJST1cQABIICgRURVhUEAESDQoJQ1JPU1NIQUlSEAISCwoHUE9JTlRFUhADEg0KCVJFU0laRV9OUxAEEg0KCVJFU0laRV9FVxAFEg4KClJFU0laRV9BTEwQBhIPCgtOT1RfQUxMT1dFRBAHSgQIARACSgQIAhADUgVpbWFnZVIJbWltZV90eXBlIr8BCg9Qb3ZJbnB1dFJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCRIQCghzZXF1ZW5jZRgCIAEoBBIQCghjYXB0dXJlZBgDIAEoCBINCgV3aWR0aBgEIAEoBRIOCgZoZWlnaHQYBSABKAUSKgoGZXZlbnRzGAYgAygLMhouc291bGZpcmUudjEuUG92SW5wdXRFdmVudBIOCgZlc2NhcGUYByABKAgSGQoRcmVxdWVzdF9rZXlfZnJhbWUYCCABKAgiEgoQUG92SW5wdXRSZXNwb25zZSLZAQoNUG92SW5wdXRFdmVudBItCgRraW5kGAEgASgOMh8uc291bGZpcmUudjEuUG92SW5wdXRFdmVudC5LaW5kEgwKBGNvZGUYAiABKAUSDgoGYWN0aW9uGAMgASgFEhEKCW1vZGlmaWVycxgEIAEoBRIJCgF4GAUgASgBEgkKAXkYBiABKAESEAoIcmVsYXRpdmUYByABKAgiQAoES2luZBIHCgNLRVkQABINCglDSEFSQUNURVIQARIKCgZCVVRUT04QAhIICgRNT1ZFEAMSCgoGU0NST0xMEAQykgEKClBvdlNlcnZpY2USPgoFV2F0Y2gSHC5zb3VsZmlyZS52MS5Qb3ZXYXRjaFJlcXVlc3QaFS5zb3VsZmlyZS52MS5Qb3ZGcmFtZTABEkQKBUlucHV0Ehwuc291bGZpcmUudjEuUG92SW5wdXRSZXF1ZXN0Gh0uc291bGZpcmUudjEuUG92SW5wdXRSZXNwb25zZUIhCh1jb20uc291bGZpcmVtYy5ncnBjLmdlbmVyYXRlZFABYgZwcm90bzM");
 
 /**
  * @generated from message soulfire.v1.PovWatchRequest
@@ -96,6 +96,13 @@ export type PovFrame = Message<"soulfire.v1.PovFrame"> & {
    * @generated from field: string codec = 10;
    */
   codec: string;
+
+  /**
+   * Minecraft's cursor for the GUI in this frame; hidden when screen_open is false.
+   *
+   * @generated from field: soulfire.v1.PovFrame.CursorShape cursor_shape = 11;
+   */
+  cursorShape: PovFrame_CursorShape;
 };
 
 /**
@@ -104,6 +111,57 @@ export type PovFrame = Message<"soulfire.v1.PovFrame"> & {
  */
 export const PovFrameSchema: GenMessage<PovFrame> = /*@__PURE__*/
   messageDesc(file_soulfire_pov, 1);
+
+/**
+ * @generated from enum soulfire.v1.PovFrame.CursorShape
+ */
+export enum PovFrame_CursorShape {
+  /**
+   * @generated from enum value: ARROW = 0;
+   */
+  ARROW = 0,
+
+  /**
+   * @generated from enum value: TEXT = 1;
+   */
+  TEXT = 1,
+
+  /**
+   * @generated from enum value: CROSSHAIR = 2;
+   */
+  CROSSHAIR = 2,
+
+  /**
+   * @generated from enum value: POINTER = 3;
+   */
+  POINTER = 3,
+
+  /**
+   * @generated from enum value: RESIZE_NS = 4;
+   */
+  RESIZE_NS = 4,
+
+  /**
+   * @generated from enum value: RESIZE_EW = 5;
+   */
+  RESIZE_EW = 5,
+
+  /**
+   * @generated from enum value: RESIZE_ALL = 6;
+   */
+  RESIZE_ALL = 6,
+
+  /**
+   * @generated from enum value: NOT_ALLOWED = 7;
+   */
+  NOT_ALLOWED = 7,
+}
+
+/**
+ * Describes the enum soulfire.v1.PovFrame.CursorShape.
+ */
+export const PovFrame_CursorShapeSchema: GenEnum<PovFrame_CursorShape> = /*@__PURE__*/
+  enumDesc(file_soulfire_pov, 1, 0);
 
 /**
  * @generated from message soulfire.v1.PovInputRequest
@@ -288,4 +346,3 @@ export const PovService: GenService<{
   },
 }> = /*@__PURE__*/
   serviceDesc(file_soulfire_pov, 0);
-

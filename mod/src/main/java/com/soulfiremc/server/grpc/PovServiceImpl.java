@@ -189,7 +189,17 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
           // A respawn or dimension transfer temporarily removes the world and player.
           if (minecraft.player == null || minecraft.level == null) return null;
           var image = VulkanRenderer.renderInteractive(minecraft, width, height);
-          return new Captured(image, minecraft.gui.screen() != null);
+          var cursorShape = switch (minecraft.getWindow().currentCursor.toString()) {
+            case "ibeam" -> PovFrame.CursorShape.TEXT;
+            case "crosshair" -> PovFrame.CursorShape.CROSSHAIR;
+            case "pointing_hand" -> PovFrame.CursorShape.POINTER;
+            case "resize_ns" -> PovFrame.CursorShape.RESIZE_NS;
+            case "resize_ew" -> PovFrame.CursorShape.RESIZE_EW;
+            case "resize_all" -> PovFrame.CursorShape.RESIZE_ALL;
+            case "not_allowed" -> PovFrame.CursorShape.NOT_ALLOWED;
+            default -> PovFrame.CursorShape.ARROW;
+          };
+          return new Captured(image, minecraft.gui.screen() != null, cursorShape);
         }).get(5, TimeUnit.SECONDS);
         if (frame == null || closed.get()) return;
         synchronized (encoderLock) {
@@ -205,7 +215,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
             .setData(ByteString.copyFrom(encoded.data())).setTimestampUs(encoded.timestampUs())
             .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
             .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
-            .setSequence(++frameSequence).build());
+            .setCursorShape(frame.cursorShape).setSequence(++frameSequence).build());
         }
       } catch (Throwable error) {
         if (!closed.get() && !observer.isCancelled()) observer.onError(rpcError(error));
@@ -227,5 +237,5 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     }
   }
 
-  private record Captured(VulkanRenderer.RgbaFrame image, boolean screenOpen) {}
+  private record Captured(VulkanRenderer.RgbaFrame image, boolean screenOpen, PovFrame.CursorShape cursorShape) {}
 }

@@ -29,6 +29,18 @@ message PovFrame {
   bool key_frame = 9;
   // RFC 6381 codec string derived from the stream's SPS.
   string codec = 10;
+  enum CursorShape {
+    ARROW = 0;
+    TEXT = 1;
+    CROSSHAIR = 2;
+    POINTER = 3;
+    RESIZE_NS = 4;
+    RESIZE_EW = 5;
+    RESIZE_ALL = 6;
+    NOT_ALLOWED = 7;
+  }
+  // Minecraft's cursor for the GUI in this frame; hidden when screen_open is false.
+  CursorShape cursor_shape = 11;
 }
 message PovInputRequest {
   string session_id = 1;
