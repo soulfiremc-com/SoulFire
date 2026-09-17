@@ -1,5 +1,8 @@
 accessWidener v2 official
 
+accessible field net/minecraft/client/multiplayer/resolver/ServerNameResolver redirectHandler Lnet/minecraft/client/multiplayer/resolver/ServerRedirectHandler;
+accessible field net/minecraft/client/gui/screens/DisconnectedScreen details Lnet/minecraft/network/DisconnectionDetails;
+
 accessible method net/minecraft/client/multiplayer/resolver/ServerAddress <init> (Lcom/google/common/net/HostAndPort;)V
 accessible method net/minecraft/server/network/EventLoopGroupHolder <init> (Ljava/lang/String;Ljava/lang/Class;Ljava/lang/Class;)V
 accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()Ljava/util/Map;

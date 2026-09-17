@@ -25,6 +25,7 @@ import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsSource;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.multiplayer.resolver.ServerRedirectHandler;
 import net.raphimc.viabedrock.api.BedrockProtocolVersion;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -46,6 +47,19 @@ public record BotConnectionFactory(
     }
 
     return new ServerAddress(hostAndPort);
+  }
+
+  static ServerAddress resolveLegacyAddress(
+    ServerAddress address,
+    ProtocolVersion protocolVersion,
+    ServerRedirectHandler redirectHandler) {
+    // ViaFabricPlus skips SRV lookup in ServerNameResolver for these versions.
+    // Its parseString hook normally handles this, but our parser also supports Bedrock ports.
+    if (!BedrockProtocolVersion.bedrockLatest.equals(protocolVersion)
+      && protocolVersion.olderThanOrEqualTo(ProtocolVersion.v1_16_4)) {
+      return redirectHandler.lookupRedirect(address).orElse(address);
+    }
+    return address;
   }
 
   public BotConnection prepareConnection(boolean isStatusPing) {

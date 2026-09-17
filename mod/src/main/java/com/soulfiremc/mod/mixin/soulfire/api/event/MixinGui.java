@@ -22,13 +22,26 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.soulfiremc.server.api.SoulFireAPI;
 import com.soulfiremc.server.api.event.bot.BotShouldRespawnEvent;
 import com.soulfiremc.server.bot.BotConnection;
+import com.soulfiremc.server.util.SFHelpers;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Gui.class)
 public class MixinGui {
+  @Inject(method = "setScreen", at = @At("HEAD"))
+  private void disconnectFailedConnection(Screen screen, CallbackInfo ci) {
+    if (screen instanceof DisconnectedScreen disconnectedScreen) {
+      BotConnection.currentOptional().ifPresent(connection ->
+        connection.disconnect(SFHelpers.nativeToAdventure(disconnectedScreen.details.reason())));
+    }
+  }
+
   @WrapOperation(method = "setScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;shouldShowDeathScreen()Z"))
   private boolean shouldRespawnEvent(LocalPlayer instance, Operation<Boolean> original) {
     var connection = BotConnection.currentOptional().orElse(null);

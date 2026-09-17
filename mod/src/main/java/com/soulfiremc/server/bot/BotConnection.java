@@ -90,6 +90,7 @@ import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.client.multiplayer.chat.report.ReportEnvironment;
 import net.minecraft.client.multiplayer.chat.report.ReportingContext;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.multiplayer.resolver.ServerNameResolver;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.player.LocalPlayerResolver;
 import net.minecraft.client.renderer.ItemInHandRenderer;
@@ -516,6 +517,8 @@ public final class BotConnection {
     return scheduler.runAsync(
       () -> {
         SoulFireAPI.postEvent(new PreBotConnectEvent(this));
+        var serverAddress = BotConnectionFactory.resolveLegacyAddress(
+          this.serverAddress, currentProtocolVersion, ServerNameResolver.DEFAULT.redirectHandler);
         var serverData = new ServerData("soulfire-target", serverAddress.toString(), ServerData.Type.OTHER);
         serverData.setResourcePackStatus(ServerData.ServerPackStatus.ENABLED);
 
