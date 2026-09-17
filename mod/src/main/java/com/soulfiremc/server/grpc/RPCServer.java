@@ -99,6 +99,7 @@ public final class RPCServer {
           GrpcHeaderNames.GRPC_STATUS,
           GrpcHeaderNames.GRPC_MESSAGE,
           GrpcHeaderNames.ARMERIA_GRPC_THROWABLEPROTO_BIN);
+    var povService = new PovServiceImpl(soulFireServer);
     var grpcServiceBuilder =
       GrpcService.builder()
         .autoCompression(true)
@@ -108,7 +109,7 @@ public final class RPCServer {
           new JwtServerInterceptor(soulFireServer)
         ))
         .addService(new BotServiceImpl(soulFireServer))
-        .addService(new PovServiceImpl(soulFireServer))
+        .addService(povService)
         .addService(new BotLiveServiceImpl(soulFireServer))
         .addService(new BotProtocolServiceImpl(soulFireServer))
         .addService(new BotTaskServiceImpl(soulFireServer))
@@ -193,6 +194,7 @@ public final class RPCServer {
         .service(grpcService,
           corsBuilder.newDecorator(),
           MetricCollectingService.newDecorator(GrpcMeterIdPrefixFunction.of("soulfire")))
+        .service("/pov/input", povService.inputChannel())
         .service("/health", HealthCheckService.builder().build())
         .service("/", new RedirectService("/docs"))
         .service("/openapi", new RedirectService("/openapi.json"))

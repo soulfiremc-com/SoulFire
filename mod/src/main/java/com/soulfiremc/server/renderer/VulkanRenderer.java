@@ -18,6 +18,8 @@
 package com.soulfiremc.server.renderer;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.soulfiremc.mod.util.SFConstants;
@@ -31,6 +33,7 @@ import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
 import java.awt.image.BufferedImage;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -103,14 +106,14 @@ public final class VulkanRenderer {
   }
 
   /// Draws one live frame without waiting for all chunk compilation to settle.
-  public static RgbaFrame renderInteractive(Minecraft minecraft, int width, int height) {
-    if (!minecraft.isSameThread()) return onGameThread(minecraft, () -> renderInteractive(minecraft, width, height));
+  public static RgbaFrame renderInteractive(Minecraft minecraft, int width, int height, LiveReadback readback) {
+    if (!minecraft.isSameThread()) return onGameThread(minecraft, () -> renderInteractive(minecraft, width, height, readback));
     var options = Options.defaults(minecraft.player, width, height, minecraft.options.fov().get(),
       minecraft.options.getEffectiveRenderDistance() * 16);
     DEVICE_LOCK.lock();
     try {
       return ScopedValue.where(INTERACTIVE, true).where(CAPTURE, true).where(REQUEST, options)
-        .call(() -> renderWorld(minecraft, options, VulkanRenderer::readRawFrame));
+        .call(() -> renderWorld(minecraft, options, readback::capture));
     } finally {
       DEVICE_LOCK.unlock();
     }
@@ -273,22 +276,58 @@ public final class VulkanRenderer {
     }
   }
 
-  /// Packed RGBA rows in Vulkan readback order (bottom to top), owned by the caller.
-  public record RgbaFrame(byte[] pixels, int width, int height) {}
+  /// Mapped RGBA rows, bottom to top. Keep the mapping alive until encoding completes.
+  public record RgbaFrame(GpuBufferSlice.MappedView mapping, int width, int height)
+    implements AutoCloseable {
+    public ByteBuffer pixels() { return mapping.data(); }
+    @Override public void close() { mapping.close(); }
+  }
 
-  private static RgbaFrame readRawFrame(RenderTarget target) {
-    var texture = Objects.requireNonNull(target.getColorTexture());
-    var encoder = RenderSystem.getDevice().createCommandEncoder();
-    var pixels = new byte[Math.multiplyExact(Math.multiplyExact(target.width, target.height), 4)];
-    try (var buffer = RenderSystem.getDevice().createBuffer(() -> "SoulFire live video",
-      GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, pixels.length)) {
-      encoder.copyTextureToBuffer(texture, buffer, 0, () -> {}, 0);
-      awaitDevice();
-      try (var mapped = buffer.map(true, false)) {
-        mapped.data().get(pixels);
-      }
+  /// A stream owns its staging allocation. No per-frame heap array or RGBA copy.
+  public static final class LiveReadback implements AutoCloseable {
+    private final boolean pipelined;
+    private final GpuBuffer[] buffers;
+    private final GpuFence[] fences;
+    private int next;
+    private boolean primed;
+    public LiveReadback() { this(Boolean.getBoolean("sf.pov.pipeline-readback")); }
+    public LiveReadback(boolean pipelined) {
+      this.pipelined = pipelined;
+      buffers = new GpuBuffer[pipelined ? 2 : 1];
+      fences = new GpuFence[buffers.length];
     }
-    return new RgbaFrame(pixels, target.width, target.height);
+    public boolean pipelined() { return pipelined; }
+    public RgbaFrame capture(RenderTarget target) {
+      var texture = Objects.requireNonNull(target.getColorTexture());
+      var size = Math.multiplyExact(Math.multiplyExact(target.width, target.height), 4);
+      if (buffers[0] == null || buffers[0].size() != size) {
+        close();
+        for (var i = 0; i < buffers.length; i++) buffers[i] = RenderSystem.getDevice().createBuffer(
+          () -> "SoulFire live video", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, size);
+      }
+      var current = next;
+      var encoder = RenderSystem.getDevice().createCommandEncoder();
+      encoder.copyTextureToBuffer(texture, buffers[current], 0, () -> {}, 0);
+      fences[current] = encoder.createFence();
+      encoder.submit();
+      next = (next + 1) % buffers.length;
+      if (pipelined && !primed) { primed = true; return null; }
+      var ready = pipelined ? next : current;
+      if (!fences[ready].awaitCompletion(30_000_000_000L)) throw new IllegalStateException("POV readback timed out");
+      fences[ready].close();
+      fences[ready] = null;
+      return new RgbaFrame(buffers[ready].map(true, false), target.width, target.height);
+    }
+    @Override public void close() {
+      for (var i = 0; i < buffers.length; i++) {
+        if (fences[i] != null) {
+          if (!fences[i].awaitCompletion(30_000_000_000L)) throw new IllegalStateException("POV readback cleanup timed out");
+          fences[i].close(); fences[i] = null;
+        }
+        if (buffers[i] != null) { buffers[i].close(); buffers[i] = null; }
+      }
+      primed = false; next = 0;
+    }
   }
 
   private static BufferedImage readback(RenderTarget target, boolean opaque) {

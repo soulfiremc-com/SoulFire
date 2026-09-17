@@ -15,6 +15,8 @@ message PovWatchRequest {
   string session_id = 3;
   int32 width = 4;
   int32 height = 5;
+  uint32 max_fps = 6;
+  repeated string codecs = 7;
 }
 message PovFrame {
   reserved 1, 2;
@@ -23,7 +25,8 @@ message PovFrame {
   int32 width = 4;
   int32 height = 5;
   bool screen_open = 6;
-  // One complete Annex B H.264 access unit. Keyframes include SPS and PPS.
+  // One complete video access unit: Annex B for H.264, low-overhead OBUs for AV1.
+  // H.264 keyframes include SPS and PPS.
   bytes data = 7;
   uint64 timestamp_us = 8;
   bool key_frame = 9;
@@ -42,6 +45,11 @@ message PovFrame {
   // Minecraft's cursor for the GUI in this frame; hidden when screen_open is false.
   CursorShape cursor_shape = 11;
   uint32 target_bitrate = 12;
+  // Session-scoped capability for /pov/input. Never place it in a URL.
+  string input_token = 13;
+  uint32 target_fps = 14;
+  optional string clipboard = 15;
+  uint64 clipboard_sequence = 16;
 }
 message PovInputRequest {
   string session_id = 1;
@@ -50,11 +58,16 @@ message PovInputRequest {
   int32 width = 4;
   int32 height = 5;
   repeated PovInputEvent events = 6;
-  // Forward Escape before releasing local capture, including opening the pause menu.
+  // Forward Escape to the game, including opening the pause menu.
   bool escape = 7;
   // Recover after dropping dependent frames or resetting the decoder.
   bool request_key_frame = 8;
   PovStreamFeedback feedback = 9;
+  string input_token = 10;
+  // Clipboard is set before processing the accompanying paste key event.
+  optional string clipboard = 11;
+  bool read_clipboard = 12;
+  uint32 max_fps = 13;
 }
 // Client-relative delivery delay avoids requiring synchronized clocks.
 message PovStreamFeedback {

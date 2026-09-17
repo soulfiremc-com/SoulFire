@@ -49,6 +49,7 @@ final class HeadlessRendererBenchmark {
     if (!expectedType.isEmpty() && !device.type().name().equals(expectedType)) {
       throw new IllegalStateException("Expected " + expectedType + " but selected " + device);
     }
+    if (Boolean.getBoolean("sf.lavapipe.povBenchmark")) benchmarkPov(minecraft, output);
     var camera = minecraft.gameRenderer.mainCamera();
     var options = new VulkanRenderer.Options(camera.position(), camera.yRot(), camera.xRot(), WIDTH, HEIGHT,
       camera.getFov(), minecraft.options.getEffectiveRenderDistance() * 16, !isolated, !isolated, false);
@@ -87,6 +88,30 @@ final class HeadlessRendererBenchmark {
     ImageIO.write(image, "PNG", output.resolve("headless-benchmark.png").toFile());
     System.out.println("Headless benchmark " + scene + " on " + device.name() + ": median "
       + (sorted[SAMPLES / 2 - 1] + sorted[SAMPLES / 2]) / 2 + " ms");
+  }
+
+  private static void benchmarkPov(Minecraft minecraft, Path output) throws IOException {
+    var report = new LinkedHashMap<String, Object>();
+    for (var pipeline : new boolean[]{false, true}) {
+      try (var readback = new VulkanRenderer.LiveReadback(pipeline);
+           var encoder = new PovVideoEncoder(1280, 720, 60, PovVideoEncoder.Format.HIGH)) {
+        var times = new ArrayList<Double>();
+        var totalBytes = 0L;
+        for (var i = 0; i < 90; i++) {
+          var start = System.nanoTime();
+          try (var frame = VulkanRenderer.renderInteractive(minecraft, 1280, 720, readback)) {
+            if (frame == null) continue;
+            var encoded = encoder.encode(frame.pixels(), i * 16_667L, i == 0);
+            if (i >= 30) { times.add((System.nanoTime() - start) / 1_000_000.0); totalBytes += encoded.data().length; }
+          }
+        }
+        var sorted = times.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+        report.put(pipeline ? "pipelined" : "immediate", Map.of("medianMs", sorted[sorted.length / 2],
+          "p95Ms", sorted[(int) (sorted.length * 0.95)], "encodedBytes", totalBytes, "encoder", encoder.name(),
+          "samples", times, "extraBufferedFrames", pipeline ? 1 : 0));
+      }
+    }
+    Files.writeString(output.resolve("pov-benchmark.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report));
   }
 
   private static void validate(BufferedImage image) {

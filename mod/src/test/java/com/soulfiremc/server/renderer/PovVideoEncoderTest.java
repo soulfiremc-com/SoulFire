@@ -40,10 +40,43 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class H264VideoEncoderTest {
+class PovVideoEncoderTest {
+  @Test
+  void highProfileEncodesMappedMemoryWithoutTakingOwnership() {
+    var pixels = java.nio.ByteBuffer.allocateDirect(320 * 180 * 4);
+    try (var encoder = new PovVideoEncoder(320, 180, 120, PovVideoEncoder.Format.HIGH, "libx264")) {
+      for (var i = 0; i < 150; i++) {
+        pixels.put(0, (byte) i);
+        var encoded = encoder.encode(pixels, i * 8_333L, false);
+        assertEquals(i * 8_333L, encoded.timestampUs());
+        assertEquals(i == 0 || i == 120, encoded.keyFrame());
+        assertEquals(0, pixels.position());
+        assertTrue(encoded.data().length > 0);
+      }
+    }
+    pixels.put(0, (byte) 42);
+    assertEquals(42, pixels.get(0));
+  }
+
+  @Test
+  @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "sf.pov.test.hardware", matches = "true")
+  void hardwareFormatsReturnEveryFrameWithoutReordering() {
+    var pixels = java.nio.ByteBuffer.allocateDirect(1280 * 720 * 4);
+    for (var format : new PovVideoEncoder.Format[]{PovVideoEncoder.Format.HIGH, PovVideoEncoder.Format.AV1}) {
+      var name = format == PovVideoEncoder.Format.AV1 ? "av1_nvenc" : "h264_nvenc";
+      try (var encoder = new PovVideoEncoder(1280, 720, 120, format, name)) {
+        for (var i = 0; i < 30; i++) {
+          var encoded = encoder.encode(pixels, i * 8_333L, false);
+          assertEquals(i * 8_333L, encoded.timestampUs());
+          assertTrue(encoded.data().length > 0);
+        }
+      }
+    }
+  }
+
   @Test
   void bitrateChangesProduceImmediateKeyframesWithContinuousTimestamps() {
-    try (var encoder = new H264VideoEncoder(320, 180, "libx264")) {
+    try (var encoder = new PovVideoEncoder(320, 180, "libx264")) {
       var pixels = new byte[320 * 180 * 4];
       encoder.encode(pixels, 0, false);
       encoder.bitrate(1_000_000);
@@ -72,7 +105,7 @@ class H264VideoEncoderTest {
     var decoder = avcodec_alloc_context3(avcodec_find_decoder(AV_CODEC_ID_H264));
     var frame = av_frame_alloc();
     var packet = av_packet_alloc();
-    try (var encoder = new H264VideoEncoder(width, height, "libx264")) {
+    try (var encoder = new PovVideoEncoder(width, height, "libx264")) {
       assertEquals(0, avcodec_open2(decoder, avcodec_find_decoder(AV_CODEC_ID_H264), (AVDictionary) null));
       var total = 0;
       for (var index = 0; index < 75; index++) {
@@ -103,7 +136,7 @@ class H264VideoEncoderTest {
 
   @Test
   void rejectsDimensionsThatCannotRepresent420Chroma() {
-    assertThrows(IllegalArgumentException.class, () -> new H264VideoEncoder(321, 180, "libx264"));
-    assertThrows(IllegalArgumentException.class, () -> new H264VideoEncoder(0, 180, "libx264"));
+    assertThrows(IllegalArgumentException.class, () -> new PovVideoEncoder(321, 180, "libx264"));
+    assertThrows(IllegalArgumentException.class, () -> new PovVideoEncoder(0, 180, "libx264"));
   }
 }

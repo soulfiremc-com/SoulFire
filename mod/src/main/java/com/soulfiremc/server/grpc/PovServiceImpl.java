@@ -18,7 +18,12 @@
 package com.soulfiremc.server.grpc;
 
 import com.google.protobuf.ByteString;
+import com.linecorp.armeria.common.websocket.WebSocket;
+import com.linecorp.armeria.common.websocket.WebSocketFrame;
+import com.linecorp.armeria.common.websocket.WebSocketFrameType;
+import com.linecorp.armeria.common.websocket.WebSocketWriter;
 import com.linecorp.armeria.server.ServiceRequestContext;
+import com.linecorp.armeria.server.websocket.WebSocketService;
 import com.soulfiremc.grpc.generated.InstancePermission;
 import com.soulfiremc.grpc.generated.PovFrame;
 import com.soulfiremc.grpc.generated.PovInputEvent;
@@ -30,24 +35,31 @@ import com.soulfiremc.grpc.generated.PovWatchRequest;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotControlLeaseManager;
-import com.soulfiremc.server.renderer.AdaptivePovBitrate;
-import com.soulfiremc.server.renderer.H264VideoEncoder;
+import com.soulfiremc.server.renderer.AdaptivePovQuality;
+import com.soulfiremc.server.renderer.PovVideoEncoder;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.user.PermissionContext;
+import com.soulfiremc.server.user.SoulFireUser;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.client.input.KeyEvent;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
-/// Bounded, demand-driven live frames and ordered native input over authenticated gRPC-Web.
+/// Authenticated live video over gRPC-Web with ordered, session-scoped WebSocket input.
 @RequiredArgsConstructor
 public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
   private final SoulFireServer server;
@@ -69,8 +81,8 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
       var leases = instance.botControlLeaseManager();
       var lease = leases.acquire(botId, user.getUniqueId(), Duration.ofSeconds(10));
       var observer = (ServerCallStreamObserver<PovFrame>) response;
-      var session = new Session(sessionId, bot, user.getUniqueId(), leases, lease.token(), observer,
-        request.getWidth(), request.getHeight());
+      var session = new Session(sessionId, bot, user, leases, lease.token(), observer,
+        request.getWidth(), request.getHeight(), request.getMaxFps(), request.getCodecsList());
       if (sessions.putIfAbsent(sessionId, session) != null) {
         leases.release(botId, user.getUniqueId(), lease.token());
         throw Status.ALREADY_EXISTS.asRuntimeException();
@@ -85,50 +97,129 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
   @Override
   public void input(PovInputRequest request, StreamObserver<PovInputResponse> response) {
     try {
-      var session = sessions.get(UUID.fromString(request.getSessionId()));
-      if (session == null || session.closed.get()) throw Status.NOT_FOUND.withDescription("POV session ended").asRuntimeException();
-      if (!session.owner.equals(ServerRPCConstants.USER_CONTEXT_KEY.get().getUniqueId())) throw Status.PERMISSION_DENIED.asRuntimeException();
-      ServerRPCConstants.USER_CONTEXT_KEY.get().hasPermissionOrThrow(PermissionContext.instance(
-        InstancePermission.CONTROL_BOT_ACTIONS, session.bot.instanceManager().id()));
-      dimensions(request.getWidth(), request.getHeight());
-      if (request.getEventsCount() > 128) throw new IllegalArgumentException("Too many input events");
-      for (var event : request.getEventsList()) validate(event);
-      if (request.hasFeedback()) {
-        var feedback = request.getFeedback();
-        if (!Double.isFinite(feedback.getDeliveryDelayMs()) || feedback.getDeliveryDelayMs() < 0
-          || feedback.getDecoderQueueSize() < 0 || feedback.getDecoderRecoveries() < 0
-          || feedback.getReceivedSequence() < 0) throw new IllegalArgumentException("Invalid stream feedback");
-      }
-      synchronized (session) {
-        if (request.getSequence() <= session.inputSequence) throw Status.ABORTED.withDescription("Stale input batch").asRuntimeException();
-        session.leases.renew(session.bot.accountProfileId(), session.owner, session.token, Duration.ofSeconds(10));
-        session.bot.minecraft().submit(() -> {
-          if (session.closed.get()) return;
-          VulkanRenderer.resize(session.bot.minecraft(), even(request.getWidth()), even(request.getHeight()));
-          if (request.getEscape()) {
-            var minecraft = session.bot.minecraft();
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
-          }
-          session.bot.povInput().capture(request.getCaptured());
-          for (var event : request.getEventsList()) session.bot.povInput().accept(event);
-        }).get(5, TimeUnit.SECONDS);
-        session.inputSequence = request.getSequence();
-        session.width = even(request.getWidth());
-        session.height = even(request.getHeight());
-        if (request.getRequestKeyFrame()) session.keyFrameRequested.set(true);
-        session.feedback = request.hasFeedback() ? request.getFeedback() : null;
-        session.lastInput = System.nanoTime();
-      }
+      applyInput(sessions.get(UUID.fromString(request.getSessionId())), request, ServerRPCConstants.USER_CONTEXT_KEY.get());
       response.onNext(PovInputResponse.getDefaultInstance());
       response.onCompleted();
     } catch (Throwable error) { response.onError(rpcError(error)); }
   }
 
+  private void applyInput(Session session, PovInputRequest request, SoulFireUser user) throws Exception {
+    if (session == null || session.closed.get()) throw Status.NOT_FOUND.withDescription("POV session ended").asRuntimeException();
+    if (!session.owner.equals(user.getUniqueId())) throw Status.PERMISSION_DENIED.asRuntimeException();
+    user.hasPermissionOrThrow(PermissionContext.instance(
+      InstancePermission.CONTROL_BOT_ACTIONS, session.bot.instanceManager().id()));
+    dimensions(request.getWidth(), request.getHeight());
+    if (request.getMaxFps() != 0 && (request.getMaxFps() < 15 || request.getMaxFps() > 120)) throw new IllegalArgumentException("Invalid target FPS");
+    if (request.getEventsCount() > 128) throw new IllegalArgumentException("Too many input events");
+    for (var event : request.getEventsList()) validate(event);
+    if (request.hasFeedback()) {
+      var feedback = request.getFeedback();
+      if (!Double.isFinite(feedback.getDeliveryDelayMs()) || feedback.getDeliveryDelayMs() < 0
+        || feedback.getDecoderQueueSize() < 0 || feedback.getDecoderRecoveries() < 0
+        || feedback.getReceivedSequence() < 0) throw new IllegalArgumentException("Invalid stream feedback");
+    }
+    if (request.hasClipboard() && request.getClipboard().length() > 16_384) throw new IllegalArgumentException("Clipboard too large");
+    synchronized (session) {
+      if (request.getSequence() <= session.inputSequence) throw Status.ABORTED.withDescription("Stale input batch").asRuntimeException();
+      session.leases.renew(session.bot.accountProfileId(), session.owner, session.token, Duration.ofSeconds(10));
+      session.bot.minecraft().submit(() -> {
+        if (session.closed.get()) return;
+
+        if (request.hasClipboard()) {
+          var minecraft = session.bot.minecraft();
+          minecraft.keyboardHandler.setClipboard(request.getClipboard());
+          if (request.getCaptured() && minecraft.gui.screen() != null) {
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(86, 0, 2));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(86, 0, 2));
+          }
+        }
+        if (request.getEscape()) {
+          var minecraft = session.bot.minecraft();
+          minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
+          minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
+        }
+        session.bot.povInput().capture(request.getCaptured());
+        for (var event : request.getEventsList()) session.bot.povInput().accept(event);
+        if (request.getReadClipboard()) {
+          session.clipboard.set(new ClipboardUpdate(request.getSequence(), session.bot.minecraft().keyboardHandler.getClipboard()));
+        }
+      }).get(5, TimeUnit.SECONDS);
+      session.inputSequence = request.getSequence();
+      session.width = even(request.getWidth());
+      session.height = even(request.getHeight());
+      if (request.getMaxFps() != 0) session.maxFps = request.getMaxFps();
+      if (request.getRequestKeyFrame()) session.keyFrameRequested.set(true);
+      session.feedback = request.hasFeedback() ? request.getFeedback() : null;
+      session.lastInput = System.nanoTime();
+    }
+  }
+
+  /// The capability comes only from the authenticated Watch stream and expires with it.
+  public WebSocketService inputChannel() {
+    return WebSocketService.builder((ctx, incoming) -> {
+      var outgoing = WebSocket.streaming();
+      incoming.subscribe(new Subscriber<WebSocketFrame>() {
+        private Subscription subscription;
+        private Session bound;
+        private boolean ended;
+        @Override public void onSubscribe(Subscription value) { subscription = value; value.request(1); }
+        @Override public void onNext(WebSocketFrame frame) {
+          try {
+            if (frame.type() == WebSocketFrameType.CLOSE) { onComplete(); return; }
+            if (frame.type() == WebSocketFrameType.PING) {
+              if (!outgoing.tryWrite(WebSocketFrame.ofPong(frame.array()))) { onComplete(); return; }
+              subscription.request(1);
+              return;
+            }
+            if (frame.type() == WebSocketFrameType.PONG) { subscription.request(1); return; }
+            if (frame.type() != WebSocketFrameType.BINARY) throw new IllegalArgumentException("Binary input required");
+            var request = PovInputRequest.parseFrom(frame.array());
+            var session = sessions.get(UUID.fromString(request.getSessionId()));
+            if (session == null || !MessageDigest.isEqual(session.inputToken.getBytes(StandardCharsets.UTF_8),
+              request.getInputToken().getBytes(StandardCharsets.UTF_8))) throw Status.PERMISSION_DENIED.asRuntimeException();
+            if (bound == null) {
+              synchronized (session) {
+                if (session.inputChannel != null || session.closed.get()) throw Status.ALREADY_EXISTS.asRuntimeException();
+                session.inputChannel = outgoing;
+              }
+              bound = session;
+            }
+            if (bound != session) throw Status.PERMISSION_DENIED.asRuntimeException();
+            ctx.blockingTaskExecutor().execute(() -> {
+              try {
+                applyInput(session, request, session.user);
+                ctx.eventLoop().execute(() -> {
+                  if (!outgoing.tryWrite(WebSocketFrame.ofText(Long.toString(request.getSequence())))) { onComplete(); return; }
+                  subscription.request(1);
+                });
+              } catch (Throwable error) { ctx.eventLoop().execute(() -> onError(error)); }
+            });
+          } catch (Throwable error) { onError(error); }
+        }
+        @Override public void onError(Throwable error) {
+          if (ended) return;
+          ended = true;
+          subscription.cancel();
+          if (bound != null) { bound.close(); if (!bound.observer.isCancelled()) bound.observer.onCompleted(); }
+          outgoing.close(error);
+        }
+        @Override public void onComplete() {
+          if (ended) return;
+          ended = true;
+          subscription.cancel();
+          if (bound != null) { bound.close(); if (!bound.observer.isCancelled()) bound.observer.onCompleted(); }
+          outgoing.close();
+        }
+      }, ctx.eventLoop());
+      return outgoing;
+    }).allowedOrigins("*").aggregateContinuation(true).maxFramePayloadLength(65_536)
+      .streamTimeout(Duration.ofSeconds(5)).build();
+  }
+
   private static int even(int size) { return (size + 1) & ~1; }
 
   private static void dimensions(int width, int height) {
-    if (width < 1 || height < 1 || width > 1920 || height > 1080) throw new IllegalArgumentException("Invalid POV dimensions");
+    if (width < 1 || height < 1 || width > 3840 || height > 2160) throw new IllegalArgumentException("Invalid POV dimensions");
   }
 
   static void validate(PovInputEvent event) {
@@ -163,44 +254,66 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     private final UUID id;
     private final BotConnection bot;
     private final UUID owner;
+    private final SoulFireUser user;
+    private final String inputToken = UUID.randomUUID().toString() + UUID.randomUUID();
+    private volatile WebSocketWriter inputChannel;
     private final BotControlLeaseManager leases;
     private final String token;
     private final ServerCallStreamObserver<PovFrame> observer;
+    private final AtomicBoolean rendering = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Object encoderLock = new Object();
     private final AtomicBoolean keyFrameRequested = new AtomicBoolean(true);
     private final long startedAt = System.nanoTime();
-    private H264VideoEncoder encoder;
-    private AdaptivePovBitrate adaptation;
+    private PovVideoEncoder encoder;
+    private boolean previousScreenOpen;
+    private PovFrame.CursorShape previousCursor = PovFrame.CursorShape.ARROW;
+    private long previousTimestamp;
+    private final VulkanRenderer.LiveReadback readback = new VulkanRenderer.LiveReadback();
+    private AdaptivePovQuality adaptation;
     private volatile PovStreamFeedback feedback;
     private volatile long lastInput = System.nanoTime();
     private long inputSequence;
+    private final AtomicReference<ClipboardUpdate> clipboard = new AtomicReference<>();
     private long frameSequence;
     private volatile int width;
     private volatile int height;
+    private volatile int maxFps;
+    private int targetFps;
+    private final PovVideoEncoder.Format format;
+    private int targetWidth;
+    private int targetHeight;
 
-    private Session(UUID id, BotConnection bot, UUID owner, BotControlLeaseManager leases, String token,
-                    ServerCallStreamObserver<PovFrame> observer, int width, int height) {
-      this.id = id; this.bot = bot; this.owner = owner; this.leases = leases; this.token = token;
+    private Session(UUID id, BotConnection bot, SoulFireUser user, BotControlLeaseManager leases, String token,
+                    ServerCallStreamObserver<PovFrame> observer, int width, int height, int maxFps, List<String> codecs) {
+      this.id = id; this.bot = bot; this.user = user; this.owner = user.getUniqueId(); this.leases = leases; this.token = token;
       this.observer = observer; this.width = even(width); this.height = even(height);
+      this.format = codecs.contains("av1") ? PovVideoEncoder.Format.AV1 : codecs.contains("h264-high") ? PovVideoEncoder.Format.HIGH : PovVideoEncoder.Format.BASELINE;
+      this.maxFps = Math.clamp(maxFps == 0 ? 60 : maxFps, 15, 120);
     }
 
     private void schedule(long delay) { server.scheduler().schedule(this::frame, delay, TimeUnit.NANOSECONDS); }
 
     private void frame() {
       if (closed.get()) return;
+      rendering.set(true);
       var started = System.nanoTime();
       try {
         if (observer.isCancelled()) { close(); return; }
         if (started - lastInput > 5_000_000_000L) throw Status.DEADLINE_EXCEEDED.withDescription("POV heartbeat timed out").asRuntimeException();
-        if (adaptation != null) adaptation.update(feedback, observer.isReady(), started);
+        if (adaptation == null || targetWidth != width || targetHeight != height || targetFps != maxFps) {
+          targetWidth = width; targetHeight = height; targetFps = maxFps;
+          var fps = Math.min(maxFps, (int) (530_000_000L / ((long) width * height)) / 5 * 5);
+          adaptation = new AdaptivePovQuality(width, height, fps, started);
+        }
+        adaptation.update(feedback, observer.isReady(), started);
         if (!observer.isReady()) return;
-        var frame = bot.minecraft().submit(() -> {
+        var captureFuture = bot.minecraft().submit(() -> {
           if (closed.get()) return null;
           var minecraft = bot.minecraft();
           // A respawn or dimension transfer temporarily removes the world and player.
           if (minecraft.player == null || minecraft.level == null) return null;
-          var image = VulkanRenderer.renderInteractive(minecraft, width, height);
+          var image = VulkanRenderer.renderInteractive(minecraft, adaptation.width(), adaptation.height(), readback);
           var cursorShape = switch (minecraft.getWindow().currentCursor.toString()) {
             case "ibeam" -> PovFrame.CursorShape.TEXT;
             case "crosshair" -> PovFrame.CursorShape.CROSSHAIR;
@@ -211,45 +324,70 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
             case "not_allowed" -> PovFrame.CursorShape.NOT_ALLOWED;
             default -> PovFrame.CursorShape.ARROW;
           };
-          return new Captured(image, minecraft.gui.screen() != null, cursorShape);
-        }).get(5, TimeUnit.SECONDS);
-        if (frame == null || closed.get()) return;
-        synchronized (encoderLock) {
-          if (closed.get()) return;
-          var image = frame.image;
-          if (encoder == null || encoder.width() != image.width() || encoder.height() != image.height()) {
-            if (encoder != null) encoder.close();
-            encoder = null;
-            encoder = new H264VideoEncoder(image.width(), image.height());
-            adaptation = new AdaptivePovBitrate(image.width(), image.height(), started);
+          var timestamp = (started - startedAt) / 1000;
+          var captured = new Captured(image, readback.pipelined() ? previousScreenOpen : minecraft.gui.screen() != null,
+            readback.pipelined() ? previousCursor : cursorShape, readback.pipelined() ? previousTimestamp : timestamp);
+          previousScreenOpen = minecraft.gui.screen() != null;
+          previousCursor = cursorShape;
+          previousTimestamp = timestamp;
+          return image == null ? null : captured;
+        });
+        Captured frame;
+        try { frame = captureFuture.get(30, TimeUnit.SECONDS); }
+        catch (Throwable error) {
+          captureFuture.thenAccept(late -> { if (late != null) late.image.close(); });
+          throw error;
+        }
+        if (frame == null) return;
+        try (var image = frame.image) {
+          synchronized (encoderLock) {
+            if (closed.get()) return;
+            if (encoder == null || encoder.width() != image.width() || encoder.height() != image.height() || encoder.fps() != adaptation.fps()) {
+              if (encoder != null) encoder.close();
+              encoder = null;
+              encoder = new PovVideoEncoder(image.width(), image.height(), adaptation.fps(), format);
+            }
+            encoder.bitrate(adaptation.bitrate());
+            var encoded = encoder.encode(image.pixels(), frame.timestampUs, keyFrameRequested.getAndSet(false));
+            var builder = PovFrame.newBuilder()
+              .setTargetFps(adaptation.fps()).setInputToken(inputToken).setData(ByteString.copyFrom(encoded.data())).setTimestampUs(encoded.timestampUs())
+              .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
+              .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
+              .setTargetBitrate((int) encoder.bitrate()).setCursorShape(frame.cursorShape).setSequence(++frameSequence);
+            var clipboardUpdate = clipboard.getAndSet(null);
+            if (clipboardUpdate != null) builder.setClipboard(clipboardUpdate.text).setClipboardSequence(clipboardUpdate.sequence);
+            if (!closed.get() && !observer.isCancelled()) observer.onNext(builder.build());
           }
-          encoder.bitrate(adaptation.bitrate());
-          var encoded = encoder.encode(image.pixels(), (started - startedAt) / 1000, keyFrameRequested.getAndSet(false));
-          if (!closed.get() && !observer.isCancelled()) observer.onNext(PovFrame.newBuilder()
-            .setData(ByteString.copyFrom(encoded.data())).setTimestampUs(encoded.timestampUs())
-            .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
-            .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
-            .setTargetBitrate((int) encoder.bitrate()).setCursorShape(frame.cursorShape).setSequence(++frameSequence).build());
         }
       } catch (Throwable error) {
         if (!closed.get() && !observer.isCancelled()) observer.onError(rpcError(error));
         close();
       } finally {
-        if (!closed.get()) schedule(Math.max(0, 1_000_000_000L / H264VideoEncoder.FPS - (System.nanoTime() - started)));
+        rendering.set(false);
+        if (closed.get()) bot.minecraft().execute(readback::close);
+        if (adaptation != null) adaptation.recordFrame(System.nanoTime() - started);
+        if (!closed.get()) schedule(Math.max(0, 1_000_000_000L / (adaptation == null ? 60 : adaptation.fps()) - (System.nanoTime() - started)));
       }
     }
 
     private void close() {
       if (!closed.compareAndSet(false, true)) return;
       sessions.remove(id, this);
+      if (inputChannel != null) inputChannel.close();
       synchronized (encoderLock) {
         if (encoder != null) { encoder.close(); encoder = null; }
       }
-      bot.minecraft().execute(() -> bot.povInput().capture(false));
+      bot.minecraft().execute(() -> {
+        bot.povInput().capture(false);
+        bot.minecraft().keyboardHandler.setClipboard("");
+        if (!rendering.get()) readback.close();
+      });
       try { leases.release(bot.accountProfileId(), owner, token); }
       catch (BotControlLeaseManager.InvalidLeaseException ignored) { /* Expired leases already release ownership. */ }
     }
   }
 
-  private record Captured(VulkanRenderer.RgbaFrame image, boolean screenOpen, PovFrame.CursorShape cursorShape) {}
+  private record ClipboardUpdate(long sequence, String text) {}
+
+  private record Captured(VulkanRenderer.RgbaFrame image, boolean screenOpen, PovFrame.CursorShape cursorShape, long timestampUs) {}
 }

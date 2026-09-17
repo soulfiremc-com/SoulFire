@@ -219,6 +219,7 @@ tasks {
   test {
     useJUnitPlatform()
     systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
+    systemProperty("sf.pov.test.hardware", providers.gradleProperty("povHardwareTest").orElse("false").get())
     systemProperty("fabric.debug.disableModIds", "viafabricplus,viafabricplus-api,viafabricplus-visuals,viafabricplus-bedrock")
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     jvmArgumentProviders.add(FabricSystemLibrariesArgumentProvider(configurations.testRuntimeClasspath.get()))
@@ -319,6 +320,8 @@ loom {
       systemProperties.put("sf.lavapipe.scene", lavapipeScene)
       systemProperties.put("sf.lavapipe.headless", lavapipeHeadless)
       systemProperties.put("sf.lavapipe.benchmark", lavapipeBenchmark)
+      systemProperties.put("sf.pov.encoder", providers.gradleProperty("povEncoder").orElse("auto"))
+      systemProperties.put("sf.lavapipe.povBenchmark", providers.gradleProperty("povBenchmark").orElse("false"))
       systemProperties.put("sf.lavapipe.expectedDeviceType", providers.gradleProperty("lavapipeExpectedDeviceType").orElse(""))
       systemProperties.put("sf.lavapipe.output", lavapipeOutput.map { it.asFile.absolutePath })
       jvmArguments.addAll("--enable-native-access=ALL-UNNAMED", "-Xmx2G")
