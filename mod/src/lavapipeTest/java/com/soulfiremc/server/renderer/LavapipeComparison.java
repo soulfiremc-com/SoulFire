@@ -59,10 +59,12 @@ public final class LavapipeComparison {
   private static int frames;
   private static boolean capturing;
   private static boolean finished;
+  static boolean validatingMotion;
 
   private LavapipeComparison() {}
 
   public static void beforeExtract(Minecraft minecraft) {
+    if (validatingMotion) return;
     if (STRESS && prepared && !finished) {
       if (fixture != null) fixture.freeze();
       else StressComparisonScene.freeze(minecraft);

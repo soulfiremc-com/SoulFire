@@ -150,7 +150,7 @@ public final class VulkanRenderer {
       renderer.mainCamera().setLevel(minecraft.level);
       renderer.mainCamera().setEntity(minecraft.player);
       minecraft.level.update();
-      renderer.mainCamera().attributeProbe().tick(minecraft.level, options.eyePos());
+      if (!INTERACTIVE.orElse(false)) renderer.mainCamera().attributeProbe().tick(minecraft.level, options.eyePos());
       renderer.lightmapRenderStateExtractor.needsUpdate = true;
       // Finish visibility updates and all requested geometry before returning an image.
       var deadline = System.nanoTime() + 30_000_000_000L;
@@ -188,7 +188,8 @@ public final class VulkanRenderer {
 
   /// Applies RPC camera overrides without moving or rotating the bot entity.
   public static void configureCamera(net.minecraft.client.Camera camera) {
-    if (!REQUEST.isBound()) return;
+    // Live gameplay must retain vanilla position, eye-height and sprint FOV interpolation.
+    if (!REQUEST.isBound() || INTERACTIVE.orElse(false)) return;
     var options = REQUEST.get();
     camera.setPosition(options.eyePos().x, options.eyePos().y, options.eyePos().z);
     camera.setRotation(options.yRot(), options.xRot());

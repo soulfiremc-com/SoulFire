@@ -90,7 +90,68 @@ final class HeadlessRendererBenchmark {
       + (sorted[SAMPLES / 2 - 1] + sorted[SAMPLES / 2]) / 2 + " ms");
   }
 
+  private static void validateLiveCamera(Minecraft minecraft, Path output) throws IOException {
+    var player = minecraft.player;
+    var position = player.position();
+    var pose = player.getPose();
+    var sprinting = player.isSprinting();
+    var fovEffects = minecraft.options.fovEffectScale().get();
+    minecraft.options.fovEffectScale().set(1.0);
+    player.setSprinting(false);
+    var timer = minecraft.deltaTracker;
+    var partial = new float[]{0};
+    var samples = new ArrayList<Map<String, Object>>();
+    minecraft.deltaTracker = new net.minecraft.client.DeltaTracker.Timer(20, 0, _ -> 50) {
+      @Override public float getGameTimeDeltaPartialTick(boolean ignoreFrozenGame) { return partial[0]; }
+    };
+    LavapipeComparison.validatingMotion = true;
+    try (var readback = new VulkanRenderer.LiveReadback(false)) {
+      var camera = minecraft.gameRenderer.mainCamera();
+      camera.setLevel(minecraft.level);
+      camera.setEntity(player);
+      for (var i = 0; i < 20; i++) camera.tick();
+      player.setOldPosAndRot();
+      player.setPos(position.add(0.8, 0, 0));
+      player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
+      player.setSprinting(true);
+      camera.tick();
+      var firstX = Double.NaN;
+      var firstFov = Float.NaN;
+      for (var fraction : new float[]{0, 0.5F, 0.9F}) {
+        partial[0] = fraction;
+        camera.update(minecraft.deltaTracker);
+        var expectedPosition = camera.position();
+        var expectedFov = camera.getFov();
+        try (var frame = VulkanRenderer.renderInteractive(minecraft, 854, 480, readback)) {
+          if (frame == null || camera.position().distanceTo(expectedPosition) > 0.000001
+            || Math.abs(camera.getFov() - expectedFov) > 0.000001) {
+            throw new IllegalStateException("Live capture replaced vanilla camera interpolation at " + fraction);
+          }
+        }
+        if (fraction == 0) {
+          firstX = camera.position().x;
+          firstFov = camera.getFov();
+        } else {
+          if (camera.position().x <= firstX) throw new IllegalStateException("Live camera did not interpolate movement");
+          if (camera.getFov() <= firstFov) throw new IllegalStateException("Live camera did not interpolate sprint FOV");
+        }
+        samples.add(Map.of("partialTick", fraction, "position", camera.position(), "fov", camera.getFov()));
+      }
+      Files.writeString(output.resolve("live-camera.json"), new GsonBuilder().setPrettyPrinting().create().toJson(samples));
+    } finally {
+      LavapipeComparison.validatingMotion = false;
+      minecraft.deltaTracker = timer;
+      player.setPos(position);
+      player.setOldPosAndRot();
+      player.setPose(pose);
+      player.setSprinting(sprinting);
+      minecraft.options.fovEffectScale().set(fovEffects);
+      for (var i = 0; i < 20; i++) minecraft.gameRenderer.mainCamera().tick();
+    }
+  }
+
   private static void benchmarkPov(Minecraft minecraft, Path output) throws IOException {
+    validateLiveCamera(minecraft, output);
     var report = new LinkedHashMap<String, Object>();
     for (var pipeline : new boolean[]{false, true}) {
       try (var readback = new VulkanRenderer.LiveReadback(pipeline);

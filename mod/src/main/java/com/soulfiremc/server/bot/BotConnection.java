@@ -48,6 +48,7 @@ import com.soulfiremc.server.api.metadata.MetadataHolder;
 import com.soulfiremc.server.pathfinding.NavigationWorldState;
 import com.soulfiremc.server.proxy.ProxyAuthenticator;
 import com.soulfiremc.server.proxy.SFProxy;
+import com.soulfiremc.server.renderer.PovFrameTasks;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.settings.lib.BotSettingsDelegate;
 import com.soulfiremc.server.settings.lib.BotSettingsSource;
@@ -144,6 +145,7 @@ public final class BotConnection {
   private final Queue<Runnable> preTickHooks = new ConcurrentLinkedQueue<>();
   private final MetadataHolder<Object> metadata = new MetadataHolder<>();
   private final MetadataHolder<JsonElement> persistentMetadata;
+  private final PovFrameTasks povFrameTasks = new PovFrameTasks();
   private final PovInputController povInput = new PovInputController(this);
   private final ControlState controlState = new ControlState();
   private final BotControlAPI botControl = new BotControlAPI();
@@ -399,6 +401,7 @@ public final class BotConnection {
     gameRenderer.mainCamera = new Camera();
     minecraft.gameRenderer = gameRenderer;
     gameRenderer.lightmapRenderStateExtractor = new LightmapRenderStateExtractor(gameRenderer, minecraft);
+    shutdownHooks.add(povFrameTasks::close);
     shutdownHooks.add(() -> VulkanRenderer.release(minecraft));
 
     var blockEntityRenderDispatcher = SFModHelpers.deepCopy(minecraft.getBlockEntityRenderDispatcher());

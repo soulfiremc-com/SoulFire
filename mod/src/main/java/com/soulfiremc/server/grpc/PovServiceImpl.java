@@ -36,6 +36,7 @@ import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.BotControlLeaseManager;
 import com.soulfiremc.server.renderer.AdaptivePovQuality;
+import com.soulfiremc.server.renderer.PovClientActions;
 import com.soulfiremc.server.renderer.PovVideoEncoder;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import com.soulfiremc.server.user.PermissionContext;
@@ -133,13 +134,16 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
             minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(86, 0, 2));
           }
         }
-        if (request.getEscape()) {
-          var minecraft = session.bot.minecraft();
-          minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
-          minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
-        }
-        session.bot.povInput().capture(request.getCaptured());
-        for (var event : request.getEventsList()) session.bot.povInput().accept(event);
+        var actions = new PovClientActions(text -> session.clipboard.set(new ClipboardUpdate(0, text)), session.openUrl::set);
+        ScopedValue.where(PovClientActions.CURRENT, actions).run(() -> {
+          if (request.getEscape()) {
+            var minecraft = session.bot.minecraft();
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
+          }
+          session.bot.povInput().capture(request.getCaptured());
+          for (var event : request.getEventsList()) session.bot.povInput().accept(event);
+        });
         if (request.getReadClipboard()) {
           session.clipboard.set(new ClipboardUpdate(request.getSequence(), session.bot.minecraft().keyboardHandler.getClipboard()));
         }
@@ -274,6 +278,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
     private volatile PovStreamFeedback feedback;
     private volatile long lastInput = System.nanoTime();
     private long inputSequence;
+    private final AtomicReference<String> openUrl = new AtomicReference<>();
     private final AtomicReference<ClipboardUpdate> clipboard = new AtomicReference<>();
     private long frameSequence;
     private volatile int width;
@@ -308,7 +313,7 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
         }
         adaptation.update(feedback, observer.isReady(), started);
         if (!observer.isReady()) return;
-        var captureFuture = bot.minecraft().submit(() -> {
+        var captureFuture = bot.povFrameTasks().submit(() -> {
           if (closed.get()) return null;
           var minecraft = bot.minecraft();
           // A respawn or dimension transfer temporarily removes the world and player.
@@ -354,6 +359,8 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
               .setKeyFrame(encoded.keyFrame()).setCodec(encoded.codec())
               .setWidth(image.width()).setHeight(image.height()).setScreenOpen(frame.screenOpen)
               .setTargetBitrate((int) encoder.bitrate()).setCursorShape(frame.cursorShape).setSequence(++frameSequence);
+            var url = openUrl.getAndSet(null);
+            if (url != null) builder.setOpenUrl(url);
             var clipboardUpdate = clipboard.getAndSet(null);
             if (clipboardUpdate != null) builder.setClipboard(clipboardUpdate.text).setClipboardSequence(clipboardUpdate.sequence);
             if (!closed.get() && !observer.isCancelled()) observer.onNext(builder.build());

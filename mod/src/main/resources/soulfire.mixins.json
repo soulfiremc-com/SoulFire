@@ -46,6 +46,7 @@
     "headless.rendering.MixinPovKeyMapping",
     "headless.rendering.MixinPovInputConstants",
     "headless.rendering.MixinPovClipboard",
+    "headless.rendering.MixinPovOpenUri",
     "headless.rendering.MixinRenderSystem",
     "headless.rendering.MixinScreen",
     "headless.rendering.MixinTextureManager",

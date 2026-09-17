@@ -50,6 +50,7 @@ message PovFrame {
   uint32 target_fps = 14;
   optional string clipboard = 15;
   uint64 clipboard_sequence = 16;
+  optional string open_url = 17;
 }
 message PovInputRequest {
   string session_id = 1;
