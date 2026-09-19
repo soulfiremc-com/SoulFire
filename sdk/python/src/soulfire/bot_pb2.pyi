@@ -310,13 +310,29 @@ class BotLiveState(_message.Message):
     game_mode: GameMode
     def __init__(self, x: _Optional[float] = ..., y: _Optional[float] = ..., z: _Optional[float] = ..., xRot: _Optional[float] = ..., yRot: _Optional[float] = ..., health: _Optional[float] = ..., max_health: _Optional[float] = ..., food_level: _Optional[int] = ..., saturation_level: _Optional[float] = ..., inventory: _Optional[_Iterable[_Union[InventorySlot, _Mapping]]] = ..., selected_hotbar_slot: _Optional[int] = ..., dimension: _Optional[str] = ..., experience_level: _Optional[int] = ..., experience_progress: _Optional[float] = ..., skin_texture_hash: _Optional[str] = ..., game_mode: _Optional[_Union[GameMode, str]] = ...) -> None: ...
 
+class BotProxyInfo(_message.Message):
+    __slots__ = ("type", "address")
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    type: _common_pb2.ProxyProto.Type
+    address: str
+    def __init__(self, type: _Optional[_Union[_common_pb2.ProxyProto.Type, str]] = ..., address: _Optional[str] = ...) -> None: ...
+
+class BotConnectionInfo(_message.Message):
+    __slots__ = ("proxy",)
+    PROXY_FIELD_NUMBER: _ClassVar[int]
+    proxy: BotProxyInfo
+    def __init__(self, proxy: _Optional[_Union[BotProxyInfo, _Mapping]] = ...) -> None: ...
+
 class BotInfoResponse(_message.Message):
-    __slots__ = ("live_state", "status")
+    __slots__ = ("live_state", "status", "connection")
     LIVE_STATE_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
+    CONNECTION_FIELD_NUMBER: _ClassVar[int]
     live_state: BotLiveState
     status: BotStatus
-    def __init__(self, live_state: _Optional[_Union[BotLiveState, _Mapping]] = ..., status: _Optional[_Union[BotStatus, _Mapping]] = ...) -> None: ...
+    connection: BotConnectionInfo
+    def __init__(self, live_state: _Optional[_Union[BotLiveState, _Mapping]] = ..., status: _Optional[_Union[BotStatus, _Mapping]] = ..., connection: _Optional[_Union[BotConnectionInfo, _Mapping]] = ...) -> None: ...
 
 class BotUpdateConfigEntryRequest(_message.Message):
     __slots__ = ("instance_id", "bot_id", "namespace", "key", "value")

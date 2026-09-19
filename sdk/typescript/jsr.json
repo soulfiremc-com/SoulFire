@@ -30,6 +30,7 @@
     "./generated/soulfire/plugin/example/v1/example_pb": "./src/generated/soulfire/plugin/example/v1/example_pb.ts",
     "./generated/soulfire/plugin_api_pb": "./src/generated/soulfire/plugin_api_pb.ts",
     "./generated/soulfire/plugin_stats_pb": "./src/generated/soulfire/plugin_stats_pb.ts",
+    "./generated/soulfire/pov_pb": "./src/generated/soulfire/pov_pb.ts",
     "./generated/soulfire/protocol_pb": "./src/generated/soulfire/protocol_pb.ts",
     "./generated/soulfire/proxy-check_pb": "./src/generated/soulfire/proxy-check_pb.ts",
     "./generated/soulfire/recipe_pb": "./src/generated/soulfire/recipe_pb.ts",

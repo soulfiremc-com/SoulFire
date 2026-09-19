@@ -313,6 +313,20 @@ enum GameMode {
   GAME_MODE_SPECTATOR = 4;
 }
 
+// Proxy endpoint used by the bot's current connection. Credentials are never included.
+message BotProxyInfo {
+  // Transport used to reach the proxy.
+  ProxyProto.Type type = 1 [(google.api.field_behavior) = REQUIRED];
+  // Proxy socket address in the same URI format as ProxyProto.address.
+  string address = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Metadata for the bot's current connection attempt or session.
+message BotConnectionInfo {
+  // Absent for a direct connection without a proxy.
+  optional BotProxyInfo proxy = 1;
+}
+
 // Response containing detailed information about a specific bot.
 message BotInfoResponse {
   // Live state of the bot including full inventory data.
@@ -321,6 +335,9 @@ message BotInfoResponse {
   optional BotLiveState live_state = 2;
   // Persistent desired state and current controller state.
   BotStatus status = 3 [(google.api.field_behavior) = REQUIRED];
+  // Actual connection metadata, including during login before player data is available.
+  // Absent when there is no active connection, or when returned by an older server.
+  optional BotConnectionInfo connection = 4;
 }
 
 // Request to update a single configuration entry for a specific bot.

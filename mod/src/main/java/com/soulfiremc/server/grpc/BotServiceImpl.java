@@ -38,6 +38,7 @@ import com.soulfiremc.server.settings.lib.InstanceSettingsImpl;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.util.MouseClickHelper;
+import com.soulfiremc.server.util.SocketAddressHelper;
 import com.soulfiremc.server.util.structs.GsonInstance;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -653,6 +654,15 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         .setStatus(instance.botStateManager().status(botId));
       var activeBot = instance.botConnections().get(botId);
       if (activeBot != null) {
+        var connectionInfo = BotConnectionInfo.newBuilder();
+        var proxy = activeBot.proxy();
+        if (proxy != null) {
+          connectionInfo.setProxy(BotProxyInfo.newBuilder()
+            .setType(ProxyProto.Type.valueOf(proxy.type().name()))
+            .setAddress(SocketAddressHelper.serialize(proxy.address())));
+        }
+        botInfoResponseBuilder.setConnection(connectionInfo);
+
         var liveState = callInBotContext(activeBot, () -> {
           var minecraft = activeBot.minecraft();
           var player = minecraft.player;
