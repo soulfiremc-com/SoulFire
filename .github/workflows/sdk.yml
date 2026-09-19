@@ -166,7 +166,7 @@ jobs:
 
   bun:
     name: Bun runtime
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
@@ -188,7 +188,7 @@ jobs:
 
   deno:
     name: Deno runtime
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
@@ -213,7 +213,7 @@ jobs:
   python-next:
     name: Python 3.15 prerelease
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
@@ -233,7 +233,7 @@ jobs:
   python-free-threaded:
     name: Python 3.14 free-threaded
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
