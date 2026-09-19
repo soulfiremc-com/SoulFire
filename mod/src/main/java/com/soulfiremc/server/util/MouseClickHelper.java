@@ -17,59 +17,31 @@
  */
 package com.soulfiremc.server.util;
 
-import com.soulfiremc.server.bot.BotInteractionSupport;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.multiplayer.MultiPlayerGameMode;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.client.Minecraft;
 
-/// Simulates mouse clicks using Minecraft's item, entity, and block targeting rules.
+/// Dispatches single clicks through Minecraft's handlers, including ViaFabricPlus mixins.
+/// Call on the bot's tick thread with its Minecraft instance and connection context.
 public final class MouseClickHelper {
   private MouseClickHelper() {
   }
 
-  /// Attacks the targeted entity, starts breaking the targeted block, or swings on a miss.
-  public static void performLeftClick(LocalPlayer player, MultiPlayerGameMode gameMode) {
-    var hitResult = player.raycastHitResult(1.0F, player);
-    if (hitResult instanceof EntityHitResult entityHitResult) {
-      gameMode.attack(player, entityHitResult.getEntity());
-    } else if (hitResult instanceof BlockHitResult blockHitResult && hitResult.getType() == HitResult.Type.BLOCK) {
-      gameMode.startDestroyBlock(blockHitResult.getBlockPos(), blockHitResult.getDirection());
+  /// Refreshes the target and performs vanilla attack dispatch, including miss cooldowns.
+  public static void performLeftClick(Minecraft minecraft) {
+    if (minecraft.player == null || minecraft.level == null || minecraft.gameMode == null) {
+      return;
     }
-    player.swing(InteractionHand.MAIN_HAND);
+
+    minecraft.pick(1.0F);
+    minecraft.startAttack();
   }
 
-  /// Interacts with the target or uses the main-hand item when the block interaction passes.
-  public static void performRightClick(LocalPlayer player, ClientLevel level, MultiPlayerGameMode gameMode) {
-    var hand = InteractionHand.MAIN_HAND;
-    var hitResult = player.raycastHitResult(1.0F, player);
-
-    InteractionResult result;
-    if (hitResult instanceof EntityHitResult entityHitResult) {
-      result = gameMode.interact(player, entityHitResult.getEntity(), entityHitResult, hand);
-    } else if (hitResult instanceof BlockHitResult blockHitResult && hitResult.getType() == HitResult.Type.BLOCK) {
-      result = BotInteractionSupport.withItemUseFallback(
-        gameMode.useItemOn(player, hand, blockHitResult),
-        () -> useItem(player, level, gameMode)
-      );
-    } else {
-      result = useItem(player, level, gameMode);
+  /// Refreshes the target and performs vanilla interaction and item-use dispatch for both hands.
+  public static void performRightClick(Minecraft minecraft) {
+    if (minecraft.player == null || minecraft.level == null || minecraft.gameMode == null) {
+      return;
     }
 
-    if (result instanceof InteractionResult.Success success && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-      player.swing(hand);
-    }
-  }
-
-  private static InteractionResult useItem(LocalPlayer player, ClientLevel level, MultiPlayerGameMode gameMode) {
-    var hand = InteractionHand.MAIN_HAND;
-    var itemStack = player.getItemInHand(hand);
-    return !itemStack.isEmpty() && itemStack.isItemEnabled(level.enabledFeatures())
-      ? gameMode.useItem(player, hand)
-      : InteractionResult.PASS;
+    minecraft.pick(1.0F);
+    minecraft.startUseItem();
   }
 }

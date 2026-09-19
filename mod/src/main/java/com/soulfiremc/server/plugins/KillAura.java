@@ -151,7 +151,7 @@ public final class KillAura extends InternalPlugin {
     if (hitResult instanceof EntityHitResult entityHitResult
       && entityHitResult.getEntity() == target
       && hitResult.getLocation().distanceTo(localPlayer.getEyePosition()) <= hitRange) {
-      MouseClickHelper.performLeftClick(localPlayer, bot.minecraft().gameMode);
+      MouseClickHelper.performLeftClick(bot.minecraft());
     } else {
       var visiblePoint = getEntityVisiblePoint(bot, target);
       if (visiblePoint == null) {

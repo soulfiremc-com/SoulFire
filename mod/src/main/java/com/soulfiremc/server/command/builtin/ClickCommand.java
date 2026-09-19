@@ -40,16 +40,7 @@ public final class ClickCommand {
                 c -> forEveryBot(
                 c,
                 bot -> {
-                    bot.botControl().replace(ControlTask.once(() -> {
-                      var level = bot.minecraft().level;
-                      var player = bot.minecraft().player;
-                      var gameMode = bot.minecraft().gameMode;
-                      if (level == null || player == null || gameMode == null) {
-                        return;
-                      }
-
-                      MouseClickHelper.performLeftClick(player, gameMode);
-                    }));
+                    bot.botControl().replace(ControlTask.once(() -> MouseClickHelper.performLeftClick(bot.minecraft())));
                     return Command.SINGLE_SUCCESS;
                   }))))
         .then(
@@ -60,16 +51,7 @@ public final class ClickCommand {
                 c -> forEveryBot(
                 c,
                 bot -> {
-                    bot.botControl().replace(ControlTask.once(() -> {
-                      var level = bot.minecraft().level;
-                      var player = bot.minecraft().player;
-                      var gameMode = bot.minecraft().gameMode;
-                      if (level == null || player == null || gameMode == null) {
-                        return;
-                      }
-
-                      MouseClickHelper.performRightClick(player, level, gameMode);
-                    }));
+                    bot.botControl().replace(ControlTask.once(() -> MouseClickHelper.performRightClick(bot.minecraft())));
                     return Command.SINGLE_SUCCESS;
                   }))))
     );

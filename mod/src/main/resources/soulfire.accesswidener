@@ -9,6 +9,9 @@ accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()L
 
 accessible method net/minecraft/client/Minecraft getTickTargetMillis (F)F
 accessible method net/minecraft/client/Minecraft runTick (Z)V
+accessible method net/minecraft/client/Minecraft pick (F)V
+accessible method net/minecraft/client/Minecraft startAttack ()Z
+accessible method net/minecraft/client/Minecraft startUseItem ()V
 accessible method net/minecraft/client/Camera setRotation (FF)V
 accessible method net/minecraft/client/Camera setPosition (DDD)V
 

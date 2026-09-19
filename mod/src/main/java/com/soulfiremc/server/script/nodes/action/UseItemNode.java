@@ -47,16 +47,7 @@ public final class UseItemNode extends AbstractScriptNode {
   public Mono<Map<String, NodeValue>> executeReactive(NodeRuntime runtime, Map<String, NodeValue> inputs) {
     var bot = requireBot(inputs);
 
-    runOnTickThread(runtime, bot, () -> {
-      var minecraft = bot.minecraft();
-      var player = minecraft.player;
-      var level = minecraft.level;
-      var gameMode = minecraft.gameMode;
-
-      if (player != null && level != null && gameMode != null) {
-        MouseClickHelper.performRightClick(player, level, gameMode);
-      }
-    });
+    runOnTickThread(runtime, bot, () -> MouseClickHelper.performRightClick(bot.minecraft()));
 
     return completedEmptyMono();
   }

@@ -2019,7 +2019,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           case LEFT_BUTTON -> {
             executeAction(
               activeBot,
-              () -> MouseClickHelper.performLeftClick(player, gameMode));
+              () -> MouseClickHelper.performLeftClick(minecraft));
             yield BotMouseClickResponse.newBuilder()
               .setSuccess(true)
               .build();
@@ -2027,7 +2027,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
           case RIGHT_BUTTON -> {
             executeAction(
               activeBot,
-              () -> MouseClickHelper.performRightClick(player, level, gameMode));
+              () -> MouseClickHelper.performRightClick(minecraft));
             yield BotMouseClickResponse.newBuilder()
               .setSuccess(true)
               .build();
