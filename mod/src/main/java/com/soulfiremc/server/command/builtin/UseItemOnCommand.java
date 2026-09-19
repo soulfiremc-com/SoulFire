@@ -73,6 +73,7 @@ public final class UseItemOnCommand {
                                   }
 
                                   var targetBlockPos = BlockPos.containing(DoubleAxisArgumentType.forXYZAxis(blockX, blockY, blockZ, player.position()));
+                                  var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
                                   if (gameMode.useItemOn(
                                     player,
                                     hand,
@@ -84,8 +85,8 @@ public final class UseItemOnCommand {
                                       player
                                     ))
                                   ) instanceof InteractionResult.Success success) {
-                                    if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-                                      player.swing(hand);
+                                    if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+                                      player.swing(hand, swingAnimation, false);
                                     }
                                   }
                                 }));

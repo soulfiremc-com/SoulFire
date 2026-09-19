@@ -17,18 +17,19 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.renderpearl.api.device.GpuBackend;
-import com.mojang.renderpearl.backend.vulkan.VulkanBackend;
-import net.minecraft.client.PreferredGraphicsApi;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.util.TimeSource;
+import org.lwjgl.sdl.SDLHints;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(PreferredGraphicsApi.class)
-public class MixinHeadlessGraphicsApi {
-  @Inject(method = "getBackendsToTry", at = @At("HEAD"), cancellable = true)
-  private void vulkanOnly(CallbackInfoReturnable<GpuBackend[]> cir) {
-    cir.setReturnValue(new GpuBackend[]{new VulkanBackend()});
+/// SDL's dummy driver needs no operating-system display connection.
+@Mixin(RenderSystem.class)
+public class MixinHeadlessSdl {
+  @Inject(method = "initBackendSystem", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLInit;SDL_Init(I)Z"))
+  private static void selectNullPlatform(CallbackInfoReturnable<TimeSource.NanoTimeSource> cir) {
+    SDLHints.SDL_SetHint(SDLHints.SDL_HINT_VIDEO_DRIVER, "dummy");
   }
 }

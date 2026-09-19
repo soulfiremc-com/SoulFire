@@ -35,9 +35,9 @@ private class FabricSystemLibrariesArgumentProvider(
 dependencies {
   libs.bundles.bom.get().forEach { api(platform(it)) }
 
-  minecraft("com.mojang:minecraft:26.2")
+  minecraft("com.mojang:minecraft:26.3")
   runtimeOnly(fileTree(rootProject.layout.buildDirectory.dir("vulkan-runtime")) { include("soulfire-vulkan-*.jar") })
-  implementation("net.fabricmc:fabric-loader:0.19.3")
+  implementation("net.fabricmc:fabric-loader:0.19.5")
 
   // Bundle the encoder and its native runtime for headless hosts without FFmpeg packages.
   implementation("org.bytedeco:ffmpeg:8.1.2-1.5.14")
@@ -47,7 +47,7 @@ dependencies {
   }
 
 
-  val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.0.1"
+  val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.1.0"
   implementation(viaFabricPlusNotation) {
     exclude("org.lz4")
   }
@@ -55,7 +55,7 @@ dependencies {
     isTransitive = false
   }
 
-  val viaFabricPlusBedrockNotation = "com.viaversion:viafabricplus-bedrock:1.0.1"
+  val viaFabricPlusBedrockNotation = "com.viaversion:viafabricplus-bedrock:1.1.0"
   implementation(viaFabricPlusBedrockNotation)
   include(viaFabricPlusBedrockNotation) {
     isTransitive = false

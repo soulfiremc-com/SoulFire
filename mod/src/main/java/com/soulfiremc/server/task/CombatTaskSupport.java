@@ -33,8 +33,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.dimension.end.EnderDragonFight;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.feature.EndPodiumFeature;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -103,7 +103,7 @@ final class CombatTaskSupport {
   private static DragonMeleeApproach dragonMeleeApproach(
     EnderDragon dragon
   ) {
-    var podium = EndPodiumFeature.getLocation(dragon.getFightOrigin());
+    var podium = EnderDragonFight.getPodiumLocation(dragon.getFightOrigin());
     var podiumSurface = dragon.level().getHeightmapPos(
       Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
       podium
@@ -115,7 +115,7 @@ final class CombatTaskSupport {
     BlockPos fightOrigin,
     Vec3 startingPosition
   ) {
-    var podium = EndPodiumFeature.getLocation(fightOrigin);
+    var podium = EnderDragonFight.getPodiumLocation(fightOrigin);
     var position = Vec3.atBottomCenterOf(podium);
     var radius = Math.hypot(
       startingPosition.x - position.x,

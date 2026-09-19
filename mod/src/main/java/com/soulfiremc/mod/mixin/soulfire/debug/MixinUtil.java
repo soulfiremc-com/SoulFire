@@ -34,8 +34,8 @@ public final class MixinUtil {
   private MixinUtil() {
   }
 
-  @Redirect(method = "logAndPauseIfInIde(Ljava/lang/String;)V", at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;error(Ljava/lang/String;)V"))
-  private static void logAndPauseIfInIde(Logger instance, String s) {
-    LOGGER.error(s, new RuntimeException(s));
+  @Redirect(method = "logAndPauseIfInIde(Ljava/lang/String;)V", at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;error(Ljava/lang/String;Ljava/lang/Object;)V"))
+  private static void logAndPauseIfInIde(Logger instance, String format, Object message) {
+    LOGGER.error(format, message, new RuntimeException(String.valueOf(message)));
   }
 }

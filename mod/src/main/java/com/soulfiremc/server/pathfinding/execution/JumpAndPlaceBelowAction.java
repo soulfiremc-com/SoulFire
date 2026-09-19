@@ -220,6 +220,7 @@ public final class JumpAndPlaceBelowAction implements WorldAction {
       return;
     }
 
+    var swingAnimation = clientEntity.getItemInHand(hand).getInteractAnimation();
     var interaction = BotInteractionSupport.withSneaking(
       clientEntity,
       true,
@@ -230,8 +231,8 @@ public final class JumpAndPlaceBelowAction implements WorldAction {
       )
     );
     if (interaction instanceof InteractionResult.Success success) {
-      if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-        clientEntity.swing(hand);
+      if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+        clientEntity.swing(hand, swingAnimation, false);
       }
 
       finishedPlacing = true;

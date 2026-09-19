@@ -38,7 +38,7 @@ final class VulkanRenderSession implements AutoCloseable {
     previousGameRenderer = minecraft.gameRenderer;
     previousLevelRenderer = minecraft.levelRenderer;
     previousExtractor = minecraft.levelExtractor;
-    var renderer = new GameRenderer(minecraft, previousGameRenderer.itemInHandRenderer, minecraft.getModelManager());
+    var renderer = new GameRenderer(minecraft, previousGameRenderer.firstPersonHandsAndItemsRenderer, minecraft.getModelManager(), minecraft.getItemModelResolver());
     copySimulationState(previousGameRenderer, renderer);
     renderer.lightmapRenderStateExtractor.needsUpdate = true;
     LevelRenderer levelRenderer = null;
@@ -85,16 +85,12 @@ final class VulkanRenderSession implements AutoCloseable {
     var targetFog = ((IFogEnvironmentState) target.gameRenderState()).soulfire$fogEnvironments();
     targetFog.clear();
     targetFog.addAll(((IFogEnvironmentState) source.gameRenderState()).soulfire$fogEnvironments());
-    target.spinningEffectTime = source.spinningEffectTime;
-    target.spinningEffectSpeed = source.spinningEffectSpeed;
     target.bossOverlayWorldDarkening = source.bossOverlayWorldDarkening;
     target.bossOverlayWorldDarkeningO = source.bossOverlayWorldDarkeningO;
     target.renderBlockOutline = source.renderBlockOutline;
-    target.postEffectId = source.postEffectId;
-    target.effectActive = source.effectActive;
+    target.spectatedEntityPostEffect = source.spectatedEntityPostEffect;
+    target.spectatedEntityEffectActive = source.spectatedEntityEffectActive;
     target.mainCamera = source.mainCamera;
-    target.screenEffectRenderer = source.screenEffectRenderer;
-    target.random = source.random;
     target.lightmapRenderStateExtractor.blockLightFlicker = source.lightmapRenderStateExtractor.blockLightFlicker;
   }
 

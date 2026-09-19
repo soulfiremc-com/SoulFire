@@ -17,9 +17,9 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
+import com.mojang.blaze3d.Blaze3D;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.renderer.PovClientActions;
-import net.minecraft.util.Util;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,10 +27,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.net.URI;
 
-@Mixin(Util.OS.class)
+@Mixin(Blaze3D.class)
 public class MixinPovOpenUri {
   @Inject(method = "openUri(Ljava/net/URI;)V", at = @At("HEAD"), cancellable = true)
-  private void openUri(URI uri, CallbackInfo ci) {
+  private static void openUri(URI uri, CallbackInfo ci) {
     if (BotConnection.currentOptional().isPresent()) {
       PovClientActions.open(uri);
       ci.cancel();

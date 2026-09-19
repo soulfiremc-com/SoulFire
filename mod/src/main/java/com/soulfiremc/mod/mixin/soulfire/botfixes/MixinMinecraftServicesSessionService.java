@@ -20,8 +20,7 @@ package com.soulfiremc.mod.mixin.soulfire.botfixes;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.authlib.exceptions.AuthenticationException;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
-import com.mojang.authlib.yggdrasil.YggdrasilMinecraftSessionService;
+import com.mojang.authlib.services.MinecraftServicesSessionService;
 import com.soulfiremc.server.account.AuthType;
 import com.soulfiremc.server.account.TheAlteningAuthService;
 import com.soulfiremc.server.account.service.BedrockData;
@@ -30,13 +29,12 @@ import com.soulfiremc.server.account.service.OnlineChainJavaData;
 import com.soulfiremc.server.account.service.OnlineSimpleJavaData;
 import com.soulfiremc.server.account.service.TheAlteningJavaData;
 import com.soulfiremc.server.bot.BotConnection;
-import com.soulfiremc.server.proxy.ProxyAuthenticator;
 import org.spongepowered.asm.mixin.Mixin;
 
 import java.util.UUID;
 
-@Mixin(YggdrasilMinecraftSessionService.class)
-public class MixinYggdrasilMinecraftSessionService {
+@Mixin(MinecraftServicesSessionService.class)
+public class MixinMinecraftServicesSessionService {
   @WrapMethod(method = "joinServer")
   private void joinServer(UUID profileId, String authenticationToken, String serverId, Operation<Void> original) throws AuthenticationException {
     var bot = BotConnection.current();
@@ -52,9 +50,7 @@ public class MixinYggdrasilMinecraftSessionService {
     };
 
     if (accountData instanceof TheAlteningJavaData) {
-      YggdrasilAuthenticationService.createOffline(ProxyAuthenticator.createProxy(bot.proxy()), TheAlteningAuthService.ENVIRONMENT)
-        .createMinecraftSessionService()
-        .joinServer(actualProfileId, actualAuthenticationToken, serverId);
+      TheAlteningAuthService.joinServer(bot.proxy(), actualProfileId, actualAuthenticationToken, serverId);
       return;
     }
 

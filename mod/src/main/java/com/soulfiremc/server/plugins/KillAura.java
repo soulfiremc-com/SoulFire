@@ -38,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
@@ -161,7 +162,8 @@ public final class KillAura extends InternalPlugin {
         || !bot.rotationControl().isFacing(visiblePoint)) {
         return;
       }
-      localPlayer.swing(InteractionHand.MAIN_HAND);
+      localPlayer.swing(InteractionHand.MAIN_HAND, localPlayer.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+      localPlayer.connection.send(ServerboundPunchPacket.INSTANCE);
     }
 
     if (useAttackDelay) {

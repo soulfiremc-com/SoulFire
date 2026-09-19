@@ -34,6 +34,7 @@ import com.soulfiremc.server.pathfinding.graph.constraint.ProjectileAvoidanceCon
 import com.soulfiremc.server.pathfinding.graph.constraint.ThreatAvoidanceConstraint;
 import com.soulfiremc.server.util.SFEntityHelpers;
 import io.grpc.Status;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -42,7 +43,7 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.Items;
@@ -203,7 +204,7 @@ public final class FleeTaskProvider implements BotTaskProvider<FleeTask> {
       && (
         mob.isAggressive()
           || (mob instanceof NeutralMob neutralMob && neutralMob.isAngry())
-          || (mob instanceof EnderMan enderMan && enderMan.isCreepy())
+          || (mob instanceof Enderman enderMan && enderMan.isCreepy())
       );
   }
 
@@ -263,7 +264,7 @@ public final class FleeTaskProvider implements BotTaskProvider<FleeTask> {
     if (entity instanceof RangedAttackMob) {
       return RANGED_THREAT_EXCLUSION_RADIUS;
     }
-    if (entity instanceof EnderMan) {
+    if (entity instanceof Enderman) {
       return ENDERMAN_EXCLUSION_RADIUS;
     }
     return GENERIC_THREAT_EXCLUSION_RADIUS;
@@ -497,7 +498,8 @@ public final class FleeTaskProvider implements BotTaskProvider<FleeTask> {
       player.setSprinting(true);
       try {
         gameMode.attack(player, attackTarget);
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
       } finally {
         player.setSprinting(wasSprinting);
       }

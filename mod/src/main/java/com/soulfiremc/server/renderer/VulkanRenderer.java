@@ -17,11 +17,11 @@
  */
 package com.soulfiremc.server.renderer;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.GpuFence;
 import com.soulfiremc.mod.util.SFConstants;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -160,7 +160,7 @@ public final class VulkanRenderer {
         renderer.extract(delta, true);
         renderer.gameRenderState().optionsRenderState.chunkSectionFadeInTime = 0;
         RenderSystem.executePendingTasks();
-        renderer.render(delta, true);
+        renderer.render();
         finishFrame(minecraft);
         if (INTERACTIVE.orElse(false)) {
           break;
@@ -220,7 +220,7 @@ public final class VulkanRenderer {
           state.reset();
           state.clearColorOverride.zero();
           draw.accept(new GuiGraphicsExtractor(minecraft, state, 0, 0));
-          renderer.render(DeltaTracker.ONE, false);
+          renderer.render();
           finishFrame(minecraft);
           return readback(renderer.mainRenderTarget(), false);
         } finally {

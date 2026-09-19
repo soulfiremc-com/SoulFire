@@ -18,7 +18,6 @@
 package com.soulfiremc.mod.mixin.headless.rendering;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.Window;
 import com.soulfiremc.server.bot.BotConnection;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -28,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(InputConstants.class)
 public class MixinPovInputConstants {
   @Inject(method = "isKeyDown", at = @At("HEAD"), cancellable = true)
-  private static void remoteKeys(Window window, int key, CallbackInfoReturnable<Boolean> cir) {
+  private static void remoteKeys(int key, CallbackInfoReturnable<Boolean> cir) {
     BotConnection.currentOptional().ifPresent(bot -> cir.setReturnValue(bot.povInput().keyDown(key)));
   }
 }

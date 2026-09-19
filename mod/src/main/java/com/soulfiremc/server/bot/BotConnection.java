@@ -22,10 +22,10 @@ import com.google.gson.JsonElement;
 import com.mojang.authlib.exceptions.AuthenticationException;
 import com.mojang.authlib.minecraft.UserApiService;
 import com.mojang.authlib.minecraft.UserApiService.UserProperties;
-import com.mojang.authlib.yggdrasil.FriendsService;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
-import com.mojang.authlib.yggdrasil.response.FriendData;
-import com.mojang.authlib.yggdrasil.response.PresenceResponse;
+import com.mojang.authlib.services.FriendsService;
+import com.mojang.authlib.services.MinecraftServicesDiscoveryService;
+import com.mojang.authlib.services.response.FriendData;
+import com.mojang.authlib.services.response.PresenceResponse;
 import com.mojang.blaze3d.platform.FramerateLimitTracker;
 import com.mojang.blaze3d.platform.TextInputManager;
 import com.soulfiremc.mod.access.IMinecraft;
@@ -93,7 +93,7 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.multiplayer.resolver.ServerNameResolver;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.player.LocalPlayerResolver;
-import net.minecraft.client.renderer.ItemInHandRenderer;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
 import net.minecraft.client.renderer.LightmapRenderStateExtractor;
 import net.minecraft.client.renderer.MapRenderer;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
@@ -111,7 +111,6 @@ import net.minecraft.client.tutorial.Tutorial;
 import net.minecraft.gizmos.SimpleGizmoCollector;
 import net.minecraft.network.PacketProcessor;
 import net.minecraft.server.network.EventLoopGroupHolder;
-import net.minecraft.util.RandomSource;
 import net.minecraft.util.Util;
 import net.minecraft.util.profiling.ContinuousProfiler;
 import net.minecraft.world.phys.Vec3;
@@ -385,19 +384,14 @@ public final class BotConnection {
     entityRenderDispatcher.textureManager = minecraft.getTextureManager();
     entityRenderDispatcher.mapRenderer = minecraft.getMapRenderer();
     entityRenderDispatcher.playerSkinRenderCache = minecraft.playerSkinRenderCache();
-    var itemInHandRenderer = new ItemInHandRenderer(
-      minecraft,
-      entityRenderDispatcher,
-      minecraft.getItemModelResolver());
-    entityRenderDispatcher.itemInHandRenderer = itemInHandRenderer;
+    var firstPersonHandsAndItemsRenderer = new FirstPersonHandsAndItemsRenderer(minecraft);
     minecraft.entityRenderDispatcher = entityRenderDispatcher;
 
     var gameRenderer = SFModHelpers.deepCopy(minecraft.gameRenderer);
     gameRenderer.minecraft = minecraft;
     gameRenderer.gameRenderState = new GameRenderState();
-    gameRenderer.random = RandomSource.create();
-    gameRenderer.itemInHandRenderer = itemInHandRenderer;
-    gameRenderer.screenEffectRenderer = new ScreenEffectRenderer(minecraft, minecraft.getAtlasManager());
+    gameRenderer.firstPersonHandsAndItemsRenderer = firstPersonHandsAndItemsRenderer;
+    gameRenderer.screenEffectRenderer = new ScreenEffectRenderer(gameRenderer, minecraft.getAtlasManager());
     gameRenderer.handAndScreenSubmitNodeStorage = new SubmitNodeStorage();
     gameRenderer.mainCamera = new Camera();
     minecraft.gameRenderer = gameRenderer;
@@ -447,7 +441,7 @@ public final class BotConnection {
           authManager.getMinecraftToken().getUpToDateUnchecked().getToken());
       }
       case OnlineSimpleJavaData onlineSimpleJavaData -> {
-        var authService = new YggdrasilAuthenticationService(javaProxy);
+        var authService = MinecraftServicesDiscoveryService.create(javaProxy);
         var accessToken = onlineSimpleJavaData.accessToken();
         yield new AuthSession(
           authService.createUserApiService(accessToken),

@@ -17,7 +17,7 @@ These tests are opt-in. The `test`, `check`, and `build` tasks do not start them
 - Java 25 and the repository Gradle wrapper.
 - A Vulkan loader and Mesa lavapipe.
 - An X11 or Wayland display for the reference capture, or Xvfb.
-- An isolated Minecraft 26.2 server with an accepted Minecraft EULA.
+- An isolated Minecraft 26.3 server with an accepted Minecraft EULA.
 - Server configuration: `online-mode=false`, `enforce-secure-profile=false`, and a view distance of at least three chunks.
 - A free player slot for `LavapipeTest`.
 

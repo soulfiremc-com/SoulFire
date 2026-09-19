@@ -59,6 +59,7 @@ public final class InteractBlockAction implements WorldAction {
     }
 
     var hand = InteractionHand.MAIN_HAND;
+    var swingAnimation = clientEntity.getItemInHand(hand).getInteractAnimation();
     if (connection.minecraft().gameMode.useItemOn(
       clientEntity,
       hand,
@@ -68,8 +69,8 @@ public final class InteractBlockAction implements WorldAction {
         blockPosition.toBlockPos(),
         false
       )
-    ) instanceof InteractionResult.Success success && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-      clientEntity.swing(hand);
+    ) instanceof InteractionResult.Success success && success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+      clientEntity.swing(hand, swingAnimation, false);
     }
   }
 

@@ -51,6 +51,7 @@ import net.minecraft.network.protocol.login.custom.CustomQueryPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.ProfileKeyPair;
+import net.minecraft.world.entity.player.ProfilePublicKey;
 import org.jspecify.annotations.Nullable;
 
 import javax.crypto.Mac;
@@ -224,7 +225,7 @@ public final class ForwardingBypass extends InternalPlugin {
         if (actualVersion >= MODERN_WITH_KEY
           && actualVersion < MODERN_LAZY_SESSION) {
           assert key != null;
-          key.publicKey().data().write(forwarded);
+          ProfilePublicKey.Data.STREAM_CODEC.encode(forwarded, key.publicKey().data());
 
           // Provide the signer UUID since the UUID may differ from the
           // assigned UUID. Doing that breaks the signatures anyway but the server

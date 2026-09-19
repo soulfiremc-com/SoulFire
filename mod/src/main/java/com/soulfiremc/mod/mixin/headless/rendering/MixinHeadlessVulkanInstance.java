@@ -17,7 +17,7 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.blaze3d.vulkan.VulkanInstance;
+import com.mojang.renderpearl.backend.vulkan.VulkanInstance;
 import com.soulfiremc.server.renderer.BundledVulkanRuntime;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
@@ -38,7 +38,7 @@ import java.util.Set;
 public class MixinHeadlessVulkanInstance {
   @Shadow @Final private Set<String> enabledExtensions;
 
-  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFWVulkan;glfwGetRequiredInstanceExtensions()Lorg/lwjgl/PointerBuffer;"))
+  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLVulkan;SDL_Vulkan_GetInstanceExtensions()Lorg/lwjgl/PointerBuffer;"))
   private PointerBuffer noSurfaceExtensions() {
     if (BundledVulkanRuntime.hasBundledDrivers()) {
       enabledExtensions.add(LUNARGDirectDriverLoading.VK_LUNARG_DIRECT_DRIVER_LOADING_EXTENSION_NAME);

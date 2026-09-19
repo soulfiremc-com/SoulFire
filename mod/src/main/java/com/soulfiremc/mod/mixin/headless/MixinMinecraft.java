@@ -20,8 +20,8 @@ package com.soulfiremc.mod.mixin.headless;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.authlib.minecraft.UserApiService;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuSurface;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.device.GpuSurface;
 import com.soulfiremc.server.renderer.VulkanRenderer;
 import net.minecraft.SystemReport;
 import net.minecraft.client.Minecraft;
@@ -33,6 +33,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.function.BooleanSupplier;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
@@ -65,12 +67,12 @@ public class MixinMinecraft {
     cir.setReturnValue(UserApiService.OFFLINE);
   }
 
-  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuDevice;createSurface(J)Lcom/mojang/blaze3d/systems/GpuSurface;"))
-  private GpuSurface noPresentationSurface(GpuDevice device, long window) {
+  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuDevice;createSurface(JLjava/util/function/BooleanSupplier;)Lcom/mojang/renderpearl/api/device/GpuSurface;"))
+  private GpuSurface noPresentationSurface(GpuDevice device, long window, BooleanSupplier isIconified) {
     return null;
   }
 
-  @Redirect(method = "close", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuSurface;close()V"))
+  @Redirect(method = "close", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;close()V"))
   private void closePresentationSurface(GpuSurface surface) {
     // No surface exists in headless mode.
   }
@@ -82,9 +84,5 @@ public class MixinMinecraft {
     } finally {
       VulkanRenderer.DEVICE_LOCK.unlock();
     }
-  }
-  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFW;glfwSetWindowSizeLimits(JIIII)V"))
-  private void noWindowSizeLimits(long window, int minWidth, int minHeight, int maxWidth, int maxHeight) {
-    // Captures validate texture dimensions, not operating-system window limits.
   }
 }

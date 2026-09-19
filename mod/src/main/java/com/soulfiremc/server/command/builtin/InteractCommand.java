@@ -72,9 +72,10 @@ public final class InteractCommand {
                               return;
                             }
 
+                            var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
                             if (gameMode.interact(player, entity.get(), new EntityHitResult(entity.get()), hand) instanceof InteractionResult.Success success) {
-                              if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-                                player.swing(hand);
+                              if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+                                player.swing(hand, swingAnimation, false);
                               }
                             }
                           }));

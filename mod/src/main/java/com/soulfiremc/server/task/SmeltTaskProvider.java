@@ -41,6 +41,7 @@ import com.soulfiremc.server.util.SFInventoryHelpers;
 import io.grpc.Status;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
@@ -51,6 +52,8 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.FurnaceRecipeDisplay;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ResolvableFloat;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -222,12 +225,11 @@ public final class SmeltTaskProvider implements BotTaskProvider<SmeltTask> {
     BotTaskContext context,
     SmeltTask input
   ) {
-    var level = Objects.requireNonNull(context.bot().minecraft().level);
     var player = Objects.requireNonNull(context.bot().minecraft().player);
     Predicate<ItemStack> matchesFuel = stack -> !stack.isEmpty()
       && (!input.hasFuel()
       || InventoryServiceImpl.matches(stack, input.getFuel()))
-      && level.fuelValues().isFuel(stack);
+      && stack.has(DataComponents.COOKING_FUEL);
     var inventoryFuel = player.getInventory().getNonEquipmentItems().stream()
       .filter(matchesFuel)
       .findFirst();
@@ -419,9 +421,8 @@ public final class SmeltTaskProvider implements BotTaskProvider<SmeltTask> {
           .asRuntimeException();
       }
       var existingFuel = menu.getSlot(1).getItem();
-      var level = Objects.requireNonNull(context.bot().minecraft().level);
       if (!existingFuel.isEmpty()
-        && (!level.fuelValues().isFuel(existingFuel)
+        && (!existingFuel.has(DataComponents.COOKING_FUEL)
         || fuelSelector != null
         && !InventoryServiceImpl.matches(existingFuel, fuelSelector))) {
         transition(
@@ -535,9 +536,8 @@ public final class SmeltTaskProvider implements BotTaskProvider<SmeltTask> {
 
     private void loadFuel() {
       var menu = requireFurnaceMenu();
-      var level = Objects.requireNonNull(context.bot().minecraft().level);
       Predicate<ItemStack> matchesFuel = stack ->
-        level.fuelValues().isFuel(stack)
+        stack.has(DataComponents.COOKING_FUEL)
           && (fuelSelector == null
           || InventoryServiceImpl.matches(stack, fuelSelector));
       var existingFuel = menu.getSlot(1).getItem();
@@ -567,8 +567,12 @@ public final class SmeltTaskProvider implements BotTaskProvider<SmeltTask> {
       var fuelPrototype = existingFuel.isEmpty()
         ? sourceStack
         : existingFuel;
-      var fuelTicks = level.fuelValues().burnDuration(fuelPrototype);
-      var additionalFuel = additionalFuelItems(
+      var fuel = Objects.requireNonNull(fuelPrototype.get(DataComponents.COOKING_FUEL));
+      // Let the server resolve contextual fuel values and nonstandard cooking speeds.
+      var fuelTicks = fuel.burnTime() instanceof ResolvableInt.Constant burnTime
+        && fuel.speedMultiplier() instanceof ResolvableFloat.Constant speed && speed.value() == 1.0F
+        ? burnTime.value() : 0;
+      var additionalFuel = fuelTicks <= 0 ? (existingFuel.isEmpty() && !menu.isLit() ? 1 : 0) : additionalFuelItems(
         batchOperations,
         recipe.display.duration(),
         remainingBurnTicks(menu),
@@ -638,8 +642,7 @@ public final class SmeltTaskProvider implements BotTaskProvider<SmeltTask> {
 
     private boolean hasUsableFuel(AbstractFurnaceMenu menu) {
       var stack = menu.getSlot(1).getItem();
-      var level = Objects.requireNonNull(context.bot().minecraft().level);
-      return level.fuelValues().isFuel(stack)
+      return stack.has(DataComponents.COOKING_FUEL)
         && (fuelSelector == null
         || InventoryServiceImpl.matches(stack, fuelSelector));
     }

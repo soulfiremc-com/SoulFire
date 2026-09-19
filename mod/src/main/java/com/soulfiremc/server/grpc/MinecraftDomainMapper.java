@@ -42,7 +42,7 @@ import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -246,7 +246,7 @@ public final class MinecraftDomainMapper {
       builder.setAggressive(
         mob.isAggressive()
           || (mob instanceof NeutralMob neutralMob && neutralMob.isAngry())
-          || (mob instanceof EnderMan enderMan && enderMan.isCreepy())
+          || (mob instanceof Enderman enderMan && enderMan.isCreepy())
       );
       if (mob.getTarget() != null) {
         builder.setTarget(reference(bot, mob.getTarget()));

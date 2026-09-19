@@ -40,6 +40,7 @@ import io.grpc.Status;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
@@ -439,7 +440,8 @@ public final class AttackEntityTaskProvider
       player.setSprinting(sprinting);
       try {
         gameMode.attack(player, attackTarget);
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
       } finally {
         player.setSprinting(wasSprinting);
       }

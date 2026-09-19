@@ -99,26 +99,22 @@ mutable field net/minecraft/network/PacketProcessor runningThread Ljava/lang/Thr
 
 accessible field net/minecraft/client/renderer/GameRenderer minecraft Lnet/minecraft/client/Minecraft;
 accessible field net/minecraft/client/renderer/GameRenderer gameRenderState Lnet/minecraft/client/renderer/state/GameRenderState;
-accessible field net/minecraft/client/renderer/GameRenderer random Lnet/minecraft/util/RandomSource;
-accessible field net/minecraft/client/renderer/GameRenderer itemInHandRenderer Lnet/minecraft/client/renderer/ItemInHandRenderer;
+accessible field net/minecraft/client/renderer/GameRenderer firstPersonHandsAndItemsRenderer Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;
 accessible field net/minecraft/client/renderer/GameRenderer screenEffectRenderer Lnet/minecraft/client/renderer/ScreenEffectRenderer;
 accessible field net/minecraft/client/renderer/GameRenderer handAndScreenSubmitNodeStorage Lnet/minecraft/client/renderer/SubmitNodeStorage;
 accessible field net/minecraft/client/renderer/GameRenderer mainCamera Lnet/minecraft/client/Camera;
 
 mutable field net/minecraft/client/renderer/GameRenderer minecraft Lnet/minecraft/client/Minecraft;
 mutable field net/minecraft/client/renderer/GameRenderer gameRenderState Lnet/minecraft/client/renderer/state/GameRenderState;
-mutable field net/minecraft/client/renderer/GameRenderer random Lnet/minecraft/util/RandomSource;
-mutable field net/minecraft/client/renderer/GameRenderer itemInHandRenderer Lnet/minecraft/client/renderer/ItemInHandRenderer;
+mutable field net/minecraft/client/renderer/GameRenderer firstPersonHandsAndItemsRenderer Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;
 mutable field net/minecraft/client/renderer/GameRenderer screenEffectRenderer Lnet/minecraft/client/renderer/ScreenEffectRenderer;
 mutable field net/minecraft/client/renderer/GameRenderer handAndScreenSubmitNodeStorage Lnet/minecraft/client/renderer/SubmitNodeStorage;
 mutable field net/minecraft/client/renderer/GameRenderer mainCamera Lnet/minecraft/client/Camera;
 
-accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher itemInHandRenderer Lnet/minecraft/client/renderer/ItemInHandRenderer;
 accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher textureManager Lnet/minecraft/client/renderer/texture/TextureManager;
 accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher mapRenderer Lnet/minecraft/client/renderer/MapRenderer;
 accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher playerSkinRenderCache Lnet/minecraft/client/renderer/PlayerSkinRenderCache;
 
-mutable field net/minecraft/client/renderer/entity/EntityRenderDispatcher itemInHandRenderer Lnet/minecraft/client/renderer/ItemInHandRenderer;
 mutable field net/minecraft/client/renderer/entity/EntityRenderDispatcher textureManager Lnet/minecraft/client/renderer/texture/TextureManager;
 mutable field net/minecraft/client/renderer/entity/EntityRenderDispatcher mapRenderer Lnet/minecraft/client/renderer/MapRenderer;
 mutable field net/minecraft/client/renderer/entity/EntityRenderDispatcher playerSkinRenderCache Lnet/minecraft/client/renderer/PlayerSkinRenderCache;
@@ -251,13 +247,11 @@ mutable field net/minecraft/client/gui/Gui guiRenderState Lnet/minecraft/client/
 accessible field net/minecraft/client/renderer/CloudRenderer texture Lnet/minecraft/client/renderer/CloudRenderer$TextureData;
 
 mutable field net/minecraft/client/Minecraft levelRenderer Lnet/minecraft/client/renderer/LevelRenderer;
-accessible field net/minecraft/client/renderer/GameRenderer spinningEffectTime F
-accessible field net/minecraft/client/renderer/GameRenderer spinningEffectSpeed F
 accessible field net/minecraft/client/renderer/GameRenderer bossOverlayWorldDarkening F
 accessible field net/minecraft/client/renderer/GameRenderer bossOverlayWorldDarkeningO F
 accessible field net/minecraft/client/renderer/GameRenderer renderBlockOutline Z
-accessible field net/minecraft/client/renderer/GameRenderer postEffectId Lnet/minecraft/resources/Identifier;
-accessible field net/minecraft/client/renderer/GameRenderer effectActive Z
+accessible field net/minecraft/client/renderer/GameRenderer spectatedEntityPostEffect Lnet/minecraft/resources/Identifier;
+accessible field net/minecraft/client/renderer/GameRenderer spectatedEntityEffectActive Z
 accessible field net/minecraft/client/renderer/LightmapRenderStateExtractor blockLightFlicker F
 accessible field net/minecraft/client/renderer/SectionOcclusionGraph fullUpdateTask Ljava/util/concurrent/Future;
 accessible field net/minecraft/client/renderer/SectionOcclusionGraph needsFullUpdate Z
@@ -274,7 +268,7 @@ accessible method net/minecraft/client/KeyboardHandler keyPress (JILnet/minecraf
 accessible method net/minecraft/client/KeyboardHandler charTyped (JLnet/minecraft/client/input/CharacterEvent;)V
 accessible method net/minecraft/client/MouseHandler onButton (JLnet/minecraft/client/input/MouseButtonInfo;I)V
 accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
-accessible method net/minecraft/client/MouseHandler onMove (JDD)V
+accessible method net/minecraft/client/MouseHandler onMove (JDDDD)V
 accessible field net/minecraft/client/MouseHandler mouseGrabbed Z
 accessible field net/minecraft/client/KeyMapping key Lcom/mojang/blaze3d/platform/InputConstants$Key;
 accessible method net/minecraft/client/KeyMapping release ()V

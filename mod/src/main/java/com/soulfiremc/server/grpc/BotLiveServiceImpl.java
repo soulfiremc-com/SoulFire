@@ -86,6 +86,7 @@ import net.minecraft.network.protocol.game.ServerboundEditBookPacket;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundSignUpdatePacket;
 import net.minecraft.resources.Identifier;
@@ -102,6 +103,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SignBlock;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.BlockHitResult;
@@ -1074,21 +1076,21 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
       && packet instanceof ClientboundLevelParticlesPacket particlePacket) {
       var particle = BotParticleEvent.newBuilder()
         .setParticleId(BuiltInRegistries.PARTICLE_TYPE
-          .getKey(particlePacket.getParticle().getType()).toString())
+          .getKey(particlePacket.particle().getType()).toString())
         .setPosition(WorldPosition.newBuilder()
-          .setX(particlePacket.getX())
-          .setY(particlePacket.getY())
-          .setZ(particlePacket.getZ())
+          .setX(particlePacket.x())
+          .setY(particlePacket.y())
+          .setZ(particlePacket.z())
           .setDimension(currentDimension(connection)))
         .setOffset(com.soulfiremc.grpc.generated.Vec3.newBuilder()
-          .setX(particlePacket.getXDist())
-          .setY(particlePacket.getYDist())
-          .setZ(particlePacket.getZDist()))
-        .setMaxSpeed(particlePacket.getMaxSpeed())
-        .setCount(particlePacket.getCount())
+          .setX(particlePacket.xDist())
+          .setY(particlePacket.yDist())
+          .setZ(particlePacket.zDist()))
+        .setMaxSpeed(Math.max(particlePacket.xMaxSpeed(), Math.max(particlePacket.yMaxSpeed(), particlePacket.zMaxSpeed())))
+        .setCount(particlePacket.count())
         .setAlwaysShow(particlePacket.alwaysShow())
-        .setOverrideLimiter(particlePacket.isOverrideLimiter())
-        .setOptions(particlePacket.getParticle().toString());
+        .setOverrideLimiter(particlePacket.overrideLimiter())
+        .setOptions(particlePacket.particle().toString());
       emitBotEvent(observer, closed, BotEvent.newBuilder()
         .setParticle(particle)
         .build());
@@ -1148,8 +1150,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     if (packet instanceof ClientboundLevelChunkWithLightPacket loadPacket) {
       chunk
         .setKind(ChunkEventKind.CHUNK_EVENT_LOAD)
-        .setChunkX(loadPacket.getX())
-        .setChunkZ(loadPacket.getZ());
+        .setChunkX(loadPacket.x())
+        .setChunkZ(loadPacket.z());
     } else if (packet instanceof ClientboundForgetLevelChunkPacket unloadPacket) {
       chunk
         .setKind(ChunkEventKind.CHUNK_EVENT_UNLOAD)
@@ -1967,7 +1969,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("The target block cannot be broken")
             .asRuntimeException();
         }
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
         started = true;
         attemptedState = currentState;
         return;
@@ -1982,7 +1985,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           .withDescription("Block breaking was rejected")
           .asRuntimeException();
       }
-      player.swing(InteractionHand.MAIN_HAND);
+      player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+      player.connection.send(ServerboundPunchPacket.INSTANCE);
       ticks++;
       if (BlockPredictionSupport.isClearedBreakTarget(level.getBlockState(position))) {
         predictedBroken = true;
@@ -2178,6 +2182,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         return;
       }
 
+      var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
       var result = BotInteractionSupport.withSneaking(
         player,
         true,
@@ -2196,8 +2201,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         }
         return;
       }
-      if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-        player.swing(hand);
+      if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+        player.swing(hand, swingAnimation, false);
       }
       awaitingConfirmation = true;
     }
@@ -2303,6 +2308,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           direction.getStepY() * 0.5,
           direction.getStepZ() * 0.5
         );
+        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
         var result = BotInteractionSupport.withSneaking(
           player,
           request.getSneaking(),
@@ -2333,9 +2339,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         }
         if (
           success.swingSource()
-            == InteractionResult.SwingSource.CLIENT
+            == InteractionResult.SwingSource.PREDICTED
         ) {
-          player.swing(hand);
+          player.swing(hand, swingAnimation, false);
         }
       }),
       DEFAULT_ACTION_TIMEOUT,
@@ -2366,14 +2372,15 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("Bot player or game mode is not available")
             .asRuntimeException();
         }
+        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
         var result = gameMode.useItem(player, hand);
         if (!(result instanceof InteractionResult.Success success)) {
           throw Status.FAILED_PRECONDITION
             .withDescription("The held item could not be used")
             .asRuntimeException();
         }
-        if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-          player.swing(hand);
+        if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+          player.swing(hand, swingAnimation, false);
         }
       }),
       DEFAULT_ACTION_TIMEOUT,
@@ -2446,7 +2453,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         player.setSprinting(request.getSprinting());
         try {
           gameMode.attack(player, target);
-          player.swing(InteractionHand.MAIN_HAND);
+          player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+          player.connection.send(ServerboundPunchPacket.INSTANCE);
         } finally {
           player.setSprinting(wasSprinting);
         }
@@ -2514,6 +2522,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("Target entity is outside the bot's interaction reach")
             .asRuntimeException();
         }
+        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
         var result = BotInteractionSupport.withSneaking(
           player,
           request.getSneaking(),
@@ -2529,8 +2538,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("The target entity rejected the interaction")
             .asRuntimeException();
         }
-        if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-          player.swing(hand);
+        if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+          player.swing(hand, swingAnimation, false);
         }
       }),
       DEFAULT_ACTION_TIMEOUT,
@@ -2557,7 +2566,10 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("Bot player is not available")
             .asRuntimeException();
         }
-        player.swing(hand);
+        player.swing(hand, player.getItemInHand(hand).getAttackAnimation(), false);
+        if (hand == InteractionHand.MAIN_HAND) {
+          player.connection.send(ServerboundPunchPacket.INSTANCE);
+        }
       }),
       DEFAULT_ACTION_TIMEOUT,
       result -> SwingArmResponse.newBuilder().setResult(result).build(),
@@ -2830,11 +2842,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           var lines = request.getLinesList();
           player.connection.send(new ServerboundSignUpdatePacket(
             position,
-            request.getFrontText(),
-            lines.get(0),
-            lines.get(1),
-            lines.get(2),
-            lines.get(3)
+            lines,
+            request.getFrontText() ? SignTextSlot.FRONT : SignTextSlot.BACK
           ));
         }
       ),
@@ -3608,6 +3617,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("Mount target is outside the bot's interaction reach")
             .asRuntimeException();
         }
+        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
         var result = gameMode.interact(
           player,
           target,
@@ -3619,8 +3629,8 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("The target entity rejected the mount interaction")
             .asRuntimeException();
         }
-        if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-          player.swing(hand);
+        if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+          player.swing(hand, swingAnimation, false);
         }
         requested = true;
       }
@@ -3776,6 +3786,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .asRuntimeException();
         }
         requireReach(player, bed);
+        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
         var result = gameMode.useItemOn(
           player,
           hand,
@@ -3793,9 +3804,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         }
         if (
           success.swingSource()
-            == InteractionResult.SwingSource.CLIENT
+            == InteractionResult.SwingSource.PREDICTED
         ) {
-          player.swing(hand);
+          player.swing(hand, swingAnimation, false);
         }
         requested = true;
       }

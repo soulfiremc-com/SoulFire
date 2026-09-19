@@ -49,7 +49,7 @@ The Windows and macOS build steps also document their build-tool dependencies. T
 
 ## Validate the production container
 
-Install Pillow in your development Python environment. Supply a Minecraft 26.2 server JAR, then run:
+Install Pillow in your development Python environment. Supply a Minecraft 26.3 server JAR, then run:
 
 ```bash
 python3 scripts/validate-vulkan-container.py \

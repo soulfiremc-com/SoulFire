@@ -387,6 +387,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       }
       var loveState = (AnimalLoveState) animal;
       loveEventBeforeInteraction = loveState.soulfire$lastLoveEventTick();
+      var swingAnimation = requirePlayer().getItemInHand(InteractionHand.MAIN_HAND).getInteractAnimation();
       var interaction = requireGameMode().interact(
         requirePlayer(),
         animal,
@@ -399,9 +400,9 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           .asRuntimeException();
       }
       if (
-        success.swingSource() == InteractionResult.SwingSource.CLIENT
+        success.swingSource() == InteractionResult.SwingSource.PREDICTED
       ) {
-        requirePlayer().swing(InteractionHand.MAIN_HAND);
+        requirePlayer().swing(InteractionHand.MAIN_HAND, swingAnimation, false);
       }
       transition(
         Stage.WAIT_FOR_LOVE,

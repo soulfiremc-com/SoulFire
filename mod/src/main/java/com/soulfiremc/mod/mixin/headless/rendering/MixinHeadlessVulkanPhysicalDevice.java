@@ -17,7 +17,7 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.blaze3d.vulkan.VulkanPhysicalDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanPhysicalDevice;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkPhysicalDevice;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(VulkanPhysicalDevice.class)
 public class MixinHeadlessVulkanPhysicalDevice {
-  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFWVulkan;glfwGetPhysicalDevicePresentationSupport(Lorg/lwjgl/vulkan/VkInstance;Lorg/lwjgl/vulkan/VkPhysicalDevice;I)Z"))
+  @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLVulkan;SDL_Vulkan_GetPresentationSupport(Lorg/lwjgl/vulkan/VkInstance;Lorg/lwjgl/vulkan/VkPhysicalDevice;I)Z"))
   private boolean graphicsQueueNeedsNoPresentation(VkInstance instance, VkPhysicalDevice device, int queue) {
     return true;
   }

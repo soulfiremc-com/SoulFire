@@ -38,6 +38,7 @@ import io.grpc.Status;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -447,7 +448,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
             .withDescription("The mature crop could not be broken")
             .asRuntimeException();
         }
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
         breaking = true;
       } else {
         if (
@@ -460,7 +462,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
             .withDescription("Crop breaking was rejected")
             .asRuntimeException();
         }
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
       }
       stageTicks++;
       if (stageTicks >= BREAK_TIMEOUT_TICKS) {
@@ -748,6 +751,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         face.getStepY() * 0.5,
         face.getStepZ() * 0.5
       );
+      var swingAnimation = player.getItemInHand(InteractionHand.MAIN_HAND).getInteractAnimation();
       var interaction = requireGameMode().useItemOn(
         player,
         InteractionHand.MAIN_HAND,
@@ -764,9 +768,9 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
           .asRuntimeException();
       }
       if (
-        success.swingSource() == InteractionResult.SwingSource.CLIENT
+        success.swingSource() == InteractionResult.SwingSource.PREDICTED
       ) {
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, swingAnimation, false);
       }
     }
 

@@ -17,7 +17,7 @@
  */
 package com.soulfiremc.server.account;
 
-import com.mojang.authlib.Environment;
+import com.mojang.authlib.exceptions.AuthenticationException;
 import com.soulfiremc.server.account.service.TheAlteningJavaData;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.util.LenniHttpHelper;
@@ -42,11 +42,6 @@ public final class TheAlteningAuthService
   public static final TheAlteningAuthService INSTANCE = new TheAlteningAuthService();
   public static final String AUTH_SERVER_URL = "http://authserver.thealtening.com";
   public static final String SESSION_SERVER_URL = "http://sessionserver.thealtening.com";
-  public static final Environment ENVIRONMENT = new Environment(
-    SESSION_SERVER_URL,
-    "https://api.minecraftservices.com",
-    "https://api.minecraftservices.com",
-    "PROD");
   private static final Agent MINECRAFT_AGENT = new Agent("Minecraft", 1);
   private static final String CLIENT_TOKEN = UUID.randomUUID().toString();
   private static final String AUTH_PASSWORD = "SoulFire";
@@ -89,6 +84,20 @@ public final class TheAlteningAuthService
   @Override
   public boolean isExpired(MinecraftAccount account) {
     return false;
+  }
+
+  public static void joinServer(@Nullable SFProxy proxy, UUID profileId, String accessToken, String serverId) throws AuthenticationException {
+    var body = GsonInstance.GSON.toJson(Map.of(
+      "accessToken", accessToken,
+      "selectedProfile", profileId.toString().replace("-", ""),
+      "serverId", serverId));
+    var client = LenniHttpHelper.client(proxy);
+    try {
+      client.execute(client.post(SESSION_SERVER_URL + "/session/minecraft/join")
+        .setContent(new StringContent(ContentTypes.APPLICATION_JSON, body)), new ThrowingResponseHandler());
+    } catch (IOException exception) {
+      throw new AuthenticationException("TheAltening session authentication failed", exception);
+    }
   }
 
   private MinecraftAccount authenticate(String accountToken, @Nullable SFProxy proxyData, @Nullable MinecraftAccount previousAccount)

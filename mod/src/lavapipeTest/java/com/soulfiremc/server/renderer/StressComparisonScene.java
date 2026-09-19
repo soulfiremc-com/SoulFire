@@ -59,6 +59,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BeaconBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -201,8 +202,8 @@ final class StressComparisonScene {
       }
       put(minecraft, x, 0, z, state);
       if (minecraft.level.getBlockEntity(origin.offset(x, 0, z)) instanceof SignBlockEntity sign) {
-        sign.setText(sign.getFrontText().setMessage(0, Component.literal("Glowing text"))
-          .setMessage(1, Component.literal("§lPixels Ω")).setColor(DyeColor.CYAN).setHasGlowingText(true), true);
+        sign.setText(sign.getText(SignTextSlot.FRONT).asMutable().setLine(0, Component.literal("Glowing text"))
+          .setLine(1, Component.literal("§lPixels Ω")).setColor(DyeColor.CYAN).setTextGlowing(true).asImmutable(), SignTextSlot.FRONT);
       }
     }
     var layers = List.of("water", "glass", "blue_stained_glass", "ice", "slime_block", "honey_block", "oak_leaves", "nether_portal");

@@ -25,6 +25,7 @@ import com.soulfiremc.server.pathfinding.graph.BlockFace;
 import com.soulfiremc.server.pathfinding.graph.actions.movement.MovementMiningCost;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -184,7 +185,8 @@ public final class BlockBreakAction implements WorldAction {
       if (gameMode.startDestroyBlock(target, direction)) {
         breakAttempted = true;
         attemptedState = optionalBlock;
-        clientEntity.swing(InteractionHand.MAIN_HAND);
+        clientEntity.swing(InteractionHand.MAIN_HAND, clientEntity.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        clientEntity.connection.send(ServerboundPunchPacket.INSTANCE);
       }
       return;
     }
@@ -193,7 +195,8 @@ public final class BlockBreakAction implements WorldAction {
       predictedBroken |= BlockPredictionSupport.isClearedBreakTarget(
         level.getBlockState(target)
       );
-      clientEntity.swing(InteractionHand.MAIN_HAND);
+      clientEntity.swing(InteractionHand.MAIN_HAND, clientEntity.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+      clientEntity.connection.send(ServerboundPunchPacket.INSTANCE);
     }
   }
 

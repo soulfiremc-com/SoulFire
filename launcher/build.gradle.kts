@@ -24,7 +24,7 @@ dependencies {
   api("org.ow2.asm:asm-tree:9.10.1")
   api("org.ow2.asm:asm-util:9.10.1")
   api("net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
-  api("net.fabricmc:fabric-loader:0.19.3")
+  api("net.fabricmc:fabric-loader:0.19.5")
   api("net.fabricmc:mapping-io:0.9.1")
 
   api("at.yawk.lz4:lz4-java:1.11.2")
@@ -35,11 +35,11 @@ dependencies {
   api("com.google.guava:guava:33.7.1-jre")
   api("com.ibm.icu:icu4j:78.3")
   api("com.microsoft.azure:msal4j:1.26.0")
-  api("com.mojang:authlib:9.0.75")
+  api("com.mojang:authlib:10.0.77")
   api("com.mojang:blocklist:1.0.10")
-  api("com.mojang:brigadier:1.3.10")
+  api("com.mojang:brigadier:1.3.11")
   api("com.mojang:datafixerupper:10.0.21")
-  api("com.mojang:jtracy:1.0.37")
+  api("com.mojang:jtracy:1.14.38")
   api("com.mojang:logging:1.7.12")
   api("com.mojang:patchy:2.2.10")
   api("com.mojang:text2speech:1.19.12")
@@ -55,14 +55,13 @@ dependencies {
   api("org.joml:joml:1.10.9")
   api("org.jspecify:jspecify:1.0.1")
   api("org.lwjgl:lwjgl-freetype:3.4.3")
-  api("org.lwjgl:lwjgl-glfw:3.4.3")
+  api("org.lwjgl:lwjgl-sdl:3.4.3")
   api("org.lwjgl:lwjgl-jemalloc:3.4.3")
   api("org.lwjgl:lwjgl-openal:3.4.3")
   api("org.lwjgl:lwjgl-opengl:3.4.3")
   api("org.lwjgl:lwjgl-shaderc:3.4.3")
   api("org.lwjgl:lwjgl-spvc:3.4.3")
   api("org.lwjgl:lwjgl-stb:3.4.3")
-  api("org.lwjgl:lwjgl-tinyfd:3.4.3")
   api("org.lwjgl:lwjgl-vma:3.4.3")
   api("org.lwjgl:lwjgl-vulkan:3.4.3")
   runtimeOnly("org.lwjgl:lwjgl-vulkan:3.4.3:natives-macos")
@@ -71,7 +70,7 @@ dependencies {
   api("org.lwjgl:lwjgl:3.4.3:unsafe")
   // Real native libraries are required for headless Vulkan and texture/font decoding.
   for (platform in listOf("linux", "linux-arm64", "windows", "windows-arm64", "macos", "macos-arm64")) {
-    for (module in listOf("lwjgl", "lwjgl-freetype", "lwjgl-glfw", "lwjgl-jemalloc", "lwjgl-openal", "lwjgl-shaderc", "lwjgl-spvc", "lwjgl-stb", "lwjgl-tinyfd", "lwjgl-vma")) {
+    for (module in listOf("lwjgl", "lwjgl-freetype", "lwjgl-sdl", "lwjgl-jemalloc", "lwjgl-openal", "lwjgl-shaderc", "lwjgl-spvc", "lwjgl-stb", "lwjgl-vma")) {
       runtimeOnly("org.lwjgl:$module:3.4.3:natives-$platform")
     }
   }

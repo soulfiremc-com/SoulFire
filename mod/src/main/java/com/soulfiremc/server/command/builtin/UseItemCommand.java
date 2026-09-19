@@ -62,12 +62,13 @@ public final class UseItemCommand {
                           return;
                         }
 
+                        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
                         if (gameMode.useItem(
                           player,
                           hand
                         ) instanceof InteractionResult.Success success) {
-                          if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-                            player.swing(hand);
+                          if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+                            player.swing(hand, swingAnimation, false);
                           }
                         }
                       }));

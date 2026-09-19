@@ -37,6 +37,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.ConduitBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -229,8 +230,8 @@ final class EnvironmentComparisonScenes {
       w.put(x, 0, 13, "white_banner");
       w.put(x, 1, 13, "oak_hanging_sign");
       var sign = w.blockEntity(x, 1, 13, SignBlockEntity.class);
-      sign.setText(sign.getFrontText().setMessage(0, Component.literal("Moving Ω " + i))
-        .setColor(DyeColor.CYAN).setHasGlowingText(true), true);
+      sign.setText(sign.getText(SignTextSlot.FRONT).asMutable().setLine(0, Component.literal("Moving Ω " + i))
+        .setColor(DyeColor.CYAN).setTextGlowing(true).asImmutable(), SignTextSlot.FRONT);
       var display = (Display) w.spawn("block_display", x, 4, 14,
         "{block_state:{Name:'amethyst_block'},transformation:{scale:[1.4f,0.3f,1.4f],left_rotation:[0f,0.3826834f,0f,0.9238795f]}}");
       display.tick();

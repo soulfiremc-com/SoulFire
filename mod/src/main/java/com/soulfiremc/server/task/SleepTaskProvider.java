@@ -288,6 +288,7 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
         context.bot().minecraft().gameMode,
         "Bot game mode is not available"
       );
+      var swingAnimation = player.getItemInHand(InteractionHand.MAIN_HAND).getInteractAnimation();
       var interaction = gameMode.useItemOn(
         player,
         InteractionHand.MAIN_HAND,
@@ -303,9 +304,9 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
         return;
       }
       if (
-        success.swingSource() == InteractionResult.SwingSource.CLIENT
+        success.swingSource() == InteractionResult.SwingSource.PREDICTED
       ) {
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, swingAnimation, false);
       }
       transition(
         Stage.WAIT_FOR_CONFIRMATION,

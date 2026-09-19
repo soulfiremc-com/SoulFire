@@ -18,6 +18,7 @@
 package com.soulfiremc.server.script.nodes.action;
 
 import com.soulfiremc.server.script.*;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import reactor.core.publisher.Mono;
 
@@ -50,7 +51,8 @@ public final class SwingHandNode extends AbstractScriptNode {
     runOnTickThread(runtime, bot, () -> {
       var player = bot.minecraft().player;
       if (player != null) {
-        player.swing(InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
+        player.connection.send(ServerboundPunchPacket.INSTANCE);
       }
     });
 

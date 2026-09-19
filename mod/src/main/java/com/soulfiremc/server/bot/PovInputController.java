@@ -57,16 +57,19 @@ public final class PovInputController implements ControlTask {
     var handle = minecraft.getWindow().handle();
     switch (event.getKind()) {
       case KEY -> {
-        if (event.getAction() == 0) keys.remove(event.getCode());
-        else keys.add(event.getCode());
-        minecraft.keyboardHandler.keyPress(handle, event.getAction(),
-          new KeyEvent(event.getCode(), 0, event.getModifiers()));
+        var key = PovInputCodes.scancode(event.getCode());
+        if (key == 0) return;
+        if (event.getAction() == 0) keys.remove(key);
+        else keys.add(key);
+        minecraft.keyboardHandler.keyPress(handle, event.getAction() == 2 ? -1 : event.getAction(),
+          new KeyEvent(key, PovInputCodes.keycode(event.getCode()), PovInputCodes.modifiers(event.getModifiers())));
       }
       case CHARACTER -> minecraft.keyboardHandler.charTyped(handle, new CharacterEvent(event.getCode()));
       case BUTTON -> {
-        if (event.getAction() == 0) buttons.remove(event.getCode());
-        else buttons.add(event.getCode());
-        minecraft.mouseHandler.onButton(handle, new MouseButtonInfo(event.getCode(), event.getModifiers()), event.getAction());
+        var button = PovInputCodes.mouseButton(event.getCode());
+        if (event.getAction() == 0) buttons.remove(button);
+        else buttons.add(button);
+        minecraft.mouseHandler.onButton(handle, new MouseButtonInfo(button, PovInputCodes.modifiers(event.getModifiers())), event.getAction());
       }
       case MOVE -> {
         if (event.getRelative()) {
@@ -75,7 +78,7 @@ public final class PovInputController implements ControlTask {
           }
         } else if (minecraft.gui.screen() != null) {
           var window = minecraft.getWindow();
-          minecraft.mouseHandler.onMove(handle, event.getX() * window.getScreenWidth(), event.getY() * window.getScreenHeight());
+          minecraft.mouseHandler.onMove(handle, event.getX() * window.getScreenWidth(), event.getY() * window.getScreenHeight(), 0, 0);
           minecraft.mouseHandler.handleAccumulatedMovement();
         }
       }

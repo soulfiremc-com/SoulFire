@@ -653,6 +653,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         selectedSupport.position(),
         false
       );
+      var swingAnimation = player.getItemInHand(InteractionHand.MAIN_HAND).getInteractAnimation();
       var interaction = BotInteractionSupport.withSneaking(
         player,
         true,
@@ -670,8 +671,8 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         );
         return;
       }
-      if (success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-        player.swing(InteractionHand.MAIN_HAND);
+      if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+        player.swing(InteractionHand.MAIN_HAND, swingAnimation, false);
       }
       stageTicks = 0;
       stage = Stage.CONFIRM;

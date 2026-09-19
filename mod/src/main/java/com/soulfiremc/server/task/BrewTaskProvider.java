@@ -37,8 +37,10 @@ import com.soulfiremc.server.pathfinding.graph.constraint.NoBlockPlacingConstrai
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraintImpl;
 import com.soulfiremc.server.util.SFInventoryHelpers;
 import io.grpc.Status;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -46,8 +48,7 @@ import net.minecraft.world.inventory.BrewingStandMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraft.world.item.crafting.RecipePropertySet;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -58,7 +59,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.function.Predicate;
 
 /// Brews exact potion outputs in batches while keeping all container
 /// interaction and progress tracking on the bot thread.
@@ -156,9 +156,11 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
   ) {
     var player = Objects.requireNonNull(context.bot().minecraft().player);
     var level = Objects.requireNonNull(context.bot().minecraft().level);
-    var brewing = level.potionBrewing();
+    var reagents = level.recipeAccess().propertySet(RecipePropertySet.BREWING_REAGENTS);
     var inventory = player.getInventory().getNonEquipmentItems();
+    var inputs = level.recipeAccess().propertySet(RecipePropertySet.BREWING_INPUTS);
     var inputCount = inventory.stream()
+      .filter(inputs::test)
       .filter(stack -> InventoryServiceImpl.matches(stack, input.getInput()))
       .mapToInt(ItemStack::getCount)
       .sum();
@@ -175,7 +177,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         stack,
         input.getIngredient()
       ))
-      .filter(brewing::isIngredient)
+      .filter(reagents::test)
       .mapToInt(ItemStack::getCount)
       .sum();
     var requiredIngredients = (count + MAX_BATCH_SIZE - 1) / MAX_BATCH_SIZE;
@@ -187,39 +189,23 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         )
         .asRuntimeException();
     }
-    var hasMix = inventory.stream()
-      .filter(stack -> InventoryServiceImpl.matches(stack, input.getInput()))
-      .anyMatch(potion -> inventory.stream()
-        .filter(ingredient -> InventoryServiceImpl.matches(
-          ingredient,
-          input.getIngredient()
-        ))
-        .anyMatch(ingredient -> brewing.hasMix(potion, ingredient)));
-    if (!hasMix) {
-      throw Status.FAILED_PRECONDITION
-        .withDescription(
-          "No matching potion input and ingredient form a valid brewing mix"
-        )
-        .asRuntimeException();
-    }
-
     var menuFuel = player.containerMenu instanceof BrewingStandMenu menu
       ? menu.getFuel()
       : 0;
     var inventoryFuel = inventory.stream()
-      .filter(stack -> stack.is(Items.BLAZE_POWDER))
+      .filter(stack -> stack.has(DataComponents.BREWING_FUEL))
       .filter(stack -> !input.hasFuel()
         || InventoryServiceImpl.matches(stack, input.getFuel()))
       .findFirst();
     var stationFuel = player.containerMenu instanceof BrewingStandMenu menu
       ? menu.getSlot(4).getItem()
       : ItemStack.EMPTY;
-    var stationFuelMatches = stationFuel.is(Items.BLAZE_POWDER)
+    var stationFuelMatches = stationFuel.has(DataComponents.BREWING_FUEL)
       && (!input.hasFuel()
       || InventoryServiceImpl.matches(stationFuel, input.getFuel()));
     if (menuFuel <= 0 && inventoryFuel.isEmpty() && !stationFuelMatches) {
       throw Status.FAILED_PRECONDITION
-        .withDescription("No matching blaze powder is available")
+        .withDescription("No matching brewing fuel is available")
         .asRuntimeException();
     }
   }
@@ -234,7 +220,8 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private final @Nullable BlockPos station;
     private final CompletableFuture<BrewTaskResult> result;
     private final List<ItemStack> outputs = new ArrayList<>();
-    private final List<ItemStack> expectedOutputs = new ArrayList<>();
+    private final List<ItemStack> batchInputs = new ArrayList<>();
+    private final List<ItemStack> batchOutputs = new ArrayList<>();
     private @Nullable PathExecutor activePath;
     private Stage stage;
     private int stageTicks;
@@ -385,7 +372,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       }
       var existingFuel = menu.getSlot(4).getItem();
       if (!existingFuel.isEmpty()
-        && (!existingFuel.is(Items.BLAZE_POWDER)
+        && (!existingFuel.has(DataComponents.BREWING_FUEL)
         || fuelSelector != null
         && !InventoryServiceImpl.matches(existingFuel, fuelSelector))) {
         throw Status.FAILED_PRECONDITION
@@ -399,60 +386,41 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
 
     private void loadBottles() {
       var menu = requireBrewingMenu();
-      var brewing = potionBrewing();
+      var reagents = requireLevel().recipeAccess().propertySet(RecipePropertySet.BREWING_REAGENTS);
       var maximumBatchSize = Math.min(
         MAX_BATCH_SIZE,
         targetCount - operationsCompleted
       );
-      expectedOutputs.clear();
+      batchOutputs.clear();
+      batchInputs.clear();
       outputIndex = 0;
 
-      var selection = playerSlots(menu)
-        .mapToObj(slot -> menu.getSlot(slot).getItem().copy())
-        .filter(stack -> InventoryServiceImpl.matches(
-          stack,
-          ingredientSelector
-        ))
-        .filter(brewing::isIngredient)
-        .map(stack -> new BatchSelection(
-          stack,
-          findCompatibleInputs(menu, brewing, stack)
-        ))
-        .filter(candidate -> !candidate.inputs.isEmpty())
-        .max(java.util.Comparator.comparingInt(
-          candidate -> candidate.inputs.size()
-        ))
+      selectedIngredient = playerSlots(menu)
+        .mapToObj(slot -> menu.getSlot(slot).getItem())
+        .filter(stack -> InventoryServiceImpl.matches(stack, ingredientSelector))
+        .filter(reagents::test)
+        .findFirst()
         .orElseThrow(() -> Status.FAILED_PRECONDITION
-          .withDescription("No compatible brewing mix remains")
-          .asRuntimeException());
-      selectedIngredient = selection.ingredient.copy();
-      var inputs = selection.inputs;
+          .withDescription("No matching brewing ingredient remains")
+          .asRuntimeException())
+        .copy();
+      var inputs = findInputs(menu);
+      if (inputs.isEmpty()) {
+        throw Status.FAILED_PRECONDITION
+          .withDescription("No matching brewing input remains")
+          .asRuntimeException();
+      }
       activeBatchSize = Math.min(maximumBatchSize, inputs.size());
       for (var index = 0; index < activeBatchSize; index++) {
         var selected = inputs.get(index);
-        var expected = brewing.mix(selectedIngredient, selected.stack);
-        if (expectedResultSelector != null
-          && !InventoryServiceImpl.matches(
-          expected,
-          expectedResultSelector
-        )) {
-          throw Status.FAILED_PRECONDITION
-            .withDescription(
-              "Predicted brewing output does not match expected_result"
-            )
-            .asRuntimeException();
-        }
-        expectedOutputs.add(expected.copy());
+        batchInputs.add(selected.stack.copy());
         moveOne(menu, selected.slot, index);
       }
       transition(Stage.LOAD_INGREDIENT, "Loading brewing ingredient");
     }
 
-    private List<SourceStack> findCompatibleInputs(
-      BrewingStandMenu menu,
-      PotionBrewing brewing,
-      ItemStack ingredient
-    ) {
+    private List<SourceStack> findInputs(BrewingStandMenu menu) {
+      var inputs = requireLevel().recipeAccess().propertySet(RecipePropertySet.BREWING_INPUTS);
       return playerSlots(menu)
         .mapToObj(slot -> new SourceStack(
           slot,
@@ -462,12 +430,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
           source.stack,
           inputSelector
         ))
-        .filter(source -> brewing.hasMix(source.stack, ingredient))
-        .filter(source -> expectedResultSelector == null
-          || InventoryServiceImpl.matches(
-          brewing.mix(ingredient, source.stack),
-          expectedResultSelector
-        ))
+        .filter(source -> inputs.test(source.stack))
         .limit(MAX_BATCH_SIZE)
         .toList();
     }
@@ -478,26 +441,13 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         transition(Stage.LOAD_FUEL, "Checking brewing fuel");
         return;
       }
-      var brewing = potionBrewing();
+      var reagents = requireLevel().recipeAccess().propertySet(RecipePropertySet.BREWING_REAGENTS);
       var source = playerSlots(menu)
         .filter(slot -> {
           var ingredient = menu.getSlot(slot).getItem();
-          if (!InventoryServiceImpl.matches(
-            ingredient,
-            ingredientSelector
-          ) || !brewing.isIngredient(ingredient)
-            || !ItemStack.isSameItemSameComponents(
-              ingredient,
-              selectedIngredient
-            )) {
-            return false;
-          }
-          for (var bottle = 0; bottle < activeBatchSize; bottle++) {
-            if (!brewing.hasMix(menu.getSlot(bottle).getItem(), ingredient)) {
-              return false;
-            }
-          }
-          return true;
+          return InventoryServiceImpl.matches(ingredient, ingredientSelector)
+            && reagents.test(ingredient)
+            && ItemStack.isSameItemSameComponents(ingredient, selectedIngredient);
         })
         .findFirst()
         .orElseThrow(() -> Status.FAILED_PRECONDITION
@@ -520,13 +470,13 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       var source = playerSlots(menu)
         .filter(slot -> {
           var stack = menu.getSlot(slot).getItem();
-          return stack.is(Items.BLAZE_POWDER)
+          return stack.has(DataComponents.BREWING_FUEL)
             && (fuelSelector == null
             || InventoryServiceImpl.matches(stack, fuelSelector));
         })
         .findFirst()
         .orElseThrow(() -> Status.FAILED_PRECONDITION
-          .withDescription("No matching blaze powder remains")
+          .withDescription("No matching brewing fuel remains")
           .asRuntimeException());
       moveOne(menu, source, 4);
       transition(Stage.WAIT_FOR_OUTPUT, "Brewing");
@@ -536,15 +486,22 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       var menu = requireBrewingMenu();
       var complete = true;
       for (var index = 0; index < activeBatchSize; index++) {
-        if (!ItemStack.isSameItemSameComponents(
-          menu.getSlot(index).getItem(),
-          expectedOutputs.get(index)
-        )) {
+        var output = menu.getSlot(index).getItem();
+        if (output.isEmpty() || ItemStack.isSameItemSameComponents(output, batchInputs.get(index))) {
           complete = false;
           break;
         }
       }
       if (complete) {
+        for (var index = 0; index < activeBatchSize; index++) {
+          var output = menu.getSlot(index).getItem();
+          if (expectedResultSelector != null && !InventoryServiceImpl.matches(output, expectedResultSelector)) {
+            throw Status.FAILED_PRECONDITION
+              .withDescription("Brewing output does not match expected_result")
+              .asRuntimeException();
+          }
+          batchOutputs.add(output.copy());
+        }
         transition(Stage.TAKE_OUTPUT, "Collecting brewed potions");
         return;
       }
@@ -561,7 +518,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       var stack = menu.getSlot(outputIndex).getItem();
       if (!ItemStack.isSameItemSameComponents(
         stack,
-        expectedOutputs.get(outputIndex)
+        batchOutputs.get(outputIndex)
       )) {
         throw Status.FAILED_PRECONDITION
           .withDescription("Brewing output changed before collection")
@@ -681,9 +638,8 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       );
     }
 
-    private PotionBrewing potionBrewing() {
-      return Objects.requireNonNull(context.bot().minecraft().level)
-        .potionBrewing();
+    private ClientLevel requireLevel() {
+      return Objects.requireNonNull(context.bot().minecraft().level);
     }
 
     private BrewingStandMenu requireBrewingMenu() {
@@ -788,12 +744,6 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
   }
 
   private record SourceStack(int slot, ItemStack stack) {
-  }
-
-  private record BatchSelection(
-    ItemStack ingredient,
-    List<SourceStack> inputs
-  ) {
   }
 
   private enum Stage {

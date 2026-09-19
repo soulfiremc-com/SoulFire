@@ -17,46 +17,40 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.blaze3d.vulkan.VulkanBackend;
+import com.mojang.renderpearl.backend.vulkan.VulkanBackend;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VK;
 import org.lwjgl.vulkan.VK12;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkPhysicalDevice;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Mutable;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Mixin(VulkanBackend.class)
 public class MixinHeadlessVulkanBackend {
-  @Shadow @Final @Mutable public static Set<String> REQUIRED_DEVICE_EXTENSIONS;
-
-  @Inject(method = "<clinit>", at = @At("TAIL"))
-  private static void removePresentationRequirement(CallbackInfo ci) {
-    REQUIRED_DEVICE_EXTENSIONS = REQUIRED_DEVICE_EXTENSIONS.stream()
-      .filter(extension -> !extension.equals("VK_KHR_swapchain")).collect(Collectors.toUnmodifiableSet());
+  @Redirect(method = "loadLibrary", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLVulkan;SDL_Vulkan_LoadLibrary(Ljava/lang/CharSequence;)Z"))
+  private boolean useLoadedVulkanLibrary(CharSequence path) {
+    return true;
   }
 
-  @Redirect(method = {"checkBackendAvailable", "createDevice(JLcom/mojang/blaze3d/shaders/ShaderSource;Lcom/mojang/blaze3d/shaders/GpuDebugOptions;Ljava/lang/Runnable;)Lcom/mojang/blaze3d/systems/GpuDevice;"},
-    at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFWVulkan;glfwVulkanSupported()Z"))
-  private static boolean noPresentationRequired() {
-    // NativeLibrariesBootstrap already checks the Vulkan loader. GLFW checks WSI support,
-    // which is irrelevant to offscreen rendering on the null platform.
-    return true;
+  @Redirect(method = "loadLibrary", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLVulkan;SDL_Vulkan_GetVkGetInstanceProcAddr()J"))
+  private long loadedVulkanEntryPoint() {
+    return VK.getFunctionProvider().getFunctionAddress("vkGetInstanceProcAddr");
+  }
+
+  @Redirect(method = "createWindow", at = @At(value = "INVOKE", target = "Lorg/lwjgl/sdl/SDLVideo;SDL_CreateWindow(Ljava/lang/CharSequence;IIJ)J"))
+  private long createOffscreenWindow(CharSequence title, int width, int height, long flags) {
+    return SDLVideo.SDL_CreateWindow(title, width, height, flags & ~SDLVideo.SDL_WINDOW_VULKAN);
   }
 
   @Redirect(method = "findPhysicalDevice", at = @At(value = "INVOKE",

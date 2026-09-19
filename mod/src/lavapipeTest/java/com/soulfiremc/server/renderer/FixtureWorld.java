@@ -117,14 +117,9 @@ final class FixtureWorld {
     for (var x = -5; x <= 5; x++) {
       for (var z = -5; z <= 5; z++) {
         var chunk = new LevelChunk(level, new ChunkPos(x, z));
-        for (var section : chunk.getSections()) section.fillBiomesFromNoise((_, _, _, _) -> biome, null, 0, 0, 0);
+        for (var section : chunk.getSections()) section.fillBiomesFromNoise((_, _, _) -> biome, 0, 0, 0);
         var packet = new ClientboundLevelChunkPacketData(chunk);
-        var data = packet.getReadBuffer();
-        try {
-          cache.replaceWithPacketData(x, z, data, packet.getHeightmaps(), packet.getBlockEntitiesTagsConsumer(x, z));
-        } finally {
-          data.release();
-        }
+        cache.replaceWithPacketData(x, z, packet);
         lighting.setLightEnabled(chunk.getPos(), true);
         for (var y = level.getMinSectionY() - 1; y <= level.getMaxSectionY(); y++) {
           var section = SectionPos.of(x, y, z);

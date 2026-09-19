@@ -17,20 +17,24 @@
  */
 package com.soulfiremc.mod.mixin.headless.rendering;
 
-import com.mojang.blaze3d.platform.GLX;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets;
+import com.mojang.renderpearl.backend.vulkan.init.FeatureSet;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.function.LongSupplier;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-/// GLFW's null platform has no operating-system window or display connection.
-@Mixin(GLX.class)
-public class MixinHeadlessGlfw {
-  @Inject(method = "_initGlfw", at = @At(value = "INVOKE", target = "Lorg/lwjgl/glfw/GLFW;glfwInit()Z"))
-  private static void selectNullPlatform(CallbackInfoReturnable<LongSupplier> cir) {
-    GLFW.glfwInitHint(GLFW.GLFW_PLATFORM, GLFW.GLFW_PLATFORM_NULL);
+@Mixin(VulkanFeatureSets.class)
+public class MixinHeadlessVulkanFeatureSets {
+  @Inject(method = "requiredFeatureSets", at = @At("RETURN"), cancellable = true)
+  private static void removePresentationRequirement(CallbackInfoReturnable<Set<FeatureSet>> cir) {
+    cir.setReturnValue(cir.getReturnValue().stream()
+      .map(features -> new FeatureSet(features.name(), features.extensions().stream()
+        .filter(extension -> !extension.equals("VK_KHR_swapchain"))
+        .collect(Collectors.toUnmodifiableSet()), features.features(), features.condition()))
+      .collect(Collectors.toSet()));
   }
 }

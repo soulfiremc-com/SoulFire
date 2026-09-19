@@ -59,11 +59,9 @@ public final class SFBlockHelpers {
 
   private SFBlockHelpers() {}
 
-  @SuppressWarnings("deprecation")
   public static boolean isBlockFree(BlockState blockState) {
     return isCollisionShapeEmpty(blockState)
       && blockState.getFluidState().getType() == Fluids.EMPTY
-      && !blockState.blocksMotion()
       && !affectsTouchMovementSpeed(blockState.getBlock());
   }
 
