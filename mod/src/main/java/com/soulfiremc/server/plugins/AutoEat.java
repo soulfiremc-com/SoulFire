@@ -114,15 +114,7 @@ public final class AutoEat extends InternalPlugin {
             "Auto eat",
             ControlPriority.LOW,
             ControlTask.action(player::sendOpenInventory),
-            ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player)),
-            ControlTask.waitMillis(50L),
-            ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, SFInventoryHelpers.getSelectedSlot(player.getInventory()), 0, ContainerInput.PICKUP, player)),
-            ControlTask.waitMillis(50L),
-            ControlTask.action(() -> {
-              if (!player.inventoryMenu.getCarried().isEmpty()) {
-                gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, 0, ContainerInput.PICKUP, player);
-              }
-            }),
+            ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, slot, player.getInventory().getSelectedSlot(), ContainerInput.SWAP, player)),
             ControlTask.waitMillis(50L),
             ControlTask.action(player::closeContainer),
             ControlTask.waitMillis(50L),

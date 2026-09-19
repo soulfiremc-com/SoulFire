@@ -30,6 +30,7 @@ import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
 import com.soulfiremc.server.settings.property.*;
+import com.soulfiremc.server.util.MouseClickHelper;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -41,9 +42,10 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -111,7 +113,7 @@ public final class KillAura extends InternalPlugin {
       return;
     }
 
-    if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, new KillAuraMarker(target, distance)))) {
+    if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, new KillAuraMarker(target)))) {
       return;
     }
     bot.rotationControl().lookAt(bestVisiblePoint);
@@ -121,43 +123,48 @@ public final class KillAura extends InternalPlugin {
   public static void onPostEntityTick(BotPostEntityTickEvent event) {
     var bot = event.connection();
     var localPlayer = bot.minecraft().player;
-    var control = bot.botControl();
-    if (localPlayer.getAttackStrengthScale(0) != 1F) {
+    var marker = bot.botControl().claimMarker(KillAuraMarker.class);
+    if (!bot.settingsSource().get(KillAuraSettings.ENABLE) || localPlayer == null) {
       return;
     }
 
-    int cooldownTicks = bot.metadata().getOrDefault(COOLDOWN, 0);
+    var cooldownTicks = bot.metadata().getOrDefault(COOLDOWN, 0);
     if (cooldownTicks > 0) {
       bot.metadata().set(COOLDOWN, cooldownTicks - 1);
       return;
     }
 
-    var marker = control.claimMarker(KillAuraMarker.class);
-    if (marker == null) {
+    var useAttackDelay = bot.currentProtocolVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)
+      || bot.settingsSource().get(KillAuraSettings.IGNORE_COOLDOWN);
+    if (marker == null || (!useAttackDelay && localPlayer.getAttackStrengthScale(0) < 1F)) {
+      return;
+    }
+
+    var target = marker.attackEntity();
+    if (!target.isAlive()) {
       return;
     }
 
     var hitRange = bot.settingsSource().get(KillAuraSettings.HIT_RANGE);
     var swingRange = bot.settingsSource().get(KillAuraSettings.SWING_RANGE);
-    var swing = marker.distance() <= swingRange;
-    var visiblePoint = getEntityVisiblePoint(bot, marker.attackEntity());
-    if (visiblePoint == null) {
-      visiblePoint = marker.attackEntity().getEyePosition();
-    }
-    if (!bot.rotationControl().isFacing(visiblePoint)) {
-      return;
+    var hitResult = localPlayer.raycastHitResult(1.0F, localPlayer);
+    if (hitResult instanceof EntityHitResult entityHitResult
+      && entityHitResult.getEntity() == target
+      && hitResult.getLocation().distanceTo(localPlayer.getEyePosition()) <= hitRange) {
+      MouseClickHelper.performLeftClick(localPlayer, bot.minecraft().gameMode);
+    } else {
+      var visiblePoint = getEntityVisiblePoint(bot, target);
+      if (visiblePoint == null) {
+        visiblePoint = target.getEyePosition();
+      }
+      if (visiblePoint.distanceTo(localPlayer.getEyePosition()) > swingRange
+        || !bot.rotationControl().isFacing(visiblePoint)) {
+        return;
+      }
+      localPlayer.swing(InteractionHand.MAIN_HAND);
     }
 
-    if (marker.distance() <= hitRange) {
-      bot.minecraft().gameMode.attack(localPlayer, marker.attackEntity());
-      localPlayer.swing(InteractionHand.MAIN_HAND);
-    } else if (swing) {
-      localPlayer.swing(InteractionHand.MAIN_HAND);
-    }
-
-    // Custom attack delay for specific scenarios
-    if (bot.currentProtocolVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)
-      || bot.settingsSource().get(KillAuraSettings.IGNORE_COOLDOWN)) {
+    if (useAttackDelay) {
       bot.metadata().set(COOLDOWN, bot.settingsSource().getRandom(KillAuraSettings.ATTACK_DELAY_TICKS).getAsInt());
     }
   }
@@ -214,20 +221,17 @@ public final class KillAura extends InternalPlugin {
       return null;
     }
 
-    var x = player.getX();
-    var y = player.getY();
-    var z = player.getZ();
-
     Entity closest = null;
-    var closestDistance = Double.MAX_VALUE;
+    var closestDistanceSquared = Double.MAX_VALUE;
+    var rangeSquared = range * range;
 
     for (var entity : connection.minecraft().level.entitiesForRendering()) {
       if (entity.getId() == player.getId()) {
         continue;
       }
 
-      var distance = entity.getPosition(0).distanceTo(new Vec3(x, y, z));
-      if (distance > range) {
+      var distanceSquared = player.distanceToSqr(entity);
+      if (distanceSquared > rangeSquared) {
         continue;
       }
 
@@ -270,9 +274,9 @@ public final class KillAura extends InternalPlugin {
         continue;
       }
 
-      if (distance < closestDistance) {
+      if (distanceSquared < closestDistanceSquared) {
         closest = entity;
-        closestDistance = distance;
+        closestDistanceSquared = distanceSquared;
       }
     }
 
@@ -297,23 +301,8 @@ public final class KillAura extends InternalPlugin {
       return false;
     }
 
-    return isNotIntersected(level.getBlockCollisions(connection.minecraft().player, new AABB(eye, vec)), eye, vec);
-  }
-
-  private static boolean isNotIntersected(Iterable<VoxelShape> shapes, Vec3 start, Vec3 end) {
-    for (var shape : shapes) {
-      var aabb = shape.bounds();
-      if (
-        AABB.clip(
-          aabb.minX, aabb.minY, aabb.minZ, aabb.maxX, aabb.maxY, aabb.maxZ,
-          start, end
-        ).isPresent()
-      ) {
-        return false;
-      }
-    }
-
-    return true;
+    return level.clip(new ClipContext(eye, vec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+      connection.minecraft().player)).getType() == HitResult.Type.MISS;
   }
 
   @EventHandler
@@ -348,7 +337,7 @@ public final class KillAura extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("hit-range")
         .uiName("Hit Range")
-        .description("Range for the kill aura where the bot will start hitting the entity")
+        .description("Maximum attack distance, limited by vanilla reach and crosshair targeting")
         .defaultValue(3.0d)
         .minValue(0.5d)
         .maxValue(6.0d)
@@ -384,7 +373,7 @@ public final class KillAura extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("check-walls")
         .uiName("Check Walls")
-        .description("Check if the entity is behind a wall")
+        .description("Only select targets with a visible point; attacks always respect walls")
         .defaultValue(true)
         .build();
     public static final BooleanProperty<SettingsSource.Bot> IGNORE_COOLDOWN =
@@ -416,6 +405,6 @@ public final class KillAura extends InternalPlugin {
         .build();
   }
 
-  private record KillAuraMarker(Entity attackEntity, double distance) {
+  private record KillAuraMarker(Entity attackEntity) {
   }
 }

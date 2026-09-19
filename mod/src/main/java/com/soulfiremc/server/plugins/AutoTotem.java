@@ -32,6 +32,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.lenni0451.lambdaevents.EventHandler;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.Items;
@@ -90,15 +91,7 @@ public final class AutoTotem extends InternalPlugin {
           "Auto totem",
           ControlPriority.LOW,
           ControlTask.action(player::sendOpenInventory),
-          ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player)),
-          ControlTask.waitMillis(50L),
-          ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, InventoryMenu.SHIELD_SLOT, 0, ContainerInput.PICKUP, player)),
-          ControlTask.waitMillis(50L),
-          ControlTask.action(() -> {
-            if (!playerInventory.getCarried().isEmpty()) {
-              gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), 0, ContainerInput.PICKUP, player);
-            }
-          }),
+          ControlTask.action(() -> gameMode.handleContainerInput(player.inventoryMenu.containerId, totemSlot.getAsInt(), Inventory.SLOT_OFFHAND, ContainerInput.SWAP, player)),
           ControlTask.waitMillis(50L),
           ControlTask.action(player::closeContainer)
         ))) {
