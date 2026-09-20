@@ -81,6 +81,7 @@
     "soulfire.resourcepack.MixinDownloadedPackSource",
     "soulfire.resourcepack.MixinServerPackData",
     "headless.rendering.MixinHeadlessSdl",
+    "headless.rendering.MixinHeadlessCursorType",
     "headless.rendering.MixinHeadlessVulkanBackend",
     "headless.rendering.MixinHeadlessVulkanFeatureSets",
     "headless.rendering.MixinHeadlessVulkanInstance",

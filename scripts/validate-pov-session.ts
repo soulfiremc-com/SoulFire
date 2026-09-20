@@ -201,7 +201,15 @@ try {
     await input([{ kind: Kind.MOVE, x: 0.3, y: 0.975 }]);
     await until(() => latest?.cursorShape === CursorShape.TEXT, "Chat input must request a text cursor");
     await saveFrame("interactive-text-cursor");
-    await input([{ kind: Kind.KEY, code: 256, action: 1 }, { kind: Kind.KEY, code: 256, action: 0 }]);
+    await pov.input({
+      sessionId,
+      sequence: ++sequence,
+      width,
+      height,
+      captured,
+      clipboard: "SoulFire clipboard validation",
+    });
+    await input([{ kind: Kind.KEY, code: 257, action: 1 }, { kind: Kind.KEY, code: 257, action: 0 }]);
     await until(() => latest?.screenOpen === false, "Closing chat must hide the cursor");
     console.log(JSON.stringify({ pointingCursor: true, textCursor: true, hiddenInWorld: true }));
   } else if (mode === "world") {
@@ -439,10 +447,12 @@ try {
     await sleep(500);
     const afterTimeout = (await bots.getBotInfo({ instanceId, botId }))
       .liveState!;
+    assert.ok(timedOut.health > 0 && afterTimeout.health > 0, "The timeout probe must remain alive");
+    assert.equal(afterTimeout.health, timedOut.health, "Damage must not interfere with the movement check");
     assert.ok(
       Math.hypot(afterTimeout.x - timedOut.x, afterTimeout.z - timedOut.z) <
         0.05,
-      "Heartbeat timeout must release held movement",
+      `Heartbeat timeout must release held movement: ${JSON.stringify([timedOut, afterTimeout].map(({ x, y, z, health }) => ({ x, y, z, health })))}`,
     );
     console.log(
       JSON.stringify({

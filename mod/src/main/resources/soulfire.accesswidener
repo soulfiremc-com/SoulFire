@@ -278,3 +278,5 @@ accessible field net/minecraft/client/multiplayer/ClientChunkCache storage Lnet/
 accessible field net/minecraft/client/multiplayer/ClientChunkCache$Storage chunks Ljava/util/concurrent/atomic/AtomicReferenceArray;
 
 accessible field com/mojang/blaze3d/platform/Window currentCursor Lcom/mojang/blaze3d/platform/cursor/CursorType;
+
+accessible method com/mojang/blaze3d/platform/cursor/CursorType <init> (Ljava/lang/String;J)V

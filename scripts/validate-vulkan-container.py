@@ -113,7 +113,7 @@ def main():
     mc_port, api_port = free_port(), free_port()
     (server_directory / "eula.txt").write_text("eula=true\n")
     (server_directory / "server.properties").write_text(
-        f"server-ip=127.0.0.1\nserver-port={mc_port}\nonline-mode=false\nenforce-secure-profile=false\n"
+        f"server-ip=127.0.0.1\nserver-port={mc_port}\nonline-mode=false\nenforce-secure-profile=false\nwhite-list=false\n"
         "level-type=minecraft:flat\ngamemode=creative\nspawn-protection=0\nview-distance=4\nsimulation-distance=4\n"
         "max-players=4\npause-when-empty-seconds=-1\n"
     )
@@ -130,6 +130,10 @@ def main():
     )
     try:
         wait_for(lambda: "Done (" in (destination / "minecraft.log").read_text())
+        # Knockback and mob attacks invalidate movement and inventory assertions.
+        server.stdin.write("gamerule minecraft:spawn_mobs false\n")
+        server.stdin.write("kill @e[type=!minecraft:player]\n")
+        server.stdin.flush()
         container = run(
             "docker",
             "run",
@@ -324,6 +328,7 @@ def main():
                 check=True,
                 env={**os.environ, "SF_POV_TEST_TOKEN": token},
             )
+            wait_for(lambda: "<NativeProbeA> SoulFire clipboard validation" in (destination / "minecraft.log").read_text(), 15)
             subprocess.run(
                 ["bun", "scripts/validate-pov-session.ts", f"http://127.0.0.1:{api_port}",
                  instance, *bots, str(destination), "adaptive"],

@@ -24,6 +24,7 @@ import com.linecorp.armeria.common.websocket.WebSocketFrameType;
 import com.linecorp.armeria.common.websocket.WebSocketWriter;
 import com.linecorp.armeria.server.ServiceRequestContext;
 import com.linecorp.armeria.server.websocket.WebSocketService;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.soulfiremc.grpc.generated.InstancePermission;
 import com.soulfiremc.grpc.generated.PovFrame;
 import com.soulfiremc.grpc.generated.PovInputEvent;
@@ -130,16 +131,16 @@ public final class PovServiceImpl extends PovServiceGrpc.PovServiceImplBase {
           var minecraft = session.bot.minecraft();
           minecraft.keyboardHandler.setClipboard(request.getClipboard());
           if (request.getCaptured() && minecraft.gui.screen() != null) {
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(86, 0, 2));
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(86, 0, 2));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(InputConstants.KEY_V, 'v', InputConstants.MOD_CONTROL));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(InputConstants.KEY_V, 'v', InputConstants.MOD_CONTROL));
           }
         }
         var actions = new PovClientActions(text -> session.clipboard.set(new ClipboardUpdate(0, text)), session.openUrl::set);
         ScopedValue.where(PovClientActions.CURRENT, actions).run(() -> {
           if (request.getEscape()) {
             var minecraft = session.bot.minecraft();
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(256, 0, 0));
-            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(256, 0, 0));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 1, new KeyEvent(InputConstants.KEY_ESCAPE, 27, 0));
+            minecraft.keyboardHandler.keyPress(minecraft.getWindow().handle(), 0, new KeyEvent(InputConstants.KEY_ESCAPE, 27, 0));
           }
           session.bot.povInput().capture(request.getCaptured());
           for (var event : request.getEventsList()) session.bot.povInput().accept(event);
