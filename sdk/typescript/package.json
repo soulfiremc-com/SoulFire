@@ -1,6 +1,6 @@
 {
   "name": "@soulfiremc/sdk",
-  "version": "2.10.1",
+  "version": "2.11.0",
   "description": "TypeScript SDK for automating SoulFire bots over gRPC-Web.",
   "keywords": [
     "minecraft",

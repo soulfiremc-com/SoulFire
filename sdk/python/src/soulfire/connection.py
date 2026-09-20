@@ -7,7 +7,7 @@ from typing import Final
 from .plugin_api_pb2 import PluginApiDescriptor
 from .sdk_pb2 import SdkApiVersion, SdkHandshakeResponse, SdkIdentity
 
-SDK_VERSION: Final = "2.10.1"
+SDK_VERSION: Final = "2.11.0"
 SDK_API_VERSION: Final = SdkApiVersion(major=1, minor=0, patch=0)
 
 

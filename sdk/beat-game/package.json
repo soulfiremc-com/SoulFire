@@ -1,6 +1,6 @@
 {
   "name": "@soulfiremc/beat-game",
-  "version": "2.10.1",
+  "version": "2.11.0",
   "description": "Effect-first beat-the-game runner for the official SoulFire SDK.",
   "keywords": [
     "minecraft",
