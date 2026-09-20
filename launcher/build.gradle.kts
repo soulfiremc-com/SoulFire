@@ -27,9 +27,9 @@ dependencies {
   api("net.fabricmc:fabric-loader:0.19.5")
   api("net.fabricmc:mapping-io:0.9.1")
 
-  api("at.yawk.lz4:lz4-java:1.11.2")
+  api("at.yawk.lz4:lz4-java:1.11.3")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:7.6.0")
+  api("com.github.oshi:oshi-core:7.6.1")
   api("com.google.code.gson:gson:2.14.0")
   api("com.google.guava:failureaccess:1.0.3")
   api("com.google.guava:guava:33.7.1-jre")
@@ -74,13 +74,13 @@ dependencies {
       runtimeOnly("org.lwjgl:$module:3.4.3:natives-$platform")
     }
   }
-  api("org.slf4j:slf4j-api:2.0.18")
+  api("org.slf4j:slf4j-api:2.0.19")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.5")
-  api("org.checkerframework:checker-qual:4.2.2")
+  api("org.checkerframework:checker-qual:4.2.3")
 
   // Newest netty
-  api("io.netty:netty-all:4.2.17.Final")
+  api("io.netty:netty-all:4.2.18.Final")
 }
 
 val modProjectName = ":mod"
