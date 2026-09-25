@@ -32,12 +32,20 @@ public final class BotRotationController {
   private static final float DEFAULT_TOLERANCE = 2.0F;
   private final BotConnection connection;
   private @Nullable RotationRequest request;
+  private @Nullable RotationRequest combatRequest;
   private long requestRevision;
+  private long combatRequestRevision;
+  private long revisionSequence;
   private long lastAppliedRequestRevision = -1L;
   private int lastAppliedPlayerTick = Integer.MIN_VALUE;
 
   public BotRotationController(BotConnection connection) {
     this.connection = connection;
+  }
+
+  /// Combat aim is valid only for the current client tick.
+  public void beginTick() {
+    combatRequest = null;
   }
 
   public void lookAt(Vec3 target) {
@@ -46,7 +54,13 @@ public final class BotRotationController {
 
   public void lookAt(Vec3 target, float yawOffset, float pitchOffset) {
     request = new RotationRequest(new LookAtTarget(target, yawOffset, pitchOffset), DEFAULT_MAX_YAW_STEP, DEFAULT_MAX_PITCH_STEP, DEFAULT_TOLERANCE);
-    requestRevision++;
+    requestRevision = ++revisionSequence;
+  }
+
+  public void lookAtCombat(Vec3 target) {
+    combatRequest = new RotationRequest(new LookAtTarget(target, 0.0F, 0.0F),
+      DEFAULT_MAX_YAW_STEP, DEFAULT_MAX_PITCH_STEP, DEFAULT_TOLERANCE);
+    combatRequestRevision = ++revisionSequence;
   }
 
   public void lookHorizontallyAt(Vec3 target) {
@@ -59,7 +73,7 @@ public final class BotRotationController {
       DEFAULT_MAX_YAW_STEP,
       DEFAULT_MAX_PITCH_STEP,
       DEFAULT_TOLERANCE);
-    requestRevision++;
+    requestRevision = ++revisionSequence;
   }
 
   public void lookHorizontallyAtSmoothly(
@@ -73,7 +87,7 @@ public final class BotRotationController {
       DEFAULT_MAX_PITCH_STEP,
       tolerance
     );
-    requestRevision++;
+    requestRevision = ++revisionSequence;
   }
 
   public void lookTo(float yaw, float pitch) {
@@ -82,12 +96,13 @@ public final class BotRotationController {
       DEFAULT_MAX_YAW_STEP,
       DEFAULT_MAX_PITCH_STEP,
       DEFAULT_TOLERANCE);
-    requestRevision++;
+    requestRevision = ++revisionSequence;
   }
 
   public void clear() {
     request = null;
-    requestRevision++;
+    combatRequest = null;
+    requestRevision = ++revisionSequence;
   }
 
   public boolean isFacing(Vec3 target) {
@@ -112,10 +127,11 @@ public final class BotRotationController {
   }
 
   public void queueMouseMovement() {
-    var activeRequest = request;
+    var activeRequest = combatRequest != null ? combatRequest : request;
     if (activeRequest == null) {
       return;
     }
+    var activeRevision = combatRequest != null ? combatRequestRevision : requestRevision;
 
     var minecraft = connection.minecraft();
     var player = minecraft.player;
@@ -123,7 +139,7 @@ public final class BotRotationController {
       return;
     }
 
-    if (lastAppliedPlayerTick == player.tickCount && lastAppliedRequestRevision == requestRevision) {
+    if (lastAppliedPlayerTick == player.tickCount && lastAppliedRequestRevision == activeRevision) {
       return;
     }
 
@@ -138,7 +154,7 @@ public final class BotRotationController {
     var pitchStep = clampDelta(pitchDelta, activeRequest.maxPitchStep());
     queueMouseMovement(minecraft, yawStep, pitchStep);
     lastAppliedPlayerTick = player.tickCount;
-    lastAppliedRequestRevision = requestRevision;
+    lastAppliedRequestRevision = activeRevision;
   }
 
   private boolean isFacing(RotationAngles target, float tolerance) {

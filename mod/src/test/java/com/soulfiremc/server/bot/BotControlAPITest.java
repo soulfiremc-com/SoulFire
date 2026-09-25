@@ -141,7 +141,41 @@ final class BotControlAPITest {
     assertEquals(0, queued.ticks);
   }
 
-  private static final class RecordingTask implements ControlTask {
+  @Test
+  void combatOverlayRequiresEveryActiveTaskToCooperate() {
+    var control = new BotControlAPI();
+    var movement = new RecordingTask(ControlPriority.NORMAL, ControlResource.MOVEMENT, 2) {
+      @Override
+      public boolean allowsCombatOverlay() {
+        return true;
+      }
+    };
+    var inventory = new RecordingTask(ControlPriority.NORMAL, ControlResource.INVENTORY, 2);
+
+    assertTrue(control.allowsCombatOverlay());
+    assertTrue(control.tryStart(movement));
+    assertTrue(control.allowsCombatOverlay());
+    assertTrue(control.tryStart(inventory));
+    assertFalse(control.allowsCombatOverlay());
+    assertTrue(control.cancel(inventory));
+    assertTrue(control.allowsCombatOverlay());
+  }
+
+  @Test
+  void resourceFreeCombatMarkerDoesNotInterruptMovement() {
+    var control = new BotControlAPI();
+    var movement = new RecordingTask(ControlPriority.NORMAL, ControlResource.MOVEMENT, 2);
+    var target = new Object();
+    var marker = ControlTask.marker(null, ControlPriority.LOW, Set.of(), target);
+
+    assertTrue(control.tryStart(movement));
+    assertTrue(control.tryStart(marker));
+    assertSame(target, control.claimMarker(Object.class));
+    control.tick();
+    assertEquals(1, movement.ticks);
+  }
+
+  private static class RecordingTask implements ControlTask {
     private final ControlPriority priority;
     private final Set<ControlResource> resources;
     private final int requiredTicks;

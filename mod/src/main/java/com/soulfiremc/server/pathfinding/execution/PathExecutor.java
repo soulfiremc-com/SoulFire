@@ -84,6 +84,12 @@ public final class PathExecutor implements ControlTask {
     return RESOURCES;
   }
 
+  @Override
+  public boolean allowsCombatOverlay() {
+    return !isDone() && !awaitingPath && worldDataWait == null
+      && worldActionQueue.peek() instanceof MovementAction;
+  }
+
   private PathExecutor(
     BotConnection connection,
     LiveRouteFinder findPath,

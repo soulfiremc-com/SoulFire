@@ -83,7 +83,11 @@ public interface ControlTask {
   }
 
   static <M> MarkerTask<M> marker(@Nullable String description, ControlPriority priority, M marker) {
-    return new MarkerTask<>(description, priority, ControlResource.all(), marker);
+    return marker(description, priority, ControlResource.all(), marker);
+  }
+
+  static <M> MarkerTask<M> marker(@Nullable String description, ControlPriority priority, Set<ControlResource> resources, M marker) {
+    return new MarkerTask<>(description, priority, resources, marker);
   }
 
   static ActionStep action(Runnable runnable) {
@@ -108,6 +112,11 @@ public interface ControlTask {
 
   default Set<ControlResource> resources() {
     return ControlResource.all();
+  }
+
+  /// Allows KillAura to aim and attack while this task owns bot controls.
+  default boolean allowsCombatOverlay() {
+    return false;
   }
 
   default void onStarted() {

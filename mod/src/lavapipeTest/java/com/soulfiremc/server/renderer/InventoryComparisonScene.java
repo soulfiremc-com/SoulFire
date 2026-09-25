@@ -34,12 +34,15 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -139,12 +142,29 @@ final class InventoryComparisonScene {
       throw new UncheckedIOException(e);
     }
     var result = VulkanRenderer.renderWithResult(minecraft.level, minecraft.player, options);
+    var previousShouldRenderLevel = minecraft.gameRenderer.gameRenderState().shouldRenderLevel;
+    var icon = InventoryItemIconRenderer.render(minecraft, minecraft.level, minecraft.player,
+      new ItemStack(Items.DIAMOND));
+    try {
+      var image = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(icon.base64())));
+      ImageIO.write(image, "png", output.resolve("inventory-item-icon.png").toFile());
+      if ((image.getRGB(0, 0) >>> 24) != 0 || (image.getRGB(image.getWidth() - 1, 0) >>> 24) != 0
+        || (image.getRGB(0, image.getHeight() - 1) >>> 24) != 0
+        || (image.getRGB(image.getWidth() - 1, image.getHeight() - 1) >>> 24) != 0) {
+        throw new IllegalStateException("Inventory icon contains a rendered world background");
+      }
+      if (minecraft.gameRenderer.gameRenderState().shouldRenderLevel != previousShouldRenderLevel) {
+        throw new IllegalStateException("Inventory icon changed the world render state");
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
     try {
       Files.writeString(output.resolve("vulkan-trace.json"), new GsonBuilder().setPrettyPrinting().create().toJson(result.debugTrace()));
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
-    return result.image();
+    return VulkanRenderer.renderWithResult(minecraft.level, minecraft.player, options).image();
   }
 
   private static final class FixedInventoryScreen extends InventoryScreen {

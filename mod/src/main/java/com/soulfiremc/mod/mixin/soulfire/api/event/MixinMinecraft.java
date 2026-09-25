@@ -35,6 +35,7 @@ public class MixinMinecraft {
     if (connection == null) {
       return;
     }
+    connection.rotationControl().beginTick();
     connection.botControl().tick();
     SoulFireAPI.postEvent(new BotPreTickEvent(connection));
   }

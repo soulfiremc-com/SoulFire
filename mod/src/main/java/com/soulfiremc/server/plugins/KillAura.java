@@ -26,6 +26,7 @@ import com.soulfiremc.server.api.event.lifecycle.InstanceSettingsRegistryInitEve
 import com.soulfiremc.server.api.metadata.MetadataKey;
 import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.bot.ControlPriority;
+import com.soulfiremc.server.bot.ControlResource;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.settings.lib.SettingsObject;
 import com.soulfiremc.server.settings.lib.SettingsSource;
@@ -52,11 +53,13 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @InternalPluginClass
 public final class KillAura extends InternalPlugin {
   private static final MetadataKey<Integer> COOLDOWN = MetadataKey.of("kill_aura", "cooldown", Integer.class);
+  private static final double MOVING_ATTACK_REACH = 2.65D;
 
   public KillAura() {
     super(new PluginInfo(
@@ -78,7 +81,7 @@ public final class KillAura extends InternalPlugin {
 
     var control = bot.botControl();
     var localPlayer = bot.minecraft().player;
-    if (control.hasActiveTask()) {
+    if (!control.allowsCombatOverlay() || localPlayer == null) {
       return;
     }
 
@@ -114,10 +117,10 @@ public final class KillAura extends InternalPlugin {
       return;
     }
 
-    if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, new KillAuraMarker(target)))) {
+    if (!control.tryStart(ControlTask.marker("Kill aura", ControlPriority.LOW, Set.of(), new KillAuraMarker(target)))) {
       return;
     }
-    bot.rotationControl().lookAt(bestVisiblePoint);
+    bot.rotationControl().lookAtCombat(bestVisiblePoint);
   }
 
   @EventHandler
@@ -125,7 +128,8 @@ public final class KillAura extends InternalPlugin {
     var bot = event.connection();
     var localPlayer = bot.minecraft().player;
     var marker = bot.botControl().claimMarker(KillAuraMarker.class);
-    if (!bot.settingsSource().get(KillAuraSettings.ENABLE) || localPlayer == null) {
+    if (!bot.settingsSource().get(KillAuraSettings.ENABLE) || localPlayer == null
+      || !bot.botControl().allowsCombatOverlay()) {
       return;
     }
 
@@ -147,6 +151,10 @@ public final class KillAura extends InternalPlugin {
     }
 
     var hitRange = bot.settingsSource().get(KillAuraSettings.HIT_RANGE);
+    if (bot.botControl().hasActiveTask(ControlResource.MOVEMENT)) {
+      // The server can evaluate the attack before it receives this tick's movement packet.
+      hitRange = Math.min(hitRange, MOVING_ATTACK_REACH);
+    }
     var swingRange = bot.settingsSource().get(KillAuraSettings.SWING_RANGE);
     var hitResult = localPlayer.raycastHitResult(1.0F, localPlayer);
     if (hitResult instanceof EntityHitResult entityHitResult

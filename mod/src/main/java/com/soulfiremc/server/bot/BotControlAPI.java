@@ -91,6 +91,10 @@ public final class BotControlAPI {
     return activeTasks.stream().anyMatch(task -> task.resources().contains(resource));
   }
 
+  public synchronized boolean allowsCombatOverlay() {
+    return activeTasks.stream().allMatch(ControlTask::allowsCombatOverlay);
+  }
+
   public synchronized void replace(ControlTask task) {
     for (var conflict : conflicts(task)) {
       activeTasks.remove(conflict);

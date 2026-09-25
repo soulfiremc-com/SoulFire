@@ -214,15 +214,22 @@ public final class VulkanRenderer {
           resize(minecraft, width, height);
           window.setGuiScale(scale);
           var renderer = minecraft.gameRenderer;
-          renderer.extractWindow();
-          renderer.extractOptions();
-          var state = renderer.gameRenderState().guiRenderState;
-          state.reset();
-          state.clearColorOverride.zero();
-          draw.accept(new GuiGraphicsExtractor(minecraft, state, 0, 0));
-          renderer.render();
-          finishFrame(minecraft);
-          return readback(renderer.mainRenderTarget(), false);
+          var renderState = renderer.gameRenderState();
+          var previousShouldRenderLevel = renderState.shouldRenderLevel;
+          try {
+            renderState.shouldRenderLevel = false;
+            renderer.extractWindow();
+            renderer.extractOptions();
+            var state = renderState.guiRenderState;
+            state.reset();
+            state.clearColorOverride.zero();
+            draw.accept(new GuiGraphicsExtractor(minecraft, state, 0, 0));
+            renderer.render();
+            finishFrame(minecraft);
+            return readback(renderer.mainRenderTarget(), false);
+          } finally {
+            renderState.shouldRenderLevel = previousShouldRenderLevel;
+          }
         } finally {
           resize(minecraft, oldWidth, oldHeight);
           window.setGuiScale(oldScale);
