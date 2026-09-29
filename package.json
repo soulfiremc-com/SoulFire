@@ -1,7 +1,7 @@
 {
   "name": "soulfire-monorepo",
   "private": true,
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "sdk/beat-game",
     "sdk/typescript"
@@ -16,7 +16,7 @@
     "sdk:check": "bun run sdk:generate && bun run sdk:lint-proto && bun run --filter @soulfiremc/sdk check"
   },
   "devDependencies": {
-    "@bufbuild/buf": "1.72.0",
-    "@bufbuild/protoc-gen-es": "2.14.0"
+    "@bufbuild/buf": "1.73.0",
+    "@bufbuild/protoc-gen-es": "2.15.0"
   }
 }

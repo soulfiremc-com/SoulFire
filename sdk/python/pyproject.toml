@@ -13,7 +13,7 @@ authors = [
   { name = "SoulFire" },
 ]
 dependencies = [
-  "connectrpc>=0.11.1,<0.12",
+  "connectrpc>=0.12.1,<0.13",
   "googleapis-common-protos>=1.70,<2",
   "protobuf>=6.31.1,<8",
 ]
