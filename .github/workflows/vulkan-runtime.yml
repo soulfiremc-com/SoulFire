@@ -37,7 +37,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" build/vulkan-runtime
       - name: Set up Windows build tools
         if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows'
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: ${{ matrix.msystem }}
           update: true
