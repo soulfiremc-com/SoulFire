@@ -21,6 +21,7 @@ import com.soulfiremc.test.utils.TestBlockAccessorBuilder;
 import com.soulfiremc.test.utils.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -128,5 +129,33 @@ final class SFBlockHelpersTest {
     assertTrue(SFBlockHelpers.breaksWhenFallenOn(Blocks.FARMLAND.defaultBlockState()));
     assertFalse(SFBlockHelpers.breaksWhenFallenOn(Blocks.DIRT_PATH.defaultBlockState()));
     assertFalse(SFBlockHelpers.breaksWhenFallenOn(Blocks.STONE.defaultBlockState()));
+  }
+
+  @Test
+  void findsLavaAndFireAroundTheFeetOrTheHead() {
+    var feet = new BlockPos(0, 3, 0);
+    var fallingLava = Blocks.LAVA.defaultBlockState().setValue(LiquidBlock.LEVEL, 8);
+
+    var beside = new TestBlockAccessorBuilder();
+    beside.setBlockStateAt(0, 3, -1, fallingLava);
+    assertTrue(SFBlockHelpers.isNearLavaOrFire(beside.build(), feet));
+
+    var atTheCorner = new TestBlockAccessorBuilder();
+    atTheCorner.setBlockAt(1, 4, 1, Blocks.FIRE);
+    assertTrue(SFBlockHelpers.isNearLavaOrFire(atTheCorner.build(), feet));
+  }
+
+  @Test
+  void ignoresLavaOutOfReachAndBlocksThatDontBurn() {
+    var feet = new BlockPos(0, 3, 0);
+
+    // Below the floor, above the head, two blocks away; and blocks that only slow or prick
+    var away = new TestBlockAccessorBuilder();
+    away.setBlockAt(1, 2, 0, Blocks.LAVA);
+    away.setBlockAt(0, 5, -1, Blocks.LAVA);
+    away.setBlockAt(2, 3, 0, Blocks.LAVA);
+    away.setBlockAt(-1, 3, 0, Blocks.COBWEB);
+    away.setBlockAt(0, 4, 1, Blocks.CACTUS);
+    assertFalse(SFBlockHelpers.isNearLavaOrFire(away.build(), feet));
   }
 }
