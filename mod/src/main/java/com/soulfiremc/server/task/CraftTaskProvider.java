@@ -189,8 +189,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
     private @Nullable PathExecutor activePath;
     private Stage stage;
     private int stageTicks;
-    private int syncStateId;
-    private int syncStableTicks;
+    private final MenuSync menuSync = new MenuSync();
     private int crafted;
 
     private CraftControl(
@@ -269,8 +268,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
         ContainerInput.QUICK_MOVE,
         player
       );
-      syncStateId = menu.getStateId();
-      syncStableTicks = 0;
+      menuSync.restart(menu);
       transition(
         Stage.WAIT_FOR_INVENTORY_SYNC,
         "Making offhand ingredients accessible"
@@ -286,15 +284,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
           )
           .asRuntimeException();
       }
-      var stateId = menu.getStateId();
-      if (stateId != syncStateId) {
-        syncStateId = stateId;
-        syncStableTicks = 0;
-      } else {
-        syncStableTicks++;
-      }
-
-      if (syncStableTicks >= INVENTORY_SYNC_TICKS) {
+      if (menuSync.settled(menu)) {
         var offhand = menu.getSlot(InventoryMenu.SHIELD_SLOT).getItem();
         if (!offhand.isEmpty() && recipeAccepts(offhand)) {
           throw Status.RESOURCE_EXHAUSTED
@@ -533,8 +523,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
           .asRuntimeException();
       }
 
-      syncStateId = menu.getStateId();
-      syncStableTicks = 0;
+      menuSync.awaitAnswer(menu);
       transition(
         Stage.WAIT_FOR_INGREDIENT_SYNC,
         "Synchronizing recipe ingredients"
@@ -544,15 +533,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
     private void waitForIngredientSync() {
       var player = requirePlayer();
       var menu = requireCraftingMenu(player.containerMenu);
-      var stateId = menu.getStateId();
-      if (stateId != syncStateId) {
-        syncStateId = stateId;
-        syncStableTicks = 0;
-      } else {
-        syncStableTicks++;
-      }
-
-      if (syncStableTicks >= INVENTORY_SYNC_TICKS) {
+      if (menuSync.settled(menu)) {
         var carried = menu.getCarried();
         if (!carried.isEmpty()) {
           var target = SFInventoryHelpers.playerInventorySlots(menu)
@@ -571,8 +552,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
             ContainerInput.PICKUP,
             player
           );
-          syncStateId = menu.getStateId();
-          syncStableTicks = 0;
+          menuSync.restart(menu);
         } else {
           transition(Stage.PLACE_INGREDIENTS, "Placing recipe ingredients");
           return;
@@ -759,12 +739,22 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
         ContainerInput.PICKUP,
         player
       );
+      menuSync.awaitAnswer(menu);
       transition(Stage.DEPOSIT_RESULT, "Storing crafted result");
     }
 
     private void depositResult() {
       var player = requirePlayer();
       var menu = requireCraftingMenu(player.containerMenu);
+      if (!menuSync.settled(menu)) {
+        stageTicks++;
+        if (stageTicks > MENU_TIMEOUT_TICKS) {
+          throw Status.DEADLINE_EXCEEDED
+            .withDescription("Timed out taking the crafted result")
+            .asRuntimeException();
+        }
+        return;
+      }
       var carried = menu.getCarried();
       if (carried.isEmpty()) {
         crafted++;
@@ -973,6 +963,47 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
     @Override
     public String description() {
       return "Craft recipe";
+    }
+  }
+
+  /// Tells when a menu's state id has settled after the bot's clicks.
+  ///
+  /// The server answers each change to a crafting grid with a new state id.
+  /// Until that answer arrives, the menu shows the bot's own prediction, and
+  /// a click sent meanwhile carries a stale state id: the server answers it
+  /// with the whole menu as it was after that click, cursor included.
+  static final class MenuSync {
+    private int stateId;
+    private int stableTicks;
+    private int clickStateId;
+    private boolean awaitingAnswer;
+
+    /// Waits for the state id to stay the same again.
+    void restart(AbstractContainerMenu menu) {
+      stateId = menu.getStateId();
+      stableTicks = 0;
+    }
+
+    /// Waits for the answer to clicks that changed the crafting grid.
+    void awaitAnswer(AbstractContainerMenu menu) {
+      restart(menu);
+      clickStateId = stateId;
+      awaitingAnswer = true;
+    }
+
+    /// Called once a tick.
+    boolean settled(AbstractContainerMenu menu) {
+      var current = menu.getStateId();
+      if (current != stateId) {
+        stateId = current;
+        stableTicks = 0;
+      } else {
+        stableTicks++;
+      }
+      if (current != clickStateId) {
+        awaitingAnswer = false;
+      }
+      return !awaitingAnswer && stableTicks >= INVENTORY_SYNC_TICKS;
     }
   }
 

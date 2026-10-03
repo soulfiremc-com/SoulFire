@@ -22,6 +22,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -32,6 +33,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 final class CraftTaskProviderTest {
   @BeforeAll
@@ -57,6 +60,50 @@ final class CraftTaskProviderTest {
       List.of(itemStack(Items.COBBLESTONE)),
       itemStack(Items.DIRT)
     ));
+  }
+
+  @Test
+  void settlesOnceTheStateIdStaysTheSame() {
+    var menu = mock(AbstractContainerMenu.class);
+    when(menu.getStateId()).thenReturn(5);
+    var sync = new CraftTaskProvider.MenuSync();
+    sync.restart(menu);
+
+    assertFalse(sync.settled(menu));
+    assertTrue(sync.settled(menu));
+  }
+
+  @Test
+  void waitsForTheServersAnswerToGridClicks() {
+    var menu = mock(AbstractContainerMenu.class);
+    when(menu.getStateId()).thenReturn(5);
+    var sync = new CraftTaskProvider.MenuSync();
+    sync.awaitAnswer(menu);
+
+    for (var tick = 0; tick < 10; tick++) {
+      assertFalse(sync.settled(menu));
+    }
+    when(menu.getStateId()).thenReturn(6);
+    assertFalse(sync.settled(menu));
+    assertFalse(sync.settled(menu));
+    assertTrue(sync.settled(menu));
+  }
+
+  @Test
+  void waitsForTheStateIdToSettleAgainAfterARestart() {
+    var menu = mock(AbstractContainerMenu.class);
+    when(menu.getStateId()).thenReturn(5);
+    var sync = new CraftTaskProvider.MenuSync();
+    sync.awaitAnswer(menu);
+    when(menu.getStateId()).thenReturn(6);
+    for (var tick = 0; tick < 3; tick++) {
+      sync.settled(menu);
+    }
+    assertTrue(sync.settled(menu));
+
+    sync.restart(menu);
+    assertFalse(sync.settled(menu));
+    assertTrue(sync.settled(menu));
   }
 
   private static ItemStack itemStack(Item item) {
