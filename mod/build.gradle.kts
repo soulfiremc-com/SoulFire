@@ -143,7 +143,7 @@ dependencies {
   api(libs.fastutil)
   api(libs.caffeine)
   api(libs.jetbrains.annotations)
-  api("org.checkerframework:checker-qual:4.2.3")
+  api("org.checkerframework:checker-qual:4.3.0")
   api(libs.immutables.gson)
 
   api(libs.reflect)
