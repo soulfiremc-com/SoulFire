@@ -633,7 +633,10 @@ class SoulFireContainer:
                 GetContainerSnapshotRequest(scope=self._scope), timeout_ms=timeout_ms
             ),
         )
-        if response.container.container_id != self._snapshot.container_id:
+        if (
+            response.container.container_id != self._snapshot.container_id
+            or response.container.menu_id != self._snapshot.menu_id
+        ):
             self._closed = True
             return (
                 yield from fail(
@@ -728,7 +731,12 @@ class SoulFireContainer:
                     selector=selector,
                     count=count,
                     to=to_area,
-                    expected_revision=self._snapshot.revision,
+                    # Servers that predate menu ids (0) check the revision instead.
+                    **(
+                        {"expected_revision": self._snapshot.revision}
+                        if self._snapshot.menu_id == 0
+                        else {"menu_id": self._snapshot.menu_id}
+                    ),
                     **_optional(idempotency_key, "idempotency_key"),
                     **{"from": cast(Any, from_area)},
                 ),

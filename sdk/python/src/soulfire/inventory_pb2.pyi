@@ -83,7 +83,7 @@ class InventorySlotSnapshot(_message.Message):
     def __init__(self, slot: _Optional[int] = ..., area: _Optional[_Union[InventoryArea, str]] = ..., item: _Optional[_Union[_domain_pb2.ItemStackSnapshot, _Mapping]] = ..., may_place: bool = ..., may_pickup: bool = ...) -> None: ...
 
 class ContainerSnapshot(_message.Message):
-    __slots__ = ("container_id", "state_id", "revision", "container_type", "title", "layout", "slots", "carried", "selected_hotbar_slot", "path_building_block_count")
+    __slots__ = ("container_id", "state_id", "revision", "container_type", "title", "layout", "slots", "carried", "selected_hotbar_slot", "path_building_block_count", "menu_id")
     CONTAINER_ID_FIELD_NUMBER: _ClassVar[int]
     STATE_ID_FIELD_NUMBER: _ClassVar[int]
     REVISION_FIELD_NUMBER: _ClassVar[int]
@@ -94,6 +94,7 @@ class ContainerSnapshot(_message.Message):
     CARRIED_FIELD_NUMBER: _ClassVar[int]
     SELECTED_HOTBAR_SLOT_FIELD_NUMBER: _ClassVar[int]
     PATH_BUILDING_BLOCK_COUNT_FIELD_NUMBER: _ClassVar[int]
+    MENU_ID_FIELD_NUMBER: _ClassVar[int]
     container_id: int
     state_id: int
     revision: int
@@ -104,7 +105,8 @@ class ContainerSnapshot(_message.Message):
     carried: _domain_pb2.ItemStackSnapshot
     selected_hotbar_slot: int
     path_building_block_count: int
-    def __init__(self, container_id: _Optional[int] = ..., state_id: _Optional[int] = ..., revision: _Optional[int] = ..., container_type: _Optional[str] = ..., title: _Optional[_Union[_domain_pb2.TextComponent, _Mapping]] = ..., layout: _Optional[_Union[_bot_pb2.ContainerLayout, _Mapping]] = ..., slots: _Optional[_Iterable[_Union[InventorySlotSnapshot, _Mapping]]] = ..., carried: _Optional[_Union[_domain_pb2.ItemStackSnapshot, _Mapping]] = ..., selected_hotbar_slot: _Optional[int] = ..., path_building_block_count: _Optional[int] = ...) -> None: ...
+    menu_id: int
+    def __init__(self, container_id: _Optional[int] = ..., state_id: _Optional[int] = ..., revision: _Optional[int] = ..., container_type: _Optional[str] = ..., title: _Optional[_Union[_domain_pb2.TextComponent, _Mapping]] = ..., layout: _Optional[_Union[_bot_pb2.ContainerLayout, _Mapping]] = ..., slots: _Optional[_Iterable[_Union[InventorySlotSnapshot, _Mapping]]] = ..., carried: _Optional[_Union[_domain_pb2.ItemStackSnapshot, _Mapping]] = ..., selected_hotbar_slot: _Optional[int] = ..., path_building_block_count: _Optional[int] = ..., menu_id: _Optional[int] = ...) -> None: ...
 
 class InventoryScope(_message.Message):
     __slots__ = ("instance_id", "bot_id")
@@ -231,7 +233,7 @@ class MoveInventoryItemRequest(_message.Message):
     def __init__(self, scope: _Optional[_Union[InventoryScope, _Mapping]] = ..., source_slot: _Optional[int] = ..., destination_slot: _Optional[int] = ..., count: _Optional[int] = ..., expected_revision: _Optional[int] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class TransferItemsRequest(_message.Message):
-    __slots__ = ("scope", "selector", "count", "to", "expected_revision", "idempotency_key")
+    __slots__ = ("scope", "selector", "count", "to", "expected_revision", "idempotency_key", "menu_id")
     SCOPE_FIELD_NUMBER: _ClassVar[int]
     SELECTOR_FIELD_NUMBER: _ClassVar[int]
     COUNT_FIELD_NUMBER: _ClassVar[int]
@@ -239,13 +241,15 @@ class TransferItemsRequest(_message.Message):
     TO_FIELD_NUMBER: _ClassVar[int]
     EXPECTED_REVISION_FIELD_NUMBER: _ClassVar[int]
     IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    MENU_ID_FIELD_NUMBER: _ClassVar[int]
     scope: InventoryScope
     selector: ItemSelector
     count: int
     to: InventoryArea
     expected_revision: int
     idempotency_key: str
-    def __init__(self, scope: _Optional[_Union[InventoryScope, _Mapping]] = ..., selector: _Optional[_Union[ItemSelector, _Mapping]] = ..., count: _Optional[int] = ..., to: _Optional[_Union[InventoryArea, str]] = ..., expected_revision: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., **kwargs) -> None: ...
+    menu_id: int
+    def __init__(self, scope: _Optional[_Union[InventoryScope, _Mapping]] = ..., selector: _Optional[_Union[ItemSelector, _Mapping]] = ..., count: _Optional[int] = ..., to: _Optional[_Union[InventoryArea, str]] = ..., expected_revision: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., menu_id: _Optional[int] = ..., **kwargs) -> None: ...
 
 class TossItemsRequest(_message.Message):
     __slots__ = ("scope", "selector", "count", "expected_revision", "idempotency_key")

@@ -58,25 +58,32 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /// Semantic, revision-aware inventory and container operations.
 public final class InventoryServiceImpl
   extends InventoryServiceGrpc.InventoryServiceImplBase {
   private static final Duration MUTATION_TIMEOUT = Duration.ofSeconds(10);
+  private static final Map<AbstractContainerMenu, Long> MENU_IDS =
+    Collections.synchronizedMap(new WeakHashMap<>());
+  private static final AtomicLong NEXT_MENU_ID = new AtomicLong();
   private static final Set<ControlResource> INVENTORY_RESOURCES = Set.of(
     ControlResource.INVENTORY,
     ControlResource.CONTAINER
@@ -267,13 +274,16 @@ public final class InventoryServiceImpl
       fingerprint(request.toByteArray()),
       request.getExpectedRevision(),
       "SDK transfer inventory items",
-      context -> transfer(
-        context,
-        request.getSelector(),
-        request.getCount(),
-        requireArea(request.getFrom(), "from"),
-        requireArea(request.getTo(), "to")
-      ),
+      context -> {
+        requireMenu(context.menu, request);
+        transfer(
+          context,
+          request.getSelector(),
+          request.getCount(),
+          requireArea(request.getFrom(), "from"),
+          requireArea(request.getTo(), "to")
+        );
+      },
       responseObserver
     );
   }
@@ -613,6 +623,7 @@ public final class InventoryServiceImpl
       .setContainerId(menu.containerId)
       .setStateId(menu.getStateId())
       .setRevision(revision(context))
+      .setMenuId(menuId(menu))
       .setContainerType(context.layout.getContainerType())
       .setTitle(TextComponent.newBuilder()
         .setPlainText(context.layout.getTitle()))
@@ -646,6 +657,11 @@ public final class InventoryServiceImpl
       builder.setCarried(MinecraftDomainMapper.item(menu.getCarried()));
     }
     return builder.build();
+  }
+
+  /// Never reused, unlike containerId, which restarts with each new player.
+  static long menuId(AbstractContainerMenu menu) {
+    return MENU_IDS.computeIfAbsent(menu, _ -> NEXT_MENU_ID.incrementAndGet());
   }
 
   private static long revision(Context context) {
@@ -1720,6 +1736,17 @@ public final class InventoryServiceImpl
       );
     }
     return menu.getSlot(index);
+  }
+
+  static void requireMenu(
+    AbstractContainerMenu menu,
+    TransferItemsRequest request
+  ) {
+    if (request.hasMenuId() && menuId(menu) != request.getMenuId()) {
+      throw Status.ABORTED
+        .withDescription("The open menu changed before the transfer")
+        .asRuntimeException();
+    }
   }
 
   private static void requireRevision(Context context, long expected) {

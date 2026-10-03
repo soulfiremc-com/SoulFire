@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ContainerSnapshotSchema,
+  GetContainerSnapshotResponseSchema,
   InventoryArea,
   InventoryItemRecommendationSchema,
   InventoryMutationResponseSchema,
@@ -15,7 +16,10 @@ import {
   type RankInventoryItemsRequest,
   type TransferItemsRequest,
 } from "../src/generated/soulfire/inventory_pb.js";
-import { SoulFireInventory } from "../src/inventory.js";
+import {
+  SoulFireContainerClosedError,
+  SoulFireInventory,
+} from "../src/inventory.js";
 
 describe("SoulFireContainer", () => {
   it("chains revision-safe deposit and withdraw operations", () =>
@@ -61,6 +65,69 @@ describe("SoulFireContainer", () => {
           expect(container.closed).toBe(true);
         }),
       ),
+    ));
+
+  it("binds deposit and withdraw to the open menu, not its revision", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const transfers: TransferItemsRequest[] = [];
+        const transport = createRouterTransport(({ service }) => {
+          service(InventoryService, {
+            openBlockContainer() {
+              return response(42, 10n, 7n);
+            },
+            transferItems(request) {
+              transfers.push(request);
+              return response(42, 20n, 7n);
+            },
+          });
+        });
+        const inventory = new SoulFireInventory(
+          "instance-id",
+          "bot-id",
+          createClient(InventoryService, transport),
+          (options) => options,
+        );
+        const container = yield* inventory.open({ x: 1, y: 64, z: 2 });
+        yield* container.deposit({ itemIds: ["minecraft:cobblestone"] }, 32);
+        yield* container.withdraw({ itemIds: ["minecraft:bread"] }, 4);
+        expect(transfers.map((t) => [t.menuId, t.expectedRevision])).toEqual([
+          [7n, 0n],
+          [7n, 0n],
+        ]);
+      }),
+    ));
+
+  it("treats another menu with the same container id as closed", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = createRouterTransport(({ service }) => {
+          service(InventoryService, {
+            openBlockContainer() {
+              return response(1, 10n, 7n);
+            },
+            getContainerSnapshot() {
+              return create(GetContainerSnapshotResponseSchema, {
+                container: create(ContainerSnapshotSchema, {
+                  containerId: 1,
+                  revision: 10n,
+                  menuId: 8n,
+                }),
+              });
+            },
+          });
+        });
+        const inventory = new SoulFireInventory(
+          "instance-id",
+          "bot-id",
+          createClient(InventoryService, transport),
+          (options) => options,
+        );
+        const container = yield* inventory.open({ x: 1, y: 64, z: 2 });
+        const error = yield* Effect.flip(container.refresh());
+        expect(error.cause).toBeInstanceOf(SoulFireContainerClosedError);
+        expect(container.closed).toBe(true);
+      }),
     ));
 
   it("requests an explainable best tool for the exact target block", () =>
@@ -122,11 +189,12 @@ describe("SoulFireContainer", () => {
     ));
 });
 
-function response(containerId: number, revision: bigint) {
+function response(containerId: number, revision: bigint, menuId = 0n) {
   return create(InventoryMutationResponseSchema, {
     container: create(ContainerSnapshotSchema, {
       containerId,
       revision,
+      menuId,
     }),
   });
 }

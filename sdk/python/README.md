@@ -292,8 +292,8 @@ container = yield from bot.inventory.open(chest_position)
 yield from container.withdraw(ItemSelector(item_ids=["minecraft:bread"]), 16)
 ```
 
-Container operations carry the current revision. A replaced menu produces a
-typed `SoulFireContainerClosedError`. Cleanup failures remain visible as defects.
+Container transfers carry the open menu's id and fail once another menu has
+replaced it. `refresh()` then raises a typed `SoulFireContainerClosedError`. Cleanup failures remain visible as defects.
 
 ## Compose behaviors
 

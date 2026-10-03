@@ -109,6 +109,37 @@ async def test_effect_container_chains_revision_safe_transfers() -> None:
     await run_async(scoped(workflow).or_die())
 
 
+class MenuIdInventoryService(SyncInventoryService):
+    async def open_block_container(
+        self, _request: object, **_kwargs: object
+    ) -> InventoryMutationResponse:
+        return _response(42, 10, menu_id=7)
+
+    async def transfer_items(
+        self, request: TransferItemsRequest, **_kwargs: object
+    ) -> InventoryMutationResponse:
+        self.transfers.append(request)
+        return _response(42, 20, menu_id=7)
+
+
+async def test_effect_container_binds_transfers_to_the_open_menu() -> None:
+
+    @gen
+    def workflow():
+        yield from succeed(None)
+        service = MenuIdInventoryService()
+        inventory = SoulFireInventory(
+            "instance-id", "bot-id", cast(InventoryServiceClient, service), lambda headers: headers
+        )
+        container = yield from inventory.open(BlockPosition(x=1, y=64, z=2))
+        yield from container.deposit(ItemSelector(item_ids=["minecraft:cobblestone"]), 32)
+        yield from container.withdraw(ItemSelector(item_ids=["minecraft:bread"]), 4)
+        assert [request.menu_id for request in service.transfers] == [7, 7]
+        assert [request.expected_revision for request in service.transfers] == [0, 0]
+
+    await run_async(scoped(workflow).or_die())
+
+
 async def test_effect_best_tool_preserves_ranking_policy() -> None:
 
     @gen
@@ -160,6 +191,39 @@ async def test_container_detects_replaced_menu() -> None:
     await run_async(scoped(workflow).or_die())
 
 
+class SameIdOtherMenuService(AsyncInventoryService):
+    async def open_block_container(
+        self, _request: object, **_kwargs: object
+    ) -> InventoryMutationResponse:
+        return _response(1, 10, menu_id=7)
+
+    async def get_container_snapshot(
+        self, _request: object, **_kwargs: object
+    ) -> GetContainerSnapshotResponse:
+        return GetContainerSnapshotResponse(
+            container=ContainerSnapshot(container_id=1, revision=10, menu_id=8)
+        )
+
+
+@pytest.mark.asyncio
+async def test_container_detects_replaced_menu_with_the_same_container_id() -> None:
+
+    @gen
+    def workflow():
+        yield from succeed(None)
+        service = SameIdOtherMenuService()
+        inventory = SoulFireInventory(
+            "instance-id", "bot-id", cast(InventoryServiceClient, service), lambda headers: headers
+        )
+        container = yield from inventory.open(BlockPosition(x=1, y=64, z=2))
+        result = yield from container.refresh().exit()
+        assert isinstance(result, Failure)
+        assert isinstance(result.error, SoulFireContainerClosedError)
+        assert container.closed
+
+    await run_async(scoped(workflow).or_die())
+
+
 @pytest.mark.asyncio
 async def test_best_food_uses_food_recommendation_kind() -> None:
 
@@ -182,9 +246,9 @@ async def test_best_food_uses_food_recommendation_kind() -> None:
     await run_async(scoped(workflow).or_die())
 
 
-def _response(container_id: int, revision: int) -> InventoryMutationResponse:
+def _response(container_id: int, revision: int, menu_id: int = 0) -> InventoryMutationResponse:
     return InventoryMutationResponse(
-        container=ContainerSnapshot(container_id=container_id, revision=revision)
+        container=ContainerSnapshot(container_id=container_id, revision=revision, menu_id=menu_id)
     )
 
 

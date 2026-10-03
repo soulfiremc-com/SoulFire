@@ -90,7 +90,8 @@ export class SoulFireContainer {
       );
       if (
         response.container === undefined ||
-        response.container.containerId !== this.current.containerId
+        response.container.containerId !== this.current.containerId ||
+        response.container.menuId !== this.current.menuId
       ) {
         this.#closed = true;
         return yield* Effect.fail(
@@ -107,7 +108,8 @@ export class SoulFireContainer {
 
   /**
    * Moves `count` items matching `selector` from the player's inventory into
-   * the container. Fails if fewer are available or they don't fit.
+   * the container. Fails if fewer are available, they don't fit, or another
+   * menu replaced the container.
    */
   public deposit(
     selector: InventoryRequest<typeof TransferItemsRequestSchema>["selector"],
@@ -125,7 +127,8 @@ export class SoulFireContainer {
 
   /**
    * Moves `count` items matching `selector` from the container into the
-   * player's inventory. Fails if fewer are available or they don't fit.
+   * player's inventory. Fails if fewer are available, they don't fit, or
+   * another menu replaced the container.
    */
   public withdraw(
     selector: InventoryRequest<typeof TransferItemsRequestSchema>["selector"],
@@ -189,7 +192,10 @@ export class SoulFireContainer {
             count,
             from,
             to,
-            expectedRevision: this.current.revision,
+            // Servers that predate menu ids (0) check the revision instead.
+            ...(this.current.menuId === 0n
+              ? { expectedRevision: this.current.revision }
+              : { menuId: this.current.menuId }),
             ...(options.idempotencyKey === undefined
               ? {}
               : { idempotencyKey: options.idempotencyKey }),
@@ -403,7 +409,7 @@ export class SoulFireInventory {
   /**
    * Moves `count` items matching `selector` from area `from` to area `to`
    * (`PLAYER` is main and hotbar). Fails if fewer are available or they don't
-   * fit.
+   * fit, or if `menuId` is set and that menu isn't open.
    */
   public transfer(
     request: InventoryRequest<typeof TransferItemsRequestSchema>,
