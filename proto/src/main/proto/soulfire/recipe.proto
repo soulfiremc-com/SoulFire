@@ -21,6 +21,8 @@ message IngredientChoice {
 
 message RecipeSnapshot {
   string recipe_id = 1;
+  // Display type: crafting_shaped, crafting_shapeless, furnace (any cooking
+  // recipe), stonecutter or smithing, with the minecraft: namespace.
   string recipe_type = 2;
   optional string group = 3;
   repeated IngredientChoice ingredients = 4;
@@ -33,6 +35,7 @@ message RecipeSnapshot {
 message ListRecipesRequest {
   optional string result_item_id = 1;
   optional ItemSelector ingredient = 2;
+  // Values of RecipeSnapshot.recipe_type.
   repeated string recipe_types = 3;
   uint32 page_size = 4;
   string page_token = 5;
@@ -65,7 +68,8 @@ message CanCraftResponse {
 }
 
 message CraftTask {
-  // Recipe display ID returned by ListRecipes, such as "display:42".
+  // Recipe display ID returned by ListRecipes, such as "display:42". It must
+  // be a minecraft:crafting_shaped or minecraft:crafting_shapeless recipe.
   string recipe_id = 1;
   // Number of recipe operations to perform, not the number of output items.
   int32 count = 2;

@@ -2480,8 +2480,10 @@ export class SoulFireTasks {
   }
 
   /**
-   * `recipeId` comes from `recipes.list`, e.g. "display:42". `count` is recipe
-   * operations, not output items; it defaults to 1, at most 4096.
+   * `recipeId` comes from `recipes.list`, e.g. "display:42", and must be a
+   * `minecraft:crafting_shaped` or `minecraft:crafting_shapeless` recipe.
+   * `count` is recipe operations, not output items; it defaults to 1, at most
+   * 4096.
    */
   public craft(
     recipeId: string,
@@ -2507,8 +2509,10 @@ export class SoulFireTasks {
   }
 
   /**
-   * `recipeId` comes from `recipes.list`, e.g. "display:42". `count` is recipe
-   * operations, not output items; it defaults to 1, at most 4096.
+   * `recipeId` comes from `recipes.list`, e.g. "display:42", and must be a
+   * `minecraft:crafting_shaped` or `minecraft:crafting_shapeless` recipe.
+   * `count` is recipe operations, not output items; it defaults to 1, at most
+   * 4096.
    */
   public runCraft(
     recipeId: string,

@@ -46,6 +46,7 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
@@ -106,13 +107,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
         .asRuntimeException();
     }
     var entry = RecipeSupport.find(context.bot(), input.getRecipeId());
-    if (!RecipeSupport.isCraftingRecipe(entry)) {
-      throw Status.FAILED_PRECONDITION
-        .withDescription(
-          "CraftTask supports shaped and shapeless crafting recipes"
-        )
-        .asRuntimeException();
-    }
+    requireCraftingRecipe(entry);
     if (entry.craftingRequirements().isEmpty()) {
       throw Status.FAILED_PRECONDITION
         .withDescription(
@@ -192,6 +187,7 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
     private int syncStateId;
     private int syncStableTicks;
     private int crafted;
+    private boolean ingredientsChecked;
 
     private CraftControl(
       BotTaskContext context,
@@ -220,6 +216,16 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
         return;
       }
       try {
+        if (!ingredientsChecked) {
+          // On the first tick, not in start(): a queued task runs later.
+          requireIngredients(
+            recipe.craftingRequirements().orElseThrow(),
+            availableIngredients(requirePlayer()),
+            targetCount,
+            "display:" + recipe.id().index()
+          );
+          ingredientsChecked = true;
+        }
         if (crafted >= targetCount) {
           complete();
           return;
@@ -1006,6 +1012,72 @@ public final class CraftTaskProvider implements BotTaskProvider<CraftTask> {
     private boolean matches(ItemStack stack) {
       return ingredientMatches(acceptedStacks, stack);
     }
+  }
+
+  static void requireCraftingRecipe(RecipeDisplayEntry entry) {
+    if (!RecipeSupport.isCraftingRecipe(entry)) {
+      throw Status.FAILED_PRECONDITION
+        .withDescription(
+          "display:%d is a %s recipe; CraftTask supports minecraft:crafting_shaped and minecraft:crafting_shapeless recipes"
+            .formatted(entry.id().index(), RecipeSupport.type(entry))
+        )
+        .asRuntimeException();
+    }
+  }
+
+  /// Stacks the task can use: the inventory, the off-hand and the crafting grids.
+  private static List<ItemStack> availableIngredients(
+    net.minecraft.client.player.LocalPlayer player
+  ) {
+    var stacks = new ArrayList<>(player.getInventory().getNonEquipmentItems());
+    stacks.add(player.getOffhandItem());
+    player.inventoryMenu.getInputGridSlots()
+      .forEach(slot -> stacks.add(slot.getItem()));
+    if (player.containerMenu instanceof CraftingMenu menu) {
+      menu.getInputGridSlots().forEach(slot -> stacks.add(slot.getItem()));
+    }
+    return stacks;
+  }
+
+  /// Fails unless the stacks hold the ingredients for `count` crafts.
+  static void requireIngredients(
+    List<Ingredient> requirements,
+    List<ItemStack> available,
+    int count,
+    String recipeId
+  ) {
+    var maximum = maximumCrafts(requirements, available);
+    if (maximum < count) {
+      throw Status.FAILED_PRECONDITION
+        .withDescription(
+          "Not enough ingredients for %s: count is %d, the bot has enough for %d"
+            .formatted(recipeId, count, maximum)
+        )
+        .asRuntimeException();
+    }
+  }
+
+  /// How many crafts the stacks cover, one craft at a time, so each craft may use another
+  /// alternative of an ingredient. Every set of ingredients needs that many accepted items
+  /// per ingredient in the set (Hall's theorem), so the answer is the smallest such ratio.
+  private static int maximumCrafts(
+    List<Ingredient> requirements,
+    List<ItemStack> available
+  ) {
+    var maximum = Long.MAX_VALUE;
+    for (var set = 1; set < 1 << requirements.size(); set++) {
+      var supply = 0L;
+      for (var stack : available) {
+        for (var index = 0; index < requirements.size(); index++) {
+          if ((set & 1 << index) != 0 && requirements.get(index).test(stack)) {
+            supply += stack.getCount();
+            break;
+          }
+        }
+      }
+      maximum = Math.min(maximum, supply / Integer.bitCount(set));
+    }
+    return (int) Math.min(maximum, Integer.MAX_VALUE);
   }
 
   static boolean ingredientMatches(

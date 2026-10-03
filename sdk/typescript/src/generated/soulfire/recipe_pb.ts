@@ -59,6 +59,9 @@ export type RecipeSnapshot = Message<"soulfire.v1.RecipeSnapshot"> & {
   recipeId: string;
 
   /**
+   * Display type: crafting_shaped, crafting_shapeless, furnace (any cooking
+   * recipe), stonecutter or smithing, with the minecraft: namespace.
+   *
    * @generated from field: string recipe_type = 2;
    */
   recipeType: string;
@@ -116,6 +119,8 @@ export type ListRecipesRequest = Message<"soulfire.v1.ListRecipesRequest"> & {
   ingredient?: ItemSelector | undefined;
 
   /**
+   * Values of RecipeSnapshot.recipe_type.
+   *
    * @generated from field: repeated string recipe_types = 3;
    */
   recipeTypes: string[];
@@ -261,7 +266,8 @@ export const CanCraftResponseSchema: GenMessage<CanCraftResponse> = /*@__PURE__*
  */
 export type CraftTask = Message<"soulfire.v1.CraftTask"> & {
   /**
-   * Recipe display ID returned by ListRecipes, such as "display:42".
+   * Recipe display ID returned by ListRecipes, such as "display:42". It must
+   * be a minecraft:crafting_shaped or minecraft:crafting_shapeless recipe.
    *
    * @generated from field: string recipe_id = 1;
    */

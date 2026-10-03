@@ -257,9 +257,7 @@ public final class RecipeServiceImpl
     var result = display.result().resolveForFirstStack(context);
     var builder = RecipeSnapshot.newBuilder()
       .setRecipeId("display:" + entry.id().index())
-      .setRecipeType(
-        BuiltInRegistries.RECIPE_DISPLAY.getKey(display.type()).toString()
-      )
+      .setRecipeType(RecipeSupport.type(entry))
       .setResult(MinecraftDomainMapper.item(result))
       .setSpecial(entry.craftingRequirements().isEmpty());
     entry.group().ifPresent(group -> builder.setGroup(Integer.toString(group)));

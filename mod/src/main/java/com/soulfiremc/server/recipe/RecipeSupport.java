@@ -20,6 +20,7 @@ package com.soulfiremc.server.recipe;
 import com.soulfiremc.mod.mixin.soulfire.ClientRecipeBookAccessor;
 import com.soulfiremc.server.bot.BotConnection;
 import io.grpc.Status;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
@@ -79,6 +80,12 @@ public final class RecipeSupport {
   public static boolean isCraftingRecipe(RecipeDisplayEntry entry) {
     return entry.display() instanceof ShapedCraftingRecipeDisplay
       || entry.display() instanceof ShapelessCraftingRecipeDisplay;
+  }
+
+  /// The display type ListRecipes reports, such as "minecraft:crafting_shaped".
+  public static String type(RecipeDisplayEntry entry) {
+    return BuiltInRegistries.RECIPE_DISPLAY.getKey(entry.display().type())
+      .toString();
   }
 
   public static boolean canCraftInInventory(RecipeDisplayEntry entry) {
