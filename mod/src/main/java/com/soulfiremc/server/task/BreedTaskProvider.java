@@ -39,6 +39,7 @@ import io.grpc.Status;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.equine.Donkey;
 import net.minecraft.world.entity.animal.equine.Horse;
@@ -49,8 +50,11 @@ import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.StreamSupport;
@@ -193,6 +197,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     private final int originalSelectedSlot;
     private final PathConstraint constraint;
     private final CompletableFuture<BreedTaskResult> result;
+    private final RefusedAnimals refused = new RefusedAnimals();
     private @Nullable Pair pair;
     private @Nullable PathExecutor path;
     private Stage stage = Stage.SCAN;
@@ -439,6 +444,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       }
       stageTicks++;
       if (stageTicks >= breedingTimeoutTicks) {
+        refused.add(animal.getUUID(), requireLevel().getGameTime());
         failPair("Server did not confirm breeding food");
       }
     }
@@ -446,6 +452,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     private PairSearch findPair() {
       var player = requirePlayer();
       var level = requireLevel();
+      var gameTime = level.getGameTime();
       var origin = fixedCenter == null
         ? player.position()
         : Vec3.atCenterOf(fixedCenter);
@@ -464,9 +471,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           input.getAnimals(),
           player.getEyePosition()
         ))
-        .sorted(Comparator.comparingDouble(
-          animal -> animal.distanceToSqr(player)
-        ))
+        .sorted(searchOrder(refused, gameTime, player))
         .toList();
       var compatiblePairExists = false;
       for (var firstIndex = 0; firstIndex < candidates.size(); firstIndex++) {
@@ -689,6 +694,35 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     @Override
     public String description() {
       return "Breed animals";
+    }
+  }
+
+  /// The order the pair search tries animals in: the ones the server hasn't
+  /// refused first, then the nearest to the player.
+  static Comparator<Animal> searchOrder(
+    RefusedAnimals refused,
+    long gameTime,
+    Entity player
+  ) {
+    return Comparator
+      .comparing((Animal animal) -> refused.contains(animal.getUUID(), gameTime))
+      .thenComparingDouble(animal -> animal.distanceToSqr(player));
+  }
+
+  /// Animals the server didn't put in love when fed, most likely because they
+  /// bred recently. Each is tried last for a breeding cooldown after it was
+  /// refused.
+  static final class RefusedAnimals {
+    private final Map<UUID, Long> refusedUntil = new HashMap<>();
+
+    void add(UUID animal, long gameTime) {
+      refusedUntil.values().removeIf(until -> until <= gameTime);
+      refusedUntil.put(animal, gameTime + Animal.PARENT_AGE_AFTER_BREEDING);
+    }
+
+    boolean contains(UUID animal, long gameTime) {
+      var until = refusedUntil.get(animal);
+      return until != null && gameTime < until;
     }
   }
 
