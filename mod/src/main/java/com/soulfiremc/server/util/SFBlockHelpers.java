@@ -114,6 +114,28 @@ public final class SFBlockHelpers {
       || isHurtOnTouchFluid(blockState.getFluidState().getType());
   }
 
+  /// Whether lava or fire is beside the feet or the head of a player standing at `feet`, or at a
+  /// corner of them. A player off the block's centre touches it.
+  public static boolean isNearLavaOrFire(BlockGetter level, BlockPos feet) {
+    for (var dy = 0; dy <= 1; dy++) {
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dz = -1; dz <= 1; dz++) {
+          if ((dx != 0 || dz != 0) && isLavaOrFire(level.getBlockState(feet.offset(dx, dy, dz)))) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  private static boolean isLavaOrFire(BlockState state) {
+    var block = state.getBlock();
+    return block == Blocks.FIRE
+      || block == Blocks.SOUL_FIRE
+      || isHurtOnTouchFluid(state.getFluidState().getType());
+  }
+
   public static boolean isHurtWhenStoodOn(BlockState blockState) {
     var blockType = blockState.getBlock();
     return blockType == Blocks.MAGMA_BLOCK

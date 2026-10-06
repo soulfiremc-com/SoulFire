@@ -39,6 +39,8 @@ import net.minecraft.world.phys.Vec3;
 public final class MovementAction implements WorldAction {
   private static final double STEP_HEIGHT = 0.6;
   private static final double TARGET_HEIGHT_TOLERANCE = 0.25;
+  // Ground friction takes walking speed below this in a few ticks
+  private static final double SETTLED_SPEED = 0.03;
   @Getter
   private final SFVec3i blockPosition;
   // Corner jumps normally require you to stand closer to the block to jump
@@ -72,8 +74,18 @@ public final class MovementAction implements WorldAction {
       // We want to be on the same Y level
       return false;
     } else {
-      return isAtTargetXZ(clientEntity, botPosition, targetMiddleBlock);
+      return isAtTargetXZ(clientEntity, botPosition, targetMiddleBlock)
+        // Leaving a block while still sliding, off its centre, can carry the player into lava or fire around it.
+        // Not in water, where a current may never let it settle.
+        && (!clientEntity.onGround()
+          || clientEntity.isInWater()
+          || isSettled(clientEntity.getDeltaMovement())
+          || !SFBlockHelpers.isNearLavaOrFire(level, blockPosition.toBlockPos()));
     }
+  }
+
+  private static boolean isSettled(Vec3 deltaMovement) {
+    return deltaMovement.horizontalDistance() < SETTLED_SPEED;
   }
 
   @Override
