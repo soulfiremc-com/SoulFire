@@ -14,7 +14,7 @@ export const SDK_API_VERSION = {
   patch: 0,
 } as const;
 
-export const SDK_VERSION = "2.10.2";
+export const SDK_VERSION = "2.10.3";
 
 export interface ServerMetadata {
   readonly id: string;
