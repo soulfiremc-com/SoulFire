@@ -37,6 +37,7 @@ autoapi_options = [
 ]
 autoapi_member_order = "bysource"
 autoapi_template_dir = "templates"
+exclude_patterns = ["templates/**"]
 autoapi_python_class_content = "class"
 napoleon_numpy_docstring = False
 
