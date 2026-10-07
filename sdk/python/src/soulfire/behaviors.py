@@ -43,10 +43,12 @@ def define_behavior[A2, E2 = Never, R2 = Never](
 
 
 class SoulFireBehaviorError(TaggedError):
-    pass
+    """Base error for bot behavior operations."""
 
 
 class SoulFireBehaviorTimeoutError(SoulFireBehaviorError):
+    """A bot behavior exceeded its allowed duration."""
+
     def __init__(self, duration: float) -> None:
         self.duration = duration
         super().__init__(f"Behavior exceeded {duration:g} seconds")

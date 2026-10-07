@@ -113,6 +113,8 @@ type HeaderFactory = Callable[[dict[str, str] | None], dict[str, str] | None]
 
 
 class TaskStartOptions(TypedDict):
+    """Scheduling, lifecycle, and request options for a bot task."""
+
     conflict_policy: NotRequired[BotTaskConflictPolicy]
     reconnect_policy: NotRequired[BotTaskReconnectPolicy]
     disconnect_policy: NotRequired[BotTaskDisconnectPolicy]

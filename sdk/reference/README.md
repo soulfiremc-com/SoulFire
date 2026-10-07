@@ -5,7 +5,8 @@
 Keep tutorials and recipes in the [website guides](https://soulfiremc.com/docs/sdk).
 
 TypeDoc reads every TypeScript package entry point, including generated protocol modules.
-MkDocs with mkdocstrings reads the Python package, public modules, and protocol stubs.
+Sphinx with AutoAPI reads the Python package, public modules, and protocol stubs.
+The Python reference uses Furo and gives each class its own page.
 Both sites include search and source code.
 
 ## Build
@@ -19,7 +20,7 @@ bun run build:python
 ```
 
 The HTML output is in `dist/typescript` and `dist/python`.
-The Python build creates a local `.venv` and installs the documentation tools.
+The Python build creates a local `.venv` and installs the documentation tools and SDK dependencies.
 The TypeScript build installs the repository dependencies before it runs TypeDoc.
 TypeDoc uses its supported TypeScript version from this directory.
 The SDK compiler configuration stays separate.
@@ -29,6 +30,8 @@ Cloudflare serves the HTML, scripts, and styles as static assets.
 Neither reference needs Worker application code.
 TypeScript rewrites `/` to `/index.html` and preserves its `.html` links.
 Python uses native index handling for `/` and module directories.
+AutoAPI prefers `.pyi` files so the reference includes generated protobuf fields and their types.
+Module pages keep class anchors so existing links still reach the class summaries.
 
 ## Publish
 

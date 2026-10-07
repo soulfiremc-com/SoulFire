@@ -172,6 +172,8 @@ class FleetOperationReport[ValueT]:
 
 
 class FleetTaskGroupError[ResultT: Message](TaggedError):
+    """A fleet task failed. The report contains each task's outcome."""
+
     def __init__(self, report: FleetTaskReport[ResultT]) -> None:
         super().__init__(f"{len(report.rejected)} of {len(report.outcomes)} fleet tasks failed")
         self.report = report

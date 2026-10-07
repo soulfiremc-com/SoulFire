@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   cleanBuildOutputDir,
@@ -22,9 +16,7 @@ if (language !== "typescript" && language !== "python") {
 }
 
 const root = import.meta.dir;
-const { version } = JSON.parse(
-  readFileSync(join(root, "../typescript/package.json"), "utf8"),
-);
+const { version } = JSON.parse(readFileSync(join(root, "../typescript/package.json"), "utf8"));
 const assets = join(root, "dist", language);
 rmSync(assets, { recursive: true, force: true });
 mkdirSync(assets, { recursive: true });
@@ -50,14 +42,18 @@ if (language === "typescript") {
     run("python3.14", ["-m", "venv", ".venv"]);
   }
   run(python, ["-m", "pip", "install", "-r", "requirements.txt"]);
-  execFileSync(python, ["-m", "mkdocs", "build", "--site-dir", assets], {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      SOULFIRE_REFERENCE_NAME: `SoulFire Python SDK ${version}`,
-    },
-  });
+  run(python, [
+    "-m",
+    "sphinx",
+    "-b",
+    "dirhtml",
+    "-j",
+    "4",
+    "-d",
+    join(root, "dist", "doctrees", "python"),
+    "python-docs",
+    assets,
+  ]);
 }
 
 const context = {

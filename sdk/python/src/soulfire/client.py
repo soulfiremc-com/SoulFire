@@ -148,6 +148,8 @@ type ClientInterceptor = (
 
 
 class ManagedInstallOptions(TypedDict, total=False):
+    """Options for a local SoulFire server managed by the SDK."""
+
     directory: str | os.PathLike[str] | None
     version: str | None
     java_args: Iterable[str]

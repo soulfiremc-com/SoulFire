@@ -24,6 +24,8 @@ class RpcFailureContext:
 
 
 class SoulFireRpcError(TaggedError):
+    """An RPC request failed with server status and retry context."""
+
     def __init__(self, context: RpcFailureContext, cause: ConnectError) -> None:
         self.context = context
         self.operation = context.operation
@@ -79,6 +81,8 @@ def _rpc_error[RequestT, ResponseT](
 
 
 class SoulFireActionError(TaggedError):
+    """A bot action returned an unsuccessful result."""
+
     def __init__(self, result: BotActionResult) -> None:
         self.result = result
         super().__init__(result.error or f"Bot action {result.action_id} did not complete")
@@ -89,12 +93,16 @@ class SoulFireCompatibilityError(TaggedError):
 
 
 class SoulFireCapabilityError(TaggedError):
+    """The server does not provide a required SDK capability."""
+
     def __init__(self, capability: str) -> None:
         super().__init__(f"SoulFire capability is unavailable: {capability}")
         self.capability = capability
 
 
 class SoulFireTaskError(TaggedError):
+    """A bot task ended with a failure or an unsuccessful status."""
+
     def __init__(self, task: BotTask) -> None:
         self.task = task
         message = task.failure.message if task.HasField("failure") else ""
@@ -102,43 +110,51 @@ class SoulFireTaskError(TaggedError):
 
 
 class SoulFirePluginNotFoundError(TaggedError):
+    """A required plugin is not installed on the server."""
+
     def __init__(self, plugin_id: str) -> None:
         super().__init__(f"SoulFire plugin is not installed: {plugin_id}")
         self.plugin_id = plugin_id
 
 
 class SoulFirePluginCompatibilityError(TaggedError):
+    """An installed plugin is incompatible with the SDK requirements."""
+
     def __init__(self, plugin_id: str, message: str) -> None:
         super().__init__(message)
         self.plugin_id = plugin_id
 
 
 class SoulFirePluginDescriptorError(TaggedError):
+    """The SDK could not use a plugin's API descriptor."""
+
     def __init__(self, plugin_id: str, message: str) -> None:
         super().__init__(message)
         self.plugin_id = plugin_id
 
 
 class SoulFireContainerClosedError(TaggedError):
+    """An inventory operation attempted to use a closed container."""
+
     def __init__(self, container_id: int) -> None:
         self.container_id = container_id
         super().__init__(f"Container {container_id} is already closed")
 
 
 class SoulFireValidationError(TaggedError):
-    pass
+    """An SDK operation received an invalid value or argument type."""
 
 
 class SoulFireStateError(TaggedError):
-    pass
+    """An SDK operation cannot proceed in the current state."""
 
 
 class SoulFireInstallError(TaggedError):
-    pass
+    """The SDK could not install or start a managed SoulFire server."""
 
 
 class SoulFireTimeoutError(TaggedError):
-    pass
+    """An SDK operation exceeded its allowed duration."""
 
 
 type SoulFireOperationError = (

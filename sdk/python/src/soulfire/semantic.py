@@ -119,6 +119,8 @@ type HeaderProvider = Callable[[dict[str, str] | None], dict[str, str] | None]
 
 
 class InventoryRankingOptions(TypedDict):
+    """Filters and preferences for inventory item recommendations."""
+
     selector: NotRequired[ItemSelector]
     areas: NotRequired[Iterable[InventoryArea]]
     prefer_hotbar: NotRequired[bool]

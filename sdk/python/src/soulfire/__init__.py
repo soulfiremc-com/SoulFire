@@ -1,10 +1,10 @@
 """The SoulFire SDK automates Minecraft bots with lazy Effect operations.
 
-Start with the [Python tutorial](https://soulfiremc.com/docs/sdk/python).
+Start with the `Python tutorial <https://soulfiremc.com/docs/sdk/python>`_.
 Keep bot operations inside a scope and run the complete workflow at its boundary.
 
-Methods decorated with `@fn` return lazy `Effect` operations when called.
-Their source signatures use `EffectGen` to describe the generator implementation.
+Methods decorated with ``@fn`` return lazy ``Effect`` operations when called.
+Their source signatures use ``EffectGen`` to describe the generator implementation.
 """
 
 from ._install import LocalSoulFireServer
