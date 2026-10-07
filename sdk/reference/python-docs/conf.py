@@ -186,25 +186,6 @@ def set_class_module(app, doctree):
                 node["reftarget"] = f"builtins.{target}"
 
 
-def keep_module_class_anchors(app, doctree, docname):
-    """Keep module links to classes valid after splitting them into pages."""
-    prefix = f"{app.config.autoapi_root}/"
-    if not docname.startswith(prefix) or not docname.endswith("/index"):
-        return
-    module = docname.removeprefix(prefix).removesuffix("/index").replace("/", ".")
-    for row in doctree.findall(nodes.row):
-        for link in row.findall(nodes.reference):
-            symbol = link.get("refuri", "").partition("#")[2]
-            obj = app.env.autoapi_objects.get(symbol)
-            if (
-                obj is not None
-                and obj.type in {"class", "exception"}
-                and obj.id.removesuffix(f".{obj.qual_name}") == module
-            ):
-                row["ids"].append(symbol)
-
-
 def setup(app):
     # Run before viewcode consumes signature metadata.
     app.connect("doctree-read", set_class_module, priority=450)
-    app.connect("doctree-resolved", keep_module_class_anchors)

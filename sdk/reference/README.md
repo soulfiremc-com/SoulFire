@@ -32,7 +32,6 @@ Neither reference needs Worker application code.
 TypeScript rewrites `/` to `/index.html` and preserves its `.html` links.
 Python uses native index handling for `/` and module directories.
 AutoAPI prefers `.pyi` files so the reference includes generated protobuf fields and their types.
-Module pages keep class anchors so existing links still reach the class summaries.
 
 ## Publish
 
