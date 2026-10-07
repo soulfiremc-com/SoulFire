@@ -61,6 +61,20 @@ function installLayer(
   return Layer.effect(SoulFireService, install(options));
 }
 
+/**
+ * Bun connection and managed installation helpers.
+ *
+ * `connect` checks compatibility with an existing SoulFire server. `install`
+ * downloads and starts a local server, while `createBot` also provisions a ready
+ * bot. These operations require `Scope`. Cleanup stops the managed process and
+ * leaves downloaded files and persistent data in place.
+ *
+ * @remarks
+ * Import this object from `@soulfiremc/sdk/bun`.
+ * `createBot` uses offline authentication unless configured otherwise. Its
+ * Minecraft address is separate from a remote client's gRPC-Web URL.
+ * @category Connection
+ */
 export const SoulFire = {
   ...UniversalSoulFire,
   connect,

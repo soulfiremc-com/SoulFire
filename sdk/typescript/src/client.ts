@@ -159,14 +159,38 @@ export type TokenProvider = () =>
   | string
   | undefined;
 
+/**
+ * Connection options for an existing SoulFire gRPC-Web server.
+ *
+ * The Minecraft address belongs to instance or bot provisioning, not `baseUrl`.
+ * @category Connection
+ */
 export interface SoulFireOptions {
+  /**
+   * SoulFire gRPC-Web URL, including its scheme. This is not the Minecraft address.
+   */
   baseUrl: string;
+  /**
+   * Bearer token or provider evaluated before each request. Omit for a public server.
+   */
   token?: string | TokenProvider;
+  /**
+   * Default RPC timeout in milliseconds, separate from bot readiness or task deadlines.
+   */
   defaultTimeoutMs?: number;
   fetch?: GrpcWebTransportOptions["fetch"];
   interceptors?: Interceptor[];
+  /**
+   * Capability identifiers that must be present in the handshake.
+   */
   requiredCapabilities?: readonly string[];
+  /**
+   * Plugin identifiers and version constraints that must pass the handshake.
+   */
   requiredPlugins?: readonly RequiredPluginRequirement[];
+  /**
+   * Custom Connect transport. Its caller configures authentication and transport timeouts.
+   */
   transport?: Transport;
 }
 
@@ -180,11 +204,32 @@ export interface GetOrCreateInstanceOptions {
   readonly call?: CallOptions;
 }
 
+/**
+ * Provisioning, authentication, and readiness options for a named bot.
+ *
+ * Unless `start` is false, the scope owns observation and any SDK-started bot.
+ * @category Bots
+ */
 export interface GetOrCreateBotOptions {
+  /**
+   * Account authentication, default offline. Microsoft provisioning can require device-code login.
+   */
   readonly auth?: "offline" | "microsoft";
+  /**
+   * Minecraft username for a new offline account. Existing conflicting account configuration fails.
+   */
   readonly username?: string;
+  /**
+   * Start and observe the bot by default. False returns an unconnected handle for configuration.
+   */
   readonly start?: boolean;
+  /**
+   * Positive, finite startup and player-snapshot deadline in milliseconds. Defaults to 30,000.
+   */
   readonly readyTimeoutMs?: number;
+  /**
+   * Effect callback for Microsoft sign-in codes. Without it, the SDK logs the URL and code.
+   */
   readonly onDeviceCode?: (
     code: DeviceCode,
   ) => Effect.Effect<void, SoulFireOperationError>;
@@ -222,16 +267,16 @@ export interface LocalServerController {
 type ScopedRequest<T extends DescMessage> = Omit<
   MessageInitShape<T>,
   "$typeName" | "botId" | "instanceId"
->;
+  >;
 
 type InstanceScopedRequest<T extends DescMessage> = Omit<
   MessageInitShape<T>,
   "$typeName" | "id" | "instanceId"
->;
+  >;
 
 export type BotMovement = ScopedRequest<
   typeof BotSetMovementStateRequestSchema
->;
+  >;
 
 const DEFAULT_EVENT_FILTER: MessageInitShape<typeof BotEventFilterSchema> = {
   includeChat: true,
@@ -271,6 +316,20 @@ function normalizeBaseUrl(baseUrl: string): string {
   return normalized;
 }
 
+/**
+ * A scoped connection to a SoulFire server and its instances.
+ *
+ * Use {@link SoulFire.connect} for an existing server. The Node and Bun entry
+ * points also provide managed installation and a one-call `createBot` helper.
+ * SDK operations return lazy Effects and Streams. Compose them in an Effect
+ * workflow and run the complete workflow at the application boundary.
+ *
+ * @remarks
+ * The connection handshake checks API compatibility, capabilities, and plugins.
+ * Keep client operations inside the connection scope. Cleanup stops a managed
+ * local process but leaves persistent server data and downloaded files in place.
+ * @category Connection
+ */
 export class SoulFireClient {
   readonly #transport: Transport;
   readonly #instanceClient: Client<typeof InstanceService>;
@@ -322,8 +381,17 @@ export class SoulFireClient {
   }
 
   /**
-   * Connects and checks the server is compatible: its SDK API version,
-   * `requiredCapabilities` and `requiredPlugins`.
+   * Connect to an existing server and check SDK compatibility.
+   *
+   * @remarks
+   * The handshake checks the SDK API version, required capabilities, and plugin
+   * versions. Requires `Scope`; cleanup closes any resources this client owns.
+   * A remote SoulFire server continues running after the scope closes.
+   * Failures use `SoulFireConnectionError` in the Effect error channel.
+   *
+   * @param options - gRPC-Web URL, authentication, timeouts, and compatibility requirements.
+   * @returns A lazy Effect that produces the connected client after the handshake.
+   * @see {@link unauthenticated} when login must precede the handshake.
    */
   public static connect(
     options: SoulFireOptions,
@@ -337,7 +405,12 @@ export class SoulFireClient {
   }
 
   /**
-   * A client that skips that check, for example to log in first.
+   * Create a scoped client without an SDK handshake.
+   *
+   * Use this client to complete the login flow before compatibility negotiation.
+   * Server metadata is unavailable until the handshake completes.
+   * @param options - Connection options accepted by {@link connect}.
+   * @returns A lazy Effect that produces a client and requires `Scope`.
    */
   public static unauthenticated(
     options: SoulFireOptions,
@@ -367,6 +440,12 @@ export class SoulFireClient {
     );
   }
 
+  /**
+   * Replace the bearer token or provider for subsequent requests.
+   *
+   * This synchronous change does not restart existing streams or run a handshake.
+   * @param token - Token, a provider evaluated per request, or undefined to clear it.
+   */
   public setToken(token: string | TokenProvider | undefined): void {
     this.#token = token;
   }
@@ -431,7 +510,11 @@ export class SoulFireClient {
   }
 
   /**
-   * A handle for `instanceId`, without a request.
+   * Create an instance handle without a network request.
+   *
+   * @param instanceId - Existing instance UUID, not the friendly name.
+   * @returns A handle using this client's transport. It does not check existence or access.
+   * @see {@link getOrCreateInstance} to provision by name.
    */
   public instance(instanceId: string): SoulFireInstance {
     return new SoulFireInstance(
@@ -479,7 +562,17 @@ export class SoulFireClient {
     });
   }
 
-  /** Gets an instance owned by this user, or creates it with its server address. */
+  /**
+   * Find or create a named instance for the authenticated user.
+   *
+   * @param name - Stable instance name used for provisioning.
+   * @param options - Minecraft server address and RPC call options.
+   * @returns An Effect that produces an instance handle after server acceptance.
+   * @remarks
+   * Requires `instance.provisioning.v1`. Conflicting server configuration fails.
+   * The instance persists after the connection scope closes. This operation does
+   * not start bots; reuse the instance to provision several accounts.
+   */
   public getOrCreateInstance(
     name: string,
     options: GetOrCreateInstanceOptions = {},
@@ -499,7 +592,17 @@ export class SoulFireClient {
     });
   }
 
-  /** Creates or reuses a ready bot without exposing instance or account IDs. */
+  /**
+   * Create or reuse a ready bot on this connected SoulFire server.
+   *
+   * @param options - Minecraft address, username, authentication, and readiness options.
+   * @returns An Effect that produces an observed bot and requires `Scope`.
+   * @remarks
+   * The instance name defaults to the trimmed Minecraft address, and the bot name
+   * defaults to the username. Repeated calls reuse named resources. Conflicting
+   * configuration fails. Cleanup stops a bot this operation started and preserves
+   * one that was already running. The instance and account remain available.
+   */
   public createBot(
     options: CreateBotOptions,
   ): Effect.Effect<SoulFireBot, SoulFireOperationError, Scope.Scope> {
@@ -547,6 +650,12 @@ export class SoulFireClient {
     });
   }
 
+  /**
+   * Stop this client's managed local server, if present.
+   *
+   * The connection scope calls this operation automatically. Downloaded files and
+   * server data remain in place. For a remote connection, this operation does nothing.
+   */
   public close(): Effect.Effect<void> {
     return Effect.suspend(() => {
       const localServer = this.#localServer;
@@ -605,6 +714,15 @@ export class SoulFireClient {
   }
 }
 
+/**
+ * An instance handle that groups bot accounts and configuration.
+ *
+ * Obtain it from {@link SoulFireClient.instance} or
+ * {@link SoulFireClient.getOrCreateInstance}. Use {@link getOrCreateBot} for
+ * provisioning and {@link bot} for an existing bot UUID.
+ * The instance persists after the client scope closes.
+ * @category Bots
+ */
 export class SoulFireInstance {
   readonly #botClient: Client<typeof BotService>;
   readonly #botLiveClient: Client<typeof BotLiveService>;
@@ -658,6 +776,12 @@ export class SoulFireInstance {
     return new SoulFireFleet(this, this.#capabilities);
   }
 
+  /**
+   * Create a bot handle without a request, startup, or readiness wait.
+   *
+   * @param botId - Existing bot UUID, not its username or provisioning name.
+   * @returns An unobserved handle. Call {@link SoulFireBot.connect} for scoped readiness.
+   */
   public bot(botId: string): SoulFireBot {
     return new SoulFireBot(
       this.id,
@@ -675,7 +799,21 @@ export class SoulFireInstance {
     );
   }
 
-  /** Creates an offline account by default and returns a ready, observed bot. */
+  /**
+   * Provision a named account and return a bot, ready by default.
+   *
+   * @param name - Stable bot name within this instance.
+   * @param options - Authentication, username, startup, and readiness configuration.
+   * @returns An Effect that produces a bot handle and requires `Scope`.
+   * @remarks
+   * Names belong to this instance. Repeated calls reuse accounts; conflicting
+   * usernames or authentication methods fail. Microsoft accounts use device-code
+   * login when no matching account exists. By default, the SDK logs the sign-in code.
+   *
+   * With `start: false`, this method returns before connection for account
+   * configuration. Otherwise it calls {@link SoulFireBot.connect}. Cleanup stops
+   * an SDK-started bot and preserves a previously running bot. The account persists.
+   */
   public getOrCreateBot(
     name: string,
     options: GetOrCreateBotOptions = {},
@@ -768,9 +906,6 @@ export class SoulFireInstance {
     });
   }
 
-  /**
-   * Deletes the instance and its data for good. Its bots are stopped first.
-   */
   /**
    * Deletes the instance and its data for good. Its bots are stopped first.
    */
@@ -1154,19 +1289,50 @@ export class SoulFireInstance {
 }
 
 /**
- * One bot. Methods that resolve to a `BotActionResult` throw
- * `SoulFireActionError` unless the action completed.
+ * One bot's lifecycle, actions, live state, and server tasks.
+ *
+ * Obtain a handle through {@link SoulFireClient.createBot},
+ * {@link SoulFireInstance.getOrCreateBot}, or {@link SoulFireInstance.bot}.
+ * Direct construction requires RPC clients and is intended for transport integration.
+ *
+ * @remarks
+ * Call {@link connect} before reading {@link state}. Operations are lazy Effects
+ * or Streams. Actions fail through the Effect error channel when rejected.
+ * Use {@link tasks} for server jobs, or {@link collect} for a workflow that owns
+ * collection until completion and cancels unfinished work on interruption.
+ * @category Bots
  */
 export class SoulFireBot {
   #controlToken: string | undefined;
   #session: BotSession | undefined;
 
-  /** Latest received state. Empty until a connection has an initial snapshot. */
+  /**
+   * Latest state from the session attached by {@link connect}.
+   *
+   * This synchronous property performs no request. It returns empty state before
+   * connection and after scope cleanup. State can lag behind the server; use a
+   * session predicate to wait for a required update.
+   */
   public get state(): BotSessionState {
     return this.#session?.state ?? emptyBotSessionState();
   }
 
-  /** Starts the bot if necessary. The scope owns observation and any start. */
+  /**
+   * Start the bot if necessary and wait for its initial player snapshot.
+   *
+   * @param options - Readiness deadline and per-RPC call options.
+   * @returns An Effect with no result value that requires `Scope`.
+   * @remarks
+   * An attached session makes this operation a no-op. Otherwise, it reads the
+   * bot's desired state, starts a stopped bot, and attaches observation. Scope
+   * cleanup stops the bot only if this operation started it. A previously running
+   * bot keeps its running state.
+   *
+   * `readyTimeoutMs` defaults to 30,000 milliseconds and must be positive and
+   * finite. It bounds startup and the initial player snapshot. An expired deadline
+   * fails with `SoulFireTimeoutError`; RPC failures use the Effect error channel.
+   * {@link start} alone does not attach observation.
+   */
   public connect(
     options: Pick<GetOrCreateBotOptions, "readyTimeoutMs" | "call"> = {},
   ): Effect.Effect<void, SoulFireOperationError, Scope.Scope> {
@@ -1220,6 +1386,12 @@ export class SoulFireBot {
     private readonly protocolClient?: Client<typeof BotProtocolService>,
   ) {}
 
+  /**
+   * Durable server jobs for this bot.
+   *
+   * Start methods return a handle after acceptance. `run*` methods return progress
+   * streams with cancellation tied to stream interruption by default.
+   */
   public get tasks(): SoulFireTasks {
     if (this.taskClient === undefined) {
       throw new Error("The bot task service is unavailable");
@@ -1232,7 +1404,23 @@ export class SoulFireBot {
     );
   }
 
-  /** Collects blocks to completion. Interruption cancels unfinished server work. */
+  /**
+   * Collect matching blocks and wait for the typed task result.
+   *
+   * @param target - Block IDs or tags prefixed with `#`, as one string or an array.
+   * @param options - Count, search distance, pathfinding, and scheduling options.
+   * @returns An Effect that produces the collection result on successful completion.
+   * @remarks
+   * This helper owns the task. Interruption or failure before completion requests
+   * cancellation of unfinished server work. Use {@link SoulFireTasks.collectBlocks}
+   * for a handle with explicit ownership. Non-successful terminal status fails
+   * with `SoulFireTaskFailed` through the Effect error channel.
+   * @example
+   * ```ts
+   * const result = yield* bot.collect("#minecraft:logs", { count: 16 });
+   * yield* Effect.logInfo(result);
+   * ```
+   */
   public collect(
     target: string | readonly string[],
     options: CollectBlocksTaskOptions = {},
@@ -1309,9 +1497,6 @@ export class SoulFireBot {
     );
   }
 
-  /**
-   * Marks the bot to run; it connects in the background (see `waitForOnline`).
-   */
   /**
    * Marks the bot to run; it connects in the background (see `waitForOnline`).
    */
@@ -1412,7 +1597,7 @@ export class SoulFireBot {
   }
 
   /**
-   * Throws if the bot is offline.
+   * Fails through the Effect error channel if the bot has no live state.
    */
   public liveState(
     options?: CallOptions,
@@ -1432,7 +1617,12 @@ export class SoulFireBot {
   }
 
   /**
-   * Resolves once the bot is online, at once if it already is.
+   * Wait for live state or an initial snapshot and return the latest status.
+   *
+   * @remarks
+   * This operation does not start the bot or attach observation to {@link state}.
+   * If the event stream ends before readiness, the Effect fails. Use {@link connect}
+   * for scoped startup, readiness, and continuously observed state.
    */
   public waitForOnline(options?: {
     call?: CallOptions;
@@ -1474,12 +1664,6 @@ export class SoulFireBot {
    * takes state changes, chat, lifecycle, inventory, damage, resource packs and
    * titles.
    */
-  /**
-   * The bot's live events. The first is its status; the stream stays open while
-   * the bot is stopped and follows it across reconnects. The default filter
-   * takes state changes, chat, lifecycle, inventory, damage, resource packs and
-   * titles.
-   */
   public events(
     filter: MessageInitShape<
       typeof BotEventFilterSchema
@@ -1504,7 +1688,15 @@ export class SoulFireBot {
   }
 
   /**
-   * Opens a `BotSession`: the event stream and the state it adds up to.
+   * Open a scoped session that maintains state from bot events.
+   *
+   * @param options - Filters, buffering, readiness, and resumption configuration.
+   * @returns An Effect that produces a `BotSession` and requires `Scope`.
+   * @remarks
+   * With no custom options, reuse an attached session if present. Otherwise, this
+   * operation creates a separate session. It does not start the bot or attach the
+   * new session to {@link state}; read the returned session's state instead.
+   * The scope closes the subscription.
    */
   public observe(
     options?: BotSessionOptions,
@@ -1522,9 +1714,6 @@ export class SoulFireBot {
     );
   }
 
-  /**
-   * A chat message, or a command if it starts with `/`.
-   */
   /**
    * A chat message, or a command if it starts with `/`.
    */
@@ -2509,9 +2698,15 @@ export class SoulFireBot {
   }
 
   /**
-   * Takes exclusive control: until the lease ends, only this client can act on
-   * the bot. Renew it before it runs out. `ttlSeconds` defaults to 30, from 5
-   * to 300.
+   * Acquire exclusive action control with explicit release.
+   *
+   * @param ttlSeconds - Lease lifetime in seconds, default 30, from 5 to 300.
+   * @param options - RPC call options.
+   * @returns An Effect that produces a lease. The caller owns its release.
+   * @remarks
+   * Action requests from this handle include the lease token. Renew before expiry;
+   * renewal is not automatic. A second active lease on this handle fails.
+   * @see {@link acquireControlScoped} for automatic release at scope exit.
    */
   public acquireControl(
     ttlSeconds = 30,
@@ -2551,6 +2746,16 @@ export class SoulFireBot {
     });
   }
 
+  /**
+   * Acquire exclusive action control and release it when the scope closes.
+   *
+   * @param ttlSeconds - Lease lifetime in seconds, default 30, from 5 to 300.
+   * @param options - RPC call options.
+   * @returns An Effect that produces a lease and requires `Scope`.
+   * @remarks
+   * This method adds release cleanup to {@link acquireControl}. It does not renew
+   * the lease automatically. Call {@link SoulFireBotControlLease.renew} for longer work.
+   */
   public acquireControlScoped(
     ttlSeconds = 30,
     options?: CallOptions,
@@ -2634,7 +2839,12 @@ export class SoulFireBot {
 }
 
 /**
- * `await using` releases it.
+ * Exclusive action control with explicit renewal and release.
+ *
+ * Use {@link SoulFireBot.acquireControlScoped} for scope-owned release, or
+ * {@link SoulFireBot.acquireControl} and call {@link release} yourself.
+ * Renew the lease before expiry for longer work. No background renewal occurs.
+ * @category Bots
  */
 export class SoulFireBotControlLease {
   #lease: BotControlLease | undefined;
@@ -2654,10 +2864,11 @@ export class SoulFireBotControlLease {
   }
 
   /**
-   * `ttlSeconds` defaults to 30, from 5 to 300.
-   */
-  /**
-   * `ttlSeconds` defaults to 30, from 5 to 300.
+   * Extend the active lease and return the updated server lease.
+   *
+   * @param ttlSeconds - New lifetime in seconds, default 30, from 5 to 300.
+   * @param options - RPC call options.
+   * @returns An Effect that produces the renewed lease or fails if renewal is rejected.
    */
   public renew(
     ttlSeconds = 30,
@@ -2674,6 +2885,14 @@ export class SoulFireBotControlLease {
     });
   }
 
+  /**
+   * Release the lease and clear this handle's action token.
+   *
+   * Repeated calls after successful release do nothing. A scoped acquisition
+   * registers this operation as cleanup automatically.
+   * @param options - RPC call options.
+   * @returns An Effect with no result value.
+   */
   public release(
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
@@ -2731,10 +2950,17 @@ const SoulFireServiceBase: Context.ServiceClass<
   SoulFireClient
 > = Context.Service<SoulFireService, SoulFireClient>()(
   "@soulfiremc/sdk/SoulFireService",
-);
+    );
 
 export class SoulFireService extends SoulFireServiceBase {}
 
+/**
+ * Connection helpers and Effect service layers.
+ *
+ * Import from `@soulfiremc/sdk/node` or `/bun` for managed installation and
+ * `createBot`. The universal entry point connects to an existing server.
+ * @category Connection
+ */
 export const SoulFire: {
   connect: typeof SoulFireClient.connect;
   unauthenticated: typeof SoulFireClient.unauthenticated;

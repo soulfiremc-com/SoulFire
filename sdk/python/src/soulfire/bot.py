@@ -157,6 +157,22 @@ _action_headers = action_headers
 
 
 class SoulFireBot:
+    """One bot's lifecycle, actions, live state, and server tasks.
+
+    Obtain this handle from :meth:`soulfire.SoulFire.create_bot`,
+    :meth:`soulfire.SoulFireInstance.get_or_create_bot`, or
+    :meth:`soulfire.SoulFireInstance.bot`. Direct construction requires RPC clients
+    and is intended for transport integration.
+
+    Use :meth:`connect` before reading :attr:`state`. The scope owns observation
+    and stops a bot that this operation started. Task helpers return lazy Effects
+    or Streams. A method call alone does not execute a bot operation.
+
+    Actions report rejection through the Effect error channel. Use
+    :attr:`tasks` for server jobs and :meth:`collect` for a collection workflow
+    that waits for completion and cancels unfinished work on interruption.
+    """
+
     def __init__(
         self,
         instance_id: str,
@@ -189,12 +205,39 @@ class SoulFireBot:
 
     @property
     def state(self) -> BotSessionState:
+        """Latest state from the session attached by :meth:`connect`.
+
+        Before connection or after scope cleanup, this property returns an empty
+        state. It performs no network request. State can lag behind the server;
+        use a session predicate to wait for a required update.
+        """
         return self._session.state if self._session is not None else empty_bot_session_state()
 
     @fn("SoulFireBot.connect")
     def connect(
         self, *, ready_timeout: float = 30.0, timeout_ms: int | None = None
     ) -> EffectGen[None, SoulFireOperationError, Scope]:
+        """Start the bot if necessary and wait for its initial player snapshot.
+
+        An existing attached session makes this operation a no-op. Otherwise, it
+        reads the bot's desired state, starts a stopped bot, and attaches observation.
+        The scope closes observation and stops the bot only if this operation
+        started it. A previously running bot keeps its running state.
+
+        Args:
+            ready_timeout: Positive, finite deadline in seconds for startup and the
+                initial player snapshot. Defaults to 30.
+            timeout_ms: Per-RPC timeout in milliseconds. This is separate from the
+                overall readiness deadline.
+
+        Returns:
+            An Effect with no result value. Requires ``Scope``.
+
+        Notes:
+            An invalid deadline fails with ``SoulFireValidationError``. Readiness
+            expiration fails with ``SoulFireTimeoutError``. RPC failures also use the
+            Effect error channel. :meth:`start` alone does not attach observation.
+        """
         if self._session is not None:
             return
         if not math.isfinite(ready_timeout) or ready_timeout <= 0:
@@ -255,6 +298,34 @@ class SoulFireBot:
         options: PathfindOptions | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[CollectBlocksTaskResult, SoulFireOperationError]:
+        """Collect matching blocks and wait for the typed task result.
+
+        This helper owns the collection task. On interruption or failure before task
+        completion, scope cleanup requests cancellation of unfinished server work.
+        For a task handle with explicit ownership, use
+        :meth:`SoulFireTasks.collect_blocks` through :attr:`tasks`.
+
+        Args:
+            target: A block ID, block tag prefixed with ``#``, or iterable of selectors.
+                For example, ``"minecraft:oak_log"`` or ``"#minecraft:logs"``.
+            count: Number of blocks to collect. Defaults to 1.
+            search_radius: Search distance in blocks. Defaults to 32, at most 64.
+            avoid_submerged_targets: Skip targets covered by fluid up to the bot's height.
+            require_line_of_sight: Restrict selection to visible blocks.
+            options: Pathfinding configuration, or server defaults when omitted.
+            timeout_ms: RPC timeout in milliseconds. This does not set a task deadline.
+
+        Returns:
+            An Effect that produces ``CollectBlocksTaskResult`` on completion.
+            Non-successful task status fails through the Effect error channel.
+
+        Examples:
+            Inside an Effect workflow::
+
+                result = yield from bot.collect("#minecraft:logs", count=16)
+                yield from sync(lambda: print(result))
+        """
+
         @gen
         def run() -> EffectGen[CollectBlocksTaskResult, SoulFireOperationError, Scope]:
             task = yield from acquire_release(
@@ -279,6 +350,11 @@ class SoulFireBot:
 
     @property
     def tasks(self) -> SoulFireTasks:
+        """Durable server jobs for this bot.
+
+        Start methods return a task handle after acceptance. ``run_*`` methods
+        return event streams with cancellation tied to the stream by default.
+        """
         if self._task_client is None:
             raise RuntimeError("The bot task service is unavailable")
         return SoulFireTasks(
@@ -354,6 +430,12 @@ class SoulFireBot:
     def start(
         self, *, timeout_ms: int | None = None
     ) -> EffectGen[BotStatus, SoulFireOperationError]:
+        """Set the bot's desired state to running and return its status.
+
+        This operation does not wait for a player snapshot, attach observation, or
+        stop the bot at scope exit. Use :meth:`connect` for those lifecycle guarantees.
+        ``timeout_ms`` controls the RPC timeout in milliseconds.
+        """
         response = yield from rpc(
             "SoulFireBot.start",
             lambda: self._bot_client.set_bots_desired_state(
@@ -371,6 +453,11 @@ class SoulFireBot:
     def stop(
         self, *, timeout_ms: int | None = None
     ) -> EffectGen[BotStatus, SoulFireOperationError]:
+        """Set the bot's desired state to stopped and return its status.
+
+        This is an explicit server state change. It does not remove the account or
+        instance. ``timeout_ms`` controls the RPC timeout in milliseconds.
+        """
         response = yield from rpc(
             "SoulFireBot.stop",
             lambda: self._bot_client.set_bots_desired_state(
@@ -421,6 +508,13 @@ class SoulFireBot:
     def wait_for_online(
         self, *, timeout_ms: int | None = None
     ) -> EffectGen[BotStatus, SoulFireOperationError]:
+        """Wait for live state or a snapshot and return the latest bot status.
+
+        This operation does not start the bot or attach a session to :attr:`state`.
+        An event stream that ends before readiness fails through the Effect error
+        channel. ``timeout_ms`` controls RPC timeout in milliseconds.
+        """
+
         @gen
         def wait() -> EffectGen[BotStatus, SoulFireOperationError, Scope]:
             current = yield from self.info(timeout_ms=timeout_ms)
@@ -452,6 +546,21 @@ class SoulFireBot:
     def events(
         self, event_filter: BotEventFilter | None = None, *, timeout_ms: int | None = None
     ) -> Stream[BotEvent, SoulFireOperationError]:
+        """Observe filtered bot events through a lazy Stream.
+
+        With no custom filter or timeout, an attached session supplies the events.
+        Otherwise, consumption opens a separate RPC stream. The default filter
+        includes state deltas, chat, lifecycle, inventory, damage, resource packs,
+        and titles. Consuming events alone does not attach :attr:`state`.
+
+        Args:
+            event_filter: Explicit event selection, or the SDK default when omitted.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            A Stream that produces ``BotEvent`` values. Interruption closes the
+            subscription; it does not stop the bot.
+        """
         if self._session is not None and event_filter is None and timeout_ms is None:
             return self._session.events()
         return rpc_stream(
@@ -474,6 +583,22 @@ class SoulFireBot:
         timeout_ms: int | None = None,
         ready_timeout: float | None = None,
     ) -> EffectGen[BotSession, SoulFireOperationError, Scope]:
+        """Open a scoped session that maintains state from bot events.
+
+        With no custom options, reuse the session attached by :meth:`connect`, if
+        present. Otherwise, return a separate session. The scope owns its
+        subscription. This operation does not start a stopped bot or attach the
+        new session to :attr:`state`; read the returned session's state instead.
+
+        Args:
+            options: Session filters, buffering, and resumption configuration.
+            timeout_ms: RPC timeout in milliseconds.
+            ready_timeout: Session readiness wait in seconds. ``None`` uses the
+                session default.
+
+        Returns:
+            An Effect that produces ``BotSession``. Requires ``Scope``.
+        """
         if self._session is not None and options is None:
             return self._session
 
@@ -1211,6 +1336,22 @@ class SoulFireBot:
     def acquire_control(
         self, *, ttl_seconds: int = 30, timeout_ms: int | None = None
     ) -> Effect[SoulFireBotControlLease, SoulFireOperationError, Scope]:
+        """Acquire exclusive action control and release it at scope exit.
+
+        Action requests from this handle include the lease token. Renew the lease
+        before expiry for longer workflows; renewal is not automatic.
+        Acquiring another lease on the same handle fails while a token is active.
+
+        Args:
+            ttl_seconds: Lease lifetime in seconds. Defaults to 30.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            An Effect that produces a control lease. Requires ``Scope``.
+
+        See Also:
+            :meth:`SoulFireBotControlLease.renew` for manual renewal.
+        """
         return acquire_release(
             self._acquire_control(ttl_seconds=ttl_seconds, timeout_ms=timeout_ms),
             lambda lease, _: lease.release(timeout_ms=timeout_ms).or_die(),
@@ -1296,6 +1437,13 @@ class SoulFireBot:
 
 
 class SoulFireBotControlLease:
+    """Exclusive action control with explicit renewal and scoped release.
+
+    Obtain a lease from :meth:`SoulFireBot.acquire_control`. The scope releases
+    it automatically. Call :meth:`renew` before expiry for long workflows.
+    This object does not renew the lease in the background.
+    """
+
     def __init__(self, bot: SoulFireBot, lease: BotControlLease) -> None:
         self._bot = bot
         self._lease: BotControlLease | None = lease
@@ -1310,6 +1458,12 @@ class SoulFireBotControlLease:
     def renew(
         self, *, ttl_seconds: int = 30, timeout_ms: int | None = None
     ) -> EffectGen[BotControlLease, SoulFireOperationError]:
+        """Extend the active lease and return the updated server lease.
+
+        ``ttl_seconds`` is the new lifetime in seconds, defaulting to 30.
+        A released or expired lease fails through the Effect error channel.
+        ``timeout_ms`` controls RPC timeout in milliseconds.
+        """
         self._lease = yield from self._bot.renew_control(
             (yield from validate(lambda: self.value)), ttl_seconds, timeout_ms
         )
@@ -1317,6 +1471,12 @@ class SoulFireBotControlLease:
 
     @fn("SoulFireBotControlLease.release")
     def release(self, *, timeout_ms: int | None = None) -> EffectGen[None, SoulFireOperationError]:
+        """Release the lease and clear this handle's action token.
+
+        Repeated calls after a successful release do nothing. The owning scope
+        calls this method automatically. ``timeout_ms`` controls RPC timeout in
+        milliseconds.
+        """
         if self._lease is None:
             return
         yield from self._bot.release_control(self._lease, timeout_ms)

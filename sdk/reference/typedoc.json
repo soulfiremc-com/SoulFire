@@ -11,11 +11,21 @@
   ],
   "tsconfig": "tsconfig.json",
   "name": "SoulFire TypeScript SDK",
-  "readme": "../typescript/README.md",
+  "readme": "typescript-docs/index.md",
   "navigationLinks": {
     "Guides": "https://soulfiremc.com/docs/sdk",
     "Python API": "https://py.soulfiremc.com",
     "GitHub": "https://github.com/soulfiremc-com/SoulFire"
   },
-  "out": "dist/typescript"
+  "out": "dist/typescript",
+  "projectDocuments": [
+    "typescript-docs/lifecycle.md",
+    "typescript-docs/tasks.md"
+  ],
+  "categoryOrder": [
+    "Connection",
+    "Bots",
+    "Tasks",
+    "*"
+  ]
 }

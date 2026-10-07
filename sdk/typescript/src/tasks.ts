@@ -157,9 +157,11 @@ type GuardSubject = Exclude<
 >;
 
 /**
- * Options every task takes. Unset, the server uses `conflictPolicy` QUEUE,
- * `priority` NORMAL, `reconnectPolicy` FAIL and `disconnectPolicy` CONTINUE
- * (the `run*` methods default to CANCEL_WITH_CALL).
+ * Scheduling, ownership, and request options for a durable bot task.
+ *
+ * Unspecified policies use server defaults. RPC timeouts and task deadlines
+ * control different stages. Reuse an idempotency key when retrying a submission.
+ * @category Tasks
  */
 export interface TaskStartOptions extends ScopedTaskStartRequest {
   call?: CallOptions;
@@ -781,13 +783,22 @@ export interface TaskListOptions extends ScopedTaskListRequest {
 }
 
 /**
- * Thrown by `SoulFireTask.result` when the task ended other than COMPLETED.
+ * Task failure payload retained by `SoulFireTaskFailed` in the Effect error channel.
  */
 export { SoulFireTaskError } from "./errors.js";
 
 /**
- * A task the bot runs on the server. It keeps running whatever the caller does,
- * until it ends.
+ * A handle for a server task with a typed result.
+ *
+ * Starting a task waits for acceptance, not completion. Server lifecycle policies
+ * control execution after acceptance. Use {@link wait} to inspect terminal status,
+ * or {@link result} to require successful completion and decode the result.
+ *
+ * @remarks
+ * Observing this handle does not take ownership of the job. Interrupting an
+ * observer or result wait does not itself cancel it. Call {@link cancel}, use a
+ * `run*` stream, or use {@link SoulFireBot.collect} for cancellation ownership.
+ * @category Tasks
  */
 export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
   #snapshot: BotTask;
@@ -803,24 +814,38 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
     this.#snapshot = snapshot;
   }
 
+  /**
+   * Stable task identifier for later lookup, observation, or cancellation.
+   */
   public get id(): string {
     return this.#snapshot.taskId;
   }
 
   /**
-   * The task as last fetched: `refresh`, `wait` and `cancel` update it.
+   * Last fetched task state, without a network request.
+   *
+   * {@link refresh}, {@link wait}, and {@link cancel} update it. Direct consumption
+   * of {@link events} does not update this snapshot.
    */
   public get snapshot(): Readonly<BotTask> {
     return this.#snapshot;
   }
 
   /**
-   * Completed, cancelled, failed or timed out.
+   * Whether the cached status is completed, cancelled, failed, or timed out.
+   *
+   * This property does not fetch current state. Use {@link refresh} for a new snapshot.
    */
   public get terminal(): boolean {
     return isTerminalTaskStatus(this.#snapshot.status);
   }
 
+  /**
+   * Fetch current server state and update {@link snapshot}.
+   *
+   * @param options - RPC call options.
+   * @returns An Effect that produces the latest task snapshot.
+   */
   public refresh(
     options?: CallOptions,
   ): Effect.Effect<BotTask, SoulFireOperationError> {
@@ -836,10 +861,15 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
   }
 
   /**
-   * The task's events after `afterRevision`, until it ends. `afterRevision`
-   * defaults to the snapshot's.
+   * Observe task revisions until the task ends.
+   *
+   * @param options - Revision to resume after and RPC call options. The revision
+   *  defaults to the cached snapshot's revision when the stream opens.
+   * @returns A lazy Stream of task events.
+   * @remarks
+   * Direct consumption does not update {@link snapshot}. Closing this observer
+   * does not cancel the server task.
    */
-
   public events(options?: {
     afterRevision?: bigint;
     call?: CallOptions;
@@ -861,7 +891,14 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
   }
 
   /**
-   * Resolves when the task ends, however it ends.
+   * Wait for a terminal state and update {@link snapshot}.
+   *
+   * @returns An Effect that produces a snapshot for any terminal status, including
+   *  failure and cancellation. Use {@link result} to require success.
+   * @remarks
+   * Returns immediately if the cached state is terminal. Otherwise, consumes
+   * updates and fetches state if the event stream ends before a terminal update.
+   * Interrupting this wait does not itself cancel the server task.
    */
   public wait(options?: {
     call?: CallOptions;
@@ -880,6 +917,15 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
     });
   }
 
+  /**
+   * Request task cancellation and update the cached snapshot.
+   *
+   * @param reason - Explanation recorded with the cancellation request.
+   * @param options - RPC call options; the SDK includes any active control token.
+   * @returns An Effect that produces the server's updated task snapshot.
+   * @remarks
+   * Inspect status when completion can race with cancellation.
+   */
   public cancel(
     reason = "",
     options?: CallOptions,
@@ -896,11 +942,15 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
   }
 
   /**
-   * Waits for the end and returns the result. Throws `SoulFireTaskError` unless
-   * it completed.
-   */
-  /**
-   * Waits for the result. Fails with `SoulFireTaskFailed` unless it completed.
+   * Wait for successful completion and decode the typed task result.
+   *
+   * @returns An Effect that produces the result selected by the start method.
+   *  Without a result schema, it produces the completed task snapshot.
+   * @remarks
+   * Failure, cancellation, timeout, or a missing or incompatible result fails
+   * with `SoulFireTaskFailed` in the Effect error channel. The error retains the
+   * server task snapshot. Interrupting this wait does not itself cancel the task.
+   * @see {@link wait} to inspect unsuccessful terminal states.
    */
   public result(options?: {
     call?: CallOptions;
@@ -966,10 +1016,17 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
 }
 
 /**
- * Long jobs the server runs for the bot. Each `x` starts a task and resolves
- * once accepted. Use `yield* task.result()` to wait for completion.
- * Each `runX` starts it and streams its events instead,
- * and the task is cancelled if the stream is.
+ * Start and observe durable server jobs for one bot.
+ *
+ * Access this API through {@link SoulFireBot.tasks}. Named start methods return
+ * {@link SoulFireTask} after acceptance. Use `yield* task.result()` for successful
+ * completion. `run*` methods instead stream events with cancellation tied to RPC
+ * ownership by default.
+ *
+ * @remarks
+ * A call timeout limits transport work. A task deadline limits server execution.
+ * For submission retries, reuse an idempotency key to avoid duplicate work.
+ * @category Tasks
  */
 export class SoulFireTasks {
   public constructor(
@@ -982,10 +1039,16 @@ export class SoulFireTasks {
   ) {}
 
   /**
-   * Starts a task from its input message. `resultSchema` types `result()`.
-   */
-  /**
-   * Starts a task from its input message. `resultSchema` types `result()`.
+   * Submit a protobuf task input and return a handle after acceptance.
+   *
+   * @param inputSchema - Protobuf schema for the task input.
+   * @param input - Task configuration, before protobuf serialization.
+   * @param resultSchema - Matching protobuf schema used to decode `task.result()`.
+   * @param options - Scheduling, lifecycle, deadline, and request configuration.
+   * @returns An Effect that produces a typed task handle.
+   * @remarks
+   * This operation does not wait for completion or register a cancellation
+   * finalizer. Use {@link run} for stream ownership or cancel the handle explicitly.
    */
   public start<
     Input extends DescMessage,
@@ -1023,8 +1086,17 @@ export class SoulFireTasks {
   }
 
   /**
-   * Starts a task and streams its events until it ends. Unless
-   * `disconnectPolicy` says otherwise, the task is cancelled if the stream is.
+   * Submit a task and stream progress with RPC ownership.
+   *
+   * @param inputSchema - Protobuf schema for the task input.
+   * @param input - Task configuration.
+   * @param options - Scheduling and request options. `disconnectPolicy` defaults
+   *  to `CANCEL_WITH_CALL`, rather than the server's unspecified policy.
+   * @returns A lazy Stream of task events. Consumption starts the job.
+   * @remarks
+   * Closing or interrupting the stream cancels unfinished work by default. An
+   * explicit disconnect policy can select different behavior. Task failures also
+   * appear in event snapshots; inspect their status.
    */
   public run<Input extends DescMessage>(
     inputSchema: Input,
@@ -1057,7 +1129,12 @@ export class SoulFireTasks {
   }
 
   /**
-   * Moves the bot to `goal` (see `goals`).
+   * Start durable navigation and return its typed handle after acceptance.
+   *
+   * @param goal - Arrival condition, usually built with `goals`.
+   * @param options - Pathfinding and scheduling configuration.
+   * @returns An Effect that produces a task handle. Use `task.result()` for arrival.
+   * @see {@link runGoTo} for progress with stream ownership.
    */
   public goTo(
     goal: PathfindGoal,
@@ -1077,6 +1154,14 @@ export class SoulFireTasks {
     });
   }
 
+  /**
+   * Navigate to a goal and stream task updates until execution ends.
+   *
+   * @param goal - Arrival condition, usually built with `goals`.
+   * @param options - Pathfinding and scheduling configuration.
+   * @returns A lazy progress Stream. Interruption cancels unfinished work by default.
+   * @see {@link goTo} for a handle with explicit ownership.
+   */
   public runGoTo(
     goal: PathfindGoal,
     options: GoToTaskOptions = {},
@@ -2308,7 +2393,21 @@ export class SoulFireTasks {
   }
 
   /**
-   * Finds, reaches and mines `count` blocks with one of `blockIds` or `tags`.
+   * Start block collection and return a typed handle after acceptance.
+   *
+   * @param blockIds - Block IDs or `#`-prefixed tags, as one string or an array.
+   * @param options - Additional tags, block count, search distance, and scheduling options.
+   * @returns An Effect that produces the collection task handle.
+   * @example
+   * ```ts
+   * const task = yield* bot.tasks.collectBlocks([], {
+   *   tags: ["minecraft:logs"],
+   *   count: 16,
+   * });
+   * const result = yield* task.result();
+   * ```
+   * @see {@link SoulFireBot.collect} for completion with automatic cancellation.
+   * @see {@link runCollectBlocks} for progress with stream ownership.
    */
   public collectBlocks(
     blockIds: string | readonly string[],
@@ -2350,6 +2449,13 @@ export class SoulFireTasks {
     });
   }
 
+  /**
+   * Collect matching blocks and stream progress with cancellation ownership.
+   *
+   * @param blockIds - Block IDs or tags prefixed with `#`.
+   * @param options - The same selector and pathfinding options as {@link collectBlocks}.
+   * @returns A lazy Stream. Interruption cancels unfinished work by default.
+   */
   public runCollectBlocks(
     blockIds: string | readonly string[],
     options: CollectBlocksTaskOptions = {},

@@ -168,6 +168,21 @@ def normalize_base_url(base_url: str) -> str:
 
 
 class SoulFire:
+    """A scoped client for a SoulFire server and its bot instances.
+
+    Use :meth:`connect` for an existing server, :meth:`install` for a managed
+    local server, or :meth:`create_bot` for a ready bot in one operation.
+    Direct construction creates RPC clients without a handshake or scope cleanup.
+
+    SDK operations return lazy ``Effect`` values. Compose them with ``yield from``
+    inside an Effect workflow, then run the workflow with ``run_async``.
+    Keep all client and bot work inside ``scoped``. The scope closes transports
+    and any local server that this client manages.
+
+    See Also:
+        `Python tutorial <https://soulfiremc.com/docs/sdk/python>`_.
+    """
+
     def __init__(
         self,
         base_url: str,
@@ -237,6 +252,29 @@ class SoulFire:
         required_capabilities: Iterable[str] = (),
         required_plugins: Iterable[RequiredPlugin] = (),
     ) -> EffectGen[SoulFire, SoulFireOperationError, Scope]:
+        """Connect to an existing server and check SDK compatibility.
+
+        The handshake checks the API version, required capabilities, and required
+        plugin versions. The scope closes the client's transports on exit.
+        It does not stop the remote SoulFire server.
+
+        Args:
+            base_url: SoulFire gRPC-Web URL, including ``http://`` or ``https://``.
+                This is separate from the Minecraft server address.
+            token: Bearer token or token provider. Omit it for a public server.
+            timeout_ms: Default RPC timeout in milliseconds. ``None`` uses the
+                transport default. This is separate from bot readiness timeouts.
+            interceptors: Additional ConnectRPC interceptors.
+            required_capabilities: Capability identifiers the server must support.
+            required_plugins: Plugin identifiers and version constraints to check.
+
+        Returns:
+            An Effect that produces a client after the handshake. Requires ``Scope``.
+
+        Notes:
+            Transport, authentication, and compatibility errors use the Effect error
+            channel. Use :meth:`unauthenticated` when login must precede the handshake.
+        """
         client = yield from cls.unauthenticated(
             base_url,
             token=token,
@@ -260,6 +298,16 @@ class SoulFire:
         required_capabilities: Iterable[str] = (),
         required_plugins: Iterable[RequiredPlugin] = (),
     ) -> EffectGen[SoulFire, SoulFireOperationError, Scope]:
+        """Create a scoped client without an SDK handshake.
+
+        Use this client for the login flow on a server that requires authentication.
+        After login, negotiate compatibility before reading server metadata.
+        The scope closes all transports. This method accepts the same connection
+        options as :meth:`connect`.
+
+        Returns:
+            An Effect that produces a client. Requires ``Scope``.
+        """
         return (
             yield from acquire_release(
                 validate(
@@ -290,6 +338,31 @@ class SoulFire:
         timeout_ms: int | None = None,
         interceptors: Iterable[ClientInterceptor] = (),
     ) -> EffectGen[SoulFire, SoulFireOperationError, Scope]:
+        """Download and start a local SoulFire server owned by the scope.
+
+        The installer downloads Java and SoulFire when needed, starts the process,
+        then connects with its local token and completes the SDK handshake.
+        The scope closes the client and stops the managed process on exit.
+        Downloaded files and server data remain available for later runs.
+
+        Args:
+            directory: Installation and data directory. Defaults to ``.soulfire``
+                in the current working directory.
+            version: Release tag to install. ``None`` selects the latest release.
+            java_args: Extra JVM arguments before the SoulFire JAR.
+            port: Local gRPC-Web port. ``None`` selects an available port.
+            startup_timeout: Maximum startup wait in seconds. Defaults to 120.
+            on_log: Callback for server log lines.
+            timeout_ms: Default RPC timeout in milliseconds after startup.
+            interceptors: Additional ConnectRPC interceptors.
+
+        Returns:
+            An Effect that produces a connected client. Requires ``Scope``.
+
+        Notes:
+            Installation failures use ``SoulFireInstallError`` in the Effect error
+            channel. Startup timeout and RPC timeout control different stages.
+        """
         from ._install import install_local_server
 
         handle = yield from acquire_release(
@@ -318,6 +391,10 @@ class SoulFire:
         return client
 
     def set_token(self, token: TokenProvider | None) -> None:
+        """Replace the bearer token or token provider for subsequent RPC calls.
+
+        This synchronous change does not perform a handshake or restart open streams.
+        """
         self._token = token
 
     @classmethod
@@ -334,6 +411,32 @@ class SoulFire:
         on_device_code: Callable[[DeviceCode], Effect[None, SoulFireOperationError]] | None = None,
         installation: ManagedInstallOptions | None = None,
     ) -> EffectGen[SoulFireBot, SoulFireOperationError, Scope]:
+        """Install SoulFire and create or reuse a ready bot by name.
+
+        The instance name defaults to the Minecraft server address. The bot name
+        and offline username default to ``username``. Repeated calls reuse named
+        resources. Conflicting account or server configuration fails explicitly.
+        The scope owns the managed process, observation, and bot startup.
+
+        Args:
+            server: Minecraft address, such as ``localhost:25565``.
+            username: Minecraft username for a new offline account.
+            auth: ``"offline"`` by default. ``"microsoft"`` enables device-code login
+                when no matching account exists.
+            instance_name: Stable instance name. Defaults to the trimmed address.
+            name: Stable bot name within the instance. Defaults to ``username``.
+            ready_timeout: Positive, finite readiness deadline in seconds.
+                Defaults to 30. The bot must receive an initial player snapshot.
+            on_device_code: Effect callback for the first Microsoft login code.
+                Without a callback, the SDK prints the sign-in URL and code.
+            installation: Local server options accepted by :meth:`install`.
+
+        Returns:
+            An Effect that produces a ready, observed bot. Requires ``Scope``.
+
+        See Also:
+            :meth:`SoulFireInstance.get_or_create_bot` for several bots on one client.
+        """
         client = yield from cls.install(**(installation or {}))
         instance = yield from client.get_or_create_instance(
             instance_name if instance_name is not None else server.strip(), server=server
@@ -421,6 +524,18 @@ class SoulFire:
         return client
 
     def instance(self, instance_id: str) -> SoulFireInstance:
+        """Create an instance handle without a network request.
+
+        Args:
+            instance_id: Existing instance UUID, not its friendly name.
+
+        Returns:
+            A handle whose operations use this client's transports. Creating the
+            handle does not check that the instance exists or that access is allowed.
+
+        See Also:
+            :meth:`get_or_create_instance` to provision an instance by name.
+        """
         return SoulFireInstance(
             instance_id,
             self.bot_service,
@@ -477,6 +592,21 @@ class SoulFire:
         server: str | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[SoulFireInstance, SoulFireOperationError]:
+        """Find or create an instance by name for the authenticated user.
+
+        Args:
+            name: Stable instance name used for provisioning.
+            server: Minecraft address to configure. A conflicting address fails.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            An Effect that produces an instance handle. Requires the negotiated
+            ``instance.provisioning.v1`` capability.
+
+        Notes:
+            Reuse the returned instance to provision several bots. This operation
+            does not start bots or delete the instance when a scope closes.
+        """
         yield from validate(lambda: self.capabilities.require("instance.provisioning.v1"))
         request = InstanceGetOrCreateRequest(name=name)
         if server is not None:
@@ -524,6 +654,12 @@ class SoulFire:
 
     @fn("SoulFire.close")
     def close(self) -> EffectGen[None]:
+        """Close client transports and stop its managed local server, if any.
+
+        The connection scope calls this operation automatically. Prefer scope cleanup
+        so active workflows finish before their transports close. This operation
+        leaves downloaded files and persistent server data in place.
+        """
         clients, self._clients = self._clients, []
         handle, self._local_server_handle = self._local_server_handle, None
 
@@ -589,6 +725,14 @@ class SoulFire:
 
 
 class SoulFireInstance:
+    """An instance handle that groups bot accounts and configuration.
+
+    Obtain a handle from :meth:`SoulFire.instance` or
+    :meth:`SoulFire.get_or_create_instance`. Use :meth:`get_or_create_bot` for
+    normal provisioning and :meth:`bot` for an existing bot UUID.
+    The instance itself persists after the client scope closes.
+    """
+
     def __init__(
         self,
         instance_id: str,
@@ -639,6 +783,29 @@ class SoulFireInstance:
         on_device_code: Callable[[DeviceCode], Effect[None, SoulFireOperationError]] | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[SoulFireBot, SoulFireOperationError, Scope]:
+        """Provision a named account and return a bot, ready by default.
+
+        Bot names belong to this instance. Repeated calls reuse the named account;
+        conflicting usernames or authentication methods fail explicitly.
+        With ``start=True``, this operation calls :meth:`SoulFireBot.connect`.
+        Scope cleanup stops a bot started by the SDK and preserves a bot that
+        was already running. The account remains in the instance.
+
+        Args:
+            name: Stable bot name within this instance.
+            auth: ``"offline"`` or ``"microsoft"``. Defaults to ``"offline"``.
+            username: Minecraft username for provisioning an offline account.
+            start: Start and observe the bot when true. With false, returns an
+                unconnected handle for configuration before :meth:`SoulFireBot.connect`.
+            ready_timeout: Positive, finite readiness deadline in seconds.
+                Defaults to 30 and applies when ``start`` is true.
+            on_device_code: Effect callback for Microsoft device-code login.
+                Without a callback, the SDK prints the sign-in URL and code.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            An Effect that produces a bot handle. Requires ``Scope``.
+        """
         if auth not in ("offline", "microsoft"):
             return (yield from fail(SoulFireValidationError("auth must be offline or microsoft")))
         request = InstanceGetOrCreateBotRequest(
@@ -705,6 +872,15 @@ class SoulFireInstance:
         return bot
 
     def bot(self, bot_id: str) -> SoulFireBot:
+        """Create a bot handle without a network request or readiness wait.
+
+        Args:
+            bot_id: Existing bot UUID, not its username or provisioning name.
+
+        Returns:
+            A bot handle with no attached observation session. Use
+            :meth:`SoulFireBot.connect` for scoped readiness and live state.
+        """
         return SoulFireBot(
             self.id,
             bot_id,

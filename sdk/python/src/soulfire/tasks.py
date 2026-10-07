@@ -173,6 +173,18 @@ def is_terminal_task_status(status: BotTaskStatus) -> bool:
 
 
 class SoulFireTask[ResultT: Message]:
+    """A handle for a server task with a typed result.
+
+    Obtain a handle from :class:`SoulFireTasks` start methods. Starting a task
+    waits for server acceptance, not completion. The server's lifecycle policies
+    control its execution after acceptance.
+
+    Use :meth:`wait` to inspect any terminal status, or :meth:`result` to require
+    successful completion and decode the result. Observing or interrupting these
+    operations does not itself cancel the task. Call :meth:`cancel` explicitly,
+    or use a ``run_*`` stream or :meth:`soulfire.SoulFireBot.collect` for ownership.
+    """
+
     def __init__(
         self,
         client: BotTaskServiceClient,
@@ -187,20 +199,37 @@ class SoulFireTask[ResultT: Message]:
 
     @property
     def id(self) -> str:
+        """Stable task identifier for later lookup, observation, or cancellation."""
         return self._snapshot.task_id
 
     @property
     def snapshot(self) -> BotTask:
+        """Last fetched task state, without a network request.
+
+        :meth:`refresh`, :meth:`wait`, and :meth:`cancel` update this snapshot.
+        Consuming :meth:`events` directly does not update it.
+        """
         return self._snapshot
 
     @property
     def terminal(self) -> bool:
+        """Whether the cached snapshot is completed, cancelled, failed, or timed out.
+
+        This property does not fetch current state. Use :meth:`refresh` for a new
+        snapshot.
+        """
         return is_terminal_task_status(self._snapshot.status)
 
     @fn("SoulFireTask.refresh")
     def refresh(
         self, *, headers: dict[str, str] | None = None, timeout_ms: int | None = None
     ) -> EffectGen[BotTask, SoulFireOperationError]:
+        """Fetch current server state and update :attr:`snapshot`.
+
+        Returns:
+            An Effect that produces the latest ``BotTask``. ``timeout_ms`` controls
+            RPC timeout in milliseconds; ``headers`` adds request metadata.
+        """
         self._snapshot = yield from rpc(
             "SoulFireTask.refresh",
             lambda: self._client.get_bot_task(
@@ -216,6 +245,18 @@ class SoulFireTask[ResultT: Message]:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> Stream[BotTaskEvent, SoulFireOperationError]:
+        """Observe task revisions until the task ends.
+
+        Args:
+            after_revision: Resume after this revision. ``None`` uses the cached
+                snapshot's revision when the stream opens.
+            headers: Extra request metadata.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            A lazy Stream of ``BotTaskEvent`` values. Direct consumption does not
+            update :attr:`snapshot`. Closing this observer does not cancel the task.
+        """
         return rpc_stream(
             "SoulFireTask.events",
             lambda: self._client.watch_bot_task(
@@ -235,6 +276,17 @@ class SoulFireTask[ResultT: Message]:
     def wait(
         self, *, headers: dict[str, str] | None = None, timeout_ms: int | None = None
     ) -> EffectGen[BotTask, SoulFireOperationError]:
+        """Wait for the terminal state and update :attr:`snapshot`.
+
+        Returns immediately from the cached snapshot if it is already terminal.
+        Otherwise, consumes task events and fetches state if the stream ends before
+        it observes a terminal update.
+
+        Returns:
+            An Effect that produces ``BotTask`` for any terminal status, including
+            failure or cancellation. Use :meth:`result` to require success.
+            ``timeout_ms`` controls RPC timeout in milliseconds.
+        """
         if self.terminal:
             return self._snapshot
 
@@ -257,6 +309,17 @@ class SoulFireTask[ResultT: Message]:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[BotTask, SoulFireOperationError]:
+        """Request task cancellation and update the cached snapshot.
+
+        Args:
+            reason: Explanation recorded with the cancellation request.
+            headers: Extra request metadata; the SDK adds any active control token.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            An Effect that produces the server's updated ``BotTask``. Inspect its
+            status when completion can race with cancellation.
+        """
         self._snapshot = yield from rpc(
             "SoulFireTask.cancel",
             lambda: self._client.cancel_bot_task(
@@ -271,6 +334,21 @@ class SoulFireTask[ResultT: Message]:
     def result(
         self, *, headers: dict[str, str] | None = None, timeout_ms: int | None = None
     ) -> EffectGen[ResultT, SoulFireOperationError]:
+        """Wait for successful completion and decode the typed task result.
+
+        A failed, cancelled, or timed-out task fails with ``SoulFireTaskError`` in
+        the Effect error channel. A missing or incompatible result also fails.
+        The error retains the task snapshot for status and failure inspection.
+        Interrupting this wait does not itself cancel the server task.
+
+        Returns:
+            An Effect that produces the result type selected by the start method.
+            ``timeout_ms`` controls RPC timeout in milliseconds.
+
+        See Also:
+            :meth:`wait` to inspect unsuccessful terminal states without converting
+            them into task errors.
+        """
         task = yield from self.wait(headers=headers, timeout_ms=timeout_ms)
         if task.status != BOT_TASK_STATUS_COMPLETED or not task.HasField("result"):
             return (
@@ -290,6 +368,20 @@ class SoulFireTask[ResultT: Message]:
 
 
 class SoulFireTasks:
+    """Start and observe durable jobs for one bot.
+
+    Access this API through :attr:`soulfire.SoulFireBot.tasks`.
+    Named start methods return ``SoulFireTask`` after server acceptance.
+    Call the handle's ``result()`` to wait for successful completion.
+    ``run_*`` methods instead produce progress events and tie cancellation to
+    stream interruption by default.
+
+    A request timeout limits transport work. A task ``deadline`` limits server
+    execution and must be timezone-aware. Keep these limits separate.
+    For retries of task submission, use a stable ``idempotency_key`` rather than
+    start another job accidentally.
+    """
+
     def __init__(
         self,
         instance_id: str,
@@ -319,6 +411,26 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[SoulFireTask[ResultT], SoulFireOperationError]:
+        """Submit a protobuf task input and return a typed handle after acceptance.
+
+        Args:
+            task_input: Protobuf task input, such as ``CollectBlocksTask``.
+            result_type: Matching protobuf result class for ``task.result()``.
+            conflict_policy: Server policy for conflicting task resources.
+            reconnect_policy: Server policy when the bot reconnects.
+            disconnect_policy: Server policy when the owning RPC disconnects.
+            priority: Scheduling priority; unspecified values use server defaults.
+            deadline: Absolute, timezone-aware execution deadline, or no deadline.
+            parent_task_id: Parent task identifier for task relationships.
+            causation_id: Identifier for the event or operation that caused this task.
+            idempotency_key: Stable key for retries of the same task submission.
+            headers: Extra request metadata; the SDK adds any active control token.
+            timeout_ms: RPC timeout in milliseconds, separate from ``deadline``.
+
+        Returns:
+            An Effect that produces ``SoulFireTask[result_type]`` after acceptance.
+            It does not wait for completion or register a cancellation finalizer.
+        """
         packed = AnyMessage()
         packed.Pack(task_input)
         request = yield from validate(
@@ -359,6 +471,25 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> Stream[BotTaskEvent, SoulFireOperationError]:
+        """Submit a protobuf task and stream progress with RPC ownership.
+
+        The stream is lazy: consumption starts the job. Its default disconnect policy
+        is ``CANCEL_WITH_CALL``. Closing or interrupting the stream therefore cancels
+        unfinished work unless an explicit policy selects different behavior.
+        Task failure is also represented in event snapshots; inspect task status.
+
+        Args:
+            task_input: Protobuf task input.
+            disconnect_policy: Policy for a closed RPC. Defaults to cancellation.
+            deadline: Absolute, timezone-aware task execution deadline.
+            idempotency_key: Stable key for retries of this submission.
+            timeout_ms: RPC timeout in milliseconds, separate from ``deadline``.
+            headers: Extra request metadata.
+
+        Returns:
+            A Stream of ``BotTaskEvent`` values. Scheduling and relationship options
+            have the same meaning as :meth:`start`.
+        """
         packed = AnyMessage()
         packed.Pack(task_input)
         return rpc_stream(
@@ -393,6 +524,12 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> Stream[BotTaskEvent, SoulFireOperationError]:
+        """Navigate to a goal and stream task updates until execution ends.
+
+        Consumption starts the job. Interruption cancels unfinished work by default.
+        Use :meth:`go_to` for a handle with explicit ownership. ``deadline`` limits
+        server execution; ``timeout_ms`` limits the RPC in milliseconds.
+        """
         return self.run(
             GoToTask(goal=goal, **{} if options is None else {"options": options}),
             reconnect_policy=reconnect_policy,
@@ -416,6 +553,13 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[SoulFireTask[GoToTaskResult], SoulFireOperationError]:
+        """Start a durable navigation task and return its typed handle.
+
+        ``goal`` describes arrival, and ``options`` controls pathfinding.
+        This operation returns after acceptance. Use ``yield from task.result()``
+        to wait for arrival, or :meth:`run_go_to` for progress with stream ownership.
+        Scheduling and request options have the same meaning as :meth:`start`.
+        """
         return (
             yield from self.start(
                 GoToTask(goal=goal, **{} if options is None else {"options": options}),
@@ -1987,6 +2131,12 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> Stream[BotTaskEvent, SoulFireOperationError]:
+        """Collect matching blocks and stream progress with cancellation ownership.
+
+        Selector and pathfinding options match :meth:`collect_blocks`.
+        Consumption starts the job. Interruption cancels unfinished work by default.
+        ``deadline`` limits server execution; ``timeout_ms`` limits the RPC in milliseconds.
+        """
         return self.run(
             _collect_blocks_task(
                 block_ids,
@@ -2025,6 +2175,35 @@ class SoulFireTasks:
         headers: dict[str, str] | None = None,
         timeout_ms: int | None = None,
     ) -> EffectGen[SoulFireTask[CollectBlocksTaskResult], SoulFireOperationError]:
+        """Start a durable block collection task and return its typed handle.
+
+        Args:
+            block_ids: Block IDs or ``#``-prefixed tags; accepts one string or an iterable.
+            tags: Additional block tags, such as ``"minecraft:logs"``.
+            count: Blocks to collect. Defaults to 1.
+            search_radius: Search distance in blocks. Defaults to 32, at most 64.
+            avoid_submerged_targets: Skip targets covered by fluid up to the bot's height.
+            require_line_of_sight: Restrict selection to visible blocks.
+            target_y_range: Allowed block heights; an omitted bound is open.
+            options: Pathfinding configuration.
+            deadline: Absolute, timezone-aware task execution deadline.
+            idempotency_key: Stable key for retries of the same submission.
+            timeout_ms: RPC timeout in milliseconds.
+
+        Returns:
+            An Effect that produces ``SoulFireTask[CollectBlocksTaskResult]`` after
+            acceptance. Scheduling options have the same meaning as :meth:`start`.
+
+        Examples:
+            Inside an Effect workflow::
+
+                task = yield from bot.tasks.collect_blocks(tags=["minecraft:logs"], count=16)
+                result = yield from task.result()
+
+        See Also:
+            :meth:`soulfire.SoulFireBot.collect` to wait with automatic cancellation
+            of unfinished work, or :meth:`run_collect_blocks` to stream progress.
+        """
         return (
             yield from self.start(
                 (

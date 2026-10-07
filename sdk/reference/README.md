@@ -7,7 +7,8 @@ Keep tutorials and recipes in the [website guides](https://soulfiremc.com/docs/s
 TypeDoc reads every TypeScript package entry point, including generated protocol modules.
 Sphinx with AutoAPI reads the Python package, public modules, and protocol stubs.
 The Python reference uses Furo and gives each class its own page.
-Both sites include search and source code.
+Both sites include an API overview, lifecycle and task explanations, search, and source code.
+The concept pages include examples from SDK source files instead of copied workflows.
 
 ## Build
 
@@ -64,3 +65,31 @@ The generators show the package version from that checkout.
 Before publishing a release, review its public classes, runtime entry points, and protocol modules.
 The Python source uses `EffectGen` in decorated generator implementations.
 Methods decorated with `@fn` return lazy `Effect` operations when called.
+
+## Document a public operation
+
+Keep the API contract in TSDoc comments or Python docstrings beside the implementation.
+Each operation needs an outcome, parameter meanings and units, result semantics,
+error conditions, and ownership rules. Explain when it runs, what requires a scope,
+and what happens after cancellation. Link related operations and complete recipes.
+
+For task APIs, distinguish acceptance, progress observation, and successful completion.
+Document request timeouts separately from readiness waits and server task deadlines.
+Keep language-specific contracts accurate: Python uses `SoulFireTaskError`, while
+TypeScript reports `SoulFireTaskFailed` through its Effect error channel.
+
+The concept pages include `sdk/typescript/examples/reference-lifecycle.ts` and
+`sdk/python/examples/reference_lifecycle.py` directly. TypeScript's existing typecheck
+covers its examples. For Python examples, run these local checks from `sdk/python`:
+
+```bash
+.venv/bin/ruff check examples/reference_lifecycle.py
+.venv/bin/pyright --pythonpath .venv/bin/python examples/reference_lifecycle.py
+```
+
+Build both references and inspect the overview, a class page, its source links,
+and rendered examples before publishing. Do not edit generated HTML or protocol bindings.
+Put protocol documentation in `.proto` files and regenerate bindings with `bun run sdk:generate`.
+The Python renderer converts `@fn` implementation return annotations from `EffectGen`
+to the caller's `Effect` signature through AutoAPI's method and function templates.
+Ordinary generator functions retain their declared return types.
