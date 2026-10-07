@@ -7,6 +7,9 @@ RPC discovery over gRPC-Web.
 The high-level API uses Effect 4 operations, streams, and scopes. Compose your
 workflow as an effect and run it once at the application boundary.
 
+See the [generated API reference](https://ts.soulfiremc.com/) for classes,
+methods, options, and protocol types.
+
 ## Install
 
 ```bash

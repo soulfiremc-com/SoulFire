@@ -1,0 +1,18 @@
+{
+  "name": "soulfire-sdk-reference",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:typescript": "bun build.ts typescript",
+    "build:python": "bun build.ts python",
+    "deploy:typescript": "bun run build:typescript && cf deploy --prebuilt",
+    "deploy:python": "bun run build:python && cf deploy --prebuilt --mode python"
+  },
+  "devDependencies": {
+    "@cloudflare/build-output-utils": "0.8.5",
+    "cf": "1.0.0-beta.12",
+    "typedoc": "0.28.20",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "bun@1.4.2"
+}

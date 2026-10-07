@@ -1,0 +1,7 @@
+{
+  "extends": "../typescript/tsconfig.build.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "noEmit": true
+  }
+}

@@ -62,3 +62,6 @@ sdk/python/.ruff_cache/
 sdk/python/dist/
 **/__pycache__/
 .repos/effect
+sdk/reference/.venv/
+sdk/reference/.cloudflare/
+sdk/reference/dist/

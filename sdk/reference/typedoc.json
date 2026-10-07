@@ -1,0 +1,21 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "../typescript/src/index.ts",
+    "../typescript/src/platform.ts",
+    "../typescript/src/browser.ts",
+    "../typescript/src/node.ts",
+    "../typescript/src/bun.ts",
+    "../typescript/src/plugin-generator.ts",
+    "../typescript/src/generated/**/*.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "name": "SoulFire TypeScript SDK",
+  "readme": "../typescript/README.md",
+  "navigationLinks": {
+    "Guides": "https://soulfiremc.com/docs/sdk",
+    "Python API": "https://py.soulfiremc.com",
+    "GitHub": "https://github.com/soulfiremc-com/SoulFire"
+  },
+  "out": "dist/typescript"
+}

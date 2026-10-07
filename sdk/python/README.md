@@ -7,6 +7,9 @@ typed failures, services, and scoped resources. It requires CPython 3.14 or newe
 Python and TypeScript share the same protobuf protocol and SDK concepts.
 Python uses snake case and `yield from`; TypeScript uses camel case and `yield*`.
 
+See the [generated API reference](https://py.soulfiremc.com/) for classes,
+methods, options, and protocol types.
+
 ## Install
 
 ```bash
