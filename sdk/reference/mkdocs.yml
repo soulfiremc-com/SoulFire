@@ -1,7 +1,7 @@
 site_name: !ENV [SOULFIRE_REFERENCE_NAME, SoulFire Python SDK]
 site_url: https://py.soulfiremc.com/
 repo_url: https://github.com/soulfiremc-com/SoulFire
-edit_uri: blob/main/sdk/python/src/
+edit_uri: blob/main/
 docs_dir: python-docs
 site_dir: dist/python
 theme:
