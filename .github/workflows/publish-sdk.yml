@@ -2,6 +2,20 @@ name: Publish SDKs
 run-name: Publish SDKs v${{ inputs.version }}
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      publish_npm:
+        default: false
+        type: boolean
+      publish_pypi:
+        default: false
+        type: boolean
+      publish_jsr:
+        default: true
+        type: boolean
   workflow_dispatch:
     inputs:
       version:
