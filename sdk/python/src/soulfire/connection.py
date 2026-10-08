@@ -8,7 +8,7 @@ from .errors import SoulFireCapabilityError, SoulFireCompatibilityError
 from .plugin_api_pb2 import PluginApiDescriptor
 from .sdk_pb2 import SdkApiVersion, SdkHandshakeResponse, SdkIdentity
 
-SDK_VERSION: Final = "2.10.3"
+SDK_VERSION: Final = "2.10.4"
 SDK_API_VERSION: Final = SdkApiVersion(major=1, minor=0, patch=0)
 
 
