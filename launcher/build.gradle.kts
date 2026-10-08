@@ -29,10 +29,10 @@ dependencies {
 
   api("at.yawk.lz4:lz4-java:1.12.0")
   api("com.azure:azure-json:1.5.1")
-  api("com.github.oshi:oshi-core:7.6.1")
+  api("com.github.oshi:oshi-core:7.7.0")
   api("com.google.code.gson:gson:2.14.0")
   api("com.google.guava:failureaccess:1.0.3")
-  api("com.google.guava:guava:33.7.1-jre")
+  api("com.google.guava:guava:33.7.2-jre")
   api("com.ibm.icu:icu4j:78.3")
   api("com.microsoft.azure:msal4j:1.26.0")
   api("com.mojang:authlib:10.0.77")
@@ -50,7 +50,7 @@ dependencies {
   api("net.java.dev.jna:jna:5.19.1")
   api("net.sf.jopt-simple:jopt-simple:5.0.4")
   api("org.apache.commons:commons-compress:1.28.0")
-  api("org.apache.commons:commons-lang3:3.20.0")
+  api("org.apache.commons:commons-lang3:3.21.0")
   api("org.jcraft:jorbis:0.0.17")
   api("org.joml:joml:1.10.9")
   api("org.jspecify:jspecify:1.0.1")
@@ -77,10 +77,10 @@ dependencies {
   api("org.slf4j:slf4j-api:2.0.20")
 
   api("io.github.llamalad7:mixinextras-fabric:0.5.5")
-  api("org.checkerframework:checker-qual:4.2.3")
+  api("org.checkerframework:checker-qual:4.3.1")
 
   // Newest netty
-  api("io.netty:netty-all:4.2.18.Final")
+  api("io.netty:netty-all:4.2.19.Final")
 }
 
 val modProjectName = ":mod"
