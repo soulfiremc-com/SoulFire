@@ -65,7 +65,7 @@ dependencies {
     isTransitive = false
   }
 
-  val viaFabricPlusBedrockNotation = "io.github.stackanvil:viafabricplus-bedrock-stackanvil:0.2.3"
+  val viaFabricPlusBedrockNotation = "io.github.stackanvil:viafabricplus-bedrock-stackanvil:0.3.4"
   implementation(viaFabricPlusBedrockNotation)
   include(viaFabricPlusBedrockNotation) {
     isTransitive = false
