@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: 'Set Version'
         run: |
@@ -58,3 +59,19 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
         with:
           commit_message: 'chore(release): bump version to ${{ inputs.version }}'
+          skip_fetch: true
+          skip_checkout: true
+          skip_push: true
+
+      - name: 'Push Version'
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          for attempt in 1 2 3; do
+            git fetch origin "$RELEASE_BRANCH"
+            git rebase "origin/$RELEASE_BRANCH"
+            if git push origin "HEAD:$RELEASE_BRANCH"; then
+              exit 0
+            fi
+          done
+          exit 1
