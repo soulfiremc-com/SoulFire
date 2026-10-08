@@ -7,13 +7,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.15.0",
-    "@effect/platform-node": "4.0.0",
+    "@bufbuild/protobuf": "2.16.0",
+    "@effect/platform-node": "4.0.2",
     "@soulfiremc/sdk": "workspace:*",
-    "effect": "4.0.0"
+    "effect": "4.0.2"
   },
   "devDependencies": {
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.4",
     "typescript": "7.0.2"
   }
 }
