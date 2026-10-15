@@ -12,7 +12,7 @@
     "@cloudflare/build-output-utils": "0.8.5",
     "cf": "1.0.0-beta.12",
     "typedoc": "0.28.20",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "packageManager": "bun@1.4.2"
 }
