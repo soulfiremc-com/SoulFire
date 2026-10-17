@@ -19,11 +19,11 @@ dependencies {
   implementation(libs.gradle.plugin.indra.git)
   implementation(libs.gradle.plugin.loom)
   implementation(libs.gradle.plugin.spotless)
-  implementation("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.12")
+  implementation("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.13")
   implementation(libs.gradle.plugin.freefair)
   implementation("net.ltgt.errorprone:net.ltgt.errorprone.gradle.plugin:5.1.1")
   implementation("org.openrewrite:plugin:7.39.0")
-  implementation("org.ow2.asm:asm:9.10.1")
+  implementation("org.ow2.asm:asm:9.11")
 }
 
 java {
