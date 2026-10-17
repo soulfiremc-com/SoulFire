@@ -133,7 +133,7 @@ jobs:
         run: python -m hatchling build
       - name: Upload npm package
         if: inputs.publish_npm
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: npm-package
           path: .artifacts/npm/*.tgz
@@ -141,7 +141,7 @@ jobs:
           retention-days: 1
       - name: Upload Python package
         if: inputs.publish_pypi
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: python-package
           path: sdk/python/dist/*
