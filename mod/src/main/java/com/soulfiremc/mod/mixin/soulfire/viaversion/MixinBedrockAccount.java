@@ -37,7 +37,7 @@ public class MixinBedrockAccount {
 
     var accountData = connection.settingsSource().stem().accountData();
     if (accountData instanceof BedrockData bedrockData) {
-      cir.setReturnValue(bedrockData.getBedrockAuthManager(connection.proxy()));
+      cir.setReturnValue(bedrockData.getBedrockAuthManager(connection.transportProxy()));
     }
   }
 }

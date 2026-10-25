@@ -36,7 +36,7 @@ public final class LenniHttpHelper {
         case HTTP -> ProxyType.HTTP;
         case SOCKS4 -> ProxyType.SOCKS4;
         case SOCKS5 -> ProxyType.SOCKS5;
-      }, proxyData.address(), proxyData.username(), proxyData.password()))
+      }, proxyData.address(), proxyData.username(), proxyData.username() != null && proxyData.password() == null ? "" : proxyData.password()))
       .setExecutor(ReactorNettyExecutor::new);
   }
 }

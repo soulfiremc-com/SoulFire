@@ -37,6 +37,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -104,20 +105,27 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
 
   @Override
   public void subscribe(LogRequest request, StreamObserver<LogResponse> responseObserver) {
-    validateScopeAccess(request.getScope());
+    subscribe(soulFireServer, request.getScope(), (ServerCallStreamObserver<LogResponse>) responseObserver,
+      (event, personal) -> LogResponse.newBuilder().setMessage(fromEvent(event, personal)).build());
+  }
+
+  static <T> void subscribe(SoulFireServer server, LogScope scope, ServerCallStreamObserver<T> observer,
+                           BiFunction<SFLogAppender.SFLogEvent, Boolean, T> messageFactory) {
+    validateScopeAccess(scope);
 
     try {
       var userId = ServerRPCConstants.USER_CONTEXT_KEY.get().getUniqueId();
       var issuedAt = ServerRPCConstants.USER_CONTEXT_KEY.get().getIssuedAt();
       var user = new CachedLazyObject<>((Supplier<Optional<SoulFireUser>>)
-        () -> soulFireServer.authSystem().authenticateBySubject(userId, issuedAt), 1, TimeUnit.SECONDS);
-      var predicate = eventPredicate(request.getScope());
-      new StateHolder.ConnectionMessageSender(
-        soulFireServer.logStateHolder(),
+        () -> server.authSystem().authenticateBySubject(userId, issuedAt), 1, TimeUnit.SECONDS);
+      var predicate = eventPredicate(scope);
+      new StateHolder.ConnectionMessageSender<>(
+        server.logStateHolder(),
         ServerRPCConstants.USER_CONTEXT_KEY.get().getUniqueId(),
-        (ServerCallStreamObserver<LogResponse>) responseObserver,
-        (event, personal) -> user.get().filter(soulFireUser -> hasScopeAccess(soulFireUser, request.getScope())
-          && predicate.test(event, personal)).isPresent()
+        observer,
+        (event, personal) -> user.get().filter(soulFireUser -> hasScopeAccess(soulFireUser, scope)
+          && predicate.test(event, personal)).isPresent(),
+        messageFactory
       );
     } catch (Throwable t) {
       log.error("Error subscribing to logs", t);
@@ -125,14 +133,14 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
     }
   }
 
-  private void validateScopeAccess(LogScope scope) {
+  private static void validateScopeAccess(LogScope scope) {
     if (!hasScopeAccess(ServerRPCConstants.USER_CONTEXT_KEY.get(), scope)) {
       throw
         Status.PERMISSION_DENIED.withDescription("You do not have permission to access this resource").asRuntimeException();
     }
   }
 
-  private boolean hasScopeAccess(SoulFireUser user, LogScope scope) {
+  private static boolean hasScopeAccess(SoulFireUser user, LogScope scope) {
     return switch (scope.getScopeCase()) {
       case GLOBAL -> user.hasPermission(PermissionContext.global(GlobalPermission.GLOBAL_SUBSCRIBE_LOGS));
       case INSTANCE -> {
@@ -152,7 +160,7 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
     };
   }
 
-  private EventPredicate eventPredicate(LogScope scope) {
+  private static EventPredicate eventPredicate(LogScope scope) {
     return switch (scope.getScopeCase()) {
       case GLOBAL -> (_, personal) -> !personal;
       case INSTANCE -> {
@@ -180,7 +188,7 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
   }
 
   public static class StateHolder {
-    private final Map<UUID, ConnectionMessageSender> subscribers = new ConcurrentHashMap<>();
+    private final Map<UUID, ConnectionMessageSender<?>> subscribers = new ConcurrentHashMap<>();
 
     public StateHolder() {
       SFLogAppender.INSTANCE.logConsumers().add(this::broadcastLogMessage);
@@ -216,12 +224,13 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
       }
     }
 
-    private static final class ConnectionMessageSender {
+    private static final class ConnectionMessageSender<T> {
       private static final int MAX_PENDING_MESSAGES = 300;
       private final StateHolder stateHolder;
       private final UUID responseId = UUID.randomUUID();
       private final UUID userId;
-      private final ServerCallStreamObserver<LogResponse> responseObserver;
+      private final ServerCallStreamObserver<T> responseObserver;
+      private final BiFunction<SFLogAppender.SFLogEvent, Boolean, T> messageFactory;
       private final EventPredicate eventPredicate;
       private final ArrayDeque<PendingLog> pending = new ArrayDeque<>();
       private boolean open = true;
@@ -229,11 +238,13 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
       private Status terminalStatus;
 
       private ConnectionMessageSender(StateHolder stateHolder, UUID userId,
-                                      ServerCallStreamObserver<LogResponse> responseObserver, EventPredicate eventPredicate) {
+                                      ServerCallStreamObserver<T> responseObserver, EventPredicate eventPredicate,
+                                      BiFunction<SFLogAppender.SFLogEvent, Boolean, T> messageFactory) {
         this.stateHolder = stateHolder;
         this.userId = userId;
         this.responseObserver = responseObserver;
         this.eventPredicate = eventPredicate;
+        this.messageFactory = messageFactory;
         responseObserver.setOnCancelHandler(this::cancel);
         responseObserver.setOnCloseHandler(this::cancel);
         responseObserver.setOnReadyHandler(this::drain);
@@ -267,7 +278,7 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
             var next = pending.removeFirst();
             // Permissions may change while the transport cannot accept messages.
             if (eventPredicate.test(next.event, next.personal)) {
-              responseObserver.onNext(LogResponse.newBuilder().setMessage(fromEvent(next.event, next.personal)).build());
+              responseObserver.onNext(messageFactory.apply(next.event, next.personal));
             }
           }
         } catch (RuntimeException error) { fail(error); }

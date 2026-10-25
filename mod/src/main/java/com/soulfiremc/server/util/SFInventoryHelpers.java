@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.util;
 
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import com.viaversion.viaversion.api.protocol.version.VersionType;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -70,6 +72,28 @@ public final class SFInventoryHelpers {
       Int2ObjectMaps.emptyMap(),
       HashedStack.create(menu.getCarried(), connection.decoratedHashOpsGenenerator())
     ));
+  }
+
+  /// Requests authoritative contents after predicted clicks. Cloning outside
+  /// the menu changes no items, including when the server still has a cursor
+  /// stack. The deliberately stale state id makes vanilla resend the menu.
+  public static void requestMenuContents(ClientPacketListener connection, AbstractContainerMenu menu) {
+    connection.send(new ServerboundContainerClickPacket(
+      menu.containerId,
+      -1,
+      (short) -999,
+      (byte) 0,
+      ContainerInput.CLONE,
+      Int2ObjectMaps.emptyMap(),
+      HashedStack.create(menu.getCarried(), connection.decoratedHashOpsGenenerator())
+    ));
+  }
+
+  public static boolean supportsMenuResync(ProtocolVersion version) {
+    // Earlier Java protocols discard the state id, and Bedrock uses its own
+    // transaction acknowledgments. They cannot answer this resync request.
+    return version.getVersionType() == VersionType.RELEASE
+      && version.newerThanOrEqualTo(ProtocolVersion.v1_17_1);
   }
 
   public static boolean isSelectableHotbarSlot(int slot) {

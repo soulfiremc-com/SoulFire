@@ -28,6 +28,7 @@ import com.soulfiremc.server.bot.HealthDamageTracker;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
@@ -46,6 +47,11 @@ public class MixinClientPacketListener {
   @Inject(method = {"handleContainerContent", "handleContainerSetSlot", "handleSetCursorItem", "handleSetPlayerInventory"}, at = @At("RETURN"))
   private void onInventoryUpdate(CallbackInfo ci) {
     BotConnection.currentOptional().ifPresent(BotConnection::onInventoryUpdate);
+  }
+
+  @Inject(method = "handleContainerContent", at = @At("RETURN"))
+  private void onContainerContent(ClientboundContainerSetContentPacket packet, CallbackInfo ci) {
+    BotConnection.currentOptional().ifPresent(bot -> bot.onContainerContent(packet.containerId()));
   }
 
   @Inject(method = "handleLevelChunkWithLight", at = @At("RETURN"))

@@ -18,6 +18,7 @@
 package com.soulfiremc.server.account;
 
 import com.soulfiremc.server.account.service.OnlineChainJavaData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsImpl;
 import com.soulfiremc.server.util.LenniHttpHelper;
@@ -28,7 +29,6 @@ import org.apache.commons.validator.routines.EmailValidator;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 public final class MSJavaCredentialsAuthService
@@ -39,15 +39,11 @@ public final class MSJavaCredentialsAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(MSJavaCredentialsAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = JavaAuthManager.create(LenniHttpHelper.client(proxyData))
-          .login(CredentialsMsaAuthService::new, new MsaCredentials(data.email, data.password));
-        return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_CREDENTIALS, authManager, null);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = JavaAuthManager.create(LenniHttpHelper.client(transportProxy))
+        .login(CredentialsMsaAuthService::new, new MsaCredentials(data.email, data.password));
+      return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_CREDENTIALS, authManager, null);
+    });
   }
 
   @Override
@@ -69,14 +65,10 @@ public final class MSJavaCredentialsAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> refresh(MinecraftAccount account, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = ((OnlineChainJavaData) account.accountData()).getJavaAuthManager(proxyData);
-        return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_CREDENTIALS, authManager, account);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = ((OnlineChainJavaData) account.accountData()).getJavaAuthManager(transportProxy);
+      return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_CREDENTIALS, authManager, account);
+    });
   }
 
   @Override

@@ -33,6 +33,7 @@ import com.soulfiremc.server.bot.ControlResource;
 import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.grpc.InventoryServiceImpl;
+import com.soulfiremc.server.grpc.InventoryServiceImpl.InventoryMutationTask;
 import com.soulfiremc.server.pathfinding.PathfindingSupport;
 import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.execution.PathExecutor;
@@ -64,6 +65,7 @@ public final class ContainerTransferTaskProvider
   private static final int CONTAINER_APPROACH_RADIUS = 1;
   private static final int MAX_APPROACH_ATTEMPTS = 3;
   private static final int OPEN_TIMEOUT_TICKS = 100;
+  private static final int CONFIRM_TIMEOUT_TICKS = 200;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -177,6 +179,7 @@ public final class ContainerTransferTaskProvider
     private final List<ContainerTransferOutcome> outcomes =
       new ArrayList<>();
     private @Nullable PathExecutor path;
+    private @Nullable InventoryMutationTask<List<Integer>> pendingTransfer;
     private Stage stage = Stage.NAVIGATE;
     private int initialContainerId;
     private int stageTicks;
@@ -212,9 +215,11 @@ public final class ContainerTransferTaskProvider
           case OPEN -> open();
           case WAIT_FOR_MENU -> waitForMenu();
           case TRANSFER -> transfer();
+          case CONFIRM_TRANSFER -> confirmTransfer();
           case COMPLETE -> complete();
         }
       } catch (Throwable throwable) {
+        stopTransfer(ControlStopReason.FAILED, throwable);
         closeOpenedMenu();
         result.completeExceptionally(throwable);
       }
@@ -347,12 +352,28 @@ public final class ContainerTransferTaskProvider
         .CONTAINER_TRANSFER_DIRECTION_DEPOSIT
         ? InventoryArea.INVENTORY_AREA_CONTAINER
         : InventoryArea.INVENTORY_AREA_PLAYER;
-      var transferred = InventoryServiceImpl.transferBatchForTask(
+      pendingTransfer = InventoryServiceImpl.transferBatchForTask(
         context.bot(),
         input.getOperationsList(),
         from,
         to
       );
+      pendingTransfer.onStarted();
+      transition(Stage.CONFIRM_TRANSFER, "Confirming container transfer");
+    }
+
+    private void confirmTransfer() {
+      var transfer = Objects.requireNonNull(pendingTransfer);
+      transfer.tick();
+      if (!transfer.isDone()) {
+        if (++stageTicks >= CONFIRM_TIMEOUT_TICKS) {
+          throw Status.DEADLINE_EXCEEDED.withDescription("Server did not confirm the container transfer").asRuntimeException();
+        }
+        return;
+      }
+      var transferred = transfer.result();
+      containerRevision = transfer.container().getRevision();
+      stopTransfer(ControlStopReason.COMPLETED, null);
       for (var index = 0; index < input.getOperationsCount(); index++) {
         var operation = input.getOperations(index);
         var moved = transferred.get(index);
@@ -364,8 +385,6 @@ public final class ContainerTransferTaskProvider
         totalTransferred += moved;
         partial |= moved != operation.getCount();
       }
-      containerRevision = InventoryServiceImpl
-        .containerRevisionForTask(context.bot());
       transition(Stage.COMPLETE, "Finalizing container transfer");
     }
 
@@ -438,6 +457,12 @@ public final class ContainerTransferTaskProvider
       }
     }
 
+    private void stopTransfer(ControlStopReason reason, @Nullable Throwable cause) {
+      var transfer = pendingTransfer;
+      pendingTransfer = null;
+      if (transfer != null) transfer.onStopped(reason, cause);
+    }
+
     @Override
     public boolean isDone() {
       return result.isDone();
@@ -454,6 +479,7 @@ public final class ContainerTransferTaskProvider
       @Nullable Throwable cause
     ) {
       stopPath(reason, cause);
+      stopTransfer(reason, cause);
       context.bot().controlState().resetAll();
       if (reason != ControlStopReason.COMPLETED) {
         closeOpenedMenu();
@@ -474,6 +500,7 @@ public final class ContainerTransferTaskProvider
     OPEN,
     WAIT_FOR_MENU,
     TRANSFER,
+    CONFIRM_TRANSFER,
     COMPLETE
   }
 }

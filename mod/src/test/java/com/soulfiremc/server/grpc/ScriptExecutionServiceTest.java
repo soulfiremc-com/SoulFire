@@ -29,20 +29,26 @@ import com.soulfiremc.grpc.generated.CreateScriptRequest;
 import com.soulfiremc.grpc.generated.CreateScriptResponse;
 import com.soulfiremc.grpc.generated.DeactivateScriptRequest;
 import com.soulfiremc.grpc.generated.DeleteScriptRequest;
+import com.soulfiremc.grpc.generated.DiagnosticSeverity;
 import com.soulfiremc.grpc.generated.DryRunScriptRequest;
 import com.soulfiremc.grpc.generated.EdgeType;
 import com.soulfiremc.grpc.generated.GetScriptRequest;
 import com.soulfiremc.grpc.generated.GetScriptResponse;
 import com.soulfiremc.grpc.generated.GetScriptStatusRequest;
 import com.soulfiremc.grpc.generated.GetScriptStatusResponse;
+import com.soulfiremc.grpc.generated.LogLevel;
 import com.soulfiremc.grpc.generated.PortType;
 import com.soulfiremc.grpc.generated.Position;
 import com.soulfiremc.grpc.generated.ScriptEdge;
 import com.soulfiremc.grpc.generated.ScriptEvent;
+import com.soulfiremc.grpc.generated.ScriptLogEntry;
 import com.soulfiremc.grpc.generated.ScriptNode;
 import com.soulfiremc.grpc.generated.ScriptQuotas;
+import com.soulfiremc.grpc.generated.SubscribeScriptLogsRequest;
 import com.soulfiremc.grpc.generated.UpdateScriptRequest;
 import com.soulfiremc.grpc.generated.UpdateScriptResponse;
+import com.soulfiremc.grpc.generated.ValidateScriptRequest;
+import com.soulfiremc.grpc.generated.ValidateScriptResponse;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.SoulFireScheduler;
 import com.soulfiremc.server.SoulFireServer;
@@ -56,6 +62,7 @@ import com.soulfiremc.server.script.PortDefinition;
 import com.soulfiremc.server.script.nodes.NodeRegistry;
 import com.soulfiremc.server.settings.lib.InstanceSettingsImpl;
 import com.soulfiremc.server.user.AuthSystem;
+import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.user.SoulFireUser;
 import com.soulfiremc.server.util.structs.GsonInstance;
 import com.soulfiremc.shared.SFLogAppender;
@@ -86,6 +93,9 @@ import tools.jackson.databind.json.JsonMapper;
 import java.net.http.HttpRequest;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,6 +103,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -812,5 +823,320 @@ final class ScriptExecutionServiceTest {
     assertEquals(3, outputs.get("vector").getStructValue().getFieldsCount());
     assertEquals(2, outputs.get("vector").getStructValue().getFieldsOrThrow("y").getNumberValue());
     assertEquals(List.of(4.0, 5.0), outputs.get("collection").getListValue().getValuesList().stream().map(Value::getNumberValue).toList());
+  }
+
+  private record LayoutGroup(ScriptNode node, ScriptNode input, ScriptNode output) {}
+
+  private CreateScriptRequest.Builder groupRequest() {
+    return CreateScriptRequest.newBuilder().setInstanceId(instanceId).setName("group routing").setPaused(true)
+      .addNodes(ScriptNode.newBuilder().setId(triggerId).setType("trigger.on_chat"));
+  }
+
+  private static ScriptNode.Builder layoutNode(String type) {
+    return ScriptNode.newBuilder().setId(UUID.randomUUID().toString()).setType(type);
+  }
+
+  private static ScriptNode.Builder insideGroup(String type, LayoutGroup group) {
+    return layoutNode(type).putData("parentGroupId", Value.newBuilder().setStringValue(group.node().getId()).build());
+  }
+
+  private static LayoutGroup addLayoutGroup(CreateScriptRequest.Builder request, Optional<LayoutGroup> parent) {
+    var node = layoutNode("layout.group");
+    parent.ifPresent(group -> node.putData("parentGroupId", Value.newBuilder().setStringValue(group.node().getId()).build()));
+    var root = node.build();
+    var parentId = Value.newBuilder().setStringValue(root.getId()).build();
+    var input = layoutNode("layout.group_input").putData("parentGroupId", parentId).build();
+    var output = layoutNode("layout.group_output").putData("parentGroupId", parentId).build();
+    request.addNodes(root).addNodes(input).addNodes(output);
+    return new LayoutGroup(root, input, output);
+  }
+
+  private static ScriptEdge.Builder layoutEdge(ScriptNode source, String sourceHandle, ScriptNode target, String targetHandle, EdgeType type) {
+    return ScriptEdge.newBuilder().setId(UUID.randomUUID().toString()).setSource(source.getId()).setSourceHandle(sourceHandle)
+      .setTarget(target.getId()).setTargetHandle(targetHandle).setEdgeType(type);
+  }
+
+  private void runGroup(CreateScriptRequest.Builder request) throws InterruptedException {
+    var created = this.<CreateScriptResponse>rpcResponse(observer -> service.createScript(request.build(), observer));
+    run(request(created.getScript().getId()).build());
+    awaitCompletion();
+    assertTrue(events.getLast().getScriptCompleted().getSuccess());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void groupInputsReachEveryExecutionTarget(boolean nested) throws InterruptedException {
+    var request = groupRequest();
+    var trigger = request.getNodes(0);
+    var outer = addLayoutGroup(request, Optional.empty());
+    var inner = nested ? addLayoutGroup(request, Optional.of(outer)) : outer;
+    if (nested) request.addEdges(layoutEdge(outer.input(), "input", inner.node(), "input", EdgeType.EDGE_TYPE_EXECUTION));
+    var first = insideGroup("action.print", inner).putData("message", Value.newBuilder().setNumberValue(1).build()).build();
+    var second = insideGroup("action.print", inner).putData("message", Value.newBuilder().setNumberValue(2).build()).build();
+    request.addNodes(first).addNodes(second)
+      .addEdges(layoutEdge(trigger, "out", outer.node(), "input", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(inner.input(), "input", first, "in", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(inner.input(), "input", second, "in", EdgeType.EDGE_TYPE_EXECUTION));
+    runGroup(request);
+    var executed = events.stream().filter(ScriptEvent::hasNodeCompleted).map(event -> event.getNodeCompleted().getNodeId()).toList();
+    assertTrue(executed.contains(first.getId()));
+    assertTrue(executed.contains(second.getId()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void groupPassThroughPreservesExecutionAndData(boolean data) throws InterruptedException {
+    var request = groupRequest();
+    var trigger = request.getNodes(0);
+    var group = addLayoutGroup(request, Optional.empty());
+    var action = layoutNode("action.print").putData("message", Value.newBuilder().setNumberValue(17).build()).build();
+    request.addNodes(action);
+    var type = data ? EdgeType.EDGE_TYPE_DATA : EdgeType.EDGE_TYPE_EXECUTION;
+    request.addEdges(layoutEdge(group.input(), "input", group.output(), "output", type));
+    if (data) {
+      var constant = layoutNode("constant.number").putData("value", Value.newBuilder().setNumberValue(29).build()).build();
+      request.addNodes(constant)
+        .addEdges(layoutEdge(trigger, "out", action, "in", EdgeType.EDGE_TYPE_EXECUTION))
+        .addEdges(layoutEdge(constant, "value", group.node(), "input", type))
+        .addEdges(layoutEdge(group.node(), "output", action, "message", type));
+    } else {
+      request.addEdges(layoutEdge(trigger, "out", group.node(), "input", type))
+        .addEdges(layoutEdge(group.node(), "output", action, "in", type));
+    }
+    runGroup(request);
+    var values = events.stream().filter(ScriptEvent::hasScriptLog)
+      .map(event -> Double.parseDouble(event.getScriptLog().getMessage())).toList();
+    assertEquals(List.of(data ? 29.0 : 17.0), values);
+  }
+
+  @Test
+  void groupOutputsPreserveEveryIncomingExecutionBranch() throws InterruptedException {
+    var request = groupRequest();
+    var trigger = request.getNodes(0);
+    var group = addLayoutGroup(request, Optional.empty());
+    var first = insideGroup("action.print", group).putData("message", Value.newBuilder().setNumberValue(1).build()).build();
+    var second = insideGroup("action.print", group).putData("message", Value.newBuilder().setNumberValue(2).build()).build();
+    var after = layoutNode("action.print").putData("message", Value.newBuilder().setNumberValue(3).build()).build();
+    request.addNodes(first).addNodes(second).addNodes(after)
+      .addEdges(layoutEdge(trigger, "out", group.node(), "first", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(trigger, "out", group.node(), "second", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(group.input(), "first", first, "in", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(group.input(), "second", second, "in", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(first, "out", group.output(), "output", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(second, "out", group.output(), "output", EdgeType.EDGE_TYPE_EXECUTION))
+      .addEdges(layoutEdge(group.node(), "output", after, "in", EdgeType.EDGE_TYPE_EXECUTION));
+    runGroup(request);
+    assertEquals(2, events.stream().filter(ScriptEvent::hasNodeCompleted)
+      .filter(event -> event.getNodeCompleted().getNodeId().equals(after.getId())).count());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void groupInputsReachEveryDataConsumer(boolean nested) throws InterruptedException {
+    var request = groupRequest();
+    var trigger = request.getNodes(0);
+    var outer = addLayoutGroup(request, Optional.empty());
+    var inner = nested ? addLayoutGroup(request, Optional.of(outer)) : outer;
+    if (nested) {
+      request.addEdges(layoutEdge(outer.input(), "input", inner.node(), "input", EdgeType.EDGE_TYPE_DATA));
+      for (var port : List.of("first", "second")) {
+        request.addEdges(layoutEdge(inner.node(), port, outer.output(), port, EdgeType.EDGE_TYPE_DATA));
+      }
+    }
+    var constant = layoutNode("constant.number").putData("value", Value.newBuilder().setNumberValue(17).build()).build();
+    var first = insideGroup("math.add", inner).putData("b", Value.newBuilder().setNumberValue(2).build()).build();
+    var second = insideGroup("math.add", inner).putData("b", Value.newBuilder().setNumberValue(3).build()).build();
+    request.addNodes(constant).addNodes(first).addNodes(second)
+      .addEdges(layoutEdge(constant, "value", outer.node(), "input", EdgeType.EDGE_TYPE_DATA))
+      .addEdges(layoutEdge(inner.input(), "input", first, "a", EdgeType.EDGE_TYPE_DATA))
+      .addEdges(layoutEdge(inner.input(), "input", second, "a", EdgeType.EDGE_TYPE_DATA))
+      .addEdges(layoutEdge(first, "result", inner.output(), "first", EdgeType.EDGE_TYPE_DATA))
+      .addEdges(layoutEdge(second, "result", inner.output(), "second", EdgeType.EDGE_TYPE_DATA));
+    for (var port : List.of("first", "second")) {
+      var print = layoutNode("action.print").build();
+      request.addNodes(print).addEdges(layoutEdge(trigger, "out", print, "in", EdgeType.EDGE_TYPE_EXECUTION))
+        .addEdges(layoutEdge(outer.node(), port, print, "message", EdgeType.EDGE_TYPE_DATA));
+    }
+    runGroup(request);
+    var sums = events.stream().filter(ScriptEvent::hasNodeCompleted).map(ScriptEvent::getNodeCompleted)
+      .filter(event -> event.getNodeId().equals(first.getId()) || event.getNodeId().equals(second.getId()))
+      .map(event -> event.getOutputsOrThrow("result").getNumberValue()).sorted().toList();
+    assertEquals(List.of(19.0, 20.0), sums);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void groupRewiringKeepsTheConsumersMultiInputOrder(boolean nested) throws InterruptedException {
+    var request = groupRequest();
+    var trigger = request.getNodes(0);
+    var outer = addLayoutGroup(request, Optional.empty());
+    var inner = nested ? addLayoutGroup(request, Optional.of(outer)) : outer;
+    var list = insideGroup("list.create", inner).build();
+    var print = layoutNode("action.print").build();
+    request.addNodes(list).addNodes(print).addEdges(layoutEdge(trigger, "out", print, "in", EdgeType.EDGE_TYPE_EXECUTION));
+    for (var value : List.of(1, 2)) {
+      var port = String.valueOf(value);
+      var constant = layoutNode("constant.number").putData("value", Value.newBuilder().setNumberValue(value).build()).build();
+      request.addNodes(constant).addEdges(layoutEdge(constant, "value", outer.node(), port, EdgeType.EDGE_TYPE_DATA).setOrder(value - 1));
+      if (nested) request.addEdges(layoutEdge(outer.input(), port, inner.node(), port, EdgeType.EDGE_TYPE_DATA).setOrder(value - 1));
+      request.addEdges(layoutEdge(inner.input(), port, list, "items", EdgeType.EDGE_TYPE_DATA).setOrder(2 - value));
+    }
+    request.addEdges(layoutEdge(list, "list", inner.output(), "output", EdgeType.EDGE_TYPE_DATA));
+    if (nested) request.addEdges(layoutEdge(inner.node(), "output", outer.output(), "output", EdgeType.EDGE_TYPE_DATA));
+    request.addEdges(layoutEdge(outer.node(), "output", print, "message", EdgeType.EDGE_TYPE_DATA));
+    runGroup(request);
+    var output = events.stream().filter(ScriptEvent::hasNodeCompleted).map(ScriptEvent::getNodeCompleted)
+      .filter(event -> event.getNodeId().equals(list.getId())).findFirst().orElseThrow();
+    assertEquals(List.of(2.0, 1.0), output.getOutputsOrThrow("list").getListValue().getValuesList().stream()
+      .map(Value::getNumberValue).toList());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 3})
+  void cyclicGroupParentsReturnDiagnosticsAndRejectExecution(int size) {
+    var nodes = new ArrayList<ScriptNode>();
+    for (var index = 0; index < size; index++) {
+      var parent = size == 3 && index == size - 1 ? 1 : (index + 1) % size;
+      nodes.add(ScriptNode.newBuilder().setId("group-" + index).setType("layout.group")
+        .putData("parentGroupId", Value.newBuilder().setStringValue("group-" + parent).build()).build());
+    }
+    ValidateScriptResponse validation = rpcResponse(observer -> service.validateScript(ValidateScriptRequest.newBuilder()
+      .setInstanceId(instanceId).addAllNodes(nodes).build(), observer));
+    assertEquals(1, validation.getDiagnosticsCount());
+    var diagnostic = validation.getDiagnostics(0);
+    assertEquals(DiagnosticSeverity.DIAGNOSTIC_ERROR, diagnostic.getSeverity());
+    assertTrue(nodes.stream().anyMatch(node -> node.getId().equals(diagnostic.getNodeId())));
+
+    CreateScriptResponse created = rpcResponse(observer -> service.createScript(CreateScriptRequest.newBuilder()
+      .setInstanceId(instanceId).setName("cyclic groups").setPaused(true).addAllNodes(nodes).build(), observer));
+    var failure = assertThrows(StatusRuntimeException.class,
+      () -> run(request(created.getScript().getId()).build()));
+    assertEquals(Status.Code.INVALID_ARGUMENT, failure.getStatus().getCode());
+    assertTrue(events.isEmpty());
+    GetScriptResponse saved = rpcResponse(observer -> service.getScript(GetScriptRequest.newBuilder()
+      .setInstanceId(instanceId).setScriptId(created.getScript().getId()).build(), observer));
+    assertTrue(saved.getScript().getPaused());
+  }
+
+
+  @Test
+  void scriptLogSubscriptionFiltersScopeAndPreservesMetadata() throws Exception {
+    try (var logs = new ScriptLogFixture()) {
+      var viewer = logs.subscribe();
+      logs.holder.broadcastLogMessage(logs.event(UUID.randomUUID(), logs.id, "INFO"));
+      logs.holder.broadcastLogMessage(logs.event(logs.instance, UUID.randomUUID(), "INFO"));
+      logs.holder.sendPersonalMessage(logs.owner, "personal");
+      for (var level : List.of("DEBUG", "INFO", "WARN", "ERROR"))
+        logs.holder.broadcastLogMessage(logs.event(logs.instance, logs.id, level));
+      assertEquals(List.of(LogLevel.LOG_LEVEL_DEBUG, LogLevel.LOG_LEVEL_INFO,
+        LogLevel.LOG_LEVEL_WARN, LogLevel.LOG_LEVEL_ERROR), viewer.messages.stream().map(ScriptLogEntry::getLevel).toList());
+      for (var entry : viewer.messages) {
+        assertEquals(logs.id.toString(), entry.getScriptId());
+        assertEquals("script entry", entry.getMessage());
+        assertEquals(1234, entry.getTimestamp().getSeconds());
+        assertEquals(567_000_000, entry.getTimestamp().getNanos());
+      }
+    }
+  }
+
+  @Test
+  void scriptLogSubscriptionRechecksQueuedPermissions() throws Exception {
+    try (var logs = new ScriptLogFixture()) {
+      var viewer = logs.subscribe();
+      viewer.ready.set(false);
+      logs.holder.broadcastLogMessage(logs.event(logs.instance, logs.id, "INFO"));
+      when(logs.user.hasPermission(any(PermissionContext.class))).thenReturn(false);
+      viewer.ready.set(true);
+      viewer.onReady.get().run();
+      assertTrue(viewer.messages.isEmpty());
+      when(logs.user.hasPermission(any(PermissionContext.class))).thenReturn(true);
+      logs.holder.broadcastLogMessage(logs.event(logs.instance, logs.id, "WARN"));
+      assertEquals(1, viewer.messages.size());
+    }
+  }
+
+  @Test
+  void cancellingScriptLogsClearsPendingMessagesWithoutDisconnectingOtherViewers() throws Exception {
+    try (var logs = new ScriptLogFixture()) {
+      var cancelled = logs.subscribe();
+      var healthy = logs.subscribe();
+      cancelled.ready.set(false);
+      logs.holder.broadcastLogMessage(logs.event(logs.instance, logs.id, "INFO"));
+      cancelled.onCancel.get().run();
+      cancelled.ready.set(true);
+      cancelled.onReady.get().run();
+      logs.holder.broadcastLogMessage(logs.event(logs.instance, logs.id, "WARN"));
+      assertTrue(cancelled.messages.isEmpty());
+      assertEquals(2, healthy.messages.size());
+      logs.holder.disconnect(logs.owner);
+      verify(healthy.observer).onCompleted();
+      verify(cancelled.observer, never()).onCompleted();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void scriptLogSubscriptionRejectsMissingOrForeignScripts(boolean foreignInstance) throws Exception {
+    try (var logs = new ScriptLogFixture()) {
+      var request = SubscribeScriptLogsRequest.newBuilder()
+        .setInstanceId(foreignInstance ? UUID.randomUUID().toString() : instanceId)
+        .setScriptId(foreignInstance ? logs.id.toString() : UUID.randomUUID().toString()).build();
+      var failure = assertThrows(StatusRuntimeException.class, () ->
+        rpcContext.run(() -> service.subscribeScriptLogs(request, mock())));
+      assertEquals(Status.Code.NOT_FOUND, failure.getStatus().getCode());
+    }
+  }
+
+  private final class ScriptLogFixture implements AutoCloseable {
+    final UUID instance = UUID.fromString(instanceId);
+    final UUID owner = UUID.randomUUID();
+    final SoulFireUser user = rpcContext.call(ServerRPCConstants.USER_CONTEXT_KEY::get);
+    final UUID id;
+    final LogServiceImpl.StateHolder holder;
+    final Consumer<SFLogAppender.SFLogEvent> consumer;
+
+    ScriptLogFixture() throws Exception {
+      var before = new HashSet<>(SFLogAppender.INSTANCE.logConsumers());
+      holder = new LogServiceImpl.StateHolder();
+      consumer = SFLogAppender.INSTANCE.logConsumers().stream().filter(c -> !before.contains(c)).findFirst().orElseThrow();
+      when(server.logStateHolder()).thenReturn(holder);
+      var auth = mock(AuthSystem.class);
+      var issued = Instant.now();
+      when(server.authSystem()).thenReturn(auth);
+      when(user.getUniqueId()).thenReturn(owner);
+      when(user.getIssuedAt()).thenReturn(issued);
+      when(user.hasPermission(any(PermissionContext.class))).thenReturn(true);
+      when(auth.authenticateBySubject(owner, issued)).thenReturn(Optional.of(user));
+      id = UUID.fromString(saveScript("action.print"));
+    }
+
+    ScriptLogViewer subscribe() {
+      var viewer = new ScriptLogViewer();
+      rpcContext.run(() -> service.subscribeScriptLogs(SubscribeScriptLogsRequest.newBuilder()
+        .setInstanceId(instanceId).setScriptId(id.toString()).build(), viewer.observer));
+      return viewer;
+    }
+
+    SFLogAppender.SFLogEvent event(UUID eventInstance, UUID eventScript, String level) {
+      return new SFLogAppender.SFLogEvent(UUID.randomUUID().toString(), "script entry", 1_234_567,
+        level, "script", eventInstance, null, eventScript, null, null);
+    }
+
+    @Override public void close() { SFLogAppender.INSTANCE.logConsumers().remove(consumer); }
+  }
+
+  private static final class ScriptLogViewer {
+    final ServerCallStreamObserver<ScriptLogEntry> observer = mock();
+    final List<ScriptLogEntry> messages = new ArrayList<>();
+    final AtomicBoolean ready = new AtomicBoolean(true);
+    final AtomicReference<Runnable> onReady = new AtomicReference<>(() -> {});
+    final AtomicReference<Runnable> onCancel = new AtomicReference<>();
+
+    ScriptLogViewer() {
+      when(observer.isReady()).thenAnswer(_ -> ready.get());
+      doAnswer(call -> { messages.add(call.getArgument(0)); return null; }).when(observer).onNext(any());
+      doAnswer(call -> { onReady.set(call.getArgument(0)); return null; }).when(observer).setOnReadyHandler(any());
+      doAnswer(call -> { onCancel.set(call.getArgument(0)); return null; }).when(observer).setOnCancelHandler(any());
+    }
   }
 }

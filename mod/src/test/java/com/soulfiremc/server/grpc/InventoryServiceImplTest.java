@@ -44,6 +44,19 @@ final class InventoryServiceImplTest {
   }
 
   @Test
+  void identicalNativeStateInReplacementMenusHasDifferentRevisions() {
+    assertNotEquals(InventoryServiceImpl.revision(menu(0), 0), InventoryServiceImpl.revision(menu(0), 0));
+  }
+
+  @Test
+  void revisionStaysStableUntilTheMenuStateChanges() {
+    var menu = menu(0);
+    var revision = InventoryServiceImpl.revision(menu, 0);
+    assertEquals(revision, InventoryServiceImpl.revision(menu, 0));
+    assertNotEquals(revision, InventoryServiceImpl.revision(menu, 1));
+  }
+
+  @Test
   void transferRequiresTheMenuItNames() {
     var opened = menu(1);
     var request = TransferItemsRequest.newBuilder()

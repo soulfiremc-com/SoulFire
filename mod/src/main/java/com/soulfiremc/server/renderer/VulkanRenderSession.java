@@ -18,6 +18,7 @@
 package com.soulfiremc.server.renderer;
 
 import com.soulfiremc.mod.access.IFogEnvironmentState;
+import com.soulfiremc.mod.mixin.soulfire.GameRendererAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -82,6 +83,7 @@ final class VulkanRenderSession implements AutoCloseable {
   }
 
   private static void copySimulationState(GameRenderer source, GameRenderer target) {
+    copyPostEffectState((GameRendererAccessor) source, (GameRendererAccessor) target);
     var targetFog = ((IFogEnvironmentState) target.gameRenderState()).soulfire$fogEnvironments();
     targetFog.clear();
     targetFog.addAll(((IFogEnvironmentState) source.gameRenderState()).soulfire$fogEnvironments());
@@ -92,6 +94,14 @@ final class VulkanRenderSession implements AutoCloseable {
     target.spectatedEntityEffectActive = source.spectatedEntityEffectActive;
     target.mainCamera = source.mainCamera;
     target.lightmapRenderStateExtractor.blockLightFlicker = source.lightmapRenderStateExtractor.blockLightFlicker;
+  }
+
+  static void copyPostEffectState(GameRendererAccessor source, GameRendererAccessor target) {
+    target.soulfire$failedPostEffects().clear();
+    target.soulfire$failedPostEffects().addAll(source.soulfire$failedPostEffects());
+    // Transfer reload invalidation, including one queued on the inactive cached renderer.
+    target.soulfire$shouldResetFailedPostEffects(target.soulfire$shouldResetFailedPostEffects() || source.soulfire$shouldResetFailedPostEffects());
+    source.soulfire$shouldResetFailedPostEffects(false);
   }
 
   Minecraft minecraft() { return minecraft; }

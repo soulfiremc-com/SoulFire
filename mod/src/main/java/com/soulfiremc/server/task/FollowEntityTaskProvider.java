@@ -28,6 +28,7 @@ import com.soulfiremc.server.bot.ControlResource;
 import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.pathfinding.PathfindingSupport;
+import com.soulfiremc.server.pathfinding.PathfindingSupport.ResolvedGoal;
 import com.soulfiremc.server.pathfinding.execution.PathExecutor;
 import io.grpc.Status;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -80,8 +81,6 @@ public final class FollowEntityTaskProvider
       context.bot(),
       target.hasConnectionEpoch() ? target.getConnectionEpoch() : ""
     );
-    var goal = PathfindGoal.newBuilder().setEntity(target).build();
-    var resolved = PathfindingSupport.resolveGoal(context.bot(), goal);
     var constraint = PathfindingSupport.buildConstraint(
       context.bot(),
       input.getOptions()
@@ -97,7 +96,6 @@ public final class FollowEntityTaskProvider
       context,
       target,
       timeoutSeconds * 20,
-      resolved,
       constraint,
       result
     );
@@ -126,11 +124,11 @@ public final class FollowEntityTaskProvider
     private final BotTaskContext context;
     private final PathfindGoal.EntityGoal target;
     private final int unavailableTimeoutTicks;
-    private final PathfindingSupport.ResolvedGoal goal;
     private final com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint
       constraint;
     private final CompletableFuture<FollowEntityTaskResult> result;
     private @Nullable PathExecutor path;
+    private @Nullable ResolvedGoal goal;
     private int unavailableTicks;
     private int consecutivePathFailures;
     private int ticks;
@@ -139,7 +137,6 @@ public final class FollowEntityTaskProvider
       BotTaskContext context,
       PathfindGoal.EntityGoal target,
       int unavailableTimeoutTicks,
-      PathfindingSupport.ResolvedGoal goal,
       com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint
         constraint,
       CompletableFuture<FollowEntityTaskResult> result
@@ -147,7 +144,6 @@ public final class FollowEntityTaskProvider
       this.context = context;
       this.target = target;
       this.unavailableTimeoutTicks = unavailableTimeoutTicks;
-      this.goal = goal;
       this.constraint = constraint;
       this.result = result;
     }
@@ -217,6 +213,12 @@ public final class FollowEntityTaskProvider
         return;
       }
       if (path == null) {
+        if (goal == null) {
+          goal = PathfindingSupport.resolveGoal(
+            bot,
+            PathfindGoal.newBuilder().setEntity(target).build()
+          );
+        }
         path = PathExecutor.createPathfinding(
           bot,
           goal.scorer(),

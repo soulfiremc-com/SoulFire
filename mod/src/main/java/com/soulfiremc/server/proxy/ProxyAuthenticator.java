@@ -70,7 +70,7 @@ public final class ProxyAuthenticator extends Authenticator {
         var authenticator = AUTHENTICATORS.getIfPresent(REQUEST_PROXY.get());
         requestedProxy = authenticator == null ? null : authenticator.proxy;
       } else {
-        requestedProxy = BotConnection.currentOptional().map(BotConnection::proxy).orElse(null);
+        requestedProxy = BotConnection.currentOptional().map(BotConnection::transportProxy).orElse(null);
       }
     }
 

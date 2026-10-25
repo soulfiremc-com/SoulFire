@@ -29,7 +29,21 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.socket.DatagramPacket;
-import io.netty.handler.codec.socksx.v5.*;
+import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandRequest;
+import io.netty.handler.codec.socksx.v5.DefaultSocks5InitialRequest;
+import io.netty.handler.codec.socksx.v5.DefaultSocks5PasswordAuthRequest;
+import io.netty.handler.codec.socksx.v5.Socks5AddressType;
+import io.netty.handler.codec.socksx.v5.Socks5AuthMethod;
+import io.netty.handler.codec.socksx.v5.Socks5ClientEncoder;
+import io.netty.handler.codec.socksx.v5.Socks5CommandResponse;
+import io.netty.handler.codec.socksx.v5.Socks5CommandResponseDecoder;
+import io.netty.handler.codec.socksx.v5.Socks5CommandStatus;
+import io.netty.handler.codec.socksx.v5.Socks5CommandType;
+import io.netty.handler.codec.socksx.v5.Socks5InitialResponse;
+import io.netty.handler.codec.socksx.v5.Socks5InitialResponseDecoder;
+import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponse;
+import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponseDecoder;
+import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthStatus;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -37,6 +51,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
+import java.nio.channels.ClosedChannelException;
 
 /// Implements SOCKS5 UDP ASSOCIATE (RFC 1928, command 0x03) for proxying
  /// UDP traffic through a SOCKS5 proxy. Used for Bedrock Edition connections
@@ -50,7 +65,6 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
   private final InetSocketAddress proxyAddress;
   private final @Nullable String username;
   private final @Nullable String password;
-  private Channel tcpControlChannel;
   private InetSocketAddress relayAddress;
   private InetSocketAddress originalDestination;
 
@@ -66,7 +80,7 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
     originalDestination = (InetSocketAddress) remoteAddress;
 
     var eventLoopGroup = EventLoopGroupHolder.remote(true);
-    new Bootstrap()
+    var tcpConnect = new Bootstrap()
       .group(eventLoopGroup.eventLoopGroup())
       .channel(eventLoopGroup.channelCls())
       .handler(new ChannelInitializer<>() {
@@ -77,14 +91,23 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
           ch.pipeline().addLast(new Socks5TcpControlHandler(ctx, promise));
         }
       })
-      .connect(proxyAddress)
-      .addListener((ChannelFutureListener) future -> {
-        if (future.isSuccess()) {
-          tcpControlChannel = future.channel();
-        } else {
-          promise.tryFailure(future.cause());
-        }
-      });
+      .connect(proxyAddress);
+    // An unbound datagram channel can close without ever firing channelInactive.
+    ctx.channel().closeFuture().addListener(_ -> {
+      promise.tryFailure(new ClosedChannelException());
+      tcpConnect.channel().close();
+    });
+    promise.addListener(future -> {
+      if (!future.isSuccess()) {
+        tcpConnect.channel().close();
+        ctx.close();
+      }
+    });
+    tcpConnect.addListener((ChannelFutureListener) future -> {
+      if (!future.isSuccess()) {
+        promise.tryFailure(future.cause());
+      }
+    });
   }
 
   @Override
@@ -108,31 +131,26 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
   public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
     switch (msg) {
       case ByteBuf buf -> {
-        skipSocks5UdpHeader(buf);
-        ctx.fireChannelRead(buf);
+        if (skipSocks5UdpHeader(buf)) {
+          ctx.fireChannelRead(buf);
+        } else {
+          buf.release();
+        }
       }
       case DatagramPacket packet -> {
-        skipSocks5UdpHeader(packet.content());
-        ctx.fireChannelRead(packet);
+        if (skipSocks5UdpHeader(packet.content())) {
+          ctx.fireChannelRead(packet);
+        } else {
+          packet.release();
+        }
       }
       case null, default -> super.channelRead(ctx, msg);
     }
   }
 
   @Override
-  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-    if (tcpControlChannel != null) {
-      tcpControlChannel.close();
-    }
-    super.channelInactive(ctx);
-  }
-
-  @Override
   public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
     log.error("SOCKS5 UDP relay error", cause);
-    if (tcpControlChannel != null) {
-      tcpControlChannel.close();
-    }
     ctx.close();
   }
 
@@ -147,17 +165,31 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
     return buf;
   }
 
-  private static void skipSocks5UdpHeader(ByteBuf buf) {
-    buf.skipBytes(2); // RSV
-    buf.skipBytes(1); // FRAG
-    var atyp = buf.readByte();
-    switch (atyp) {
-      case 0x01 -> buf.skipBytes(4); // IPv4
-      case 0x03 -> buf.skipBytes(buf.readUnsignedByte()); // Domain name
-      case 0x04 -> buf.skipBytes(16); // IPv6
-      default -> throw new IllegalStateException("Unknown SOCKS5 address type: " + atyp);
+  private static boolean skipSocks5UdpHeader(ByteBuf buf) {
+    var start = buf.readerIndex();
+    var readable = buf.readableBytes();
+    // Fragment reassembly is unsupported, so only standalone datagrams are accepted.
+    if (readable < 4 || buf.getUnsignedShort(start) != 0 || buf.getUnsignedByte(start + 2) != 0) {
+      return false;
     }
-    buf.skipBytes(2); // DST.PORT
+
+    var headerLength = switch (buf.getUnsignedByte(start + 3)) {
+      case 0x01 -> 10; // IPv4
+      case 0x03 -> {
+        if (readable < 5) {
+          yield -1;
+        }
+        var length = buf.getUnsignedByte(start + 4);
+        yield length == 0 ? -1 : 7 + length;
+      }
+      case 0x04 -> 22; // IPv6
+      default -> -1;
+    };
+    if (headerLength < 0 || readable < headerLength) {
+      return false;
+    }
+    buf.skipBytes(headerLength);
+    return true;
   }
 
   /// Handles the SOCKS5 handshake over the TCP control connection
@@ -173,7 +205,7 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-      if (username != null && password != null) {
+      if (username != null) {
         ctx.writeAndFlush(new DefaultSocks5InitialRequest(Socks5AuthMethod.NO_AUTH, Socks5AuthMethod.PASSWORD));
       } else {
         ctx.writeAndFlush(new DefaultSocks5InitialRequest(Socks5AuthMethod.NO_AUTH));
@@ -186,15 +218,15 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
       switch (msg) {
         case Socks5InitialResponse response -> handleInitialResponse(ctx, response);
         case Socks5PasswordAuthResponse response -> handleAuthResponse(ctx, response);
-        case Socks5CommandResponse response -> handleCommandResponse(response);
+        case Socks5CommandResponse response -> handleCommandResponse(ctx, response);
         case null, default -> super.channelRead(ctx, msg);
       }
     }
 
     private void handleInitialResponse(ChannelHandlerContext ctx, Socks5InitialResponse response) {
-      if (response.authMethod() == Socks5AuthMethod.PASSWORD && username != null && password != null) {
+      if (response.authMethod() == Socks5AuthMethod.PASSWORD && username != null) {
         ctx.pipeline().replace(SOCKS5_DECODER, SOCKS5_DECODER, new Socks5PasswordAuthResponseDecoder());
-        ctx.writeAndFlush(new DefaultSocks5PasswordAuthRequest(username, password));
+        ctx.writeAndFlush(new DefaultSocks5PasswordAuthRequest(username, password == null ? "" : password));
       } else if (response.authMethod() == Socks5AuthMethod.NO_AUTH) {
         sendUdpAssociate(ctx);
       } else {
@@ -210,9 +242,9 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
       }
     }
 
-    private void handleCommandResponse(Socks5CommandResponse response) throws UnknownHostException {
+    private void handleCommandResponse(ChannelHandlerContext ctx, Socks5CommandResponse response) throws UnknownHostException {
       if (response.status() != Socks5CommandStatus.SUCCESS) {
-        fail(null, new Exception("SOCKS5 UDP ASSOCIATE failed: " + response.status()));
+        fail(ctx, new Exception("SOCKS5 UDP ASSOCIATE failed: " + response.status()));
         return;
       }
 
@@ -247,11 +279,9 @@ public class Socks5UdpRelayHandler extends ChannelDuplexHandler {
       fail(ctx, cause);
     }
 
-    private void fail(@Nullable ChannelHandlerContext ctx, Throwable cause) {
+    private void fail(ChannelHandlerContext ctx, Throwable cause) {
       connectPromise.tryFailure(cause);
-      if (ctx != null) {
-        ctx.close();
-      }
+      ctx.close();
     }
   }
 }

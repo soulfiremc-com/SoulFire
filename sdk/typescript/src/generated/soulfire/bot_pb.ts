@@ -1987,8 +1987,8 @@ export type ContainerLayout = Message<"soulfire.v1.ContainerLayout"> & {
   regions: SlotRegion[];
 
   /**
-   * Total number of slots in the container.
-   * Sum of all region slot_counts.
+   * Total number of native slots in the container.
+   * Regions can omit inactive or hidden slots, so their counts can sum to less than this value.
    *
    * @generated from field: int32 total_slots = 3;
    */
@@ -2008,7 +2008,7 @@ export type ContainerLayout = Message<"soulfire.v1.ContainerLayout"> & {
    * Values: "inventory", "chest", "dispenser", "hopper", "furnace", "crafting",
    *         "anvil", "enchanting", "brewing", "beacon", "shulker", "grindstone",
    *         "stonecutter", "loom", "cartography", "smithing", "merchant",
-   *         "crafter", "lectern", "generic"
+   *         "crafter", "lectern", "creative", "mount", "generic"
    *
    * @generated from field: string container_type = 5;
    */

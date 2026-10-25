@@ -42,8 +42,8 @@ public final class NettyHelper {
     var pipeline = channel.pipeline();
     switch (proxy.type()) {
       case HTTP -> {
-        if (proxy.username() != null && proxy.password() != null) {
-          pipeline.addLast(PROXY_NAME, new HttpProxyHandler(proxy.address(), proxy.username(), proxy.password()));
+        if (proxy.username() != null) {
+          pipeline.addLast(PROXY_NAME, new HttpProxyHandler(proxy.address(), proxy.username(), proxy.password() == null ? "" : proxy.password()));
         } else {
           pipeline.addLast(PROXY_NAME, new HttpProxyHandler(proxy.address()));
         }
@@ -63,10 +63,8 @@ public final class NettyHelper {
           } else {
             throw new IllegalStateException("Expected RakClientChannel for Bedrock connection, but got: " + channel.getClass());
           }
-        } else if (proxy.username() != null && proxy.password() != null) {
-          pipeline.addLast(PROXY_NAME, new Socks5ProxyHandler(proxy.address(), proxy.username(), proxy.password()));
         } else {
-          pipeline.addLast(PROXY_NAME, new Socks5ProxyHandler(proxy.address()));
+          pipeline.addLast(PROXY_NAME, new Socks5ProxyHandler(proxy.address(), proxy.username(), proxy.password()));
         }
       }
       default -> throw new UnsupportedOperationException("Unsupported proxy type: " + proxy.type());

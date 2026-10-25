@@ -18,6 +18,7 @@
 package com.soulfiremc.server.account;
 
 import com.soulfiremc.server.account.service.OnlineSimpleJavaData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.util.LenniHttpHelper;
 import net.raphimc.minecraftauth.java.model.MinecraftProfile;
@@ -28,7 +29,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 /// Authentication service for raw Minecraft Java access tokens.
@@ -42,22 +42,18 @@ public final class MSJavaAccessTokenAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(MSJavaAccessTokenAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var token = new MinecraftToken(data.expireTimeMs, "Bearer", data.accessToken);
-        var profile = LenniHttpHelper.client(proxyData)
-          .executeAndHandle(new MinecraftProfileRequest(token));
-        return new MinecraftAccount(
-          AuthType.MICROSOFT_JAVA_ACCESS_TOKEN,
-          profile.getId(),
-          profile.getName(),
-          new OnlineSimpleJavaData(data.accessToken, data.expireTimeMs),
-          Map.of(),
-          Map.of());
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var token = new MinecraftToken(data.expireTimeMs, "Bearer", data.accessToken);
+      var profile = LenniHttpHelper.client(transportProxy)
+        .executeAndHandle(new MinecraftProfileRequest(token));
+      return new MinecraftAccount(
+        AuthType.MICROSOFT_JAVA_ACCESS_TOKEN,
+        profile.getId(),
+        profile.getName(),
+        new OnlineSimpleJavaData(data.accessToken, data.expireTimeMs),
+        Map.of(),
+        Map.of());
+    });
   }
 
   @Override

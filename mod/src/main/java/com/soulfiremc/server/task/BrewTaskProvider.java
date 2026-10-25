@@ -35,6 +35,7 @@ import com.soulfiremc.server.pathfinding.goals.CloseToPosGoal;
 import com.soulfiremc.server.pathfinding.graph.constraint.NoBlockBreakingConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.NoBlockPlacingConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraintImpl;
+import com.soulfiremc.server.util.SFBlockHelpers;
 import com.soulfiremc.server.util.SFInventoryHelpers;
 import io.grpc.Status;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -94,6 +95,16 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
 
   @Override
   public BotTaskExecution start(BotTaskContext context, BrewTask input) {
+    return start(context, input, new RecoveryState());
+  }
+
+  @Override
+  public ExecutionFactory prepare(BrewTask input) {
+    var recovery = new RecoveryState();
+    return context -> start(context, input, recovery);
+  }
+
+  private BotTaskExecution start(BotTaskContext context, BrewTask input, RecoveryState recovery) {
     var count = input.getCount() <= 0 ? 1 : input.getCount();
     if (count > MAX_BOTTLES) {
       throw Status.INVALID_ARGUMENT
@@ -111,7 +122,16 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         )
         .asRuntimeException();
     }
-    validateMaterials(context, input, count);
+    var dimension = Objects.requireNonNull(context.bot().minecraft().level).dimension().identifier().toString();
+    if (recovery.dimension != null && !recovery.dimension.equals(dimension)) {
+      throw Status.FAILED_PRECONDITION.withDescription("The unfinished recipe is in another dimension").asRuntimeException();
+    }
+    recovery.dimension = dimension;
+
+    if (!recovery.materialsValidated) {
+      validateMaterials(context, input, count);
+      recovery.materialsValidated = true;
+    }
 
     BlockPos station = null;
     if (input.hasStation() || !(player.containerMenu instanceof BrewingStandMenu)) {
@@ -146,7 +166,8 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
 
     var result = new CompletableFuture<BrewTaskResult>();
     return new BotTaskExecution(
-      new BrewControl(context, input, count, station, result),
+      new BrewControl(context, input, count, station, result, recovery,
+        new RecipeItemValues(Objects.requireNonNull(context.bot().minecraft().level))),
       result
     );
   }
@@ -224,11 +245,9 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private final int targetCount;
     private final @Nullable BlockPos station;
     private final CompletableFuture<BrewTaskResult> result;
-    private final List<ItemStack> outputs = new ArrayList<>();
-    private final List<ItemStack> batchInputs = new ArrayList<>();
-    private final List<ItemStack> batchOutputs = new ArrayList<>();
-    private final Deque<ItemStack> remainingInputs = new ArrayDeque<>();
-    private boolean inputsSelected;
+    private final RecoveryState recovery;
+    private final RecipeItemValues items;
+    private boolean reconcileOutput;
     private @Nullable PathExecutor activePath;
     private boolean active;
     private @Nullable BrewingStandMenu openedMenu;
@@ -236,18 +255,15 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private int resumeStageTicks;
     private Stage stage;
     private int stageTicks;
-    private int operationsCompleted;
-    private int activeBatchSize;
-    private int outputIndex;
-    private int depositingCount;
-    private ItemStack selectedIngredient = ItemStack.EMPTY;
 
     private BrewControl(
       BotTaskContext context,
       BrewTask input,
       int targetCount,
       @Nullable BlockPos station,
-      CompletableFuture<BrewTaskResult> result
+      CompletableFuture<BrewTaskResult> result,
+      RecoveryState recovery,
+      RecipeItemValues items
     ) {
       this.context = context;
       this.inputSelector = input.getInput();
@@ -259,6 +275,10 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       this.targetCount = targetCount;
       this.station = station;
       this.result = result;
+      this.recovery = recovery;
+      this.items = items;
+      this.resumeStage = recovery.phase;
+      this.resumeStageTicks = recovery.phaseTicks;
       this.stage = station == null ? Stage.OPEN_MENU : Stage.NAVIGATE;
     }
 
@@ -268,7 +288,11 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         return;
       }
       try {
-        if (operationsCompleted >= targetCount) {
+        if (reconcileOutput && stage != Stage.NAVIGATE && stage != Stage.OPEN_MENU) {
+          if (!reconcilePickup()) return;
+          reconcileOutput = false;
+        }
+        if (recovery.operationsCompleted >= targetCount) {
           complete();
           return;
         }
@@ -287,6 +311,11 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         }
       } catch (Throwable throwable) {
         result.completeExceptionally(throwable);
+      } finally {
+        if (stage != Stage.NAVIGATE && stage != Stage.OPEN_MENU) {
+          recovery.phase = stage;
+          recovery.phaseTicks = stageTicks;
+        }
       }
     }
 
@@ -339,6 +368,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       var player = requirePlayer();
       if (player.containerMenu instanceof BrewingStandMenu menu) {
         openedMenu = menu;
+        reconcileOutput = recovery.pickup != null;
         var resumed = resumeStage;
         resumeStage = null;
         transition(
@@ -352,6 +382,12 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       }
       var stationPosition = Objects.requireNonNull(station);
       var level = Objects.requireNonNull(context.bot().minecraft().level);
+      if (!SFBlockHelpers.isChunkLoaded(level, stationPosition)) {
+        if (++stageTicks > MENU_TIMEOUT_TICKS) {
+          throw Status.DEADLINE_EXCEEDED.withDescription("Timed out observing the brewing stand").asRuntimeException();
+        }
+        return;
+      }
       var actual = BuiltInRegistries.BLOCK
         .getKey(level.getBlockState(stationPosition).getBlock())
         .toString();
@@ -420,13 +456,13 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
       var reagents = requireLevel().recipeAccess().propertySet(RecipePropertySet.BREWING_REAGENTS);
       var maximumBatchSize = Math.min(
         MAX_BATCH_SIZE,
-        targetCount - operationsCompleted
+        targetCount - recovery.operationsCompleted
       );
-      batchOutputs.clear();
-      batchInputs.clear();
-      outputIndex = 0;
+      recovery.batchOutputs.clear();
+      recovery.batchInputs.clear();
+      recovery.outputIndex = 0;
 
-      selectedIngredient = playerSlots(menu)
+      recovery.selectedIngredient = items.capture(playerSlots(menu)
         .mapToObj(slot -> menu.getSlot(slot).getItem())
         .filter(stack -> InventoryServiceImpl.matches(stack, ingredientSelector))
         .filter(reagents::test)
@@ -434,22 +470,23 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         .orElseThrow(() -> Status.FAILED_PRECONDITION
           .withDescription("No matching brewing ingredient remains")
           .asRuntimeException())
-        .copy();
-      if (!inputsSelected) {
+        .copy());
+      if (!recovery.inputsSelected) {
         selectInputs(menu);
       }
-      activeBatchSize = Math.min(maximumBatchSize, remainingInputs.size());
-      for (var index = 0; index < activeBatchSize; index++) {
-        var selected = remainingInputs.getFirst();
+      recovery.activeBatchSize = Math.min(maximumBatchSize, recovery.remainingInputs.size());
+      for (var index = 0; index < recovery.activeBatchSize; index++) {
+        var stored = recovery.remainingInputs.getFirst();
+        var selected = items.resolve(stored);
         var source = playerSlots(menu)
           .filter(slot -> ItemStack.isSameItemSameComponents(menu.getSlot(slot).getItem(), selected))
           .findFirst()
           .orElseThrow(() -> Status.FAILED_PRECONDITION
             .withDescription("A selected brewing input is no longer available")
             .asRuntimeException());
-        batchInputs.add(selected.copy());
+        recovery.batchInputs.add(stored);
         moveOne(menu, source, index);
-        remainingInputs.removeFirst();
+        recovery.remainingInputs.removeFirst();
       }
       transition(Stage.LOAD_INGREDIENT, "Loading brewing ingredient");
     }
@@ -462,20 +499,21 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
         .filter(inputs::test)
         .toList();
       for (var stack : candidates) {
-        var amount = Math.min(stack.getCount(), targetCount - remainingInputs.size());
+        var amount = Math.min(stack.getCount(), targetCount - recovery.remainingInputs.size());
+        var selected = items.capture(stack.copyWithCount(1));
         for (var index = 0; index < amount; index++) {
-          remainingInputs.addLast(stack.copyWithCount(1));
+          recovery.remainingInputs.addLast(selected);
         }
-        if (remainingInputs.size() == targetCount) {
+        if (recovery.remainingInputs.size() == targetCount) {
           break;
         }
       }
-      if (remainingInputs.size() < targetCount) {
+      if (recovery.remainingInputs.size() < targetCount) {
         throw Status.FAILED_PRECONDITION
           .withDescription("Not enough matching brewing inputs remain")
           .asRuntimeException();
       }
-      inputsSelected = true;
+      recovery.inputsSelected = true;
     }
 
     private void loadIngredient() {
@@ -491,7 +529,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
           var ingredient = menu.getSlot(slot).getItem();
           return InventoryServiceImpl.matches(ingredient, ingredientSelector)
             && reagents.test(ingredient)
-            && ItemStack.isSameItemSameComponents(ingredient, selectedIngredient);
+            && ItemStack.isSameItemSameComponents(ingredient, items.resolve(recovery.selectedIngredient));
         })
         .findFirst()
         .orElseThrow(() -> Status.FAILED_PRECONDITION
@@ -529,22 +567,22 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private void waitForOutput() {
       var menu = requireBrewingMenu();
       var complete = true;
-      for (var index = 0; index < activeBatchSize; index++) {
+      for (var index = 0; index < recovery.activeBatchSize; index++) {
         var output = menu.getSlot(index).getItem();
-        if (output.isEmpty() || ItemStack.isSameItemSameComponents(output, batchInputs.get(index))) {
+        if (output.isEmpty() || ItemStack.isSameItemSameComponents(output, items.resolve(recovery.batchInputs.get(index)))) {
           complete = false;
           break;
         }
       }
       if (complete) {
-        for (var index = 0; index < activeBatchSize; index++) {
+        for (var index = 0; index < recovery.activeBatchSize; index++) {
           var output = menu.getSlot(index).getItem();
           if (expectedResultSelector != null && !InventoryServiceImpl.matches(output, expectedResultSelector)) {
             throw Status.FAILED_PRECONDITION
               .withDescription("Brewing output does not match expected_result")
               .asRuntimeException();
           }
-          batchOutputs.add(output.copy());
+          recovery.batchOutputs.add(items.capture(output));
         }
         transition(Stage.TAKE_OUTPUT, "Collecting brewed potions");
         return;
@@ -560,18 +598,21 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private void takeOutput() {
       var menu = requireBrewingMenu();
       if (!menu.getCarried().isEmpty()
-        || !ItemStack.matches(menu.getSlot(outputIndex).getItem(), batchOutputs.get(outputIndex))) {
+        || !ItemStack.matches(menu.getSlot(recovery.outputIndex).getItem(), items.resolve(recovery.batchOutputs.get(recovery.outputIndex)))) {
         throw Status.ABORTED
           .withDescription("Brewing output changed before collection")
           .asRuntimeException();
       }
-      sendUnpredictedPickup(menu, outputIndex);
+      if (recovery.pickup == null) {
+        recovery.pickup = RecipeOutputCheckpoint.capture(items.resolve(recovery.batchOutputs.get(recovery.outputIndex)), requirePlayer());
+      }
+      sendUnpredictedPickup(menu, recovery.outputIndex);
       transition(Stage.AWAIT_OUTPUT_PICKUP, "Confirming brewed potion collection");
     }
 
     private void awaitOutputPickup() {
       var carried = requireBrewingMenu().getCarried();
-      if (ItemStack.matches(carried, batchOutputs.get(outputIndex))) {
+      if (ItemStack.matches(carried, items.resolve(recovery.batchOutputs.get(recovery.outputIndex)))) {
         transition(Stage.DEPOSIT_OUTPUT, "Storing brewed potion");
         return;
       }
@@ -586,7 +627,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private void depositOutput() {
       var menu = requireBrewingMenu();
       var carried = menu.getCarried();
-      var expected = batchOutputs.get(outputIndex);
+      var expected = items.resolve(recovery.batchOutputs.get(recovery.outputIndex));
       if (carried.isEmpty()
         || !ItemStack.isSameItemSameComponents(carried, expected)
         || carried.getCount() > expected.getCount()) {
@@ -602,7 +643,7 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
           .withDescription("Inventory has no room for brewed potion")
           .asRuntimeException();
       }
-      depositingCount = carried.getCount();
+      recovery.depositingCount = carried.getCount();
       sendUnpredictedPickup(menu, target.getAsInt());
       transition(Stage.AWAIT_OUTPUT_DEPOSIT, "Confirming brewed potion storage");
     }
@@ -610,30 +651,48 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private void awaitOutputDeposit() {
       var carried = requireBrewingMenu().getCarried();
       if (carried.isEmpty()) {
-        outputs.add(batchOutputs.get(outputIndex));
-        outputIndex++;
-        if (outputIndex < activeBatchSize) {
-          transition(Stage.TAKE_OUTPUT, "Collecting brewed potion");
-          return;
-        }
-        operationsCompleted += activeBatchSize;
-        transition(
-          operationsCompleted >= targetCount ? Stage.WAIT_FOR_OUTPUT : Stage.LOAD_BOTTLES,
-          operationsCompleted >= targetCount ? "Brewing complete" : "Loading next potion batch"
-        );
+        confirmOutput();
         return;
       }
-      if (!ItemStack.isSameItemSameComponents(carried, batchOutputs.get(outputIndex))
-        || carried.getCount() > depositingCount) {
+      if (!ItemStack.isSameItemSameComponents(carried, items.resolve(recovery.batchOutputs.get(recovery.outputIndex)))
+        || carried.getCount() > recovery.depositingCount) {
         throw Status.ABORTED
           .withDescription("Brewing output cursor changed during storage")
           .asRuntimeException();
       }
-      if (carried.getCount() < depositingCount) {
+      if (carried.getCount() < recovery.depositingCount) {
         transition(Stage.DEPOSIT_OUTPUT, "Storing remaining brewed output");
         return;
       }
       awaitOutputConfirmation("Timed out confirming brewed potion storage");
+    }
+
+    private void confirmOutput() {
+      recovery.outputs.add(recovery.batchOutputs.get(recovery.outputIndex));
+      recovery.pickup = null;
+      recovery.outputIndex++;
+      if (recovery.outputIndex < recovery.activeBatchSize) {
+        transition(Stage.TAKE_OUTPUT, "Collecting brewed potion");
+        return;
+      }
+      recovery.operationsCompleted += recovery.activeBatchSize;
+      transition(recovery.operationsCompleted >= targetCount ? Stage.WAIT_FOR_OUTPUT : Stage.LOAD_BOTTLES,
+        recovery.operationsCompleted >= targetCount ? "Brewing complete" : "Loading next potion batch");
+    }
+
+    private boolean reconcilePickup() {
+      var menu = requireBrewingMenu();
+      var pickup = Objects.requireNonNull(recovery.pickup);
+      switch (pickup.locate(requirePlayer(), items.resolve(recovery.batchOutputs.get(recovery.outputIndex)), menu.getCarried(), menu.getSlot(recovery.outputIndex).getItem())) {
+        case STORED -> confirmOutput();
+        case CURSOR -> transition(Stage.DEPOSIT_OUTPUT, "Storing recovered brewing output");
+        case STATION -> transition(Stage.TAKE_OUTPUT, "Collecting recovered brewing output");
+        case PENDING -> {
+          awaitOutputConfirmation("Timed out reconciling brewing output after reopening");
+          return false;
+        }
+      }
+      return true;
     }
 
     private void sendUnpredictedPickup(BrewingStandMenu menu, int slot) {
@@ -743,18 +802,19 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     private BotTaskProgress progress(String message) {
       return BotTaskProgress.newBuilder()
         .setMessage(message)
-        .setCurrent(operationsCompleted)
+        .setCurrent(recovery.operationsCompleted)
         .setTotal(targetCount)
         .setFraction(Math.min(
           1.0,
-          (double) operationsCompleted / targetCount
+          (double) recovery.operationsCompleted / targetCount
         ))
         .build();
     }
 
     private void complete() {
       result.complete(BrewTaskResult.newBuilder()
-        .addAllOutputs(outputs.stream()
+        .addAllOutputs(recovery.outputs.stream()
+          .map(items::resolve)
           .map(MinecraftDomainMapper::item)
           .toList())
         .build());
@@ -840,6 +900,25 @@ public final class BrewTaskProvider implements BotTaskProvider<BrewTask> {
     public String description() {
       return "Brew potions";
     }
+  }
+
+  /// Detached batches and progress survive a connection without keeping its menu or control.
+  private static final class RecoveryState {
+    private @Nullable String dimension;
+    private boolean materialsValidated;
+    private @Nullable Stage phase;
+    private int phaseTicks;
+    private final List<RecipeItemValues.StoredItem> outputs = new ArrayList<>();
+    private final List<RecipeItemValues.StoredItem> batchInputs = new ArrayList<>();
+    private final List<RecipeItemValues.StoredItem> batchOutputs = new ArrayList<>();
+    private final Deque<RecipeItemValues.StoredItem> remainingInputs = new ArrayDeque<>();
+    private boolean inputsSelected;
+    private int operationsCompleted;
+    private int activeBatchSize;
+    private int outputIndex;
+    private int depositingCount;
+    private RecipeItemValues.StoredItem selectedIngredient = RecipeItemValues.EMPTY;
+    private @Nullable RecipeOutputCheckpoint pickup;
   }
 
   private enum Stage {

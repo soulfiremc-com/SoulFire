@@ -53,10 +53,12 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /// Selects compatible adult animals, feeds both, and confirms each server
@@ -69,6 +71,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
   private static final int DEFAULT_BREEDING_TIMEOUT_TICKS = 100;
   private static final int MAX_BREEDING_TIMEOUT_TICKS = 1_200;
   private static final int LOVE_MODE_TICKS = 600;
+  private static final int OBSERVATION_TIMEOUT_TICKS = 100;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -95,6 +98,21 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
 
   @Override
   public BotTaskExecution start(BotTaskContext context, BreedTask input) {
+    return start(context, input, new RecoveryState());
+  }
+
+  @Override
+  public ExecutionFactory prepare(BreedTask input) {
+    var recovery = new RecoveryState();
+    return context -> start(context, input, recovery);
+  }
+
+  private BotTaskExecution start(BotTaskContext context, BreedTask input, RecoveryState recovery) {
+    var dimension = Objects.requireNonNull(context.bot().minecraft().level).dimension().identifier().toString();
+    if (recovery.dimension != null && !recovery.dimension.equals(dimension)) {
+      throw Status.FAILED_PRECONDITION.withDescription("The unfinished breeding task is in another dimension").asRuntimeException();
+    }
+    recovery.dimension = dimension;
     var radius = input.getRadius() == 0
       ? DEFAULT_RADIUS
       : requireRange(input.getRadius(), 1, MAX_RADIUS, "radius");
@@ -119,10 +137,6 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       validateDimension(context, input.getCenter());
       center = toBlockPos(input.getCenter());
     }
-    var player = Objects.requireNonNull(
-      context.bot().minecraft().player,
-      "Bot player is not available"
-    );
     var result = new CompletableFuture<BreedTaskResult>();
     return new BotTaskExecution(
       new BreedControl(
@@ -132,12 +146,12 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
         radius,
         rescanInterval,
         breedingTimeout,
-        player.getInventory().getSelectedSlot(),
         PathfindingSupport.buildConstraint(
           context.bot(),
           input.getOptions()
         ),
-        result
+        result,
+        recovery
       ),
       result
     );
@@ -194,19 +208,15 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     private final int radius;
     private final int rescanIntervalTicks;
     private final int breedingTimeoutTicks;
-    private final int originalSelectedSlot;
     private final PathConstraint constraint;
     private final CompletableFuture<BreedTaskResult> result;
-    private final RefusedAnimals refused = new RefusedAnimals();
-    private @Nullable Pair pair;
+    private boolean active;
+    private final RecoveryState recovery;
+    private boolean recoveryPending;
+    private boolean recoveredPendingLove;
+    private int recoveryTicks;
+    private @Nullable Animal pendingAnimal;
     private @Nullable PathExecutor path;
-    private Stage stage = Stage.SCAN;
-    private int targetIndex;
-    private int stageTicks;
-    private long loveEventBeforeInteraction;
-    private int pairsStarted;
-    private int animalsFed;
-    private int failedPairs;
 
     private BreedControl(
       BotTaskContext context,
@@ -215,9 +225,9 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       int radius,
       int rescanIntervalTicks,
       int breedingTimeoutTicks,
-      int originalSelectedSlot,
       PathConstraint constraint,
-      CompletableFuture<BreedTaskResult> result
+      CompletableFuture<BreedTaskResult> result,
+      RecoveryState recovery
     ) {
       this.context = context;
       this.input = input;
@@ -225,9 +235,12 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       this.radius = radius;
       this.rescanIntervalTicks = rescanIntervalTicks;
       this.breedingTimeoutTicks = breedingTimeoutTicks;
-      this.originalSelectedSlot = originalSelectedSlot;
       this.constraint = constraint;
       this.result = result;
+      this.recovery = recovery;
+      this.recoveryPending = recovery.initialized;
+      this.recoveredPendingLove = recoveryPending && recovery.stage == Stage.WAIT_FOR_LOVE;
+      recovery.initialized = true;
     }
 
     @Override
@@ -238,7 +251,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       try {
         if (
           input.getMaximumPairs() > 0
-            && pairsStarted >= input.getMaximumPairs()
+            && recovery.pairsStarted >= input.getMaximumPairs()
         ) {
           complete(
             BreedCompletionReason
@@ -246,7 +259,11 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           );
           return;
         }
-        switch (stage) {
+        if (recoveryPending) {
+          if (!recoverObservation()) return;
+          recoveryPending = false;
+        }
+        switch (recovery.stage) {
           case SCAN -> scan();
           case WAIT_TO_RESCAN -> waitToRescan();
           case NAVIGATE -> navigate();
@@ -258,11 +275,26 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       }
     }
 
+    private boolean recoverObservation() {
+      var level = requireLevel();
+      var visible = recovery.observed.stream().allMatch(uuid -> level.getEntity(uuid) instanceof Animal);
+      if (!visible && ++recoveryTicks < OBSERVATION_TIMEOUT_TICKS) {
+        report("Waiting to observe breeding animals after reconnecting");
+        return false;
+      }
+      var pair = recovery.pair;
+      if (pair != null && (!(level.getEntity(pair.first()) instanceof Animal)
+        || !(level.getEntity(pair.second()) instanceof Animal))) {
+        throw Status.NOT_FOUND.withDescription("The unfinished breeding pair is no longer observable").asRuntimeException();
+      }
+      return true;
+    }
+
     private void scan() {
       var search = findPair();
       if (search.pair() != null) {
-        pair = search.pair();
-        targetIndex = 0;
+        recovery.pair = search.pair();
+        recovery.targetIndex = 0;
         transition(Stage.NAVIGATE, "Walking to first breeding animal");
         return;
       }
@@ -293,8 +325,8 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
 
     private void waitToRescan() {
-      stageTicks++;
-      if (stageTicks >= rescanIntervalTicks) {
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= rescanIntervalTicks) {
         transition(Stage.SCAN, "Scanning for a breeding pair");
       }
     }
@@ -333,8 +365,8 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           exception
         );
         completed.onStopped(ControlStopReason.FAILED, cause);
-        failedPairs++;
-        pair = null;
+        recovery.failedPairs++;
+        recovery.pair = null;
         transition(
           Stage.WAIT_TO_RESCAN,
           "Unable to reach breeding animal"
@@ -377,7 +409,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           )
         )
       ) {
-        pair = null;
+        recovery.pair = null;
         if (input.getCompleteWhenNoFood()) {
           complete(
             BreedCompletionReason.BREED_COMPLETION_REASON_NO_FOOD
@@ -390,8 +422,9 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
         }
         return;
       }
+      pendingAnimal = animal;
       var loveState = (AnimalLoveState) animal;
-      loveEventBeforeInteraction = loveState.soulfire$lastLoveEventTick();
+      recovery.loveEventBeforeInteraction = loveState.soulfire$lastLoveEventTick();
       var swingAnimation = requirePlayer().getItemInHand(InteractionHand.MAIN_HAND).getInteractAnimation();
       var interaction = requireGameMode().interact(
         requirePlayer(),
@@ -421,32 +454,28 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
         failPair("Selected animal became unavailable");
         return;
       }
-      var loveEvent = ((AnimalLoveState) animal)
-        .soulfire$lastLoveEventTick();
-      if (
-        loveEvent != Long.MIN_VALUE
-          && loveEvent != loveEventBeforeInteraction
-      ) {
-        animalsFed++;
-        if (targetIndex == 0) {
-          targetIndex = 1;
-          stopPath(ControlStopReason.CANCELLED, null);
-          transition(
-            Stage.NAVIGATE,
-            "Walking to second breeding animal"
-          );
-          return;
-        }
-        pairsStarted++;
-        pair = null;
-        transition(Stage.SCAN, "Breeding pair started");
+      if (confirmPendingLove(animal)) {
+        pendingAnimal = null;
+        recoveredPendingLove = false;
+        stopPath(ControlStopReason.CANCELLED, null);
+        transition(recovery.stage, recovery.pair == null
+          ? "Breeding pair started" : "Walking to second breeding animal");
         return;
       }
-      stageTicks++;
-      if (stageTicks >= breedingTimeoutTicks) {
-        refused.add(animal.getUUID(), requireLevel().getGameTime());
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= breedingTimeoutTicks) {
+        if (recoveredPendingLove) {
+          throw Status.ABORTED.withDescription("The pending feeding could not be confirmed after reconnecting").asRuntimeException();
+        }
+        recovery.refused.add(animal.getUUID(), requireLevel().getGameTime());
         failPair("Server did not confirm breeding food");
       }
+    }
+
+    private boolean confirmPendingLove(Animal animal) {
+      var event = ((AnimalLoveState) animal).soulfire$lastLoveEventTick();
+      return event != Long.MIN_VALUE && event != recovery.loveEventBeforeInteraction
+        && recovery.confirmLove(animal.getUUID(), event);
     }
 
     private PairSearch findPair() {
@@ -471,8 +500,9 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           input.getAnimals(),
           player.getEyePosition()
         ))
-        .sorted(searchOrder(refused, gameTime, player))
+        .sorted(searchOrder(recovery.refused, gameTime, player))
         .toList();
+      recovery.observed = candidates.stream().map(Entity::getUUID).collect(Collectors.toUnmodifiableSet());
       var compatiblePairExists = false;
       for (var firstIndex = 0; firstIndex < candidates.size(); firstIndex++) {
         var first = candidates.get(firstIndex);
@@ -488,7 +518,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
           compatiblePairExists = true;
           if (hasSharedFood(first, second)) {
             return new PairSearch(
-              new Pair(first.getId(), second.getId()),
+              new Pair(first.getUUID(), second.getUUID()),
               true
             );
           }
@@ -508,13 +538,18 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
 
     private boolean probablyInLove(Animal animal) {
+      if (recovery.loved.contains(animal.getUUID(), requireLevel().getGameTime())) return true;
       var lastEvent = ((AnimalLoveState) animal)
         .soulfire$lastLoveEventTick();
       if (lastEvent == Long.MIN_VALUE) {
         return false;
       }
       var age = requireLevel().getGameTime() - lastEvent;
-      return age >= 0 && age < LOVE_MODE_TICKS;
+      if (age >= 0 && age < LOVE_MODE_TICKS) {
+        recovery.loved.add(animal.getUUID(), lastEvent);
+        return true;
+      }
+      return false;
     }
 
     private boolean hasSharedFood(Animal first, Animal second) {
@@ -546,14 +581,14 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
 
     private Animal currentAnimal() {
       var selectedPair = requirePair();
-      var entityId = targetIndex == 0
+      var uuid = recovery.targetIndex == 0
         ? selectedPair.first()
         : selectedPair.second();
-      return animal(entityId);
+      return animal(uuid);
     }
 
-    private Animal animal(int entityId) {
-      var entity = requireLevel().getEntity(entityId);
+    private Animal animal(UUID uuid) {
+      var entity = requireLevel().getEntity(uuid);
       if (entity instanceof Animal animal) {
         return animal;
       }
@@ -563,7 +598,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
 
     private Pair requirePair() {
-      return Objects.requireNonNull(pair, "Breeding pair is not available");
+      return Objects.requireNonNull(recovery.pair, "Breeding pair is not available");
     }
 
     private net.minecraft.client.player.LocalPlayer requirePlayer() {
@@ -589,28 +624,30 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
 
     private void failPair(String message) {
-      failedPairs++;
-      pair = null;
+      pendingAnimal = null;
+      recoveredPendingLove = false;
+      recovery.failedPairs++;
+      recovery.pair = null;
       stopPath(ControlStopReason.CANCELLED, null);
       transition(Stage.WAIT_TO_RESCAN, message);
     }
 
     private void transition(Stage next, String message) {
-      stage = next;
-      stageTicks = 0;
+      recovery.stage = next;
+      recovery.stageTicks = 0;
       report(message);
     }
 
     private void report(String message) {
       var builder = BotTaskProgress.newBuilder()
         .setMessage(message)
-        .setCurrent(pairsStarted);
+        .setCurrent(recovery.pairsStarted);
       if (input.getMaximumPairs() > 0) {
         builder
           .setTotal(input.getMaximumPairs())
           .setFraction(Math.min(
             1.0,
-            (double) pairsStarted / input.getMaximumPairs()
+            (double) recovery.pairsStarted / input.getMaximumPairs()
           ));
       }
       context.reportProgress(builder.build());
@@ -621,9 +658,9 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       var level = context.bot().minecraft().level;
       var builder = BreedTaskResult.newBuilder()
         .setReason(reason)
-        .setPairsStarted(pairsStarted)
-        .setAnimalsFed(animalsFed)
-        .setFailedPairs(failedPairs);
+        .setPairsStarted(recovery.pairsStarted)
+        .setAnimalsFed(recovery.animalsFed)
+        .setFailedPairs(recovery.failedPairs);
       if (player != null && level != null) {
         builder.setFinalPosition(WorldPosition.newBuilder()
           .setX(player.getX())
@@ -661,7 +698,16 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
 
     @Override
+    public void onStarted() {
+      if (recovery.originalSelectedSlot.isEmpty()) {
+        recovery.originalSelectedSlot = OptionalInt.of(requirePlayer().getInventory().getSelectedSlot());
+      }
+      active = true;
+    }
+
+    @Override
     public void onSuspended() {
+      active = false;
       if (path != null) {
         path.onSuspended();
       }
@@ -669,6 +715,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
 
     @Override
     public void onResumed() {
+      active = true;
       if (path != null) {
         path.onResumed();
       }
@@ -679,15 +726,26 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
       ControlStopReason reason,
       @Nullable Throwable cause
     ) {
-      stopPath(reason, cause);
-      if (input.getRestoreSelectedSlot()) {
-        var player = context.bot().minecraft().player;
-        if (player != null) {
-          player.getInventory().setSelectedSlot(originalSelectedSlot);
+      try {
+        var pending = pendingAnimal;
+        if (pending != null && recovery.stage == Stage.WAIT_FOR_LOVE) {
+          confirmPendingLove(pending);
         }
-      }
-      if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
-        result.cancel(true);
+        pendingAnimal = null;
+        stopPath(reason, cause);
+        if (active) {
+          active = false;
+          if (input.getRestoreSelectedSlot()) {
+            var player = context.bot().minecraft().player;
+            if (player != null) {
+              recovery.originalSelectedSlot.ifPresent(player.getInventory()::setSelectedSlot);
+            }
+          }
+        }
+      } finally {
+        if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
+          result.cancel(true);
+        }
       }
     }
 
@@ -698,7 +756,7 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
   }
 
   /// The order the pair search tries animals in: the ones the server hasn't
-  /// refused first, then the nearest to the player.
+  /// recovery.refused first, then the nearest to the player.
   static Comparator<Animal> searchOrder(
     RefusedAnimals refused,
     long gameTime,
@@ -726,7 +784,57 @@ public final class BreedTaskProvider implements BotTaskProvider<BreedTask> {
     }
   }
 
-  private record Pair(int first, int second) {
+  /// Only identifiers, counters and game-time observations survive a connection.
+  private static final class RecoveryState {
+    private @Nullable String dimension;
+    private boolean initialized;
+    private OptionalInt originalSelectedSlot = OptionalInt.empty();
+    private final RefusedAnimals refused = new RefusedAnimals();
+    private final LovedAnimals loved = new LovedAnimals();
+    private Set<UUID> observed = Set.of();
+    private @Nullable Pair pair;
+    private Stage stage = Stage.SCAN;
+    private int targetIndex;
+    private int stageTicks;
+    private long loveEventBeforeInteraction;
+    private int pairsStarted;
+    private int animalsFed;
+    private int failedPairs;
+
+    boolean confirmLove(UUID animal, long eventTick) {
+      var selected = pair;
+      if (stage != Stage.WAIT_FOR_LOVE || selected == null
+        || !animal.equals(targetIndex == 0 ? selected.first() : selected.second())) return false;
+      loved.add(animal, eventTick);
+      animalsFed++;
+      stageTicks = 0;
+      if (targetIndex == 0) {
+        targetIndex = 1;
+        stage = Stage.NAVIGATE;
+      } else {
+        pairsStarted++;
+        pair = null;
+        stage = Stage.SCAN;
+      }
+      return true;
+    }
+  }
+
+  static final class LovedAnimals {
+    private final Map<UUID, Long> until = new HashMap<>();
+
+    void add(UUID animal, long eventTick) {
+      until.values().removeIf(expiry -> expiry <= eventTick);
+      until.put(animal, eventTick + LOVE_MODE_TICKS);
+    }
+
+    boolean contains(UUID animal, long gameTime) {
+      var expiry = until.get(animal);
+      return expiry != null && gameTime < expiry;
+    }
+  }
+
+  private record Pair(UUID first, UUID second) {
   }
 
   private record PairSearch(

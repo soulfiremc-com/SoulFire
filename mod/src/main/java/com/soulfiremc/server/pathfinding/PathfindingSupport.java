@@ -117,36 +117,15 @@ public final class PathfindingSupport {
             ? entityGoal.getConnectionEpoch()
             : ""
         );
-        var level = bot.minecraft().level;
-        if (level == null) {
-          throw Status.FAILED_PRECONDITION
-            .withDescription("Level is not loaded")
-            .asRuntimeException();
-        }
         var entityId = entityGoal.getEntityId();
-        var entity = findEntityById(level, entityId);
-        if (entity == null) {
-          throw Status.NOT_FOUND
-            .withDescription("Entity '%d' is not observable".formatted(entityId))
-            .asRuntimeException();
-        }
-        var initialPosition = entity.position();
+        requireEntityPosition(bot, entityId);
         DynamicGoalScorer scorer = () -> {
-          var liveLevel = bot.minecraft().level;
-          var current = liveLevel == null ? null : findEntityById(liveLevel, entityId);
-          var position = current == null ? initialPosition : current.position();
+          var position = requireEntityPosition(bot, entityId);
           return entityGoal.getRadius() <= 0
             ? new PosGoal(SFVec3i.fromDouble(position))
             : new CloseToWorldPosGoal(position, entityGoal.getRadius());
         };
-        yield new ResolvedGoal(
-          scorer,
-          connection -> {
-            var liveLevel = connection.minecraft().level;
-            var current = liveLevel == null ? null : findEntityById(liveLevel, entityId);
-            return current == null ? initialPosition : current.position();
-          }
-        );
+        yield new ResolvedGoal(scorer, connection -> requireEntityPosition(connection, entityId));
       }
       case XZ -> {
         var xz = goal.getXz();
@@ -223,40 +202,12 @@ public final class PathfindingSupport {
           away.hasConnectionEpoch() ? away.getConnectionEpoch() : ""
         );
         requirePositiveRadius(away.getRadius(), "away_from_entity.radius");
-        var level = bot.minecraft().level;
-        if (level == null) {
-          throw Status.FAILED_PRECONDITION
-            .withDescription("Level is not loaded")
-            .asRuntimeException();
-        }
-        var entity = findEntityById(level, away.getEntityId());
-        if (entity == null) {
-          throw Status.NOT_FOUND
-            .withDescription(
-              "Entity '%d' is not observable".formatted(away.getEntityId())
-            )
-            .asRuntimeException();
-        }
-        var initialPosition = entity.position();
+        var entityId = away.getEntityId();
+        requireEntityPosition(bot, entityId);
         var radius = Math.max(1, Math.round(away.getRadius()));
-        DynamicGoalScorer scorer = () -> {
-          var liveLevel = bot.minecraft().level;
-          var current = liveLevel == null
-            ? null
-            : findEntityById(liveLevel, away.getEntityId());
-          var position = current == null ? initialPosition : current.position();
-          return new AwayFromPosGoal(SFVec3i.fromDouble(position), radius);
-        };
-        yield new ResolvedGoal(
-          scorer,
-          connection -> {
-            var liveLevel = connection.minecraft().level;
-            var current = liveLevel == null
-              ? null
-              : findEntityById(liveLevel, away.getEntityId());
-            return current == null ? initialPosition : current.position();
-          }
-        );
+        DynamicGoalScorer scorer = () -> new AwayFromPosGoal(
+          SFVec3i.fromDouble(requireEntityPosition(bot, entityId)), radius);
+        yield new ResolvedGoal(scorer, connection -> requireEntityPosition(connection, entityId));
       }
       case ANY -> {
         var goals = goal.getAny().getGoalsList();
@@ -483,13 +434,22 @@ public final class PathfindingSupport {
     java.util.List<ResolvedGoal> goals
   ) {
     var player = bot.minecraft().player;
-    if (player == null) {
-      return goals.getFirst().position().apply(bot);
+    Vec3 closest = null;
+    RuntimeException failure = null;
+    for (var goal : goals) {
+      try {
+        var position = goal.position().apply(bot);
+        if (closest == null || (player != null
+          && position.distanceToSqr(player.position()) < closest.distanceToSqr(player.position()))) {
+          closest = position;
+        }
+      } catch (RuntimeException exception) {
+        if (failure == null) failure = exception;
+      }
     }
-    return goals.stream()
-      .map(goal -> goal.position().apply(bot))
-      .min(java.util.Comparator.comparingDouble(player.position()::distanceTo))
-      .orElseGet(() -> player.position());
+    if (closest != null) return closest;
+    if (failure != null) throw failure;
+    throw new IllegalStateException("No goal positions provided");
   }
 
   private static OptionalDouble optionalPenalty(
@@ -543,6 +503,19 @@ public final class PathfindingSupport {
         .withDescription("Entity reference belongs to a previous connection")
         .asRuntimeException();
     }
+  }
+
+  private static Vec3 requireEntityPosition(BotConnection bot, int entityId) {
+    var level = bot.minecraft().level;
+    if (level == null) {
+      throw Status.FAILED_PRECONDITION.withDescription("Level is not loaded").asRuntimeException();
+    }
+    var entity = findEntityById(level, entityId);
+    if (entity == null || entity.isRemoved()) {
+      throw Status.NOT_FOUND.withDescription("Entity '%d' is not observable".formatted(entityId))
+        .asRuntimeException();
+    }
+    return entity.position();
   }
 
   private static String currentDimension(BotConnection bot) {

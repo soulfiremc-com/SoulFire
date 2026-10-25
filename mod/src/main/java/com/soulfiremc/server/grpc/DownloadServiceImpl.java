@@ -19,6 +19,7 @@ package com.soulfiremc.server.grpc;
 
 import com.google.protobuf.ByteString;
 import com.soulfiremc.grpc.generated.*;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.util.ReactorHttpHelper;
@@ -28,6 +29,8 @@ import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import reactor.core.Disposables;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
 import java.util.UUID;
@@ -51,7 +54,7 @@ public final class DownloadServiceImpl extends DownloadServiceGrpc.DownloadServi
       if (responseObserver instanceof ServerCallStreamObserver<DownloadResponse> observer) {
         observer.setOnCancelHandler(subscription::dispose);
       }
-      subscription.update(ReactorHttpHelper.createReactorClient(proxy, false)
+      subscription.update(Mono.using(() -> ProxyTransport.open(proxy), transport -> ReactorHttpHelper.createReactorClient(transport.proxy(), false)
         .headers(h -> request.getHeadersList().forEach(header -> h.set(header.getKey(), header.getValue())))
         .get()
         .uri(URI.create(request.getUri()))
@@ -69,7 +72,8 @@ public final class DownloadServiceImpl extends DownloadServiceGrpc.DownloadServi
                       .setValue(h.getValue())
                       .build()).toList())
                     .setStatusCode(res.status().code())
-                    .build()))
+                    .build())), ProxyTransport::close)
+        .subscribeOn(Schedulers.boundedElastic())
         .subscribe(response -> {
           responseObserver.onNext(response);
           responseObserver.onCompleted();

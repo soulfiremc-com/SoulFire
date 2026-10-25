@@ -22,7 +22,9 @@ import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.execution.WorldAction;
 import com.soulfiremc.server.pathfinding.graph.MinecraftGraph;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /// Goal that is a composite of multiple goals.
@@ -39,24 +41,44 @@ public record CompositeGoal(Set<GoalScorer> goals) implements GoalScorer {
 
   @Override
   public boolean isFinished(NodeState state, List<WorldAction> actions) {
-    return goals.stream().anyMatch(goal -> goal.isFinished(state, actions));
+    return finishedGoal(state, actions).isPresent();
   }
 
   public GoalScorer getFinishedGoal(
     NodeState state,
     List<WorldAction> actions
   ) {
-    return goals.stream().filter(goal -> goal.isFinished(state, actions))
-      .findFirst()
+    return finishedGoal(state, actions)
       .orElseThrow(() -> new IllegalStateException("No goals finished"));
+  }
+
+  private Optional<GoalScorer> finishedGoal(NodeState state, List<WorldAction> actions) {
+    RuntimeException failure = null;
+    var hasAvailableGoal = false;
+    for (var goal : goals) {
+      try {
+        if (goal.isFinished(state, actions)) return Optional.of(goal);
+        hasAvailableGoal = true;
+      } catch (RuntimeException exception) {
+        if (failure == null) failure = exception;
+      }
+    }
+    if (!hasAvailableGoal && failure != null) throw failure;
+    return Optional.empty();
   }
 
   @Override
   public GoalScorer snapshot() {
-    return new CompositeGoal(
-      goals.stream().map(GoalScorer::snapshot).collect(
-        java.util.stream.Collectors.toUnmodifiableSet()
-      )
-    );
+    var snapshots = new HashSet<GoalScorer>();
+    RuntimeException failure = null;
+    for (var goal : goals) {
+      try {
+        snapshots.add(goal.snapshot());
+      } catch (RuntimeException exception) {
+        if (failure == null) failure = exception;
+      }
+    }
+    if (snapshots.isEmpty() && failure != null) throw failure;
+    return new CompositeGoal(Set.copyOf(snapshots));
   }
 }

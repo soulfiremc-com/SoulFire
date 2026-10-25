@@ -758,14 +758,19 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
         }
       });
 
-      var serverObserver = (ServerCallStreamObserver<ScriptLogEntry>) responseObserver;
-
-      // TODO: Implement log subscription via the logging system
-      // This would hook into SFLogAppender to filter logs by script ID
-      // For now, we just keep the stream open until cancelled
-
-      serverObserver.setOnCancelHandler(() ->
-        log.debug("Script log subscription cancelled for script {}", scriptId));
+      var scope = LogScope.newBuilder().setInstanceScript(InstanceScriptLogScope.newBuilder()
+        .setInstanceId(instanceId.toString()).setScriptId(scriptId.toString())).build();
+      LogServiceImpl.subscribe(soulFireServer, scope, (ServerCallStreamObserver<ScriptLogEntry>) responseObserver,
+        (event, _) -> ScriptLogEntry.newBuilder()
+          .setScriptId(scriptId.toString())
+          .setMessage(event.message())
+          .setTimestamp(Timestamps.fromMillis(event.timestamp()))
+          .setLevel(switch (event.level()) {
+            case "TRACE", "DEBUG" -> LogLevel.LOG_LEVEL_DEBUG;
+            case "WARN" -> LogLevel.LOG_LEVEL_WARN;
+            case "ERROR", "FATAL" -> LogLevel.LOG_LEVEL_ERROR;
+            case null, default -> LogLevel.LOG_LEVEL_INFO;
+          }).build());
 
     } catch (StatusRuntimeException e) {
       throw e;
@@ -1215,7 +1220,12 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
   private static int computeGroupDepth(String groupId, Map<String, String> groupParentMap) {
     var depth = 0;
     var current = groupId;
+    var visited = new HashSet<String>();
     while (true) {
+      if (!visited.add(current)) {
+        throw new ScriptGraphValidationException(List.of(new ScriptGraph.ValidationDiagnostic(
+          current, null, "Group parent hierarchy contains a cycle", ScriptGraph.Severity.ERROR)));
+      }
       var parent = groupParentMap.get(current);
       if (parent == null) {
         break;
@@ -1280,10 +1290,16 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
       }
     }
 
+    // Validate every hierarchy, including a single self-parented group, before sorting.
+    var groupDepths = new HashMap<String, Integer>();
+    for (var group : groupNodes) {
+      groupDepths.put(group.id(), computeGroupDepth(group.id(), groupParentMap));
+    }
+
     // Sort by depth descending (innermost first)
     var sortedGroups = new ArrayList<>(groupNodes);
     sortedGroups.sort(Comparator.comparingInt(
-      (ScriptNodeData g) -> computeGroupDepth(g.id(), groupParentMap)).reversed());
+      (ScriptNodeData g) -> groupDepths.get(g.id())).reversed());
 
     for (var group : sortedGroups) {
       var groupId = group.id();
@@ -1309,23 +1325,28 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
           .toList();
         for (var extEdge : incomingToGroup) {
           var portId = extEdge.targetHandle();
-          // Find the internal edge from groupInput with matching sourceHandle
+          // One exposed input can feed several internal consumers.
           var giId = groupInput.id();
-          var internalEdge = edges.stream()
+          var internalEdges = edges.stream()
             .filter(e -> giId.equals(e.source()) && portId.equals(e.sourceHandle()))
-            .findFirst().orElse(null);
-          if (internalEdge != null) {
+            .toList();
+          for (var internalEdge : internalEdges) {
             edges.add(new ScriptEdgeData(
-              extEdge.id() + "_rewired",
+              extEdge.id() + "_" + internalEdge.id(),
               extEdge.source(), extEdge.sourceHandle(),
               internalEdge.target(), internalEdge.targetHandle(),
               extEdge.edgeType(),
-              extEdge.order()
+              internalEdge.order()
             ));
-          } else {
+          }
+          if (internalEdges.isEmpty()) {
             log.warn("Group {} flattening: could not find internal edge for handle '{}', dropping connection", groupId, portId);
           }
         }
+        // A direct input-to-output wire now has real upstream sources. Remove
+        // the interface's original wires before resolving the output side.
+        var giId = groupInput.id();
+        edges.removeIf(e -> giId.equals(e.source()) || giId.equals(e.target()));
       }
 
       // Rewire outgoing edges (group node -> external becomes internal source -> external)
@@ -1335,20 +1356,21 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
           .toList();
         for (var extEdge : outgoingFromGroup) {
           var portId = extEdge.sourceHandle();
-          // Find the internal edge to groupOutput with matching targetHandle
+          // Execution branches can converge on the same exposed output.
           var goId = groupOutput.id();
-          var internalEdge = edges.stream()
+          var internalEdges = edges.stream()
             .filter(e -> goId.equals(e.target()) && portId.equals(e.targetHandle()))
-            .findFirst().orElse(null);
-          if (internalEdge != null) {
+            .toList();
+          for (var internalEdge : internalEdges) {
             edges.add(new ScriptEdgeData(
-              extEdge.id() + "_rewired",
+              extEdge.id() + "_" + internalEdge.id(),
               internalEdge.source(), internalEdge.sourceHandle(),
               extEdge.target(), extEdge.targetHandle(),
               extEdge.edgeType(),
               extEdge.order()
             ));
-          } else {
+          }
+          if (internalEdges.isEmpty()) {
             log.warn("Group {} flattening: could not find internal edge for handle '{}', dropping connection", groupId, portId);
           }
         }
@@ -1721,22 +1743,21 @@ public final class ScriptServiceImpl extends ScriptServiceGrpc.ScriptServiceImpl
         }
       }
 
-      try {
-        var graph = builder.build();
-        // Build succeeded, return warnings only
-        for (var warning : graph.warnings()) {
-          responseBuilder.addDiagnostics(diagnosticToProto(warning));
-        }
-      } catch (ScriptGraphValidationException e) {
-        for (var diagnostic : e.diagnostics()) {
-          responseBuilder.addDiagnostics(diagnosticToProto(diagnostic));
-        }
+      var graph = builder.build();
+      // Build succeeded, return warnings only
+      for (var warning : graph.warnings()) {
+        responseBuilder.addDiagnostics(diagnosticToProto(warning));
       }
 
       responseObserver.onNext(responseBuilder.build());
       responseObserver.onCompleted();
     } catch (StatusRuntimeException e) {
       throw e;
+    } catch (ScriptGraphValidationException e) {
+      responseObserver.onNext(ValidateScriptResponse.newBuilder()
+        .addAllDiagnostics(e.diagnostics().stream().map(ScriptServiceImpl::diagnosticToProto).toList())
+        .build());
+      responseObserver.onCompleted();
     } catch (Throwable t) {
       log.error("Error validating script", t);
       throw Status.INTERNAL.withDescription(t.getMessage()).withCause(t).asRuntimeException();

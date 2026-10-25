@@ -24,6 +24,7 @@ import com.soulfiremc.server.api.event.bot.BotConnectionInitEvent;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsSource;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import net.kyori.adventure.text.Component;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.multiplayer.resolver.ServerRedirectHandler;
 import net.raphimc.viabedrock.api.BedrockProtocolVersion;
@@ -73,8 +74,16 @@ public record BotConnectionFactory(
         proxyData,
         isStatusPing);
 
-    SoulFireAPI.postEvent(new BotConnectionInitEvent(botConnection));
-
-    return botConnection;
+    try {
+      SoulFireAPI.postEvent(new BotConnectionInitEvent(botConnection));
+      return botConnection;
+    } catch (Throwable throwable) {
+      try {
+        botConnection.disconnect(Component.text("Connection initialization failed")).join();
+      } catch (Throwable cleanup) {
+        throwable.addSuppressed(cleanup);
+      }
+      throw throwable;
+    }
   }
 }

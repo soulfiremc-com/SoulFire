@@ -36,6 +36,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -133,7 +134,11 @@ public record RouteFinder(
     RouteSearchResult result = switch (outcome.status()) {
       case FOUND -> new FoundRouteResult(
         actions(outcome.path()),
-        metadata
+        metadata,
+        new GoalCompletion(
+          Objects.requireNonNull(outcome.endpoint()),
+          outcome.path().isEmpty() ? List.of() : outcome.path().getLast().actions()
+        )
       );
       case PARTIAL -> new PartialRouteResult(
         actions(outcome.path()),
@@ -453,9 +458,20 @@ public record RouteFinder(
     RouteSearchMetadata metadata
   ) implements RouteSearchResult {}
 
+  public record GoalCompletion(NodeState state, List<WorldAction> actions) {
+    public GoalCompletion {
+      actions = List.copyOf(actions);
+    }
+
+    public boolean isSatisfied(GoalScorer goal) {
+      return goal.isFinished(state, actions);
+    }
+  }
+
   public record FoundRouteResult(
     List<WorldAction> actions,
-    RouteSearchMetadata metadata
+    RouteSearchMetadata metadata,
+    GoalCompletion completion
   ) implements RouteSearchResult {}
 
   public record PartialRouteResult(

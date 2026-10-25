@@ -33,7 +33,7 @@ import net.minecraft.world.level.block.state.BlockState;
 @Slf4j
 public final class BlockBreakAction implements WorldAction {
   private static final int MAXIMUM_BLOCK_REPLACEMENT_RETRIES = 16;
-  private static final int CLEARED_STATE_SETTLE_TICKS = 4;
+  public static final int CLEARED_STATE_SETTLE_TICKS = 4;
 
   @Getter
   private final SFVec3i blockPosition;

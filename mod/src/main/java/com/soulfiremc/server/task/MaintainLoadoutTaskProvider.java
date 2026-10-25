@@ -32,6 +32,7 @@ import com.soulfiremc.server.bot.ControlResource;
 import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.grpc.InventoryServiceImpl;
+import com.soulfiremc.server.grpc.InventoryServiceImpl.InventoryMutationTask;
 import com.soulfiremc.server.pathfinding.PathfindingSupport;
 import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.execution.PathExecutor;
@@ -66,6 +67,7 @@ public final class MaintainLoadoutTaskProvider
   private static final int CONTAINER_APPROACH_RADIUS = 1;
   private static final int MAX_APPROACH_ATTEMPTS = 3;
   private static final int OPEN_TIMEOUT_TICKS = 100;
+  private static final int CONFIRM_TIMEOUT_TICKS = 200;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -186,6 +188,12 @@ public final class MaintainLoadoutTaskProvider
     private final int[] withdrawn;
     private final int[] deposited;
     private @Nullable PathExecutor path;
+    private @Nullable InventoryMutationTask<List<Integer>> pendingTransfer;
+    private List<Integer> transferIndexes = List.of();
+    private List<ContainerTransferOperation> pendingDeposits = List.of();
+    private List<Integer> pendingDepositIndexes = List.of();
+    private boolean withdrawing;
+    private int movedInRebalance;
     private Stage stage = Stage.CHECK;
     private int waitTicks;
     private int stageTicks;
@@ -225,9 +233,11 @@ public final class MaintainLoadoutTaskProvider
           case OPEN -> open();
           case WAIT_FOR_MENU -> waitForMenu();
           case TRANSFER -> transfer();
+          case CONFIRM_TRANSFER -> confirmTransfer();
           case WAIT -> waitForNextCheck();
         }
       } catch (Throwable throwable) {
+        stopTransfer(ControlStopReason.FAILED, throwable);
         closeOpenedMenu();
         result.completeExceptionally(throwable);
       }
@@ -400,33 +410,60 @@ public final class MaintainLoadoutTaskProvider
             .build());
         }
       }
-      var moved = 0;
+      movedInRebalance = 0;
+      pendingDeposits = List.copyOf(depositOperations);
+      pendingDepositIndexes = List.copyOf(depositIndexes);
       if (!withdrawOperations.isEmpty()) {
-        var counts = InventoryServiceImpl.transferBatchForTask(
-          context.bot(),
-          withdrawOperations,
-          InventoryArea.INVENTORY_AREA_CONTAINER,
-          InventoryArea.INVENTORY_AREA_PLAYER
-        );
-        for (var index = 0; index < counts.size(); index++) {
-          var count = counts.get(index);
-          withdrawn[withdrawIndexes.get(index)] += count;
-          moved += count;
-        }
+        beginTransfer(withdrawOperations, withdrawIndexes, true);
+      } else {
+        beginDepositsOrComplete();
       }
-      if (!depositOperations.isEmpty()) {
-        var counts = InventoryServiceImpl.transferBatchForTask(
-          context.bot(),
-          depositOperations,
-          InventoryArea.INVENTORY_AREA_PLAYER,
-          InventoryArea.INVENTORY_AREA_CONTAINER
-        );
-        for (var index = 0; index < counts.size(); index++) {
-          var count = counts.get(index);
-          deposited[depositIndexes.get(index)] += count;
-          moved += count;
+    }
+
+    private void beginTransfer(List<ContainerTransferOperation> operations, List<Integer> indexes, boolean withdraw) {
+      withdrawing = withdraw;
+      transferIndexes = List.copyOf(indexes);
+      pendingTransfer = InventoryServiceImpl.transferBatchForTask(
+        context.bot(), operations,
+        withdraw ? InventoryArea.INVENTORY_AREA_CONTAINER : InventoryArea.INVENTORY_AREA_PLAYER,
+        withdraw ? InventoryArea.INVENTORY_AREA_PLAYER : InventoryArea.INVENTORY_AREA_CONTAINER
+      );
+      pendingTransfer.onStarted();
+      transition(Stage.CONFIRM_TRANSFER, "Confirming loadout transfer");
+    }
+
+    private void confirmTransfer() {
+      var transfer = Objects.requireNonNull(pendingTransfer);
+      transfer.tick();
+      if (!transfer.isDone()) {
+        if (++stageTicks >= CONFIRM_TIMEOUT_TICKS) {
+          throw Status.DEADLINE_EXCEEDED.withDescription("Server did not confirm the loadout transfer").asRuntimeException();
         }
+        return;
       }
+      var counts = transfer.result();
+      var totals = withdrawing ? withdrawn : deposited;
+      for (var index = 0; index < counts.size(); index++) {
+        var count = counts.get(index);
+        totals[transferIndexes.get(index)] += count;
+        movedInRebalance += count;
+      }
+      stopTransfer(ControlStopReason.COMPLETED, null);
+      if (withdrawing) beginDepositsOrComplete();
+      else completeRebalance();
+    }
+
+    private void beginDepositsOrComplete() {
+      if (pendingDeposits.isEmpty()) {
+        completeRebalance();
+        return;
+      }
+      beginTransfer(pendingDeposits, pendingDepositIndexes, false);
+      pendingDeposits = List.of();
+      pendingDepositIndexes = List.of();
+    }
+
+    private void completeRebalance() {
       rebalances++;
       if (input.getCloseContainer()) {
         closeOpenedMenu();
@@ -437,7 +474,7 @@ public final class MaintainLoadoutTaskProvider
           MaintainLoadoutCompletionReason
             .MAINTAIN_LOADOUT_COMPLETION_REASON_SATISFIED
         );
-      } else if (moved == 0 && input.getCompleteWhenSatisfied()) {
+      } else if (movedInRebalance == 0 && input.getCompleteWhenSatisfied()) {
         complete(
           MaintainLoadoutCompletionReason
             .MAINTAIN_LOADOUT_COMPLETION_REASON_CONTAINER_EXHAUSTED
@@ -449,7 +486,7 @@ public final class MaintainLoadoutTaskProvider
             .MAINTAIN_LOADOUT_COMPLETION_REASON_REBALANCE_LIMIT_REACHED
         );
       } else {
-        transition(Stage.WAIT, moved == 0
+        transition(Stage.WAIT, movedInRebalance == 0
           ? "Container cannot currently satisfy loadout"
           : "Loadout rebalanced");
       }
@@ -460,6 +497,13 @@ public final class MaintainLoadoutTaskProvider
         waitTicks = 0;
         transition(Stage.CHECK, "Checking loadout");
       }
+    }
+
+    private void stopTransfer(ControlStopReason reason, @Nullable Throwable cause) {
+      var transfer = pendingTransfer;
+      pendingTransfer = null;
+      transferIndexes = List.of();
+      if (transfer != null) transfer.onStopped(reason, cause);
     }
 
     private int[] currentCounts() {
@@ -590,6 +634,7 @@ public final class MaintainLoadoutTaskProvider
       if (path != null) {
         path.onSuspended();
       }
+      if (pendingTransfer != null) pendingTransfer.onSuspended();
     }
 
     @Override
@@ -597,6 +642,7 @@ public final class MaintainLoadoutTaskProvider
       if (path != null) {
         path.onResumed();
       }
+      if (pendingTransfer != null) pendingTransfer.onResumed();
     }
 
     @Override
@@ -606,6 +652,7 @@ public final class MaintainLoadoutTaskProvider
     ) {
       var activePath = path;
       path = null;
+      stopTransfer(reason, cause);
       if (activePath != null) {
         activePath.onStopped(reason, cause);
       }
@@ -627,6 +674,7 @@ public final class MaintainLoadoutTaskProvider
     OPEN,
     WAIT_FOR_MENU,
     TRANSFER,
+    CONFIRM_TRANSFER,
     WAIT
   }
 }

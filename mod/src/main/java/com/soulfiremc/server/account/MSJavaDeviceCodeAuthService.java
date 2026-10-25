@@ -18,6 +18,7 @@
 package com.soulfiremc.server.account;
 
 import com.soulfiremc.server.account.service.OnlineChainJavaData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsImpl;
 import com.soulfiremc.server.util.LenniHttpHelper;
@@ -27,7 +28,6 @@ import net.raphimc.minecraftauth.msa.service.impl.DeviceCodeMsaAuthService;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
@@ -39,15 +39,11 @@ public final class MSJavaDeviceCodeAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(MSJavaDeviceCodeAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = JavaAuthManager.create(LenniHttpHelper.client(proxyData))
-          .login(DeviceCodeMsaAuthService::new, data.callback);
-        return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_DEVICE_CODE, authManager, null);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = JavaAuthManager.create(LenniHttpHelper.client(transportProxy))
+        .login(DeviceCodeMsaAuthService::new, data.callback);
+      return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_DEVICE_CODE, authManager, null);
+    });
   }
 
   @Override
@@ -57,14 +53,10 @@ public final class MSJavaDeviceCodeAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> refresh(MinecraftAccount account, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = ((OnlineChainJavaData) account.accountData()).getJavaAuthManager(proxyData);
-        return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_DEVICE_CODE, authManager, account);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = ((OnlineChainJavaData) account.accountData()).getJavaAuthManager(transportProxy);
+      return AuthHelpers.fromJavaAuthManager(AuthType.MICROSOFT_JAVA_DEVICE_CODE, authManager, account);
+    });
   }
 
   @Override

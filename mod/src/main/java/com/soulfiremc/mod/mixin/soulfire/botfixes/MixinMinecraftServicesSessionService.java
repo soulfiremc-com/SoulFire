@@ -42,7 +42,7 @@ public class MixinMinecraftServicesSessionService {
     var actualProfileId = bot.accountProfileId();
     var accountData = account.accountData();
     var actualAuthenticationToken = switch (accountData) {
-      case OnlineChainJavaData onlineChainJavaData -> onlineChainJavaData.getJavaAuthManager(bot.proxy()).getMinecraftToken().getUpToDateUnchecked().getToken();
+      case OnlineChainJavaData onlineChainJavaData -> onlineChainJavaData.getJavaAuthManager(bot.transportProxy()).getMinecraftToken().getUpToDateUnchecked().getToken();
       case OnlineSimpleJavaData onlineSimpleJavaData -> onlineSimpleJavaData.accessToken();
       case TheAlteningJavaData theAlteningJavaData -> theAlteningJavaData.accessToken();
       case OfflineJavaData ignored -> throw incompatibleJavaOnlineModeAuth(account.authType());
@@ -50,7 +50,7 @@ public class MixinMinecraftServicesSessionService {
     };
 
     if (accountData instanceof TheAlteningJavaData) {
-      TheAlteningAuthService.joinServer(bot.proxy(), actualProfileId, actualAuthenticationToken, serverId);
+      TheAlteningAuthService.joinServer(bot.transportProxy(), actualProfileId, actualAuthenticationToken, serverId);
       return;
     }
 

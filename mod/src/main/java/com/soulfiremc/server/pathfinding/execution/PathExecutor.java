@@ -24,6 +24,7 @@ import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
 import com.soulfiremc.server.pathfinding.NodeState;
 import com.soulfiremc.server.pathfinding.RouteFinder;
+import com.soulfiremc.server.pathfinding.RouteFinder.GoalCompletion;
 import com.soulfiremc.server.pathfinding.SFVec3i;
 import com.soulfiremc.server.pathfinding.goals.GoalScorer;
 import com.soulfiremc.server.pathfinding.graph.MinecraftGraph;
@@ -45,6 +46,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -75,6 +77,7 @@ public final class PathExecutor implements ControlTask {
     );
   private final ActionStallGuard actionStallGuard =
     new ActionStallGuard(MAX_CONSECUTIVE_STALLED_ACTIONS);
+  private volatile GoalCompletion goalCompletion;
   private volatile boolean awaitingPath;
   private volatile CompletableFuture<PlannedRoute> prefetchedRoute;
   private volatile SFVec3i prefetchedRouteStart;
@@ -176,6 +179,12 @@ public final class PathExecutor implements ControlTask {
     return Set.copyOf(completedBlockBreaks);
   }
 
+  /// Returns the current attempted break position without retaining its action or world.
+  public Optional<SFVec3i> pendingBlockBreak() {
+    return worldActionQueue.peek() instanceof BlockBreakAction action && action.breakAttempted()
+      ? Optional.of(action.blockPosition()) : Optional.empty();
+  }
+
   public void completeEarly() {
     if (isDone()) {
       return;
@@ -216,6 +225,7 @@ public final class PathExecutor implements ControlTask {
     }
 
     awaitingPath = true;
+    goalCompletion = null;
     worldDataWait = null;
     cancelPrefetch();
     partialRouteEndpoint = null;
@@ -271,15 +281,14 @@ public final class PathExecutor implements ControlTask {
             partialRouteProgressGuard.reset();
             var newActions = repositionIfNeeded(foundRouteResult.actions(), routeSearchResult.start(), isInitial, this.findPath);
             if (newActions.isEmpty()) {
-              log.info("We're already at the goal!");
               awaitingPath = false;
-              pathCompletionFuture.complete(null);
+              completeGoalRoute(foundRouteResult.completion());
               return;
             }
 
             log.info("Found path with {} actions!", newActions.size());
 
-            preparePath(newActions, null, null);
+            preparePath(newActions, null, null, foundRouteResult.completion());
           };
           case RouteFinder.NoRouteFoundResult _ ->
             throw UnreachableGoalException.noRoute();
@@ -327,18 +336,20 @@ public final class PathExecutor implements ControlTask {
       repositionIfNeeded(actions, start, isInitial, findPath)
     );
     log.info("Found path with {} actions!", newActions.size());
-    preparePath(newActions, routeEndpoint, metadata);
+    preparePath(newActions, routeEndpoint, metadata, null);
   }
 
   public void preparePath(List<WorldAction> worldActions) {
-    preparePath(worldActions, null, null);
+    preparePath(worldActions, null, null, null);
   }
 
   private void preparePath(
     List<WorldAction> worldActions,
     SFVec3i routeEndpoint,
-    RouteFinder.RouteSearchMetadata metadata
+    RouteFinder.RouteSearchMetadata metadata,
+    GoalCompletion goalCompletion
   ) {
+    this.goalCompletion = goalCompletion;
     this.worldActionQueue.clear();
     this.worldActionQueue.addAll(worldActions);
     this.partialRouteEndpoint = routeEndpoint;
@@ -489,12 +500,25 @@ public final class PathExecutor implements ControlTask {
 
     var nextAction = worldActionQueue.peek();
     if (nextAction == null) {
-      log.info("Finished all goals!");
-      connection.controlState().resetAll();
-      pathCompletionFuture.complete(null);
+      completeGoalRoute(goalCompletion);
       return;
     }
     log.debug("Next goal: {}", nextAction);
+  }
+
+  private void completeGoalRoute(GoalCompletion completion) {
+    try {
+      if (completion != null && !completion.isSatisfied(findPath.goalScorer())) {
+        submitForPathCalculation(false);
+        return;
+      }
+      connection.controlState().resetAll();
+      log.info("Finished all goals!");
+      pathCompletionFuture.complete(null);
+    } catch (Throwable cause) {
+      connection.controlState().resetAll();
+      pathCompletionFuture.completeExceptionally(cause);
+    }
   }
 
   @Override
@@ -522,6 +546,7 @@ public final class PathExecutor implements ControlTask {
     cancelPrefetch();
     releaseControls();
     worldActionQueue.clear();
+    goalCompletion = null;
   }
 
   private void releaseControls() {

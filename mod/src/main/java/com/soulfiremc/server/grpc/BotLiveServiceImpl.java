@@ -3285,6 +3285,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     }
 
     BotTask task;
+    UUID taskId;
     try {
       var pathTimeout = normalizePathTimeout(request.getOptions().getTimeoutSeconds());
       task = soulFireServer.botTaskManager().start(
@@ -3304,16 +3305,13 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
           .build(),
         ServerRPCConstants.USER_CONTEXT_KEY.get()
       );
-      serverObserver.onNext(PathfindProgress.newBuilder()
-        .setStatus(pathStatus(task.getStatus()))
-        .setActionId(task.getTaskId())
-        .build());
+      taskId = UUID.fromString(task.getTaskId());
+      emitTaskProgress(taskId, bot, serverObserver, goalPositionSupplier, task);
     } catch (Throwable t) {
       responseObserver.onError(toGrpcError("Failed to start pathfinding task", t));
       return;
     }
 
-    var taskId = UUID.fromString(task.getTaskId());
     var completed = new AtomicBoolean();
     var lastRevision = new AtomicLong(task.getRevision());
     var subscription = new AtomicReference<AutoCloseable>(() -> {

@@ -18,6 +18,7 @@
 package com.soulfiremc.server.account;
 
 import com.soulfiremc.server.account.service.BedrockData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsImpl;
 import com.soulfiremc.server.util.LenniHttpHelper;
@@ -29,7 +30,6 @@ import org.apache.commons.validator.routines.EmailValidator;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 public final class MSBedrockCredentialsAuthService
@@ -40,15 +40,11 @@ public final class MSBedrockCredentialsAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(MSBedrockCredentialsAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = BedrockAuthManager.create(LenniHttpHelper.client(proxyData), ProtocolConstants.BEDROCK_VERSION_NAME)
-          .login(CredentialsMsaAuthService::new, new MsaCredentials(data.email, data.password));
-        return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_CREDENTIALS, authManager, null);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = BedrockAuthManager.create(LenniHttpHelper.client(transportProxy), ProtocolConstants.BEDROCK_VERSION_NAME)
+        .login(CredentialsMsaAuthService::new, new MsaCredentials(data.email, data.password));
+      return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_CREDENTIALS, authManager, null);
+    });
   }
 
   @Override
@@ -70,14 +66,10 @@ public final class MSBedrockCredentialsAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> refresh(MinecraftAccount account, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = ((BedrockData) account.accountData()).getBedrockAuthManager(proxyData);
-        return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_CREDENTIALS, authManager, account);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = ((BedrockData) account.accountData()).getBedrockAuthManager(transportProxy);
+      return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_CREDENTIALS, authManager, account);
+    });
   }
 
   @Override

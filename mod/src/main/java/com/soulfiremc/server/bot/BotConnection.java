@@ -49,9 +49,11 @@ import com.soulfiremc.server.api.event.bot.PreBotConnectEvent;
 import com.soulfiremc.server.api.metadata.MetadataHolder;
 import com.soulfiremc.server.pathfinding.NavigationWorldState;
 import com.soulfiremc.server.proxy.ProxyAuthenticator;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.renderer.PovFrameTasks;
 import com.soulfiremc.server.renderer.VulkanRenderer;
+import com.soulfiremc.server.settings.instance.BotSettings;
 import com.soulfiremc.server.settings.lib.BotSettingsDelegate;
 import com.soulfiremc.server.settings.lib.BotSettingsSource;
 import com.soulfiremc.server.util.SFHelpers;
@@ -87,7 +89,6 @@ import net.minecraft.client.main.GameConfig;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ProfileKeyPairManager;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.client.multiplayer.chat.report.ReportEnvironment;
 import net.minecraft.client.multiplayer.chat.report.ReportingContext;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
@@ -113,7 +114,14 @@ import net.minecraft.client.tutorial.Tutorial;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.gizmos.SimpleGizmoCollector;
+import net.minecraft.network.Connection;
+import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.PacketProcessor;
+import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
+import net.minecraft.network.protocol.ping.ServerboundPingRequestPacket;
+import net.minecraft.network.protocol.status.ClientStatusPacketListener;
+import net.minecraft.network.protocol.status.ClientboundStatusResponsePacket;
+import net.minecraft.network.protocol.status.ServerboundStatusRequestPacket;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import net.minecraft.server.packs.resources.ResourceProvider;
 import net.minecraft.util.Util;
@@ -126,6 +134,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Modifier;
 import java.net.Proxy;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -184,6 +193,8 @@ public final class BotConnection {
   private final Minecraft minecraft;
   @Nullable
   private final SFProxy proxy;
+  @Getter(AccessLevel.NONE)
+  private final ProxyTransport proxyTransport;
   private final boolean isStatusPing;
   @Setter
   private ProtocolVersion currentProtocolVersion;
@@ -196,6 +207,7 @@ public final class BotConnection {
   private volatile @Nullable MenuCloseState creativeCursorReturn;
   @Getter(AccessLevel.NONE)
   private long inventoryUpdates;
+  private long containerContentUpdates;
 
   public static BotConnection current() {
     var current = CURRENT.isBound() ? CURRENT.get() : null;
@@ -234,9 +246,25 @@ public final class BotConnection {
     this.rotationControl = new BotRotationController(this);
     this.serverAddress = serverAddress;
     this.proxy = proxyData;
-    this.minecraft = createMinecraftCopy(minecraftAccount);
+    try {
+      this.proxyTransport = ProxyTransport.open(proxyData);
+    } catch (Throwable throwable) {
+      scheduler.shutdown();
+      throw throwable;
+    }
+    try {
+      this.minecraft = createMinecraftCopy(minecraftAccount);
+    } catch (Throwable throwable) {
+      proxyTransport.close();
+      scheduler.shutdown();
+      throw throwable;
+    }
     this.currentProtocolVersion = currentProtocolVersion;
     this.isStatusPing = isStatusPing;
+  }
+
+  public @Nullable SFProxy transportProxy() {
+    return proxyTransport.proxy();
   }
 
   private MetadataHolder<JsonElement> fillPersistentMetadata(MinecraftAccount minecraftAccount) {
@@ -251,7 +279,7 @@ public final class BotConnection {
   @SneakyThrows
   private Minecraft createMinecraftCopy(MinecraftAccount minecraftAccount) {
     var newInstance = SFModHelpers.deepCopy(SFConstants.BASE_MC_INSTANCE);
-    var javaProxy = ProxyAuthenticator.createProxy(proxy);
+    var javaProxy = ProxyAuthenticator.createProxy(transportProxy());
     var authSession = createAuthSession(minecraftAccount, javaProxy);
     var userApiService = authSession.userApiService();
 
@@ -473,7 +501,7 @@ public final class BotConnection {
       case BedrockData ignored -> new AuthSession(UserApiService.OFFLINE, OfflineFriendsService.INSTANCE, "bedrock");
       case OfflineJavaData ignored -> new AuthSession(UserApiService.OFFLINE, OfflineFriendsService.INSTANCE, "offline");
       case OnlineChainJavaData onlineChainJavaData -> {
-        var authManager = onlineChainJavaData.getJavaAuthManager(proxy);
+        var authManager = onlineChainJavaData.getJavaAuthManager(transportProxy());
         yield new AuthSession(
           new MinecraftAuthUserApiService(authManager),
           OfflineFriendsService.INSTANCE,
@@ -552,32 +580,21 @@ public final class BotConnection {
         SoulFireAPI.postEvent(new PreBotConnectEvent(this));
         var serverAddress = BotConnectionFactory.resolveLegacyAddress(
           this.serverAddress, currentProtocolVersion, ServerNameResolver.DEFAULT.redirectHandler);
+        if (isStatusPing) {
+          pingServerStatus(serverAddress);
+          return;
+        }
         var serverData = new ServerData("soulfire-target", serverAddress.toString(), ServerData.Type.OTHER);
         serverData.setResourcePackStatus(ServerData.ServerPackStatus.ENABLED);
 
-        if (isStatusPing) {
-          minecraft.execute(runnableWrapper.wrap(() -> {
-            try {
-              new ServerStatusPinger().pingServer(
-                serverData,
-                () -> {},
-                () -> {},
-                EventLoopGroupHolder.remote(this.minecraft.options.useNativeTransport())
-              );
-            } catch (Throwable t) {
-              this.disconnect(Component.text("Failed to ping server: " + t.getMessage()));
-            }
-          }));
-        } else {
-          minecraft.execute(runnableWrapper.wrap(() -> ConnectScreen.startConnecting(
+        minecraft.execute(runnableWrapper.wrap(() -> ConnectScreen.startConnecting(
             new JoinMultiplayerScreen(new TitleScreen()),
             minecraft,
             serverAddress,
             serverData,
             false,
             null
-          )));
-        }
+        )));
 
         scheduler.execute(() -> {
           var disconnectReason = Component.text("Tick loop ended");
@@ -606,6 +623,68 @@ public final class BotConnection {
           }
         });
       });
+  }
+
+  @SneakyThrows
+  private void pingServerStatus(ServerAddress address) {
+    Connection connection = null;
+    var reason = net.minecraft.network.chat.Component.translatable("multiplayer.status.finished");
+    try {
+      var resolved = ServerNameResolver.DEFAULT.resolveAddress(address)
+        .orElseThrow(() -> new UnknownHostException(address.getHost()));
+      if (isDisconnecting()) return;
+      var pingConnection = Connection.connectToServer(resolved.asInetSocketAddress(),
+        EventLoopGroupHolder.remote(minecraft.options.useNativeTransport()), null);
+      connection = pingConnection;
+      pingConnection.initiateServerboundStatusConnection(address.getHost(), address.getPort(), new ClientStatusPacketListener() {
+        private boolean receivedStatus;
+
+        @Override
+        public void handleStatusResponse(ClientboundStatusResponsePacket packet) {
+          if (receivedStatus) {
+            pingConnection.disconnect(net.minecraft.network.chat.Component.translatable("multiplayer.status.unrequested"));
+            return;
+          }
+          receivedStatus = true;
+          pingConnection.send(new ServerboundPingRequestPacket(Util.getMillis()));
+        }
+
+        @Override
+        public void handlePongResponse(ClientboundPongResponsePacket packet) {
+          pingConnection.disconnect(net.minecraft.network.chat.Component.translatable("multiplayer.status.finished"));
+        }
+
+        @Override
+        public void onDisconnect(DisconnectionDetails details) {
+          BotConnection.this.disconnect(SFHelpers.nativeToAdventure(details.reason()));
+        }
+
+        @Override
+        public boolean isAcceptingMessages() {
+          return pingConnection.isConnected();
+        }
+      });
+      pingConnection.send(ServerboundStatusRequestPacket.INSTANCE);
+      var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settingsSource.get(BotSettings.READ_TIMEOUT));
+      while (pingConnection.isConnected() && !isDisconnecting() && System.nanoTime() < deadline) {
+        pingConnection.tick();
+        TimeUnit.MILLISECONDS.sleep(10);
+      }
+      if (pingConnection.isConnected() && !isDisconnecting()) {
+        reason = net.minecraft.network.chat.Component.translatable("disconnect.timeout");
+        pingConnection.disconnect(reason);
+      }
+      pingConnection.handleDisconnection();
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      reason = net.minecraft.network.chat.Component.translatable("multiplayer.status.cancelled");
+    } catch (Throwable throwable) {
+      reason = net.minecraft.network.chat.Component.literal("Failed to ping server: " + throwable.getMessage());
+      throw throwable;
+    } finally {
+      if (connection != null) connection.disconnect(reason);
+      disconnect(SFHelpers.nativeToAdventure(reason));
+    }
   }
 
   private static Optional<String> conciseConnectionError(Throwable throwable) {
@@ -695,15 +774,28 @@ public final class BotConnection {
 
       isDisconnected = true;
     } finally {
-      minecraft.stop();
-      botControl.shutdown();
-      runShutdownHooks();
-      scheduler.shutdown();
+      try {
+        minecraft.stop();
+        botControl.shutdown();
+        runShutdownHooks();
+      } finally {
+        try {
+          proxyTransport.close();
+        } finally {
+          scheduler.shutdown();
+        }
+      }
     }
   }
 
   public void onInventoryUpdate() {
     inventoryUpdates++;
+  }
+
+  public void onContainerContent(int containerId) {
+    if (minecraft.player != null && minecraft.player.containerMenu.containerId == containerId) {
+      containerContentUpdates++;
+    }
   }
 
   public void tickDisconnectCleanup() {

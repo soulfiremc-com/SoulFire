@@ -18,6 +18,7 @@
 package com.soulfiremc.server.account;
 
 import com.soulfiremc.server.account.service.BedrockData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.settings.lib.BotSettingsImpl;
 import com.soulfiremc.server.util.LenniHttpHelper;
@@ -28,7 +29,6 @@ import net.raphimc.viabedrock.protocol.data.ProtocolConstants;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
@@ -40,15 +40,11 @@ public final class MSBedrockDeviceCodeAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(MSBedrockDeviceCodeAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = BedrockAuthManager.create(LenniHttpHelper.client(proxyData), ProtocolConstants.BEDROCK_VERSION_NAME)
-          .login(DeviceCodeMsaAuthService::new, data.callback);
-        return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_DEVICE_CODE, authManager, null);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = BedrockAuthManager.create(LenniHttpHelper.client(transportProxy), ProtocolConstants.BEDROCK_VERSION_NAME)
+        .login(DeviceCodeMsaAuthService::new, data.callback);
+      return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_DEVICE_CODE, authManager, null);
+    });
   }
 
   @Override
@@ -58,14 +54,10 @@ public final class MSBedrockDeviceCodeAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> refresh(MinecraftAccount account, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var authManager = ((BedrockData) account.accountData()).getBedrockAuthManager(proxyData);
-        return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_DEVICE_CODE, authManager, account);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var authManager = ((BedrockData) account.accountData()).getBedrockAuthManager(transportProxy);
+      return AuthHelpers.fromBedrockAuthManager(AuthType.MICROSOFT_BEDROCK_DEVICE_CODE, authManager, account);
+    });
   }
 
   @Override

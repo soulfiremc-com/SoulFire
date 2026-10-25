@@ -38,7 +38,7 @@ public class MixinConnection$1 {
     var botConnection = channel.attr(SFConstants.NETTY_BOT_CONNECTION).get();
     NettyHelper.addRunnableWrapper("first_", botConnection.runnableWrapper(), channel);
 
-    var proxyData = botConnection.proxy();
+    var proxyData = botConnection.transportProxy();
     if (proxyData != null) {
       var isBedrock = BedrockProtocolVersion.BEDROCK_LATEST.equals(botConnection.currentProtocolVersion());
       NettyHelper.addProxy(proxyData, channel, isBedrock);

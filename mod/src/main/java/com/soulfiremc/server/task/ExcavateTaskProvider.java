@@ -37,12 +37,15 @@ import com.soulfiremc.server.pathfinding.graph.constraint.DelegatePathConstraint
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
 import com.soulfiremc.server.util.SFBlockHelpers;
 import io.grpc.Status;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -52,6 +55,7 @@ import java.util.concurrent.CompletionException;
 /// the requested region.
 public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask> {
   private static final long MAX_REGION_VOLUME = 32_768;
+  private static final int RECOVERY_CHUNK_TICKS = 100;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -78,6 +82,16 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
 
   @Override
   public BotTaskExecution start(BotTaskContext context, ExcavateTask input) {
+    return start(context, input, new RecoveryState());
+  }
+
+  @Override
+  public ExecutionFactory prepare(ExcavateTask input) {
+    var recovery = new RecoveryState();
+    return context -> start(context, input, recovery);
+  }
+
+  private BotTaskExecution start(BotTaskContext context, ExcavateTask input, RecoveryState recovery) {
     if (!input.hasCornerA() || !input.hasCornerB()) {
       throw Status.INVALID_ARGUMENT
         .withDescription("corner_a and corner_b must be set")
@@ -109,45 +123,14 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
         .asRuntimeException();
     }
 
-    var player = Objects.requireNonNull(
-      context.bot().minecraft().player,
-      "Bot player is not available"
-    );
-    var allDiggable = new LinkedHashSet<SFVec3i>();
-    var skipped = 0;
-    for (var x = minimum.getX(); x <= maximum.getX(); x++) {
-      for (var y = minimum.getY(); y <= maximum.getY(); y++) {
-        for (var z = minimum.getZ(); z <= maximum.getZ(); z++) {
-          var position = new BlockPos(x, y, z);
-          if (!SFBlockHelpers.isChunkLoaded(level, position)) {
-            throw Status.FAILED_PRECONDITION
-              .withDescription(
-                "Excavation cuboid contains an unloaded chunk at %d, %d"
-                  .formatted(position.getX() >> 4, position.getZ() >> 4)
-              )
-              .asRuntimeException();
-          }
-          var state = level.getBlockState(position);
-          if (isDiggable(level, position, state)) {
-            allDiggable.add(SFVec3i.fromInt(position));
-          } else {
-            skipped++;
-          }
-        }
-      }
+    var recovering = recovery.region != null;
+    if (!recovering) {
+      recovery.region = selectRegion(level,
+        Objects.requireNonNull(context.bot().minecraft().player).blockPosition(),
+        minimum, maximum, input.getMaximumBlocks());
+      recovery.pending.addAll(recovery.region.selected());
     }
-
-    var limited = input.getMaximumBlocks() > 0
-      && allDiggable.size() > input.getMaximumBlocks();
-    var selected = allDiggable.stream()
-      .sorted(Comparator.comparingDouble(position ->
-        position.toBlockPos().distSqr(player.blockPosition())))
-      .limit(input.getMaximumBlocks() == 0
-        ? allDiggable.size()
-        : input.getMaximumBlocks())
-      .collect(
-        java.util.stream.Collectors.toCollection(LinkedHashSet::new)
-      );
+    var region = Objects.requireNonNull(recovery.region);
     var baseConstraint = PathfindingSupport.buildConstraint(
       context.bot(),
       input.getOptions().toBuilder().setAllowMining(true).build()
@@ -155,14 +138,71 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
     var result = new CompletableFuture<ExcavateTaskResult>();
     var control = new ExcavateControl(
       context,
-      Set.copyOf(selected),
-      new LinkedHashSet<>(selected),
-      skipped,
-      limited,
-      restrictDamage(baseConstraint, Set.copyOf(allDiggable)),
+      recovery,
+      recovering,
+      restrictDamage(baseConstraint, region.diggable()),
       result
     );
     return new BotTaskExecution(control, result);
+  }
+
+  static Region selectRegion(
+    ClientLevel level,
+    BlockPos origin,
+    BlockPos minimum,
+    BlockPos maximum,
+    int maximumBlocks
+  ) {
+    var allDiggable = new LinkedHashSet<SFVec3i>();
+    var skipped = 0;
+    var chunks = level.getChunkSource();
+    for (var chunkX = minimum.getX() >> 4; chunkX <= (maximum.getX() >> 4); chunkX++) {
+      for (var chunkZ = minimum.getZ() >> 4; chunkZ <= (maximum.getZ() >> 4); chunkZ++) {
+        var chunk = chunks.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
+        if (chunk == null) {
+          throw Status.FAILED_PRECONDITION
+            .withDescription("Excavation cuboid contains an unloaded chunk at %d, %d".formatted(chunkX, chunkZ))
+            .asRuntimeException();
+        }
+        var minX = Math.max(minimum.getX(), chunkX << 4);
+        var maxX = Math.min(maximum.getX(), (chunkX << 4) + 15);
+        var minZ = Math.max(minimum.getZ(), chunkZ << 4);
+        var maxZ = Math.min(maximum.getZ(), (chunkZ << 4) + 15);
+        for (var sectionY = minimum.getY() >> 4; sectionY <= (maximum.getY() >> 4); sectionY++) {
+          var section = chunk.getSection(level.getSectionIndexFromSectionY(sectionY));
+          var minY = Math.max(minimum.getY(), sectionY << 4);
+          var maxY = Math.min(maximum.getY(), (sectionY << 4) + 15);
+          if (section.hasOnlyAir()) {
+            skipped += (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+            continue;
+          }
+          for (var position : BlockPos.betweenClosed(minX, minY, minZ, maxX, maxY, maxZ)) {
+            var state = section.getBlockState(position.getX() & 15, position.getY() & 15, position.getZ() & 15);
+            if (isDiggable(level, position, state)) {
+              allDiggable.add(SFVec3i.fromInt(position));
+            } else {
+              skipped++;
+            }
+          }
+        }
+      }
+    }
+
+    var limited = maximumBlocks > 0
+      && allDiggable.size() > maximumBlocks;
+    var selected = allDiggable.stream()
+      .sorted(Comparator.comparingDouble((SFVec3i position) -> position.toBlockPos().distSqr(origin))
+        .thenComparingInt(position -> position.x)
+        .thenComparingInt(position -> position.y)
+        .thenComparingInt(position -> position.z))
+      .limit(maximumBlocks == 0
+        ? allDiggable.size()
+        : maximumBlocks)
+      .collect(
+        java.util.stream.Collectors.toCollection(LinkedHashSet::new)
+      );
+    return new Region(List.copyOf(selected), Set.copyOf(allDiggable), skipped, limited,
+      level.dimension().identifier().toString());
   }
 
   private static void validateDimension(
@@ -234,33 +274,41 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
     };
   }
 
+  record Region(
+    List<SFVec3i> selected,
+    Set<SFVec3i> diggable,
+    int skipped,
+    boolean limited,
+    String dimension
+  ) {}
+
+  private static final class RecoveryState {
+    private @Nullable Region region;
+    private final Set<SFVec3i> pending = new LinkedHashSet<>();
+    private int blocksBroken;
+    private int unreachable;
+  }
+
   private static final class ExcavateControl implements ControlTask {
     private final BotTaskContext context;
-    private final Set<SFVec3i> selected;
-    private final Set<SFVec3i> pending;
-    private final int skipped;
-    private final boolean limited;
+    private final RecoveryState recovery;
+    private boolean recoveryPending;
+    private int recoveryTicks;
     private final PathConstraint constraint;
     private final CompletableFuture<ExcavateTaskResult> result;
     private @Nullable PathExecutor activePath;
     private @Nullable SFVec3i activeTarget;
-    private int blocksBroken;
-    private int unreachable;
 
     private ExcavateControl(
       BotTaskContext context,
-      Set<SFVec3i> selected,
-      Set<SFVec3i> pending,
-      int skipped,
-      boolean limited,
+      RecoveryState recovery,
+      boolean recovering,
       PathConstraint constraint,
       CompletableFuture<ExcavateTaskResult> result
     ) {
       this.context = context;
-      this.selected = selected;
-      this.pending = pending;
-      this.skipped = skipped;
-      this.limited = limited;
+      this.recovery = recovery;
+      recoveryPending = recovering;
       this.constraint = constraint;
       this.result = result;
     }
@@ -270,15 +318,21 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
       if (result.isDone()) {
         return;
       }
+      if (recoveryPending) {
+        if (!recoverRegion()) {
+          return;
+        }
+        recoveryPending = false;
+      }
       refreshClearedBlocks();
       if (activePath != null) {
         tickPath();
         return;
       }
-      if (pending.isEmpty()) {
-        complete(unreachable > 0 && blocksBroken == 0
+      if (recovery.pending.isEmpty()) {
+        complete(recovery.unreachable > 0 && recovery.blocksBroken == 0
           ? ExcavateCompletionReason.EXCAVATE_COMPLETION_REASON_NO_REACHABLE_BLOCKS
-          : limited
+          : region().limited()
             ? ExcavateCompletionReason.EXCAVATE_COMPLETION_REASON_BLOCK_LIMIT_REACHED
             : ExcavateCompletionReason.EXCAVATE_COMPLETION_REASON_AREA_CLEARED);
         return;
@@ -289,7 +343,7 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
         result.completeExceptionally(new IllegalStateException("Bot player is not available"));
         return;
       }
-      activeTarget = pending.stream()
+      activeTarget = recovery.pending.stream()
         .min(Comparator.comparingDouble(position ->
           position.toBlockPos().distSqr(player.blockPosition())))
         .orElseThrow();
@@ -300,6 +354,31 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
         constraint
       );
       activePath.onStarted();
+    }
+
+    private Region region() {
+      return Objects.requireNonNull(recovery.region);
+    }
+
+    private boolean recoverRegion() {
+      var level = Objects.requireNonNull(context.bot().minecraft().level);
+      if (!level.dimension().identifier().toString().equals(region().dimension())) {
+        result.completeExceptionally(Status.FAILED_PRECONDITION
+          .withDescription("Cannot resume excavation in another dimension")
+          .asRuntimeException());
+        return false;
+      }
+      if (recovery.pending.stream().anyMatch(position ->
+        !SFBlockHelpers.isChunkLoaded(level, position.toBlockPos()))) {
+        context.reportProgress(progress("Waiting for excavation chunks"));
+        if (++recoveryTicks >= RECOVERY_CHUNK_TICKS) {
+          result.completeExceptionally(Status.DEADLINE_EXCEEDED
+            .withDescription("Excavation chunks did not arrive after reconnect")
+            .asRuntimeException());
+        }
+        return false;
+      }
+      return true;
     }
 
     private void tickPath() {
@@ -326,8 +405,8 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
           ? exception
           : exception.getCause();
         path.onStopped(ControlStopReason.FAILED, cause);
-        if (activeTarget != null && pending.remove(activeTarget)) {
-          unreachable++;
+        if (activeTarget != null && recovery.pending.remove(activeTarget)) {
+          recovery.unreachable++;
         }
       } finally {
         activeTarget = null;
@@ -340,7 +419,7 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
       if (level == null) {
         return;
       }
-      var cleared = pending.stream()
+      var cleared = recovery.pending.stream()
         .filter(position -> {
           var blockPosition = position.toBlockPos();
           if (!SFBlockHelpers.isChunkLoaded(level, blockPosition)) {
@@ -350,21 +429,21 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
           return !isDiggable(level, blockPosition, state);
         })
         .toList();
-      pending.removeAll(cleared);
-      blocksBroken += cleared.size();
+      recovery.pending.removeAll(cleared);
+      recovery.blocksBroken += cleared.size();
     }
 
     private BotTaskProgress progress(String message) {
-      var total = selected.size();
+      var total = region().selected().size();
       return BotTaskProgress.newBuilder()
         .setMessage(message)
-        .setCurrent(blocksBroken + unreachable)
+        .setCurrent(recovery.blocksBroken + recovery.unreachable)
         .setTotal(total)
         .setFraction(total == 0
           ? 1.0
           : Math.min(
             1.0,
-            (double) (blocksBroken + unreachable) / total
+            (double) (recovery.blocksBroken + recovery.unreachable) / total
           ))
         .build();
     }
@@ -372,9 +451,9 @@ public final class ExcavateTaskProvider implements BotTaskProvider<ExcavateTask>
     private void complete(ExcavateCompletionReason reason) {
       var builder = ExcavateTaskResult.newBuilder()
         .setReason(reason)
-        .setBlocksBroken(blocksBroken)
-        .setBlocksSkipped(skipped)
-        .setUnreachableBlocks(unreachable);
+        .setBlocksBroken(recovery.blocksBroken)
+        .setBlocksSkipped(region().skipped())
+        .setUnreachableBlocks(recovery.unreachable);
       var player = context.bot().minecraft().player;
       var level = context.bot().minecraft().level;
       if (player != null && level != null) {

@@ -74,6 +74,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /// Semantic, revision-aware inventory and container operations.
 public final class InventoryServiceImpl
@@ -496,19 +497,11 @@ public final class InventoryServiceImpl
     String description,
     InventoryMutation mutation
   ) {
-    var result = new AtomicReference<ContainerSnapshot>();
-    var task = new CompletableControlTask(ControlTask.once(
-      description,
-      INVENTORY_RESOURCES,
-      () -> {
-        var context = Context.create(bot);
-        requireRevision(context, expectedRevision);
-        requireEmptyCursor(context);
-        mutation.apply(context);
-        requireEmptyCursor(context);
-        result.set(snapshot(context));
-      }
-    ));
+    var mutationTask = new InventoryMutationTask<Void>(bot, expectedRevision, description, context -> {
+      mutation.apply(context);
+      return null;
+    });
+    var task = new CompletableControlTask(mutationTask);
     try {
       BotThreadExecution.call(bot, () -> {
         bot.botControl().replace(task);
@@ -536,7 +529,7 @@ public final class InventoryServiceImpl
       }
       return InventoryMutationResponse.newBuilder()
         .setActionId(task.actionId().toString())
-        .setContainer(Objects.requireNonNull(result.get()))
+        .setContainer(mutationTask.container())
         .build();
     });
   }
@@ -663,15 +656,19 @@ public final class InventoryServiceImpl
   }
 
   private static long revision(Context context) {
-    var hash = 0xcbf29ce484222325L;
-    hash = mix(hash, context.menu.containerId);
-    hash = mix(hash, context.menu.getStateId());
-    hash = mix(hash, context.player.getInventory().getSelectedSlot());
-    for (var slot : context.menu.slots) {
+    return revision(context.menu, context.player.getInventory().getSelectedSlot());
+  }
+
+  static long revision(AbstractContainerMenu menu, int selectedHotbarSlot) {
+    var hash = 0xcbf29ce484222325L ^ menuId(menu);
+    hash = mix(hash, menu.containerId);
+    hash = mix(hash, menu.getStateId());
+    hash = mix(hash, selectedHotbarSlot);
+    for (var slot : menu.slots) {
       hash = mix(hash, slot.index);
       hash = mix(hash, stackIdentity(slot.getItem()));
     }
-    return mix(hash, stackIdentity(context.menu.getCarried()));
+    return mix(hash, stackIdentity(menu.getCarried()));
   }
 
   private static long mix(long hash, int value) {
@@ -1057,25 +1054,24 @@ public final class InventoryServiceImpl
     return true;
   }
 
-  /// Preflights and applies a batch from an already-open menu while a
-  /// server-side task owns the bot's inventory and container resources. No
-  /// click is sent until every exact operation has a complete plan.
-  public static List<Integer> transferBatchForTask(
+  /// Preflights, applies and confirms a batch while its parent task owns the
+  /// inventory and container resources. Tick it until done before reading the
+  /// transferred counts. Exact operations are all planned before any click.
+  public static InventoryMutationTask<List<Integer>> transferBatchForTask(
     BotConnection bot,
     List<ContainerTransferOperation> operations,
     InventoryArea from,
     InventoryArea to
   ) {
-    var context = Context.create(bot);
-    requireEmptyCursor(context);
-    var planned = planTaskBatch(context, operations, from, to);
-    applyMoves(context, planned.moves());
-    requireEmptyCursor(context);
-    return planned.transferred();
-  }
-
-  public static long containerRevisionForTask(BotConnection bot) {
-    return revision(Context.create(bot));
+    var menu = Objects.requireNonNull(bot.minecraft().player).containerMenu;
+    return new InventoryMutationTask<>(bot, 0, "Transfer container batch", context -> {
+      if (context.menu != menu) {
+        throw Status.ABORTED.withDescription("The menu changed before transferring items").asRuntimeException();
+      }
+      var planned = planTaskBatch(context, operations, from, to);
+      applyMoves(context, planned.moves());
+      return planned.transferred();
+    });
   }
 
   private static TaskBatchPlan planTaskBatch(
@@ -1268,12 +1264,34 @@ public final class InventoryServiceImpl
       throw wholeOnly(source);
     }
 
-    click(context, source.index, 0, ContainerInput.PICKUP);
-    for (var moved = 0; moved < count; moved++) {
-      click(context, destination.index, 1, ContainerInput.PICKUP);
+    var canReturn = !takenWholeOnly(source);
+    var halfCount = (sourceStack.getCount() + 1) / 2;
+    var takeHalf = canReturn && count <= halfCount
+      && count != Math.min(sourceStack.getCount(), capacity)
+      && (count == Math.min(halfCount, capacity) || halfCount - count < count);
+    click(context, source.index, takeHalf ? 1 : 0, ContainerInput.PICKUP);
+    var carriedCount = context.menu.getCarried().getCount();
+    var excess = carriedCount - count;
+    if (canReturn && count != Math.min(carriedCount, capacity) && excess < count) {
+      for (var returned = 0; returned < excess; returned++) {
+        click(context, source.index, 1, ContainerInput.PICKUP);
+      }
     }
+    placeCarried(context, destination, count);
     if (!context.menu.getCarried().isEmpty()) {
       click(context, source.index, 0, ContainerInput.PICKUP);
+    }
+  }
+
+  private static void placeCarried(Context context, Slot destination, int count) {
+    var carried = context.menu.getCarried();
+    var capacity = destination.getMaxStackSize(carried) - destination.getItem().getCount();
+    if (count == Math.min(carried.getCount(), capacity)) {
+      click(context, destination.index, 0, ContainerInput.PICKUP);
+    } else {
+      for (var placed = 0; placed < count; placed++) {
+        click(context, destination.index, 1, ContainerInput.PICKUP);
+      }
     }
   }
 
@@ -1324,9 +1342,8 @@ public final class InventoryServiceImpl
       }
       click(context, source.index, 0, ContainerInput.PICKUP);
       for (; i < moves.size() && moves.get(i).source == source.index; i++) {
-        for (var placed = 0; placed < moves.get(i).count; placed++) {
-          click(context, moves.get(i).destination, 1, ContainerInput.PICKUP);
-        }
+        var plannedMove = moves.get(i);
+        placeCarried(context, context.menu.getSlot(plannedMove.destination), plannedMove.count);
       }
     }
   }
@@ -1574,20 +1591,18 @@ public final class InventoryServiceImpl
       case OFFHAND -> 45;
       default -> throw new AssertionError("Unexpected equipment slot");
     };
+    var destination = context.menu.getSlot(targetIndex);
     var source = context.menu.slots.stream()
       .filter(value -> value.index != targetIndex)
       .filter(value -> matches(value.getItem(), request.getSelector()))
-      .filter(value -> context.player.isEquippableInSlot(
-        value.getItem(),
-        slot
-      ))
+      .filter(value -> destination.mayPlace(value.getItem()))
       .findFirst()
       .orElseThrow(() -> Status.NOT_FOUND
         .withDescription(
           "No matching item can be equipped in " + slot.getSerializedName()
         )
         .asRuntimeException());
-    swap(context, source, context.menu.getSlot(targetIndex));
+    equipIntoSlot(context, source, destination);
   }
 
   private static void unequip(
@@ -1680,21 +1695,43 @@ public final class InventoryServiceImpl
     };
   }
 
-  private static void swap(Context context, Slot first, Slot second) {
-    var firstItem = first.getItem();
-    var secondItem = second.getItem();
-    if (!first.mayPickup(context.player)
-      || !second.mayPickup(context.player)
-      || !second.mayPlace(firstItem)
-      || !secondItem.isEmpty() && !first.mayPlace(secondItem)) {
+  private static void equipIntoSlot(Context context, Slot source, Slot destination) {
+    var sourceItem = source.getItem();
+    var destinationItem = destination.getItem();
+    if (!source.mayPickup(context.player)
+      || !destination.mayPickup(context.player)
+      || !destination.mayPlace(sourceItem)) {
       throw Status.FAILED_PRECONDITION
         .withDescription("The requested slots do not allow this swap")
         .asRuntimeException();
     }
-    click(context, first.index, 0, ContainerInput.PICKUP);
-    click(context, second.index, 0, ContainerInput.PICKUP);
+    var equippedCount = Math.min(sourceItem.getCount(), destination.getMaxStackSize(sourceItem));
+    var splitSource = equippedCount < sourceItem.getCount();
+    if (splitSource && takenWholeOnly(source)) {
+      throw wholeOnly(source);
+    }
+    var displace = !destinationItem.isEmpty()
+      && (splitSource || !source.mayPlace(destinationItem)
+      || destinationItem.getCount() > source.getMaxStackSize(destinationItem));
+    if (displace) {
+      var destinations = context.menu.slots.stream()
+        .filter(slot -> slot.index != source.index)
+        .filter(slot -> matchesArea(
+          InventoryArea.INVENTORY_AREA_PLAYER,
+          area(context.layout, slot.index)
+        ))
+        .toList();
+      var displaced = planMoves(List.of(destination), destinations, destinationItem.getCount());
+      applyMoves(context, displaced);
+    }
+    if (splitSource || displace) {
+      moveExact(context, source, destination, equippedCount);
+      return;
+    }
+    click(context, source.index, 0, ContainerInput.PICKUP);
+    click(context, destination.index, 0, ContainerInput.PICKUP);
     if (!context.menu.getCarried().isEmpty()) {
-      click(context, first.index, 0, ContainerInput.PICKUP);
+      click(context, source.index, 0, ContainerInput.PICKUP);
     }
   }
 
@@ -1847,6 +1884,126 @@ public final class InventoryServiceImpl
       this.stack = stack;
       this.count = count;
     }
+  }
+
+  private record SlotExpectation(int index, ItemStack item) {}
+
+  /// Applies a mutation, including server confirmation when the protocol supports it.
+  public static final class InventoryMutationTask<T> implements ControlTask {
+    private final BotConnection bot;
+    private final long expectedRevision;
+    private final String description;
+    private final Function<Context, T> mutation;
+    private T outcome;
+    private ContainerSnapshot container;
+    private Context context;
+    private List<SlotExpectation> expected;
+    private long contentsBefore;
+    private long stableRevision;
+    private int stableTicks;
+    private boolean done;
+
+    private InventoryMutationTask(
+      BotConnection bot,
+      long expectedRevision,
+      String description,
+      Function<Context, T> mutation
+    ) {
+      this.bot = bot;
+      this.expectedRevision = expectedRevision;
+      this.description = description;
+      this.mutation = mutation;
+    }
+
+    @Override
+    public void tick() {
+      if (context == null) {
+        context = Context.create(bot);
+        requireRevision(context, expectedRevision);
+        requireEmptyCursor(context);
+        var menu = context.menu;
+        var before = menu.slots.stream().map(slot -> slot.getItem().copy()).toList();
+        outcome = mutation.apply(context);
+        requireEmptyCursor(context);
+        if (context.menu != menu || menu.containerId <= 0
+          || !SFInventoryHelpers.supportsMenuResync(bot.currentProtocolVersion())) {
+          complete();
+          return;
+        }
+        var changes = new ArrayList<SlotExpectation>();
+        var playerChanges = new ArrayList<SlotExpectation>();
+        for (var slot : menu.slots) {
+          if (!ItemStack.matches(before.get(slot.index), slot.getItem())) {
+            var change = new SlotExpectation(slot.index, slot.getItem().copy());
+            changes.add(change);
+            if (matchesArea(InventoryArea.INVENTORY_AREA_PLAYER, area(context.layout, slot.index))) {
+              playerChanges.add(change);
+            }
+          }
+        }
+        if (changes.isEmpty()) {
+          complete();
+          return;
+        }
+        // Other viewers may immediately change the chest again. The bot's
+        // own inventory proves a withdrawal/deposit without locking them out.
+        expected = playerChanges.isEmpty() ? changes : playerChanges;
+        contentsBefore = bot.containerContentUpdates();
+        SFInventoryHelpers.requestMenuContents(context.player.connection, menu);
+        return;
+      }
+
+      if (bot.minecraft().player != context.player || context.player.containerMenu != context.menu) {
+        throw Status.ABORTED.withDescription("The menu changed while confirming inventory changes").asRuntimeException();
+      }
+      if (bot.containerContentUpdates() == contentsBefore) return;
+      var currentRevision = bot.containerContentUpdates();
+      for (var change : expected) {
+        currentRevision = mix(currentRevision, stackIdentity(context.menu.getSlot(change.index).getItem()));
+      }
+      currentRevision = mix(currentRevision, stackIdentity(context.menu.getCarried()));
+      if (currentRevision != stableRevision) {
+        stableRevision = currentRevision;
+        stableTicks = 0;
+        return;
+      }
+      // Several clicks can produce several replies, including intermediate
+      // cursor states. Let the incoming menu updates settle before checking.
+      if (++stableTicks < 2) return;
+      if (!context.menu.getCarried().isEmpty() || expected.stream().anyMatch(change ->
+        !ItemStack.matches(change.item, context.menu.getSlot(change.index).getItem()))) {
+        throw Status.ABORTED.withDescription("The server did not confirm the inventory changes").asRuntimeException();
+      }
+      complete();
+    }
+
+    private void complete() {
+      container = snapshot(context);
+      done = true;
+    }
+
+    public T result() {
+      requireDone();
+      return outcome;
+    }
+
+    public ContainerSnapshot container() {
+      requireDone();
+      return container;
+    }
+
+    private void requireDone() {
+      if (!done) throw new IllegalStateException("Inventory mutation is not confirmed yet");
+    }
+
+    @Override
+    public boolean isDone() { return done; }
+
+    @Override
+    public Set<ControlResource> resources() { return INVENTORY_RESOURCES; }
+
+    @Override
+    public String description() { return description; }
   }
 
   private static final class Context {

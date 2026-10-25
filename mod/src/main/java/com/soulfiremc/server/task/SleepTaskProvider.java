@@ -34,11 +34,13 @@ import com.soulfiremc.server.pathfinding.goals.CloseToPosGoal;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
 import com.soulfiremc.server.util.SFBlockHelpers;
 import io.grpc.Status;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -48,7 +50,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.stream.StreamSupport;
 
 /// Finds a bed, navigates into interaction range, and waits for the server to
 /// confirm that the bot entered the sleeping state.
@@ -61,6 +62,10 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
   private static final int BED_APPROACH_RADIUS = 2;
   private static final double SLEEP_RANGE_HORIZONTAL = 2.5;
   private static final double SLEEP_RANGE_VERTICAL = 1.5;
+  private static final Comparator<BlockPos> BED_SEARCH_TIE_ORDER = Comparator
+    .<BlockPos>comparingInt(BlockPos::getZ)
+    .thenComparingInt(BlockPos::getY)
+    .thenComparingInt(BlockPos::getX);
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -148,6 +153,52 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
       && Math.abs(position.z - center.z) <= SLEEP_RANGE_HORIZONTAL;
   }
 
+  static @Nullable BlockPos findNearestBed(ClientLevel level, BlockPos origin, int radius) {
+    var minX = origin.getX() - radius;
+    var maxX = origin.getX() + radius;
+    var minY = Math.max(level.getMinY(), origin.getY() - radius);
+    var maxY = Math.min(level.getMaxY(), origin.getY() + radius);
+    var minZ = origin.getZ() - radius;
+    var maxZ = origin.getZ() + radius;
+    if (minY > maxY) {
+      return null;
+    }
+    BlockPos nearest = null;
+    var nearestDistance = (double) radius * radius;
+    var chunks = level.getChunkSource();
+    for (var chunkZ = minZ >> 4; chunkZ <= (maxZ >> 4); chunkZ++) {
+      for (var chunkX = minX >> 4; chunkX <= (maxX >> 4); chunkX++) {
+        var chunk = chunks.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
+        if (chunk == null) {
+          continue;
+        }
+        for (var sectionY = minY >> 4; sectionY <= (maxY >> 4); sectionY++) {
+          var section = chunk.getSection(level.getSectionIndexFromSectionY(sectionY));
+          if (!section.maybeHas(state -> state.getBlock() instanceof BedBlock)) {
+            continue;
+          }
+          for (var position : BlockPos.betweenClosed(
+            Math.max(minX, chunkX << 4), Math.max(minY, sectionY << 4), Math.max(minZ, chunkZ << 4),
+            Math.min(maxX, (chunkX << 4) + 15), Math.min(maxY, (sectionY << 4) + 15), Math.min(maxZ, (chunkZ << 4) + 15)
+          )) {
+            var distance = position.distSqr(origin);
+            if (distance > nearestDistance
+              || !(section.getBlockState(position.getX() & 15, position.getY() & 15, position.getZ() & 15)
+              .getBlock() instanceof BedBlock)) {
+              continue;
+            }
+            if (nearest == null || distance < nearestDistance
+              || distance == nearestDistance && BED_SEARCH_TIE_ORDER.compare(position, nearest) < 0) {
+              nearest = position.immutable();
+              nearestDistance = distance;
+            }
+          }
+        }
+      }
+    }
+    return nearest;
+  }
+
   private static BlockPos toBlockPos(BlockPosition position) {
     return new BlockPos(
       position.getX(),
@@ -225,7 +276,10 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
         return;
       }
       stageTicks = 0;
-      bed = pinnedBed == null ? nearestBed() : pinnedBed;
+      bed = pinnedBed == null
+        ? findNearestBed(Objects.requireNonNull(context.bot().minecraft().level),
+          requirePlayer().blockPosition(), searchRadius)
+        : pinnedBed;
       if (bed == null) {
         if (!waitUntilPossible) {
           complete(
@@ -354,34 +408,6 @@ public final class SleepTaskProvider implements BotTaskProvider<SleepTask> {
       }
       transition(Stage.INTERACT, "Waiting until sleep is possible");
       stageTicks = 1;
-    }
-
-    /// `BlockPos.betweenClosed` reuses one mutable position for every
-    /// element, so each match is copied before `min` keeps a reference to it.
-    /// Otherwise the result is whatever position the iteration ended on.
-    private @Nullable BlockPos nearestBed() {
-      var level = Objects.requireNonNull(context.bot().minecraft().level);
-      var origin = requirePlayer().blockPosition();
-      return StreamSupport.stream(
-          BlockPos.betweenClosed(
-            origin.offset(
-              -searchRadius,
-              -searchRadius,
-              -searchRadius
-            ),
-            origin.offset(searchRadius, searchRadius, searchRadius)
-          ).spliterator(),
-          false
-        )
-        .filter(position -> position.distSqr(origin)
-          <= (double) searchRadius * searchRadius)
-        .filter(position -> SFBlockHelpers.isChunkLoaded(level, position))
-        .filter(position ->
-          level.getBlockState(position).getBlock() instanceof BedBlock)
-        .map(BlockPos::immutable)
-        .min(Comparator.comparingDouble(position ->
-          position.distSqr(origin)))
-        .orElse(null);
     }
 
     private void requireBed(BlockPos target) {

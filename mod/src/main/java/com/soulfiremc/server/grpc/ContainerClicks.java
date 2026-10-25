@@ -45,6 +45,9 @@ final class ContainerClicks {
       throw Status.INVALID_ARGUMENT.withDescription("Invalid inventory swap destination").asRuntimeException();
     }
     var slot = slotId == -999 ? null : menu.getSlot(slotId);
+    if (slot != null && !slot.isActive()) {
+      throw Status.INVALID_ARGUMENT.withDescription("Container slot is inactive").asRuntimeException();
+    }
     if (menu instanceof CreativeModeInventoryScreen.ItemPickerMenu) {
       if (!(minecraft.gui.screen() instanceof CreativeModeInventoryScreen screen) || screen.getMenu() != menu) {
         throw Status.FAILED_PRECONDITION.withDescription("Bot creative inventory screen is not available").asRuntimeException();

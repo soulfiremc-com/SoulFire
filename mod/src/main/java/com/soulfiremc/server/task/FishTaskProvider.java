@@ -79,10 +79,6 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
     var biteTimeout = input.getBiteTimeoutTicks() == 0
       ? DEFAULT_BITE_TIMEOUT_TICKS
       : Math.min(input.getBiteTimeoutTicks(), MAX_BITE_TIMEOUT_TICKS);
-    var player = Objects.requireNonNull(
-      context.bot().minecraft().player,
-      "Bot player is not available"
-    );
     var result = new CompletableFuture<FishTaskResult>();
     return new BotTaskExecution(
       new FishControl(
@@ -94,7 +90,6 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
         biteTimeout,
         input.getCompleteWhenNoRod(),
         input.getRestoreSelectedSlot(),
-        player.getInventory().getSelectedSlot(),
         result
       ),
       result
@@ -110,8 +105,9 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
     private final int biteTimeoutTicks;
     private final boolean completeWhenNoRod;
     private final boolean restoreSelectedSlot;
-    private final int originalSelectedSlot;
     private final CompletableFuture<FishTaskResult> result;
+    private int originalSelectedSlot;
+    private boolean active;
     private Stage stage = Stage.SELECT_ROD;
     private int stageTicks;
     private int catches;
@@ -129,7 +125,6 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
       int biteTimeoutTicks,
       boolean completeWhenNoRod,
       boolean restoreSelectedSlot,
-      int originalSelectedSlot,
       CompletableFuture<FishTaskResult> result
     ) {
       this.context = context;
@@ -140,7 +135,6 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
       this.biteTimeoutTicks = biteTimeoutTicks;
       this.completeWhenNoRod = completeWhenNoRod;
       this.restoreSelectedSlot = restoreSelectedSlot;
-      this.originalSelectedSlot = originalSelectedSlot;
       this.result = result;
     }
 
@@ -385,25 +379,47 @@ public final class FishTaskProvider implements BotTaskProvider<FishTask> {
     }
 
     @Override
+    public void onStarted() {
+      originalSelectedSlot = requirePlayer().getInventory().getSelectedSlot();
+      active = true;
+    }
+
+    @Override
+    public void onSuspended() {
+      active = false;
+    }
+
+    @Override
+    public void onResumed() {
+      active = true;
+    }
+
+    @Override
     public void onStopped(
       ControlStopReason reason,
       @Nullable Throwable cause
     ) {
-      var player = context.bot().minecraft().player;
-      var gameMode = context.bot().minecraft().gameMode;
-      if (
-        player != null
-          && gameMode != null
-          && player.fishing != null
-          && player.getMainHandItem().getItem() instanceof FishingRodItem
-      ) {
-        gameMode.useItem(player, InteractionHand.MAIN_HAND);
-      }
-      if (restoreSelectedSlot && player != null) {
-        player.getInventory().setSelectedSlot(originalSelectedSlot);
-      }
-      if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
-        result.cancel(true);
+      try {
+        if (active) {
+          active = false;
+          var player = context.bot().minecraft().player;
+          var gameMode = context.bot().minecraft().gameMode;
+          if (
+            player != null
+              && gameMode != null
+              && player.fishing != null
+              && player.getMainHandItem().getItem() instanceof FishingRodItem
+          ) {
+            gameMode.useItem(player, InteractionHand.MAIN_HAND);
+          }
+          if (restoreSelectedSlot && player != null) {
+            player.getInventory().setSelectedSlot(originalSelectedSlot);
+          }
+        }
+      } finally {
+        if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
+          result.cancel(true);
+        }
       }
     }
 

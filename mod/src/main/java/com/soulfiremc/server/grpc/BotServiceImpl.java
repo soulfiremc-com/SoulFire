@@ -72,6 +72,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.StringUtil;
 import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.inventory.ContainerInput;
@@ -1113,6 +1114,32 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
       playerInvStart = 9;
       hotbarStart = 36;
 
+    } else if (menu instanceof AbstractMountInventoryMenu) {
+      for (var index = 0; index < 2; index++) {
+        if (!menu.getSlot(index).isActive()) continue;
+        layoutBuilder.addRegions(SlotRegion.newBuilder()
+          .setId(index == 0 ? "saddle" : "equipment")
+          .setLabel(index == 0 ? "Saddle" : "Equipment")
+          .setStartIndex(index)
+          .setSlotCount(1)
+          .setColumns(1)
+          .setType(index == 0 ? SlotRegionType.SLOT_REGION_NORMAL : SlotRegionType.SLOT_REGION_ARMOR)
+          .build());
+      }
+      var storageSlots = menu.slots.size() - 38;
+      if (storageSlots > 0) {
+        layoutBuilder.addRegions(SlotRegion.newBuilder()
+          .setId("container")
+          .setLabel("Storage")
+          .setStartIndex(2)
+          .setSlotCount(storageSlots)
+          .setColumns(storageSlots / 3)
+          .setType(SlotRegionType.SLOT_REGION_NORMAL)
+          .build());
+      }
+      playerInvStart = 2 + storageSlots;
+      hotbarStart = playerInvStart + 27;
+
     } else if (menu instanceof ChestMenu chestMenu) {
       // Chest layout: container slots first, then player inventory
       int containerSize = chestMenu.getRowCount() * 9;
@@ -1734,6 +1761,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
   private static String getContainerTypeId(AbstractContainerMenu menu) {
     return switch (menu) {
       case InventoryMenu ignored -> "inventory";
+      case AbstractMountInventoryMenu ignored -> "mount";
       case ChestMenu ignored -> "chest";
       case DispenserMenu ignored -> "dispenser";
       case HopperMenu ignored -> "hopper";
@@ -2171,11 +2199,12 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
         }
         var container = player.containerMenu;
         var fieldId = request.getFieldId();
+        var text = StringUtil.filterText(request.getText());
         if (container instanceof CreativeModeInventoryScreen.ItemPickerMenu && "search".equals(fieldId)) {
           if (!(minecraft.gui.screen() instanceof CreativeModeInventoryScreen screen) || screen.getMenu() != container) {
             throw Status.FAILED_PRECONDITION.withDescription("Bot creative inventory screen is not available").asRuntimeException();
           }
-          CreativeInventoryControls.search(screen, request.getText());
+          CreativeInventoryControls.search(screen, text);
           success.set(true);
         } else if (container instanceof AnvilMenu && "item_name".equals(fieldId)) {
           if (minecraft.getConnection() == null) {
@@ -2185,7 +2214,7 @@ public final class BotServiceImpl extends BotServiceGrpc.BotServiceImplBase {
             throw Status.FAILED_PRECONDITION.withDescription("Bot anvil screen is not available").asRuntimeException();
           }
           // Keep the screen's text and its rename packet responder in sync.
-          ((AnvilScreenAccessor) screen).soulfire$getNameInput().setValue(request.getText());
+          ((AnvilScreenAccessor) screen).soulfire$getNameInput().setValue(text);
           success.set(true);
         } else {
           success.set(false);

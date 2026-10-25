@@ -19,6 +19,7 @@ package com.soulfiremc.server.account;
 
 import com.mojang.authlib.exceptions.AuthenticationException;
 import com.soulfiremc.server.account.service.TheAlteningJavaData;
+import com.soulfiremc.server.proxy.ProxyTransport;
 import com.soulfiremc.server.proxy.SFProxy;
 import com.soulfiremc.server.util.LenniHttpHelper;
 import com.soulfiremc.server.util.structs.GsonInstance;
@@ -32,7 +33,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 /// Authentication service for TheAltening account tokens.
@@ -50,13 +50,9 @@ public final class TheAlteningAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> login(TheAlteningAuthData data, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        return authenticate(data.accountToken, proxyData, null);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      return authenticate(data.accountToken, transportProxy, null);
+    });
   }
 
   @Override
@@ -71,14 +67,10 @@ public final class TheAlteningAuthService
 
   @Override
   public CompletableFuture<MinecraftAccount> refresh(MinecraftAccount account, @Nullable SFProxy proxyData, Executor executor) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        var accountData = (TheAlteningJavaData) account.accountData();
-        return authenticate(accountData.accountToken(), proxyData, account);
-      } catch (Exception e) {
-        throw new CompletionException(e);
-      }
-    }, executor);
+    return ProxyTransport.supplyAsync(proxyData, executor, transportProxy -> {
+      var accountData = (TheAlteningJavaData) account.accountData();
+      return authenticate(accountData.accountToken(), transportProxy, account);
+    });
   }
 
   @Override

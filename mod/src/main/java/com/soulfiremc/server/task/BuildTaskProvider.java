@@ -71,6 +71,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -82,6 +83,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
   private static final int MAX_BLOCKS = 8_192;
   private static final int PLACEMENT_CONFIRMATION_TICKS = 40;
   private static final int REACH_RADIUS = 3;
+  private static final int RECOVERY_CHUNK_TICKS = 100;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -106,6 +108,16 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
 
   @Override
   public BotTaskExecution start(BotTaskContext context, BuildTask input) {
+    return start(context, input, new RecoveryState());
+  }
+
+  @Override
+  public ExecutionFactory prepare(BuildTask input) {
+    var recovery = new RecoveryState();
+    return context -> start(context, input, recovery);
+  }
+
+  private BotTaskExecution start(BotTaskContext context, BuildTask input, RecoveryState recovery) {
     validate(context, input);
     var origin = new BlockPos(
       input.getOrigin().getX(),
@@ -159,10 +171,6 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         selected.add(transformed.get(index));
       }
     }
-    var player = Objects.requireNonNull(
-      context.bot().minecraft().player,
-      "Bot player is not available"
-    );
     var navigationConstraint = protectSchematic(
       PathfindingSupport.buildConstraint(
         context.bot(),
@@ -180,8 +188,8 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         navigationConstraint,
         input.getBreakIncorrectBlocks(),
         input.getRestoreSelectedSlot(),
-        player.getInventory().getSelectedSlot(),
-        result
+        result,
+        recovery
       ),
       result
     );
@@ -447,19 +455,14 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
     private final PathConstraint navigationConstraint;
     private final boolean breakIncorrect;
     private final boolean restoreSelectedSlot;
-    private final int originalSelectedSlot;
     private final CompletableFuture<BuildTaskResult> result;
-    private final List<BuildBlockOutcome> outcomes = new ArrayList<>();
+    private boolean active;
+    private final RecoveryState recovery;
+    private boolean recoveryPending;
+    private int recoveryTicks;
     private @Nullable PathExecutor activePath;
     private @Nullable Placement current;
     private @Nullable Material currentMaterial;
-    private Stage stage = Stage.PREPARE;
-    private int placementIndex;
-    private int stageTicks;
-    private int blocksPlaced;
-    private int alreadyCorrect;
-    private int incorrectBroken;
-    private int failed;
 
     private BuildControl(
       BotTaskContext context,
@@ -467,16 +470,17 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       PathConstraint navigationConstraint,
       boolean breakIncorrect,
       boolean restoreSelectedSlot,
-      int originalSelectedSlot,
-      CompletableFuture<BuildTaskResult> result
+      CompletableFuture<BuildTaskResult> result,
+      RecoveryState recovery
     ) {
       this.context = context;
       this.placements = placements;
       this.navigationConstraint = navigationConstraint;
       this.breakIncorrect = breakIncorrect;
       this.restoreSelectedSlot = restoreSelectedSlot;
-      this.originalSelectedSlot = originalSelectedSlot;
       this.result = result;
+      this.recovery = recovery;
+      recoveryPending = recovery.dimension != null;
     }
 
     @Override
@@ -484,17 +488,59 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       if (result.isDone()) {
         return;
       }
-      if (placementIndex >= placements.size()) {
+      if (recoveryPending) {
+        if (!recoverPlacement()) {
+          return;
+        }
+        recoveryPending = false;
+      }
+      if (recovery.placementIndex >= placements.size()) {
         complete();
         return;
       }
-      current = placements.get(placementIndex);
-      switch (stage) {
+      current = placements.get(recovery.placementIndex);
+      switch (recovery.stage) {
         case PREPARE -> prepare();
         case BREAK, NAVIGATE -> tickPath();
         case PLACE -> place();
         case CONFIRM -> confirm();
       }
+    }
+
+    private boolean recoverPlacement() {
+      var level = Objects.requireNonNull(context.bot().minecraft().level);
+      if (!level.dimension().identifier().toString().equals(recovery.dimension)) {
+        result.completeExceptionally(Status.FAILED_PRECONDITION
+          .withDescription("Cannot resume build placements in another dimension")
+          .asRuntimeException());
+        return false;
+      }
+      if (recovery.placementIndex >= placements.size()) {
+        return true;
+      }
+      current = placements.get(recovery.placementIndex);
+      if (!SFBlockHelpers.isChunkLoaded(level, current.position())) {
+        context.reportProgress(progress("Waiting for build target chunk"));
+        if (++recoveryTicks >= RECOVERY_CHUNK_TICKS) {
+          result.completeExceptionally(Status.DEADLINE_EXCEEDED
+            .withDescription("Build target chunk did not arrive after reconnect")
+            .asRuntimeException());
+        }
+        return false;
+      }
+      switch (recovery.stage) {
+        case CONFIRM -> currentMaterial = material(
+          Objects.requireNonNull(recovery.placingMaterialId), current.properties());
+        case BREAK -> {
+          if (BlockPredictionSupport.isClearedBreakTarget(level.getBlockState(current.position()))) {
+            recovery.incorrectBroken++;
+          }
+          recovery.stage = Stage.PREPARE;
+        }
+        case NAVIGATE, PLACE -> recovery.stage = Stage.PREPARE;
+        case PREPARE -> {}
+      }
+      return true;
     }
 
     private void prepare() {
@@ -516,7 +562,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       var matching = matchingCurrentMaterial(placement, state);
       if (matching.isPresent()) {
         currentMaterial = matching.orElseThrow();
-        alreadyCorrect++;
+        recovery.alreadyCorrect++;
         outcome(
           BuildBlockStatus.BUILD_BLOCK_STATUS_ALREADY_CORRECT,
           currentMaterial.blockId(),
@@ -543,7 +589,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
           )
         );
         activePath.onStarted();
-        stage = Stage.BREAK;
+        recovery.stage = Stage.BREAK;
         context.reportProgress(progress("Breaking incorrect block"));
         return;
       }
@@ -562,14 +608,14 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         navigationConstraint
       );
       activePath.onStarted();
-      stage = Stage.NAVIGATE;
+      recovery.stage = Stage.NAVIGATE;
       context.reportProgress(progress("Navigating to build placement"));
     }
 
     private void tickPath() {
       var path = activePath;
       if (path == null) {
-        stage = Stage.PREPARE;
+        recovery.stage = Stage.PREPARE;
         return;
       }
       if (!path.isDone()) {
@@ -577,7 +623,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         context.reportProgress(progress(
           path.progress().planning()
             ? "Planning build route"
-            : stage == Stage.BREAK
+            : recovery.stage == Stage.BREAK
               ? "Breaking incorrect block"
               : "Navigating to build placement"
         ));
@@ -587,11 +633,11 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       try {
         path.completion().join();
         path.onStopped(ControlStopReason.COMPLETED, null);
-        if (stage == Stage.BREAK) {
-          incorrectBroken++;
-          stage = Stage.PREPARE;
+        if (recovery.stage == Stage.BREAK) {
+          recovery.incorrectBroken++;
+          recovery.stage = Stage.PREPARE;
         } else {
-          stage = Stage.PLACE;
+          recovery.stage = Stage.PLACE;
         }
       } catch (CompletionException exception) {
         var cause = exception.getCause() == null
@@ -675,8 +721,9 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
         player.swing(InteractionHand.MAIN_HAND, swingAnimation, false);
       }
-      stageTicks = 0;
-      stage = Stage.CONFIRM;
+      recovery.stageTicks = 0;
+      recovery.placingMaterialId = material.blockId();
+      recovery.stage = Stage.CONFIRM;
       context.reportProgress(progress("Confirming block placement"));
     }
 
@@ -696,7 +743,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
           placement.position()
         )
       ) {
-        blocksPlaced++;
+        recovery.blocksPlaced++;
         outcome(
           BuildBlockStatus.BUILD_BLOCK_STATUS_PLACED,
           material.blockId(),
@@ -705,8 +752,8 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
         advance();
         return;
       }
-      stageTicks++;
-      if (stageTicks >= PLACEMENT_CONFIRMATION_TICKS) {
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= PLACEMENT_CONFIRMATION_TICKS) {
         fail(
           BuildBlockStatus.BUILD_BLOCK_STATUS_STATE_MISMATCH,
           blockId(state),
@@ -756,7 +803,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       String placedBlockId,
       String message
     ) {
-      failed++;
+      recovery.failed++;
       outcome(status, placedBlockId, message);
       advance();
     }
@@ -771,7 +818,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       var dimension = level == null
         ? ""
         : level.dimension().identifier().toString();
-      outcomes.add(BuildBlockOutcome.newBuilder()
+      recovery.outcomes.add(BuildBlockOutcome.newBuilder()
         .setPosition(BlockPosition.newBuilder()
           .setX(placement.position().getX())
           .setY(placement.position().getY())
@@ -785,37 +832,37 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
     }
 
     private void advance() {
-      placementIndex++;
+      recovery.placementIndex++;
       current = null;
       currentMaterial = null;
+      recovery.placingMaterialId = null;
       activePath = null;
-      stageTicks = 0;
-      stage = Stage.PREPARE;
+      recovery.stageTicks = 0;
+      recovery.stage = Stage.PREPARE;
     }
 
     private BotTaskProgress progress(String message) {
       var total = placements.size();
       return BotTaskProgress.newBuilder()
         .setMessage(message)
-        .setCurrent(placementIndex)
+        .setCurrent(recovery.placementIndex)
         .setTotal(total)
         .setFraction(total == 0
           ? 1.0
-          : Math.min(1.0, (double) placementIndex / total))
+          : Math.min(1.0, (double) recovery.placementIndex / total))
         .build();
     }
 
     private void complete() {
-      restoreSelectedSlot();
       var builder = BuildTaskResult.newBuilder()
-        .setReason(failed == 0
+        .setReason(recovery.failed == 0
           ? BuildCompletionReason.BUILD_COMPLETION_REASON_COMPLETED
           : BuildCompletionReason.BUILD_COMPLETION_REASON_PARTIAL)
-        .setBlocksPlaced(blocksPlaced)
-        .setBlocksAlreadyCorrect(alreadyCorrect)
-        .setIncorrectBlocksBroken(incorrectBroken)
-        .setBlocksFailed(failed)
-        .addAllOutcomes(outcomes);
+        .setBlocksPlaced(recovery.blocksPlaced)
+        .setBlocksAlreadyCorrect(recovery.alreadyCorrect)
+        .setIncorrectBlocksBroken(recovery.incorrectBroken)
+        .setBlocksFailed(recovery.failed)
+        .addAllOutcomes(recovery.outcomes);
       var player = context.bot().minecraft().player;
       var level = context.bot().minecraft().level;
       if (player != null && level != null) {
@@ -831,7 +878,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
     private void restoreSelectedSlot() {
       var player = context.bot().minecraft().player;
       if (restoreSelectedSlot && player != null) {
-        player.getInventory().setSelectedSlot(originalSelectedSlot);
+        recovery.originalSelectedSlot.ifPresent(player.getInventory()::setSelectedSlot);
       }
     }
 
@@ -851,7 +898,19 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
     }
 
     @Override
+    public void onStarted() {
+      if (recovery.originalSelectedSlot.isEmpty()) {
+        recovery.originalSelectedSlot = OptionalInt.of(
+          Objects.requireNonNull(context.bot().minecraft().player).getInventory().getSelectedSlot());
+        recovery.dimension = Objects.requireNonNull(context.bot().minecraft().level)
+          .dimension().identifier().toString();
+      }
+      active = true;
+    }
+
+    @Override
     public void onSuspended() {
+      active = false;
       if (activePath != null) {
         activePath.onSuspended();
       }
@@ -860,6 +919,7 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
 
     @Override
     public void onResumed() {
+      active = true;
       if (activePath != null) {
         activePath.onResumed();
       }
@@ -870,15 +930,21 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
       ControlStopReason reason,
       @Nullable Throwable cause
     ) {
-      var path = activePath;
-      activePath = null;
-      if (path != null) {
-        path.onStopped(reason, cause);
-      }
-      context.bot().controlState().resetAll();
-      restoreSelectedSlot();
-      if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
-        result.cancel(true);
+      try {
+        var path = activePath;
+        activePath = null;
+        if (path != null) {
+          path.onStopped(reason, cause);
+        }
+        if (active) {
+          active = false;
+          context.bot().controlState().resetAll();
+          restoreSelectedSlot();
+        }
+      } finally {
+        if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
+          result.cancel(true);
+        }
       }
     }
 
@@ -886,6 +952,20 @@ public final class BuildTaskProvider implements BotTaskProvider<BuildTask> {
     public String description() {
       return "Build schematic";
     }
+  }
+
+  private static final class RecoveryState {
+    private OptionalInt originalSelectedSlot = OptionalInt.empty();
+    private @Nullable String dimension;
+    private final List<BuildBlockOutcome> outcomes = new ArrayList<>();
+    private Stage stage = Stage.PREPARE;
+    private int placementIndex;
+    private int stageTicks;
+    private int blocksPlaced;
+    private int alreadyCorrect;
+    private int incorrectBroken;
+    private int failed;
+    private @Nullable String placingMaterialId;
   }
 
   private static Optional<Support> findSupport(

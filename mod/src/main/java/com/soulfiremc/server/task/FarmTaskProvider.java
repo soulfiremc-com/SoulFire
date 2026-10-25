@@ -64,6 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -111,6 +112,16 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
 
   @Override
   public BotTaskExecution start(BotTaskContext context, FarmTask input) {
+    return start(context, input, new RecoveryState());
+  }
+
+  @Override
+  public ExecutionFactory prepare(FarmTask input) {
+    var recovery = new RecoveryState();
+    return context -> start(context, input, recovery);
+  }
+
+  private BotTaskExecution start(BotTaskContext context, FarmTask input, RecoveryState recovery) {
     var radius = input.getRadius() == 0
       ? DEFAULT_RADIUS
       : Math.min(input.getRadius(), MAX_RADIUS);
@@ -126,10 +137,6 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       validateDimension(context, input.getCenter());
       center = toBlockPos(input.getCenter());
     }
-    var player = Objects.requireNonNull(
-      context.bot().minecraft().player,
-      "Bot player is not available"
-    );
     var result = new CompletableFuture<FarmTaskResult>();
     return new BotTaskExecution(
       new FarmControl(
@@ -142,12 +149,12 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         input.getCompleteWhenNoMatureCrops(),
         rescanInterval,
         input.getRestoreSelectedSlot(),
-        player.getInventory().getSelectedSlot(),
         PathfindingSupport.buildConstraint(
           context.bot(),
           input.getOptions()
         ),
-        result
+        result,
+        recovery
       ),
       result
     );
@@ -259,16 +266,13 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     private final boolean completeWhenNoMatureCrops;
     private final int rescanIntervalTicks;
     private final boolean restoreSelectedSlot;
-    private final int originalSelectedSlot;
     private final PathConstraint constraint;
     private final CompletableFuture<FarmTaskResult> result;
-    private @Nullable CropTarget target;
+    private boolean active;
+    private final RecoveryState recovery;
     private @Nullable PathExecutor path;
-    private Stage stage = Stage.SCAN;
-    private int stageTicks;
-    private int cropsHarvested;
-    private int cropsReplanted;
-    private int failedHarvests;
+    private boolean recoveryPending = true;
+    private int recoveryTicks;
     private Direction breakFace = Direction.UP;
     private boolean breaking;
 
@@ -282,9 +286,9 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       boolean completeWhenNoMatureCrops,
       int rescanIntervalTicks,
       boolean restoreSelectedSlot,
-      int originalSelectedSlot,
       PathConstraint constraint,
-      CompletableFuture<FarmTaskResult> result
+      CompletableFuture<FarmTaskResult> result,
+      RecoveryState recovery
     ) {
       this.context = context;
       this.cropIds = cropIds;
@@ -295,9 +299,9 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       this.completeWhenNoMatureCrops = completeWhenNoMatureCrops;
       this.rescanIntervalTicks = rescanIntervalTicks;
       this.restoreSelectedSlot = restoreSelectedSlot;
-      this.originalSelectedSlot = originalSelectedSlot;
       this.constraint = constraint;
       this.result = result;
+      this.recovery = recovery;
     }
 
     @Override
@@ -306,17 +310,13 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         return;
       }
       try {
-        if (
-          maximumHarvests > 0
-            && cropsHarvested >= maximumHarvests
-        ) {
-          complete(
-            FarmCompletionReason
-              .FARM_COMPLETION_REASON_HARVEST_LIMIT_REACHED
-          );
-          return;
+        if (recoveryPending) {
+          if (!recoverCropCycle()) {
+            return;
+          }
+          recoveryPending = false;
         }
-        switch (stage) {
+        switch (recovery.stage) {
           case SCAN -> scan();
           case WAIT_TO_RESCAN -> waitToRescan();
           case NAVIGATE -> navigate();
@@ -333,8 +333,19 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     }
 
     private void scan() {
-      target = findNearestMatureCrop();
-      if (target == null) {
+      if (
+        maximumHarvests > 0
+          && recovery.cropsHarvested >= maximumHarvests
+      ) {
+        complete(
+          FarmCompletionReason
+            .FARM_COMPLETION_REASON_HARVEST_LIMIT_REACHED
+        );
+        return;
+      }
+      recovery.target = findNearestMatureCrop();
+      recovery.dimension = requireLevel().dimension().identifier().toString();
+      if (recovery.target == null) {
         if (completeWhenNoMatureCrops) {
           complete(
             FarmCompletionReason
@@ -352,8 +363,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     }
 
     private void waitToRescan() {
-      stageTicks++;
-      if (stageTicks >= rescanIntervalTicks) {
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= rescanIntervalTicks) {
         transition(Stage.SCAN, "Scanning for mature crops");
       }
     }
@@ -361,18 +372,12 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     private void navigate() {
       var currentTarget = requireTarget();
       if (!isStillMature(currentTarget)) {
-        failedHarvests++;
+        recovery.failedHarvests++;
         stopPath(ControlStopReason.CANCELLED, null);
         clearTargetAndScan("Crop was harvested before arrival");
         return;
       }
-      var player = requirePlayer();
-      if (
-        player.getEyePosition().distanceToSqr(
-          Vec3.atCenterOf(currentTarget.position())
-        ) <= 25
-      ) {
-        stopPath(ControlStopReason.CANCELLED, null);
+      if (approachTarget()) {
         transition(
           currentTarget.definition().method() == HarvestMethod.INTERACT
             ? Stage.INTERACT
@@ -381,7 +386,14 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
             ? "Harvesting crop"
             : "Breaking mature crop"
         );
-        return;
+      }
+    }
+
+    private boolean approachTarget() {
+      var currentTarget = requireTarget();
+      if (requirePlayer().getEyePosition().distanceToSqr(Vec3.atCenterOf(currentTarget.position())) <= 25) {
+        stopPath(ControlStopReason.CANCELLED, null);
+        return true;
       }
       if (path == null) {
         path = PathExecutor.createPathfinding(
@@ -399,7 +411,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         report(path.progress().planning()
           ? "Planning route to mature crop"
           : "Walking to mature crop");
-        return;
+        return false;
       }
       var completed = path;
       path = null;
@@ -413,6 +425,30 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         completed.onStopped(ControlStopReason.FAILED, cause);
         result.completeExceptionally(cause);
       }
+      return false;
+    }
+
+    private boolean recoverCropCycle() {
+      if (recovery.target == null) {
+        return true;
+      }
+      var level = requireLevel();
+      if (!level.dimension().identifier().toString().equals(recovery.dimension)) {
+        throw Status.FAILED_PRECONDITION
+          .withDescription("The unfinished crop cycle is in another dimension")
+          .asRuntimeException();
+      }
+      if (!SFBlockHelpers.isChunkLoaded(level, recovery.target.position())) {
+        if (++recoveryTicks >= BREAK_TIMEOUT_TICKS) {
+          throw Status.DEADLINE_EXCEEDED
+            .withDescription("Timed out observing the unfinished crop cycle")
+            .asRuntimeException();
+        }
+        report("Waiting for the unfinished crop cycle");
+        return false;
+      }
+      // Rebuild movement on the new connection before resuming an interaction.
+      return recovery.stage == Stage.NAVIGATE || approachTarget();
     }
 
     private void breakCrop() {
@@ -423,14 +459,14 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       if (!isSameCrop(currentTarget, state)) {
         breaking = false;
         gameMode.stopDestroyBlock();
-        cropsHarvested++;
+        recovery.cropsHarvested++;
         afterHarvest();
         return;
       }
       if (!isMature(currentTarget.position(), state)) {
         breaking = false;
         gameMode.stopDestroyBlock();
-        failedHarvests++;
+        recovery.failedHarvests++;
         clearTargetAndScan("Crop is no longer mature");
         return;
       }
@@ -466,8 +502,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         player.swing(InteractionHand.MAIN_HAND, player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation(), false);
         player.connection.send(ServerboundPunchPacket.INSTANCE);
       }
-      stageTicks++;
-      if (stageTicks >= BREAK_TIMEOUT_TICKS) {
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= BREAK_TIMEOUT_TICKS) {
         throw Status.DEADLINE_EXCEEDED
           .withDescription("Timed out breaking a mature crop")
           .asRuntimeException();
@@ -477,7 +513,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     private void interact() {
       var currentTarget = requireTarget();
       if (!isStillMature(currentTarget)) {
-        failedHarvests++;
+        recovery.failedHarvests++;
         clearTargetAndScan("Crop is no longer mature");
         return;
       }
@@ -498,14 +534,14 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     private void waitForInteraction() {
       var currentTarget = requireTarget();
       if (!isStillMature(currentTarget)) {
-        cropsHarvested++;
+        recovery.cropsHarvested++;
         clearTargetAndScan("Crop harvested");
         return;
       }
-      stageTicks++;
+      recovery.stageTicks++;
       if (
-        stageTicks % 10 == 0
-          && stageTicks < INTERACTION_TIMEOUT_TICKS
+        recovery.stageTicks % 10 == 0
+          && recovery.stageTicks < INTERACTION_TIMEOUT_TICKS
       ) {
         useOn(
           currentTarget.position(),
@@ -515,8 +551,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
           )
         );
       }
-      if (stageTicks >= INTERACTION_TIMEOUT_TICKS) {
-        failedHarvests++;
+      if (recovery.stageTicks >= INTERACTION_TIMEOUT_TICKS) {
+        recovery.failedHarvests++;
         clearTargetAndScan("Crop did not confirm the harvest");
       }
     }
@@ -547,8 +583,8 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
         transition(Stage.REPLANT, "Replanting crop");
         return;
       }
-      stageTicks++;
-      if (stageTicks >= REPLANT_ITEM_TIMEOUT_TICKS) {
+      recovery.stageTicks++;
+      if (recovery.stageTicks >= REPLANT_ITEM_TIMEOUT_TICKS) {
         complete(
           FarmCompletionReason
             .FARM_COMPLETION_REASON_NO_REPLANT_ITEM
@@ -560,7 +596,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       var currentTarget = requireTarget();
       var placement = currentTarget.placement();
       if (!requireLevel().getBlockState(currentTarget.position()).isAir()) {
-        failedHarvests++;
+        recovery.failedHarvests++;
         clearTargetAndScan("Crop position is no longer empty");
         return;
       }
@@ -575,19 +611,19 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       var currentTarget = requireTarget();
       var state = requireLevel().getBlockState(currentTarget.position());
       if (isSameCrop(currentTarget, state)) {
-        cropsReplanted++;
+        recovery.cropsReplanted++;
         clearTargetAndScan("Crop replanted");
         return;
       }
-      stageTicks++;
+      recovery.stageTicks++;
       if (
-        stageTicks % 10 == 0
-          && stageTicks < REPLANT_CONFIRMATION_TIMEOUT_TICKS
+        recovery.stageTicks % 10 == 0
+          && recovery.stageTicks < REPLANT_CONFIRMATION_TIMEOUT_TICKS
       ) {
         var placement = currentTarget.placement();
         useOn(placement.against(), placement.face());
       }
-      if (stageTicks >= REPLANT_CONFIRMATION_TIMEOUT_TICKS) {
+      if (recovery.stageTicks >= REPLANT_CONFIRMATION_TIMEOUT_TICKS) {
         throw Status.FAILED_PRECONDITION
           .withDescription("The server did not confirm crop replanting")
           .asRuntimeException();
@@ -796,7 +832,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     }
 
     private CropTarget requireTarget() {
-      return Objects.requireNonNull(target, "Farm target is not available");
+      return Objects.requireNonNull(recovery.target, "Farm target is not available");
     }
 
     private net.minecraft.client.player.LocalPlayer requirePlayer() {
@@ -822,13 +858,14 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     }
 
     private void transition(Stage next, String message) {
-      stage = next;
-      stageTicks = 0;
+      recovery.stage = next;
+      recovery.stageTicks = 0;
       report(message);
     }
 
     private void clearTargetAndScan(String message) {
-      target = null;
+      recovery.target = null;
+      recovery.dimension = null;
       breaking = false;
       transition(Stage.SCAN, message);
     }
@@ -836,13 +873,13 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     private void report(String message) {
       var builder = BotTaskProgress.newBuilder()
         .setMessage(message)
-        .setCurrent(cropsHarvested);
+        .setCurrent(recovery.cropsHarvested);
       if (maximumHarvests > 0) {
         builder
           .setTotal(maximumHarvests)
           .setFraction(Math.min(
             1.0,
-            (double) cropsHarvested / maximumHarvests
+            (double) recovery.cropsHarvested / maximumHarvests
           ));
       }
       context.reportProgress(builder.build());
@@ -853,9 +890,9 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       var level = context.bot().minecraft().level;
       var builder = FarmTaskResult.newBuilder()
         .setReason(reason)
-        .setCropsHarvested(cropsHarvested)
-        .setCropsReplanted(cropsReplanted)
-        .setFailedHarvests(failedHarvests);
+        .setCropsHarvested(recovery.cropsHarvested)
+        .setCropsReplanted(recovery.cropsReplanted)
+        .setFailedHarvests(recovery.failedHarvests);
       if (player != null && level != null) {
         builder.setFinalPosition(WorldPosition.newBuilder()
           .setX(player.getX())
@@ -883,7 +920,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       }
       var player = context.bot().minecraft().player;
       if (player != null) {
-        player.getInventory().setSelectedSlot(originalSelectedSlot);
+        recovery.originalSelectedSlot.ifPresent(player.getInventory()::setSelectedSlot);
       }
     }
 
@@ -903,7 +940,16 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     }
 
     @Override
+    public void onStarted() {
+      if (recovery.originalSelectedSlot.isEmpty()) {
+        recovery.originalSelectedSlot = OptionalInt.of(requirePlayer().getInventory().getSelectedSlot());
+      }
+      active = true;
+    }
+
+    @Override
     public void onSuspended() {
+      active = false;
       if (path != null) {
         path.onSuspended();
       }
@@ -918,6 +964,7 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
 
     @Override
     public void onResumed() {
+      active = true;
       if (path != null) {
         path.onResumed();
       }
@@ -928,17 +975,23 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
       ControlStopReason reason,
       @Nullable Throwable cause
     ) {
-      stopPath(reason, cause);
-      if (breaking) {
-        var gameMode = context.bot().minecraft().gameMode;
-        if (gameMode != null) {
-          gameMode.stopDestroyBlock();
+      try {
+        stopPath(reason, cause);
+        if (active) {
+          active = false;
+          if (breaking) {
+            var gameMode = context.bot().minecraft().gameMode;
+            if (gameMode != null) {
+              gameMode.stopDestroyBlock();
+            }
+            breaking = false;
+          }
+          restoreSelectedSlot();
         }
-        breaking = false;
-      }
-      restoreSelectedSlot();
-      if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
-        result.cancel(true);
+      } finally {
+        if (reason != ControlStopReason.COMPLETED && !result.isDone()) {
+          result.cancel(true);
+        }
       }
     }
 
@@ -946,6 +999,17 @@ public final class FarmTaskProvider implements BotTaskProvider<FarmTask> {
     public String description() {
       return "Farm crops";
     }
+  }
+
+  private static final class RecoveryState {
+    private OptionalInt originalSelectedSlot = OptionalInt.empty();
+    private @Nullable CropTarget target;
+    private @Nullable String dimension;
+    private Stage stage = Stage.SCAN;
+    private int stageTicks;
+    private int cropsHarvested;
+    private int cropsReplanted;
+    private int failedHarvests;
   }
 
   private record CropDefinition(
