@@ -16,7 +16,7 @@ jobs:
           - { runner: ubuntu-24.04, platform: linux-x86_64, os: linux }
           - { runner: ubuntu-24.04-arm, platform: linux-arm64, os: linux }
           - { runner: windows-2025, platform: windows-x86_64, os: windows, msystem: CLANG64, prefix: clang-x86_64 }
-          - { runner: windows-11-arm, platform: windows-arm64, os: windows, msystem: CLANGARM64, prefix: clang-aarch64 }
+          - { runner: windows-11-arm, platform: windows-arm64, os: windows, msystem: CLANGARM64, prefix: clang-aarch64, jdk_distribution: zulu }
           - { runner: macos-15-intel, platform: macos-x86_64, os: macos }
           - { runner: macos-15, platform: macos-arm64, os: macos }
     runs-on: ${{ matrix.runner }}
@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '25'
-          distribution: temurin
+          distribution: ${{ matrix.jdk_distribution || 'temurin' }}
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
