@@ -31,3 +31,13 @@ Commits follow Conventional Commits (`fix:`, `feat:`, `ci:`); keep subjects unde
 
 After running the `./gradlew genSources` command, the generated sources jar is placed into:
 `./.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-<something>/<minecraftVersion>/minecraft-merged-<something>-<minecraftVersion>-sources.jar`
+
+## Java conventions
+
+- Import Java types instead of using fully qualified class names in code.
+- Use PascalCase for Java class names. Preserve the existing package roots.
+
+## Cloudflare tooling
+
+- For `sdk/reference/`, use `cf` for direct Cloudflare CLI commands. Prefer existing package scripts for project workflows.
+- For new Cloudflare configuration, prefer `cloudflare.config.ts`. Preserve existing configuration formats during unrelated work.
