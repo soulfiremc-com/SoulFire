@@ -45,7 +45,7 @@ jobs:
         if: inputs.update_sdk
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.4.2"
+          bun-version: "1.4.4"
 
       - name: 'Set SDK Version'
         if: inputs.update_sdk
@@ -56,7 +56,7 @@ jobs:
           INPUTS_VERSION: ${{ inputs.version }}
 
       - name: 'Commit Version'
-        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
+        uses: stefanzweifel/git-auto-commit-action@d0b01107b5db882071f96de5dd4b54961ea93f4c # v7.2.1
         with:
           commit_message: 'chore(release): bump version to ${{ inputs.version }}'
           skip_fetch: true

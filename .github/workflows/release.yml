@@ -39,7 +39,7 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
       - name: Set up JDK 25
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -57,7 +57,7 @@ jobs:
 
       - name: Build Changelog
         id: github_release
-        uses: mikepenz/release-changelog-builder-action@cb021f9b36a51a7c6f18e4679b6fa2cb77a1260c # v6.3.0
+        uses: mikepenz/release-changelog-builder-action@aa013739bbc8e7067dbbecd4525ff11aeb51a84b # v6.4.0
         with:
           mode: COMMIT
           toTag: ${{ github.ref }}
