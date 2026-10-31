@@ -17,20 +17,33 @@
  */
 package com.soulfiremc.server.pathfinding.execution;
 
+import com.soulfiremc.server.bot.BotConnection;
 import com.soulfiremc.server.pathfinding.SFVec3i;
+import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
 import com.soulfiremc.server.util.VectorHelper;
 import com.soulfiremc.test.utils.TestBootstrap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 final class MovementActionTest {
   @BeforeAll
@@ -225,5 +238,49 @@ final class MovementActionTest {
     assertEquals(backward, input.backward());
     assertEquals(left, input.left());
     assertEquals(right, input.right());
+  }
+
+  @Test
+  void settlesInABlockNearLavaBeforeGoingOn() {
+    var action = new MovementAction(new SFVec3i(0, 64, 0), true, mock(PathConstraint.class));
+    var nearCentre = new Vec3(0.6, 64, 0.6);
+    var lavaFall = Map.of(new BlockPos(-1, 65, -1), Blocks.LAVA.defaultBlockState().setValue(LiquidBlock.LEVEL, 8));
+    var walking = new Vec3(-0.15, -0.08, -0.15);
+
+    // Within the distance that completes a step, but still moving
+    assertFalse(action.isCompleted(connection(nearCentre, walking, Support.GROUND, lavaFall)));
+    assertFalse(action.isCompleted(connection(nearCentre, new Vec3(0.04, -0.08, 0), Support.GROUND, lavaFall)));
+    assertTrue(action.isCompleted(connection(nearCentre, new Vec3(0.02, -0.08, 0), Support.GROUND, lavaFall)));
+    // Nothing around to touch, in water, or climbing
+    assertTrue(action.isCompleted(connection(nearCentre, walking, Support.GROUND, Map.of())));
+    assertTrue(action.isCompleted(connection(nearCentre, walking, Support.WADING, lavaFall)));
+    assertTrue(action.isCompleted(connection(nearCentre, walking, Support.CLIMBING, lavaFall)));
+  }
+
+  private enum Support {
+    GROUND,
+    WADING,
+    CLIMBING
+  }
+
+  private static BotConnection connection(Vec3 position, Vec3 deltaMovement, Support support, Map<BlockPos, BlockState> blocks) {
+    var player = mock(LocalPlayer.class);
+    when(player.position()).thenReturn(position);
+    when(player.getDeltaMovement()).thenReturn(deltaMovement);
+    when(player.onGround()).thenReturn(support != Support.CLIMBING);
+    when(player.isInWater()).thenReturn(support == Support.WADING);
+    when(player.onClimbable()).thenReturn(support == Support.CLIMBING);
+    when(player.getBoundingBox()).thenReturn(new AABB(
+      position.x - 0.3, position.y, position.z - 0.3,
+      position.x + 0.3, position.y + 1.8, position.z + 0.3));
+    var level = mock(ClientLevel.class);
+    when(level.getBlockState(any(BlockPos.class)))
+      .thenAnswer(call -> blocks.getOrDefault(call.<BlockPos>getArgument(0), Blocks.AIR.defaultBlockState()));
+    var minecraft = mock(Minecraft.class);
+    minecraft.player = player;
+    minecraft.level = level;
+    var connection = mock(BotConnection.class);
+    when(connection.minecraft()).thenReturn(minecraft);
+    return connection;
   }
 }
