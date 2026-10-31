@@ -110,7 +110,7 @@ dependencies {
 
   api(projects.buildData)
 
-  api("io.github.classgraph:classgraph:4.8.196")
+  api("io.github.classgraph:classgraph:6.0.0")
 
   // For microsoft account authentication
   api(libs.minecraftauth) {
