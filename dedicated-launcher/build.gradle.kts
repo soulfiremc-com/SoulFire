@@ -27,6 +27,7 @@ tasks.register("runSFDedicated", JavaExec::class) {
     "-XX:+EnableDynamicAgentLoading",
     "-XX:+UnlockExperimentalVMOptions",
     "-XX:+UseZGC",
+    "-XX:+UseStringDeduplication",
     "-XX:+UseCompactObjectHeaders",
     "-XX:+AlwaysActAsServerClassMachine",
     "-XX:+UseNUMA",
@@ -35,6 +36,10 @@ tasks.register("runSFDedicated", JavaExec::class) {
     "-XX:+UseCriticalJavaThreadPriority",
     "-Dsf.flags.v2=true"
   )
+
+  if (providers.systemProperty("os.name").get().startsWith("Mac")) {
+    argsMutable += "-XstartOnFirstThread"
+  }
 
   if (System.getProperty("idea.active") != null) {
     argsMutable += "-Dnet.kyori.ansi.colorLevel=truecolor"
@@ -70,6 +75,7 @@ tasks.register("dumpSFOpenAPI", JavaExec::class) {
     "-XX:+EnableDynamicAgentLoading",
     "-XX:+UnlockExperimentalVMOptions",
     "-XX:+UseZGC",
+    "-XX:+UseStringDeduplication",
     "-XX:+UseCompactObjectHeaders",
     "-XX:+AlwaysActAsServerClassMachine",
     "-XX:+UseNUMA",
@@ -79,6 +85,10 @@ tasks.register("dumpSFOpenAPI", JavaExec::class) {
     "-Dsf.flags.v2=true",
     "-Dsf.dumpOpenApi=true"
   )
+
+  if (providers.systemProperty("os.name").get().startsWith("Mac")) {
+    argsMutable += "-XstartOnFirstThread"
+  }
 
   if (System.getProperty("idea.active") != null) {
     argsMutable += "-Dnet.kyori.ansi.colorLevel=truecolor"
