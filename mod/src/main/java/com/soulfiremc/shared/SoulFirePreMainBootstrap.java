@@ -58,7 +58,7 @@ public final class SoulFirePreMainBootstrap {
 
     log.warn("We detected you are not using the recommended flags for SoulFire!");
     log.warn("Please add the following flags to your JVM arguments:");
-    log.warn("-XX:+EnableDynamicAgentLoading -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+AlwaysActAsServerClassMachine -XX:+UseNUMA -XX:+UseFastUnorderedTimeStamps -XX:+UseVectorCmov -XX:+UseCriticalJavaThreadPriority -Dsf.flags.v2=true");
+    log.warn("-XX:StackShadowPages=32 --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+AlwaysActAsServerClassMachine -XX:+UseNUMA -XX:+UseFastUnorderedTimeStamps -XX:+UseVectorCmov -XX:+UseCriticalJavaThreadPriority -Dsf.flags.v2=true");
     log.warn("The startup command should look like: 'java -Xmx<ram> <flags> -jar <jarfile>'");
     log.warn("If you already have those flags or want to disable this warning, only add the '-Dsf.flags.v2=true' to your JVM arguments");
   }

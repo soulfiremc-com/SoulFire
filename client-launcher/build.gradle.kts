@@ -21,6 +21,8 @@ tasks.register("runSFCLI", JavaExec::class) {
 
   val argsMutable = mutableListOf(
     "--enable-native-access=ALL-UNNAMED", // Needed for JavaExec
+    "-XX:StackShadowPages=32",
+    "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
     "-Xmx8G",
     "-XX:+EnableDynamicAgentLoading",
     "-XX:+UnlockExperimentalVMOptions",
@@ -61,6 +63,8 @@ tasks.register("printSFCLIFlags", JavaExec::class) {
 
   val argsMutable = mutableListOf(
     "--enable-native-access=ALL-UNNAMED", // Needed for JavaExec
+    "-XX:StackShadowPages=32",
+    "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
     "-Xmx2G",
     "-XX:+EnableDynamicAgentLoading",
     "-XX:+UnlockExperimentalVMOptions",

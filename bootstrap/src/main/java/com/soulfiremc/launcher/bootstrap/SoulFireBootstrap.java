@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -59,6 +60,7 @@ public final class SoulFireBootstrap {
         throw new IllegalArgumentException("This launcher contains fixed Minecraft " + manifest.minecraftVersion() + " assets");
       }
       var platform = LauncherManifest.platform();
+      configureNativeDirectories(baseDirectory, platform);
       var assets = manifest.assets().stream().filter(asset -> asset.appliesTo(platform)).toList();
       StartupProgress.log("Checking " + assets.size() + " runtime files ("
         + StartupProgress.size(assets.stream().mapToLong(LauncherManifest.Asset::size).sum()) + ") for "
@@ -129,6 +131,21 @@ public final class SoulFireBootstrap {
   }
 
   private record PreparedAsset(LauncherManifest.Asset asset, Path file) {
+  }
+
+  private static void configureNativeDirectories(Path baseDirectory, String platform) throws IOException {
+    // Native libraries read these properties during class initialization.
+    var properties = Map.of(
+      "org.lwjgl.system.SharedLibraryExtractPath", "lwjgl",
+      "jna.tmpdir", "jna",
+      "io.netty.native.workdir", "netty");
+    for (var entry : properties.entrySet()) {
+      if (System.getProperty(entry.getKey()) == null) {
+        var directory = baseDirectory.resolve("natives").resolve(entry.getValue()).resolve(platform);
+        Files.createDirectories(directory);
+        System.setProperty(entry.getKey(), directory.toString());
+      }
+    }
   }
 
   private static FileLock acquireCacheLock(FileChannel channel) throws IOException {

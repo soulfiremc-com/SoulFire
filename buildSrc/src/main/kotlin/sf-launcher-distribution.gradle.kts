@@ -45,6 +45,7 @@ val uberJar = tasks.register<ShadowJar>("uberJar") {
       "Implementation-Version" to projectVersion,
       "Implementation-Vendor" to "AlexProgrammerDE",
       "Multi-Release" to "true",
+      "Add-Exports" to "java.base/jdk.internal.misc",
       "Enable-Native-Access" to "ALL-UNNAMED"
     )
   }
