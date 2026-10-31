@@ -42,6 +42,7 @@ import java.util.List;
 /// Supplies native libraries to Mojang's Vulkan backend. Devices and rendering remain owned by Minecraft.
 @Slf4j
 public final class BundledVulkanRuntime {
+  private static final boolean FORCE_SOFTWARE = Boolean.getBoolean("sf.vulkan.software");
   // Vulkan retains function pointers into these libraries until process shutdown.
   private static final List<SharedLibrary> LIBRARIES = new ArrayList<>();
   private static final List<Long> DRIVERS = new ArrayList<>();
@@ -49,7 +50,7 @@ public final class BundledVulkanRuntime {
   private BundledVulkanRuntime() {}
 
   public static void initialize() {
-    if (Configuration.VULKAN_LIBRARY_NAME.get() != null) {
+    if (!FORCE_SOFTWARE && Configuration.VULKAN_LIBRARY_NAME.get() != null) {
       // An explicit LWJGL override is useful for driver development and must retain its usual meaning.
       log.info("Loading configured Vulkan library");
       VK.create();
@@ -65,12 +66,16 @@ public final class BundledVulkanRuntime {
       VK.create(loader);
       // Driver-file overrides are explicit selections, including the manual comparison harness.
       // Keep the packaged loader, but let those manifests control the available devices.
-      if (!System.getenv().getOrDefault("VK_DRIVER_FILES", "").isBlank()
-        || !System.getenv().getOrDefault("VK_ICD_FILENAMES", "").isBlank()) {
+      if (!FORCE_SOFTWARE && (!System.getenv().getOrDefault("VK_DRIVER_FILES", "").isBlank()
+        || !System.getenv().getOrDefault("VK_ICD_FILENAMES", "").isBlank())) {
         log.info("Loaded bundled Vulkan loader with explicitly selected driver manifests");
         return;
       }
       addDriver(load(bundle.driver().toString()));
+      if (FORCE_SOFTWARE) {
+        log.info("Forced software Vulkan rendering with bundled lavapipe; GPU drivers are disabled");
+        return;
+      }
       if (Platform.get() == Platform.MACOSX) {
         // Match vanilla's bundled MoltenVK path while keeping lavapipe available on Macs without a usable GPU.
         try {
@@ -114,7 +119,10 @@ public final class BundledVulkanRuntime {
       drivers.get(index).sType$Default().pfnGetInstanceProcAddr(DRIVERS.get(index));
     }
     var list = VkDirectDriverLoadingListLUNARG.calloc(stack).sType$Default()
-      .mode(LUNARGDirectDriverLoading.VK_DIRECT_DRIVER_LOADING_MODE_INCLUSIVE_LUNARG).pDrivers(drivers);
+      .mode(FORCE_SOFTWARE
+        ? LUNARGDirectDriverLoading.VK_DIRECT_DRIVER_LOADING_MODE_EXCLUSIVE_LUNARG
+        : LUNARGDirectDriverLoading.VK_DIRECT_DRIVER_LOADING_MODE_INCLUSIVE_LUNARG)
+      .pDrivers(drivers);
     info.pNext(list);
   }
 }

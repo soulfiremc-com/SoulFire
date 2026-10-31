@@ -26,6 +26,17 @@ This also works when running as root. It does not change Vulkan environment vari
 Explicit `VK_DRIVER_FILES` or `VK_ICD_FILENAMES` selections use the bundled loader with only the selected driver manifests.
 An explicit `org.lwjgl.vulkan.libname` override retains LWJGL's normal behavior and bypasses the bundled runtime.
 
+## Force software rendering
+
+If a GPU driver crashes during startup, add `-Dsf.vulkan.software=true` before `-jar` in the Java command.
+This flag requires SoulFire 2.11 or newer.
+SoulFire then uses only bundled lavapipe and does not discover or initialize GPU drivers.
+This mode also overrides `VK_DRIVER_FILES`, `VK_ICD_FILENAMES`, and `org.lwjgl.vulkan.libname`.
+CPU rendering can reduce performance and increase CPU usage.
+
+SoulFireClient provides the same flag through **Force software rendering** in the integrated server settings.
+The setting takes effect the next time the integrated server starts.
+
 ## Build for the current host
 
 The `:vulkan-runtime` subproject owns the native sources, build script, Dockerfile, and generated packages.
