@@ -41,3 +41,10 @@ After running the `./gradlew genSources` command, the generated sources jar is p
 
 - For `sdk/reference/`, use `cf` for direct Cloudflare CLI commands. Prefer existing package scripts for project workflows.
 - For new Cloudflare configuration, prefer `cloudflare.config.ts`. Preserve existing configuration formats during unrelated work.
+
+## Branding and product language
+
+Before naming features or changing user-facing text and visuals, read the [SoulFire brand guidance](https://github.com/soulfiremc-com/brand).
+Use its terminology, naming, writing, and visual identity guides.
+Keep proposed renames separate from accepted guidance.
+Preserve public identifiers until the owning repository approves a migration.
