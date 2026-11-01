@@ -45,8 +45,8 @@ public class MixinMinecraftServicesSessionService {
       case OnlineChainJavaData onlineChainJavaData -> onlineChainJavaData.getJavaAuthManager(bot.transportProxy()).getMinecraftToken().getUpToDateUnchecked().getToken();
       case OnlineSimpleJavaData onlineSimpleJavaData -> onlineSimpleJavaData.accessToken();
       case TheAlteningJavaData theAlteningJavaData -> theAlteningJavaData.accessToken();
-      case OfflineJavaData ignored -> throw incompatibleJavaOnlineModeAuth(account.authType());
-      case BedrockData ignored -> throw incompatibleJavaOnlineModeAuth(account.authType());
+      case OfflineJavaData ignored -> throw incompatibleJavaOnlineModeAuth(account.authType(), account.lastKnownName());
+      case BedrockData ignored -> throw incompatibleJavaOnlineModeAuth(account.authType(), account.lastKnownName());
     };
 
     if (accountData instanceof TheAlteningJavaData) {
@@ -57,8 +57,13 @@ public class MixinMinecraftServicesSessionService {
     original.call(actualProfileId, actualAuthenticationToken, serverId);
   }
 
-  private static IllegalArgumentException incompatibleJavaOnlineModeAuth(AuthType authType) {
-    return new IllegalArgumentException(
-      "Server requested Java online-mode authentication, but account auth type %s is incompatible".formatted(authType));
+  private static AuthenticationException incompatibleJavaOnlineModeAuth(AuthType authType, String username) {
+    var advice = authType == AuthType.OFFLINE
+      ? "Cracked servers can still require premium authentication for specific usernames. "
+        + "Use a Microsoft Java account, or ask the server administrator to check this username's premium status."
+      : "Use a Microsoft Java account to join this server.";
+    return new AuthenticationException(
+      "Server requested Java online authentication for '%s', but this account uses %s authentication. %s"
+        .formatted(username, authType, advice));
   }
 }
