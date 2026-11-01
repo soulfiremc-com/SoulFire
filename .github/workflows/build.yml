@@ -81,7 +81,7 @@ jobs:
           $jar = $jars[0].FullName
           $data = Join-Path $env:RUNNER_TEMP 'soulfire-launcher-smoke'
           $log = Join-Path $env:RUNNER_TEMP 'soulfire-launcher-smoke.log'
-          & java --enable-native-access=ALL-UNNAMED "-Dsf.cliHomeDir=$data" -jar $jar --help *> $log
+          & java --enable-native-access=ALL-UNNAMED "-Dsf.vulkan.software=true" "-Dsf.cliHomeDir=$data" -jar $jar --help *> $log
           $code = $LASTEXITCODE
           if ($code -ne 0 -or !(Select-String -Path $log -Pattern 'Usage: soulfire' -Quiet)) {
             Get-Content $log | Select-String -Pattern 'ERROR|Exception|Caused by:|Failed|LWJGL'
