@@ -81,7 +81,23 @@ jobs:
           $jar = $jars[0].FullName
           $data = Join-Path $env:RUNNER_TEMP 'soulfire-launcher-smoke'
           $log = Join-Path $env:RUNNER_TEMP 'soulfire-launcher-smoke.log'
-          & java --enable-native-access=ALL-UNNAMED "-Dsf.cliHomeDir=$data" -jar $jar --help *> $log
+          $jvmArgs = @(
+            '--enable-native-access=ALL-UNNAMED'
+            '-XX:StackShadowPages=32'
+            '--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED'
+            '-XX:+EnableDynamicAgentLoading'
+            '-XX:+UnlockExperimentalVMOptions'
+            '-XX:+UseZGC'
+            '-XX:+UseStringDeduplication'
+            '-XX:+UseCompactObjectHeaders'
+            '-XX:+AlwaysActAsServerClassMachine'
+            '-XX:+UseNUMA'
+            '-XX:+UseFastUnorderedTimeStamps'
+            '-XX:+UseVectorCmov'
+            '-XX:+UseCriticalJavaThreadPriority'
+            '-Dsf.flags.v2=true'
+          )
+          & java @jvmArgs "-Dsf.cliHomeDir=$data" -jar $jar --help *> $log
           $code = $LASTEXITCODE
           if ($code -ne 0 -or !(Select-String -Path $log -Pattern 'Usage: soulfire' -Quiet)) {
             Get-Content $log | Select-String -Pattern 'ERROR|Exception|Caused by:|Failed|LWJGL'
