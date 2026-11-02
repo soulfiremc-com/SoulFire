@@ -30,7 +30,7 @@
     },
     "sdk/beat-game": {
       "name": "@soulfiremc/beat-game",
-      "version": "2.10.6",
+      "version": "2.10.7",
       "dependencies": {
         "@soulfiremc/sdk": "workspace:*",
       },
@@ -49,7 +49,7 @@
     },
     "sdk/typescript": {
       "name": "@soulfiremc/sdk",
-      "version": "2.10.6",
+      "version": "2.10.7",
       "bin": {
         "soulfire-sdk": "./dist/cli.js",
       },
