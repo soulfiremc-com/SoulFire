@@ -18,8 +18,11 @@
 package com.soulfiremc.server.database;
 
 import com.soulfiremc.server.database.generated.Tables;
+import com.soulfiremc.server.util.SFPathConstants;
 import org.flywaydb.core.Flyway;
+import org.jooq.ExecuteListener;
 import org.jooq.SQLDialect;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,16 +30,20 @@ import org.sqlite.SQLiteDataSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockStatic;
 
 final class InstallationIdTest {
   @Test
@@ -58,6 +65,85 @@ final class InstallationIdTest {
     var first = InstallationId.getOrCreate(DSL.using(database(directory.resolve("first.sqlite")), SQLDialect.SQLITE));
     var second = InstallationId.getOrCreate(DSL.using(database(directory.resolve("second.sqlite")), SQLDialect.SQLITE));
     assertNotEquals(first, second);
+  }
+
+  @Test
+  void existingIdentityDoesNotNeedTheSqliteWriteLock(@TempDir Path directory) throws Exception {
+    var source = database(directory.resolve("existing.sqlite"));
+    source.setBusyTimeout(1);
+    var dsl = DSL.using(source, SQLDialect.SQLITE);
+    var expected = InstallationId.getOrCreate(dsl);
+    try (var connection = DriverManager.getConnection(source.getUrl());
+         var statement = connection.createStatement()) {
+      statement.execute("BEGIN IMMEDIATE");
+      try {
+        assertEquals(expected, InstallationId.getOrCreate(dsl));
+      } finally {
+        statement.execute("ROLLBACK");
+      }
+    }
+  }
+
+  @Test
+  void initializationRetriesAfterSqliteReleasesTheWriteLock(@TempDir Path directory) throws Exception {
+    var source = database(directory.resolve("retry.sqlite"));
+    source.setBusyTimeout(1);
+    var dsl = DSL.using(source, SQLDialect.SQLITE);
+    var busy = new CountDownLatch(1);
+    dsl.configuration().set(ExecuteListener.onException(_ -> busy.countDown()));
+    try (var connection = DriverManager.getConnection(source.getUrl());
+         var statement = connection.createStatement();
+         var executor = Executors.newSingleThreadExecutor()) {
+      statement.execute("BEGIN IMMEDIATE");
+      var result = executor.submit(() -> InstallationId.getOrCreate(dsl));
+      try {
+        assertTrue(busy.await(10, TimeUnit.SECONDS));
+      } finally {
+        statement.execute("ROLLBACK");
+      }
+      assertEquals(result.get(10, TimeUnit.SECONDS), InstallationId.getOrCreate(dsl));
+    }
+  }
+
+  @Test
+  void permanentLockErrorsStopAfterThreeAttempts(@TempDir Path directory) throws Exception {
+    var source = database(directory.resolve("locked.sqlite"));
+    source.setBusyTimeout(1);
+    var dsl = DSL.using(source, SQLDialect.SQLITE);
+    var failures = new AtomicInteger();
+    dsl.configuration().set(ExecuteListener.onException(_ -> failures.incrementAndGet()));
+    try (var connection = DriverManager.getConnection(source.getUrl());
+         var statement = connection.createStatement()) {
+      statement.execute("BEGIN IMMEDIATE");
+      try {
+        assertThrows(DataAccessException.class, () -> InstallationId.getOrCreate(dsl));
+        assertEquals(3, failures.get());
+        assertEquals(0, dsl.fetchCount(Tables.SERVER_METADATA));
+      } finally {
+        statement.execute("ROLLBACK");
+      }
+    }
+  }
+
+  @Test
+  void unrelatedDatabaseErrorsDoNotRetry(@TempDir Path directory) {
+    var source = database(directory.resolve("missing.sqlite"));
+    var dsl = DSL.using(source, SQLDialect.SQLITE);
+    dsl.dropTable(Tables.SERVER_METADATA).execute();
+    var failures = new AtomicInteger();
+    dsl.configuration().set(ExecuteListener.onException(_ -> failures.incrementAndGet()));
+    assertThrows(DataAccessException.class, () -> InstallationId.getOrCreate(dsl));
+    assertEquals(1, failures.get());
+  }
+
+  @Test
+  void runtimeConnectionsWaitForSqliteLocks(@TempDir Path directory) {
+    try (var paths = mockStatic(SFPathConstants.class)) {
+      paths.when(SFPathConstants::baseDirectory).thenReturn(directory);
+      try (var database = DatabaseManager.select()) {
+        assertEquals(30_000, database.dsl().fetchValue("PRAGMA busy_timeout", Integer.class));
+      }
+    }
   }
 
   @Test

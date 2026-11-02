@@ -58,6 +58,7 @@ public final class DatabaseManager {
     var hikariConfig = new HikariConfig();
     hikariConfig.setJdbcUrl(jdbcUrl);
     hikariConfig.addDataSourceProperty("foreign_keys", "true");
+    hikariConfig.addDataSourceProperty("busy_timeout", "30000");
     hikariConfig.setMinimumIdle(1);
     hikariConfig.setMaximumPoolSize(1);
     hikariConfig.setIdleTimeout(0);
