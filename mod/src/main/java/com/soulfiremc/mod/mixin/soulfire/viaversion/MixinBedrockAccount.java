@@ -19,7 +19,7 @@ package com.soulfiremc.mod.mixin.soulfire.viaversion;
 
 import com.soulfiremc.server.account.service.BedrockData;
 import com.soulfiremc.server.bot.BotConnection;
-import com.viaversion.viafabricplus.bedrock.account.BedrockAccount;
+import com.viaversion.viafabricplus.bedrock.features.global.BedrockAccount;
 import net.raphimc.minecraftauth.bedrock.BedrockAuthManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

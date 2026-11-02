@@ -57,7 +57,7 @@ dependencies {
   }
 
 
-  val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.1.1"
+  val viaFabricPlusNotation = "com.viaversion:viafabricplus:5.1.4-20261102.124314-2"
   implementation(viaFabricPlusNotation) {
     exclude("org.lz4")
   }
@@ -65,7 +65,7 @@ dependencies {
     isTransitive = false
   }
 
-  val viaFabricPlusBedrockNotation = "io.github.stackanvil:viafabricplus-bedrock-stackanvil:0.3.4"
+  val viaFabricPlusBedrockNotation = "io.github.stackanvil:viafabricplus-bedrock-stackanvil:0.4.4"
   implementation(viaFabricPlusBedrockNotation)
   include(viaFabricPlusBedrockNotation) {
     isTransitive = false
