@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "soulfire_address_test",
+  "version": "1.0.0",
+  "environment": "client",
+  "mixins": [
+    "bedrock-address-test.mixins.json"
+  ]
+}

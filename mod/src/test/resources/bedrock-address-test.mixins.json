@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.viaversion.viafabricplus.bedrock.injection.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "core.access.MixinServerAddress"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

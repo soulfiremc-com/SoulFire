@@ -30,6 +30,8 @@ import net.minecraft.client.multiplayer.resolver.ServerRedirectHandler;
 import net.raphimc.viabedrock.api.BedrockProtocolVersion;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.net.IDN;
+
 public record BotConnectionFactory(
   InstanceManager instanceManager,
   BotSettingsSource settingsSource,
@@ -37,17 +39,21 @@ public record BotConnectionFactory(
   ServerAddress serverAddress,
   @Nullable
   SFProxy proxyData) {
-  private static final int JAVA_DEFAULT_PORT = 25565;
-  private static final int BEDROCK_DEFAULT_PORT = 19132;
-
   public static ServerAddress parseAddress(String address, ProtocolVersion protocolVersion) {
-    HostAndPort hostAndPort = HostAndPort.fromString(address)
-      .withDefaultPort(BedrockProtocolVersion.BEDROCK_LATEST.equals(protocolVersion) ? BEDROCK_DEFAULT_PORT : JAVA_DEFAULT_PORT);
-    if (hostAndPort.getHost().isEmpty()) {
+    if (!ServerAddress.isValidAddress(address)) {
       throw new IllegalArgumentException("Invalid host address: " + address);
     }
 
-    return new ServerAddress(hostAndPort);
+    // Default Bedrock to NetherNet, preserving explicit schemes and letting the addon supply the port.
+    if (BedrockProtocolVersion.BEDROCK_LATEST.equals(protocolVersion) && !address.contains("://")) {
+      var hostAndPort = HostAndPort.fromString(address);
+      var host = IDN.toASCII(hostAndPort.getHost());
+      var authority = hostAndPort.hasPort()
+        ? HostAndPort.fromParts(host, hostAndPort.getPort())
+        : HostAndPort.fromHost(host);
+      address = "nethernet://" + authority;
+    }
+    return ServerAddress.parseString(address);
   }
 
   static ServerAddress resolveLegacyAddress(
@@ -55,7 +61,7 @@ public record BotConnectionFactory(
     ProtocolVersion protocolVersion,
     ServerRedirectHandler redirectHandler) {
     // ViaFabricPlus skips SRV lookup in ServerNameResolver for these versions.
-    // Its parseString hook normally handles this, but our parser also supports Bedrock ports.
+    // Parsing happens before the bot's protocol context is available, so resolve with its version here.
     if (!BedrockProtocolVersion.BEDROCK_LATEST.equals(protocolVersion)
       && protocolVersion.olderThanOrEqualTo(ProtocolVersion.v1_16_4)) {
       return redirectHandler.lookupRedirect(address).orElse(address);
