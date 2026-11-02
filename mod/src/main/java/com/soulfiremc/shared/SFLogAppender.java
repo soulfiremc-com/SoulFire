@@ -111,8 +111,15 @@ public final class SFLogAppender extends AbstractAppender {
     @Nullable UUID botAccountId,
     @Nullable UUID scriptId,
     @Nullable String instanceName,
-    @Nullable String botAccountName
+    @Nullable String botAccountName,
+    boolean terminalInteractions
   ) {
+    public SFLogEvent(String id, String message, long timestamp, @Nullable String level, @Nullable String loggerName,
+                      @Nullable UUID instanceId, @Nullable UUID botAccountId, @Nullable UUID scriptId,
+                      @Nullable String instanceName, @Nullable String botAccountName) {
+      this(id, message, timestamp, level, loggerName, instanceId, botAccountId, scriptId, instanceName, botAccountName, false);
+    }
+
     public static SFLogEvent fromEvent(LogEvent event, String formatted) {
       return new SFLogEvent(
         event.getTimeMillis() + "-" + LOG_COUNTER.getAndIncrement(),

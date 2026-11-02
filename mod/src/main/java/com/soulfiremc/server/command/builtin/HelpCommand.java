@@ -21,6 +21,10 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.soulfiremc.server.command.CommandSourceStack;
 import com.soulfiremc.server.command.brigadier.BrigadierHelper;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import org.slf4j.event.Level;
 
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.help;
 import static com.soulfiremc.server.command.brigadier.BrigadierHelper.literal;
@@ -38,7 +42,11 @@ public final class HelpCommand {
             c -> {
               c.getSource().source().sendInfo("Available commands:");
               for (var command : BrigadierHelper.getAllUsage(dispatcher, dispatcher.getRoot(), c.getSource())) {
-                c.getSource().source().sendInfo("{} -> {}", command.command(), command.helpMeta().help());
+                c.getSource().source().sendMessage(Level.INFO,
+                  Component.empty().append(Component.text(command.command())
+                    .hoverEvent(HoverEvent.showText(Component.text(command.helpMeta().help())))
+                    .clickEvent(ClickEvent.suggestCommand(command.command())))
+                    .append(Component.text(" -> " + command.helpMeta().help())));
               }
 
               return Command.SINGLE_SUCCESS;

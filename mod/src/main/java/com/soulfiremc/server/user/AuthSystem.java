@@ -19,7 +19,6 @@ package com.soulfiremc.server.user;
 
 import com.soulfiremc.grpc.generated.InstancePermission;
 import com.soulfiremc.server.SoulFireServer;
-import com.soulfiremc.server.adventure.SoulFireAdventure;
 import com.soulfiremc.server.api.SoulFireAPI;
 import com.soulfiremc.server.api.event.UserSessionsInvalidatedEvent;
 import com.soulfiremc.server.database.UserRole;
@@ -408,7 +407,7 @@ public final class AuthSystem {
 
     @Override
     public void sendMessage(Level level, Component message) {
-      logService.sendPersonalMessage(UUID.fromString(userData.getId()), SoulFireAdventure.TRUE_COLOR_ANSI_SERIALIZER.serialize(message));
+      logService.sendPersonalMessage(UUID.fromString(userData.getId()), message);
     }
 
     private boolean isOwnerOfInstance(UUID instanceId) {

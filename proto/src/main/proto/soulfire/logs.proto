@@ -56,6 +56,11 @@ message LogString {
   // The log level (e.g., "INFO", "WARN", "ERROR", "DEBUG", "TRACE", "FATAL").
   // Corresponds to Log4j2 log levels.
   optional string level = 11;
+
+  // True only for personal Component messages encoded by the server's terminal serializer.
+  // Clients must require both this flag and personal before accepting private OSC interactions.
+  // Raw log and chat strings never grant interaction trust.
+  bool terminal_interactions = 12;
 }
 
 // Scope for receiving all non-personal logs from the entire server.

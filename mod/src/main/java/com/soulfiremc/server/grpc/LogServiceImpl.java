@@ -21,6 +21,7 @@ import com.google.common.base.Supplier;
 import com.google.protobuf.util.Timestamps;
 import com.soulfiremc.grpc.generated.*;
 import com.soulfiremc.server.SoulFireServer;
+import com.soulfiremc.server.adventure.TerminalComponentSerializer;
 import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.user.SoulFireUser;
 import com.soulfiremc.server.util.structs.CachedLazyObject;
@@ -30,6 +31,7 @@ import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.kyori.adventure.text.Component;
 
 import java.util.ArrayDeque;
 import java.util.Map;
@@ -49,6 +51,7 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
       .setId(event.id())
       .setMessage(event.message())
       .setPersonal(personal)
+      .setTerminalInteractions(personal && event.terminalInteractions())
       .setTimestamp(Timestamps.fromMillis(event.timestamp()));
 
     if (event.instanceId() != null) {
@@ -195,7 +198,15 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
       SFLogAppender.INSTANCE.logConsumers().add(this::broadcastLogMessage);
     }
 
+    public void sendPersonalMessage(UUID uuid, Component message) {
+      sendPersonalMessage(uuid, TerminalComponentSerializer.serialize(message), true);
+    }
+
     public void sendPersonalMessage(UUID uuid, String message) {
+      sendPersonalMessage(uuid, message, false);
+    }
+
+    private void sendPersonalMessage(UUID uuid, String message, boolean terminalInteractions) {
       var messageEvent = new SFLogAppender.SFLogEvent(
         UUID.randomUUID().toString(),
         message,
@@ -206,7 +217,8 @@ public final class LogServiceImpl extends LogsServiceGrpc.LogsServiceImplBase {
         null,
         null,
         null,
-        null
+        null,
+        terminalInteractions
       );
       for (var sender : subscribers.values()) {
         if (sender.userId.equals(uuid)) sender.sendMessage(messageEvent, true);
