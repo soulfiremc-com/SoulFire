@@ -49,6 +49,9 @@ message ServerInfo {
   string public_mcp_address = 8 [(google.api.field_behavior) = REQUIRED, (soulfire.v1.api_field).format = "uri"];
   // The native Minecraft protocol version supported by this server (e.g., "1.21.4").
   string minecraft_version = 7 [(google.api.field_behavior) = REQUIRED];
+  // Stable installation UUID stored in the server database. Restoring or copying that
+  // database preserves this ID. Available on servers that support installation identity.
+  string installation_id = 9 [(soulfire.v1.api_field).format = "uuid"];
 }
 
 // Response containing comprehensive information about the authenticated client and server.

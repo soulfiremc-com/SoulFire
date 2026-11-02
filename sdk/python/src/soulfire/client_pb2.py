@@ -28,7 +28,7 @@ from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from google.api import field_behavior_pb2 as google_dot_api_dot_field__behavior__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15soulfire/client.proto\x12\x0bsoulfire.v1\x1a\x15soulfire/common.proto\x1a\x17soulfire/api_docs.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\"\x13\n\x11\x43lientDataRequest\"\x87\x01\n\x15GlobalPermissionState\x12O\n\x11global_permission\x18\x01 \x01(\x0e\x32\x1d.soulfire.v1.GlobalPermissionB\x03\xe0\x41\x02R\x10globalPermission\x12\x1d\n\x07granted\x18\x02 \x01(\x08\x42\x03\xe0\x41\x02R\x07granted\"\xa1\x03\n\nServerInfo\x12\x1d\n\x07version\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x07version\x12$\n\x0b\x63ommit_hash\x18\x02 \x01(\tB\x03\xe0\x41\x02R\ncommitHash\x12$\n\x0b\x62ranch_name\x18\x03 \x01(\tB\x03\xe0\x41\x02R\nbranchName\x12:\n\x12public_api_address\x18\x04 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x10publicApiAddress\x12@\n\x15public_webdav_address\x18\x05 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x13publicWebdavAddress\x12<\n\x13public_docs_address\x18\x06 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x11publicDocsAddress\x12:\n\x12public_mcp_address\x18\x08 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x10publicMcpAddress\x12\x30\n\x11minecraft_version\x18\x07 \x01(\tB\x03\xe0\x41\x02R\x10minecraftVersion\"\xc1\x02\n\x12\x43lientDataResponse\x12\x1d\n\x02id\x18\x06 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x02id\x12\x1f\n\x08username\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x08username\x12.\n\x04role\x18\x07 \x01(\x0e\x32\x15.soulfire.v1.UserRoleB\x03\xe0\x41\x02R\x04role\x12$\n\x05\x65mail\x18\x08 \x01(\tB\x0e\xe0\x41\x02\xd2\xf3\x18\x07\n\x05\x65mailR\x05\x65mail\x12V\n\x12server_permissions\x18\x02 \x03(\x0b\x32\".soulfire.v1.GlobalPermissionStateB\x03\xe0\x41\x02R\x11serverPermissions\x12=\n\x0bserver_info\x18\x0b \x01(\x0b\x32\x17.soulfire.v1.ServerInfoB\x03\xe0\x41\x02R\nserverInfo\"\x1c\n\x1aGenerateWebDAVTokenRequest\"8\n\x1bGenerateWebDAVTokenResponse\x12\x19\n\x05token\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x05token\"\x19\n\x17GenerateAPITokenRequest\"5\n\x18GenerateAPITokenResponse\x12\x19\n\x05token\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x05token\"<\n\x19UpdateSelfUsernameRequest\x12\x1f\n\x08username\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x08username\"\x1c\n\x1aUpdateSelfUsernameResponse\">\n\x16UpdateSelfEmailRequest\x12$\n\x05\x65mail\x18\x01 \x01(\tB\x0e\xe0\x41\x02\xd2\xf3\x18\x07\n\x05\x65mailR\x05\x65mail\"\x19\n\x17UpdateSelfEmailResponse\"\x1f\n\x1dInvalidateSelfSessionsRequest\" \n\x1eInvalidateSelfSessionsResponse2\x8b\x0b\n\rClientService\x12\x98\x01\n\rGetClientData\x12\x1e.soulfire.v1.ClientDataRequest\x1a\x1f.soulfire.v1.ClientDataResponse\"F\xca\xf3\x18\x30\n\x0fGet client data\x1a\x10READ_CLIENT_DATA\"\x0b\x63lient.self\x82\xd3\xe4\x93\x02\x0c\x12\n/v1/client\x12\x84\x02\n\x13GenerateWebDAVToken\x12\'.soulfire.v1.GenerateWebDAVTokenRequest\x1a(.soulfire.v1.GenerateWebDAVTokenResponse\"\x99\x01\xca\xf3\x18l\n\x15Generate WebDAV token\x1a\x1aGENERATE_SELF_WEBDAV_TOKEN\"\x0b\x63lient.self:*Issues a new JWT with the webdav audience.\x82\xd3\xe4\x93\x02#\"!/v1/client/tokens/webdav:generate\x12\xef\x01\n\x10GenerateAPIToken\x12$.soulfire.v1.GenerateAPITokenRequest\x1a%.soulfire.v1.GenerateAPITokenResponse\"\x8d\x01\xca\xf3\x18\x63\n\x12Generate API token\x1a\x17GENERATE_SELF_API_TOKEN\"\x0b\x63lient.self:\'Issues a new JWT with the api audience.\x82\xd3\xe4\x93\x02 \"\x1e/v1/client/tokens/api:generate\x12\xeb\x01\n\x12UpdateSelfUsername\x12&.soulfire.v1.UpdateSelfUsernameRequest\x1a\'.soulfire.v1.UpdateSelfUsernameResponse\"\x83\x01\xca\xf3\x18\x61\n\x14Update self username\x1a\x14UPDATE_SELF_USERNAME\"\x0b\x63lient.self:&Persists the new username immediately.\x82\xd3\xe4\x93\x02\x18\x32\x13/v1/client/username:\x01*\x12\xdd\x01\n\x0fUpdateSelfEmail\x12#.soulfire.v1.UpdateSelfEmailRequest\x1a$.soulfire.v1.UpdateSelfEmailResponse\"\x7f\xca\xf3\x18`\n\x11Update self email\x1a\x11UPDATE_SELF_EMAIL\"\x0b\x63lient.self:+Persists the new email address immediately.\x82\xd3\xe4\x93\x02\x15\x32\x10/v1/client/email:\x01*\x12\x97\x02\n\x16InvalidateSelfSessions\x12*.soulfire.v1.InvalidateSelfSessionsRequest\x1a+.soulfire.v1.InvalidateSelfSessionsResponse\"\xa3\x01\xca\xf3\x18y\n\x18Invalidate self sessions\x1a\x18INVALIDATE_SELF_SESSIONS\"\x0b\x63lient.self:6Revokes previously issued tokens for the current user.\x82\xd3\xe4\x93\x02 \"\x1e/v1/client/sessions:invalidateB!\n\x1d\x63om.soulfiremc.grpc.generatedP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15soulfire/client.proto\x12\x0bsoulfire.v1\x1a\x15soulfire/common.proto\x1a\x17soulfire/api_docs.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\"\x13\n\x11\x43lientDataRequest\"\x87\x01\n\x15GlobalPermissionState\x12O\n\x11global_permission\x18\x01 \x01(\x0e\x32\x1d.soulfire.v1.GlobalPermissionB\x03\xe0\x41\x02R\x10globalPermission\x12\x1d\n\x07granted\x18\x02 \x01(\x08\x42\x03\xe0\x41\x02R\x07granted\"\xd6\x03\n\nServerInfo\x12\x1d\n\x07version\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x07version\x12$\n\x0b\x63ommit_hash\x18\x02 \x01(\tB\x03\xe0\x41\x02R\ncommitHash\x12$\n\x0b\x62ranch_name\x18\x03 \x01(\tB\x03\xe0\x41\x02R\nbranchName\x12:\n\x12public_api_address\x18\x04 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x10publicApiAddress\x12@\n\x15public_webdav_address\x18\x05 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x13publicWebdavAddress\x12<\n\x13public_docs_address\x18\x06 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x11publicDocsAddress\x12:\n\x12public_mcp_address\x18\x08 \x01(\tB\x0c\xe0\x41\x02\xd2\xf3\x18\x05\n\x03uriR\x10publicMcpAddress\x12\x30\n\x11minecraft_version\x18\x07 \x01(\tB\x03\xe0\x41\x02R\x10minecraftVersion\x12\x33\n\x0finstallation_id\x18\t \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidR\x0einstallationId\"\xc1\x02\n\x12\x43lientDataResponse\x12\x1d\n\x02id\x18\x06 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x02id\x12\x1f\n\x08username\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x08username\x12.\n\x04role\x18\x07 \x01(\x0e\x32\x15.soulfire.v1.UserRoleB\x03\xe0\x41\x02R\x04role\x12$\n\x05\x65mail\x18\x08 \x01(\tB\x0e\xe0\x41\x02\xd2\xf3\x18\x07\n\x05\x65mailR\x05\x65mail\x12V\n\x12server_permissions\x18\x02 \x03(\x0b\x32\".soulfire.v1.GlobalPermissionStateB\x03\xe0\x41\x02R\x11serverPermissions\x12=\n\x0bserver_info\x18\x0b \x01(\x0b\x32\x17.soulfire.v1.ServerInfoB\x03\xe0\x41\x02R\nserverInfo\"\x1c\n\x1aGenerateWebDAVTokenRequest\"8\n\x1bGenerateWebDAVTokenResponse\x12\x19\n\x05token\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x05token\"\x19\n\x17GenerateAPITokenRequest\"5\n\x18GenerateAPITokenResponse\x12\x19\n\x05token\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x05token\"<\n\x19UpdateSelfUsernameRequest\x12\x1f\n\x08username\x18\x01 \x01(\tB\x03\xe0\x41\x02R\x08username\"\x1c\n\x1aUpdateSelfUsernameResponse\">\n\x16UpdateSelfEmailRequest\x12$\n\x05\x65mail\x18\x01 \x01(\tB\x0e\xe0\x41\x02\xd2\xf3\x18\x07\n\x05\x65mailR\x05\x65mail\"\x19\n\x17UpdateSelfEmailResponse\"\x1f\n\x1dInvalidateSelfSessionsRequest\" \n\x1eInvalidateSelfSessionsResponse2\x8b\x0b\n\rClientService\x12\x98\x01\n\rGetClientData\x12\x1e.soulfire.v1.ClientDataRequest\x1a\x1f.soulfire.v1.ClientDataResponse\"F\xca\xf3\x18\x30\n\x0fGet client data\x1a\x10READ_CLIENT_DATA\"\x0b\x63lient.self\x82\xd3\xe4\x93\x02\x0c\x12\n/v1/client\x12\x84\x02\n\x13GenerateWebDAVToken\x12\'.soulfire.v1.GenerateWebDAVTokenRequest\x1a(.soulfire.v1.GenerateWebDAVTokenResponse\"\x99\x01\xca\xf3\x18l\n\x15Generate WebDAV token\x1a\x1aGENERATE_SELF_WEBDAV_TOKEN\"\x0b\x63lient.self:*Issues a new JWT with the webdav audience.\x82\xd3\xe4\x93\x02#\"!/v1/client/tokens/webdav:generate\x12\xef\x01\n\x10GenerateAPIToken\x12$.soulfire.v1.GenerateAPITokenRequest\x1a%.soulfire.v1.GenerateAPITokenResponse\"\x8d\x01\xca\xf3\x18\x63\n\x12Generate API token\x1a\x17GENERATE_SELF_API_TOKEN\"\x0b\x63lient.self:\'Issues a new JWT with the api audience.\x82\xd3\xe4\x93\x02 \"\x1e/v1/client/tokens/api:generate\x12\xeb\x01\n\x12UpdateSelfUsername\x12&.soulfire.v1.UpdateSelfUsernameRequest\x1a\'.soulfire.v1.UpdateSelfUsernameResponse\"\x83\x01\xca\xf3\x18\x61\n\x14Update self username\x1a\x14UPDATE_SELF_USERNAME\"\x0b\x63lient.self:&Persists the new username immediately.\x82\xd3\xe4\x93\x02\x18\x32\x13/v1/client/username:\x01*\x12\xdd\x01\n\x0fUpdateSelfEmail\x12#.soulfire.v1.UpdateSelfEmailRequest\x1a$.soulfire.v1.UpdateSelfEmailResponse\"\x7f\xca\xf3\x18`\n\x11Update self email\x1a\x11UPDATE_SELF_EMAIL\"\x0b\x63lient.self:+Persists the new email address immediately.\x82\xd3\xe4\x93\x02\x15\x32\x10/v1/client/email:\x01*\x12\x97\x02\n\x16InvalidateSelfSessions\x12*.soulfire.v1.InvalidateSelfSessionsRequest\x1a+.soulfire.v1.InvalidateSelfSessionsResponse\"\xa3\x01\xca\xf3\x18y\n\x18Invalidate self sessions\x1a\x18INVALIDATE_SELF_SESSIONS\"\x0b\x63lient.self:6Revokes previously issued tokens for the current user.\x82\xd3\xe4\x93\x02 \"\x1e/v1/client/sessions:invalidateB!\n\x1d\x63om.soulfiremc.grpc.generatedP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -56,6 +56,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SERVERINFO'].fields_by_name['public_mcp_address']._serialized_options = b'\340A\002\322\363\030\005\n\003uri'
   _globals['_SERVERINFO'].fields_by_name['minecraft_version']._loaded_options = None
   _globals['_SERVERINFO'].fields_by_name['minecraft_version']._serialized_options = b'\340A\002'
+  _globals['_SERVERINFO'].fields_by_name['installation_id']._loaded_options = None
+  _globals['_SERVERINFO'].fields_by_name['installation_id']._serialized_options = b'\322\363\030\006\n\004uuid'
   _globals['_CLIENTDATARESPONSE'].fields_by_name['id']._loaded_options = None
   _globals['_CLIENTDATARESPONSE'].fields_by_name['id']._serialized_options = b'\340A\002\322\363\030\006\n\004uuid'
   _globals['_CLIENTDATARESPONSE'].fields_by_name['username']._loaded_options = None
@@ -93,29 +95,29 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GLOBALPERMISSIONSTATE']._serialized_start=171
   _globals['_GLOBALPERMISSIONSTATE']._serialized_end=306
   _globals['_SERVERINFO']._serialized_start=309
-  _globals['_SERVERINFO']._serialized_end=726
-  _globals['_CLIENTDATARESPONSE']._serialized_start=729
-  _globals['_CLIENTDATARESPONSE']._serialized_end=1050
-  _globals['_GENERATEWEBDAVTOKENREQUEST']._serialized_start=1052
-  _globals['_GENERATEWEBDAVTOKENREQUEST']._serialized_end=1080
-  _globals['_GENERATEWEBDAVTOKENRESPONSE']._serialized_start=1082
-  _globals['_GENERATEWEBDAVTOKENRESPONSE']._serialized_end=1138
-  _globals['_GENERATEAPITOKENREQUEST']._serialized_start=1140
-  _globals['_GENERATEAPITOKENREQUEST']._serialized_end=1165
-  _globals['_GENERATEAPITOKENRESPONSE']._serialized_start=1167
-  _globals['_GENERATEAPITOKENRESPONSE']._serialized_end=1220
-  _globals['_UPDATESELFUSERNAMEREQUEST']._serialized_start=1222
-  _globals['_UPDATESELFUSERNAMEREQUEST']._serialized_end=1282
-  _globals['_UPDATESELFUSERNAMERESPONSE']._serialized_start=1284
-  _globals['_UPDATESELFUSERNAMERESPONSE']._serialized_end=1312
-  _globals['_UPDATESELFEMAILREQUEST']._serialized_start=1314
-  _globals['_UPDATESELFEMAILREQUEST']._serialized_end=1376
-  _globals['_UPDATESELFEMAILRESPONSE']._serialized_start=1378
-  _globals['_UPDATESELFEMAILRESPONSE']._serialized_end=1403
-  _globals['_INVALIDATESELFSESSIONSREQUEST']._serialized_start=1405
-  _globals['_INVALIDATESELFSESSIONSREQUEST']._serialized_end=1436
-  _globals['_INVALIDATESELFSESSIONSRESPONSE']._serialized_start=1438
-  _globals['_INVALIDATESELFSESSIONSRESPONSE']._serialized_end=1470
-  _globals['_CLIENTSERVICE']._serialized_start=1473
-  _globals['_CLIENTSERVICE']._serialized_end=2892
+  _globals['_SERVERINFO']._serialized_end=779
+  _globals['_CLIENTDATARESPONSE']._serialized_start=782
+  _globals['_CLIENTDATARESPONSE']._serialized_end=1103
+  _globals['_GENERATEWEBDAVTOKENREQUEST']._serialized_start=1105
+  _globals['_GENERATEWEBDAVTOKENREQUEST']._serialized_end=1133
+  _globals['_GENERATEWEBDAVTOKENRESPONSE']._serialized_start=1135
+  _globals['_GENERATEWEBDAVTOKENRESPONSE']._serialized_end=1191
+  _globals['_GENERATEAPITOKENREQUEST']._serialized_start=1193
+  _globals['_GENERATEAPITOKENREQUEST']._serialized_end=1218
+  _globals['_GENERATEAPITOKENRESPONSE']._serialized_start=1220
+  _globals['_GENERATEAPITOKENRESPONSE']._serialized_end=1273
+  _globals['_UPDATESELFUSERNAMEREQUEST']._serialized_start=1275
+  _globals['_UPDATESELFUSERNAMEREQUEST']._serialized_end=1335
+  _globals['_UPDATESELFUSERNAMERESPONSE']._serialized_start=1337
+  _globals['_UPDATESELFUSERNAMERESPONSE']._serialized_end=1365
+  _globals['_UPDATESELFEMAILREQUEST']._serialized_start=1367
+  _globals['_UPDATESELFEMAILREQUEST']._serialized_end=1429
+  _globals['_UPDATESELFEMAILRESPONSE']._serialized_start=1431
+  _globals['_UPDATESELFEMAILRESPONSE']._serialized_end=1456
+  _globals['_INVALIDATESELFSESSIONSREQUEST']._serialized_start=1458
+  _globals['_INVALIDATESELFSESSIONSREQUEST']._serialized_end=1489
+  _globals['_INVALIDATESELFSESSIONSRESPONSE']._serialized_start=1491
+  _globals['_INVALIDATESELFSESSIONSRESPONSE']._serialized_end=1523
+  _globals['_CLIENTSERVICE']._serialized_start=1526
+  _globals['_CLIENTSERVICE']._serialized_end=2945
 # @@protoc_insertion_point(module_scope)

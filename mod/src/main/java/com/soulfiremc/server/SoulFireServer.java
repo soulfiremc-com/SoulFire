@@ -27,6 +27,7 @@ import com.soulfiremc.server.api.event.session.InstanceInitEvent;
 import com.soulfiremc.server.api.metadata.MetadataHolder;
 import com.soulfiremc.server.command.ServerCommandManager;
 import com.soulfiremc.server.database.DatabaseManager;
+import com.soulfiremc.server.database.InstallationId;
 import com.soulfiremc.server.database.InstanceConstants;
 import com.soulfiremc.server.database.generated.Tables;
 import com.soulfiremc.server.grpc.LogServiceImpl;
@@ -113,6 +114,7 @@ public final class SoulFireServer {
   private final ServerMetricsCollector serverMetricsCollector;
   private final ShutdownManager shutdownManager;
   private final DatabaseManager.DatabaseContext databaseContext;
+  private final UUID installationId;
   private final SecretKey jwtSecretKey;
   private final SFSparkPlugin sparkPlugin;
   @Getter
@@ -174,6 +176,7 @@ public final class SoulFireServer {
     });
 
     this.databaseContext = databaseContextFuture.join();
+    this.installationId = InstallationId.getOrCreate(databaseContext.dsl());
     this.settingsSource = new ServerSettingsDelegate(this::fetchSettingsSource);
     this.authSystem = new AuthSystem(this, databaseContext.dsl());
     this.rpcServer = rpcServerFuture.join();
