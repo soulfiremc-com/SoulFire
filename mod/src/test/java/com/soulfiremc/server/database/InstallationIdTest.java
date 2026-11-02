@@ -31,6 +31,7 @@ import org.sqlite.SQLiteDataSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mockStatic;
 
 final class InstallationIdTest {
@@ -138,9 +140,41 @@ final class InstallationIdTest {
 
   @Test
   void runtimeConnectionsWaitForSqliteLocks(@TempDir Path directory) {
+    assumeTrue("sqlite".equals(System.getProperty("database", "sqlite")));
     try (var paths = mockStatic(SFPathConstants.class)) {
       paths.when(SFPathConstants::baseDirectory).thenReturn(directory);
       try (var database = DatabaseManager.select()) {
+        assertEquals(30_000, database.dsl().fetchValue("PRAGMA busy_timeout", Integer.class));
+      }
+    }
+  }
+
+  @Test
+  void migrationWaitsForLocksBeyondTheDriverDefault(@TempDir Path directory) throws Exception {
+    assumeTrue("sqlite".equals(System.getProperty("database", "sqlite")));
+    var source = new SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("soulfire.sqlite"));
+    Flyway.configure().dataSource(source).locations("classpath:db/migration").target("9").load().migrate();
+    var started = new CountDownLatch(1);
+    try (var connection = DriverManager.getConnection(source.getUrl());
+         var statement = connection.createStatement();
+         var executor = Executors.newSingleThreadExecutor()) {
+      statement.execute("BEGIN IMMEDIATE");
+      var result = executor.submit(() -> {
+        try (var paths = mockStatic(SFPathConstants.class)) {
+          paths.when(SFPathConstants::baseDirectory).thenReturn(directory);
+          started.countDown();
+          return DatabaseManager.select();
+        }
+      });
+      try {
+        assertTrue(started.await(10, TimeUnit.SECONDS));
+        Thread.sleep(Duration.ofMillis(3_500));
+      } finally {
+        statement.execute("ROLLBACK");
+      }
+      try (var database = result.get(10, TimeUnit.SECONDS)) {
+        assertEquals(0, database.dsl().fetchCount(Tables.SERVER_METADATA));
         assertEquals(30_000, database.dsl().fetchValue("PRAGMA busy_timeout", Integer.class));
       }
     }
