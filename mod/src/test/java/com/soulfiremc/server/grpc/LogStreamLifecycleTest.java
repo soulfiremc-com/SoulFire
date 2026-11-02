@@ -91,7 +91,12 @@ final class LogStreamLifecycleTest {
       assertTrue(component.getPersonal());
       assertTrue(component.getTerminalInteractions());
       assertTrue(component.getMessage().contains("777;soulfire;1;"));
-      assertFalse(fixture.event().terminalInteractions());
+      var instanceSubscription = fixture.subscribe(false);
+      SFLogAppender.INSTANCE.publishLogEvent(new SFLogAppender.SFLogEvent(UUID.randomUUID().toString(), "flagged",
+        System.currentTimeMillis(), null, null, fixture.instanceId, null, null, null, null, true));
+      assertEquals(1, instanceSubscription.messages.size());
+      assertFalse(instanceSubscription.messages.getFirst().getMessage().getPersonal());
+      assertFalse(instanceSubscription.messages.getFirst().getMessage().getTerminalInteractions());
     }
   }
 

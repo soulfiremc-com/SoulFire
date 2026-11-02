@@ -28,7 +28,7 @@ from google.api import field_behavior_pb2 as google_dot_api_dot_field__behavior_
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13soulfire/logs.proto\x12\x0bsoulfire.v1\x1a\x17soulfire/api_docs.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xae\x04\n\tLogString\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message\x12\x30\n\x0binstance_id\x18\x03 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x00R\ninstanceId\x88\x01\x01\x12\x35\n\x0e\x62ot_account_id\x18\x04 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x01R\x0c\x62otAccountId\x88\x01\x01\x12,\n\tscript_id\x18\x05 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x02R\x08scriptId\x88\x01\x01\x12\x1a\n\x08personal\x18\x06 \x01(\x08R\x08personal\x12(\n\rinstance_name\x18\x07 \x01(\tH\x03R\x0cinstanceName\x88\x01\x01\x12-\n\x10\x62ot_account_name\x18\x08 \x01(\tH\x04R\x0e\x62otAccountName\x88\x01\x01\x12\x38\n\ttimestamp\x18\t \x01(\x0b\x32\x1a.google.protobuf.TimestampR\ttimestamp\x12$\n\x0blogger_name\x18\n \x01(\tH\x05R\nloggerName\x88\x01\x01\x12\x19\n\x05level\x18\x0b \x01(\tH\x06R\x05level\x88\x01\x01\x42\x0e\n\x0c_instance_idB\x11\n\x0f_bot_account_idB\x0c\n\n_script_idB\x10\n\x0e_instance_nameB\x13\n\x11_bot_account_nameB\x0e\n\x0c_logger_nameB\x08\n\x06_level\"\x10\n\x0eGlobalLogScope\"B\n\x10InstanceLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\"c\n\x0b\x42otLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\x12$\n\x06\x62ot_id\x18\x02 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x05\x62otId\"t\n\x16InstanceScriptLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\x12*\n\tscript_id\x18\x02 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x08scriptId\"\x12\n\x10PersonalLogScope\"\xc2\x02\n\x08LogScope\x12\x35\n\x06global\x18\x01 \x01(\x0b\x32\x1b.soulfire.v1.GlobalLogScopeH\x00R\x06global\x12;\n\x08instance\x18\x02 \x01(\x0b\x32\x1d.soulfire.v1.InstanceLogScopeH\x00R\x08instance\x12,\n\x03\x62ot\x18\x03 \x01(\x0b\x32\x18.soulfire.v1.BotLogScopeH\x00R\x03\x62ot\x12N\n\x0finstance_script\x18\x05 \x01(\x0b\x32#.soulfire.v1.InstanceScriptLogScopeH\x00R\x0einstanceScript\x12;\n\x08personal\x18\x06 \x01(\x0b\x32\x1d.soulfire.v1.PersonalLogScopeH\x00R\x08personalB\x07\n\x05scope\"a\n\x12PreviousLogRequest\x12\x30\n\x05scope\x18\x04 \x01(\x0b\x32\x15.soulfire.v1.LogScopeB\x03\xe0\x41\x02R\x05scope\x12\x19\n\x05\x63ount\x18\x03 \x01(\x05\x42\x03\xe0\x41\x02R\x05\x63ount\"N\n\x13PreviousLogResponse\x12\x37\n\x08messages\x18\x01 \x03(\x0b\x32\x16.soulfire.v1.LogStringB\x03\xe0\x41\x02R\x08messages\">\n\nLogRequest\x12\x30\n\x05scope\x18\x03 \x01(\x0b\x32\x15.soulfire.v1.LogScopeB\x03\xe0\x41\x02R\x05scope\"D\n\x0bLogResponse\x12\x35\n\x07message\x18\x01 \x01(\x0b\x32\x16.soulfire.v1.LogStringB\x03\xe0\x41\x02R\x07message2\xda\x02\n\x0bLogsService\x12\x8d\x01\n\x0bGetPrevious\x12\x1f.soulfire.v1.PreviousLogRequest\x1a .soulfire.v1.PreviousLogResponse\";\xca\xf3\x18\x1c\n\x0fGet log history\"\tlog.scope\x82\xd3\xe4\x93\x02\x15\"\x10/v1/logs:history:\x01*\x12\xba\x01\n\tSubscribe\x12\x17.soulfire.v1.LogRequest\x1a\x18.soulfire.v1.LogResponse\"x\xca\xf3\x18t\n\x11Subscribe to logs\"\tlog.scope2\x10Server streaming:BOpens a live log stream until the client cancels the subscription.0\x01\x42!\n\x1d\x63om.soulfiremc.grpc.generatedP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13soulfire/logs.proto\x12\x0bsoulfire.v1\x1a\x17soulfire/api_docs.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe3\x04\n\tLogString\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message\x12\x30\n\x0binstance_id\x18\x03 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x00R\ninstanceId\x88\x01\x01\x12\x35\n\x0e\x62ot_account_id\x18\x04 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x01R\x0c\x62otAccountId\x88\x01\x01\x12,\n\tscript_id\x18\x05 \x01(\tB\n\xd2\xf3\x18\x06\n\x04uuidH\x02R\x08scriptId\x88\x01\x01\x12\x1a\n\x08personal\x18\x06 \x01(\x08R\x08personal\x12(\n\rinstance_name\x18\x07 \x01(\tH\x03R\x0cinstanceName\x88\x01\x01\x12-\n\x10\x62ot_account_name\x18\x08 \x01(\tH\x04R\x0e\x62otAccountName\x88\x01\x01\x12\x38\n\ttimestamp\x18\t \x01(\x0b\x32\x1a.google.protobuf.TimestampR\ttimestamp\x12$\n\x0blogger_name\x18\n \x01(\tH\x05R\nloggerName\x88\x01\x01\x12\x19\n\x05level\x18\x0b \x01(\tH\x06R\x05level\x88\x01\x01\x12\x33\n\x15terminal_interactions\x18\x0c \x01(\x08R\x14terminalInteractionsB\x0e\n\x0c_instance_idB\x11\n\x0f_bot_account_idB\x0c\n\n_script_idB\x10\n\x0e_instance_nameB\x13\n\x11_bot_account_nameB\x0e\n\x0c_logger_nameB\x08\n\x06_level\"\x10\n\x0eGlobalLogScope\"B\n\x10InstanceLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\"c\n\x0b\x42otLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\x12$\n\x06\x62ot_id\x18\x02 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x05\x62otId\"t\n\x16InstanceScriptLogScope\x12.\n\x0binstance_id\x18\x01 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\ninstanceId\x12*\n\tscript_id\x18\x02 \x01(\tB\r\xe0\x41\x02\xd2\xf3\x18\x06\n\x04uuidR\x08scriptId\"\x12\n\x10PersonalLogScope\"\xc2\x02\n\x08LogScope\x12\x35\n\x06global\x18\x01 \x01(\x0b\x32\x1b.soulfire.v1.GlobalLogScopeH\x00R\x06global\x12;\n\x08instance\x18\x02 \x01(\x0b\x32\x1d.soulfire.v1.InstanceLogScopeH\x00R\x08instance\x12,\n\x03\x62ot\x18\x03 \x01(\x0b\x32\x18.soulfire.v1.BotLogScopeH\x00R\x03\x62ot\x12N\n\x0finstance_script\x18\x05 \x01(\x0b\x32#.soulfire.v1.InstanceScriptLogScopeH\x00R\x0einstanceScript\x12;\n\x08personal\x18\x06 \x01(\x0b\x32\x1d.soulfire.v1.PersonalLogScopeH\x00R\x08personalB\x07\n\x05scope\"a\n\x12PreviousLogRequest\x12\x30\n\x05scope\x18\x04 \x01(\x0b\x32\x15.soulfire.v1.LogScopeB\x03\xe0\x41\x02R\x05scope\x12\x19\n\x05\x63ount\x18\x03 \x01(\x05\x42\x03\xe0\x41\x02R\x05\x63ount\"N\n\x13PreviousLogResponse\x12\x37\n\x08messages\x18\x01 \x03(\x0b\x32\x16.soulfire.v1.LogStringB\x03\xe0\x41\x02R\x08messages\">\n\nLogRequest\x12\x30\n\x05scope\x18\x03 \x01(\x0b\x32\x15.soulfire.v1.LogScopeB\x03\xe0\x41\x02R\x05scope\"D\n\x0bLogResponse\x12\x35\n\x07message\x18\x01 \x01(\x0b\x32\x16.soulfire.v1.LogStringB\x03\xe0\x41\x02R\x07message2\xda\x02\n\x0bLogsService\x12\x8d\x01\n\x0bGetPrevious\x12\x1f.soulfire.v1.PreviousLogRequest\x1a .soulfire.v1.PreviousLogResponse\";\xca\xf3\x18\x1c\n\x0fGet log history\"\tlog.scope\x82\xd3\xe4\x93\x02\x15\"\x10/v1/logs:history:\x01*\x12\xba\x01\n\tSubscribe\x12\x17.soulfire.v1.LogRequest\x1a\x18.soulfire.v1.LogResponse\"x\xca\xf3\x18t\n\x11Subscribe to logs\"\tlog.scope2\x10Server streaming:BOpens a live log stream until the client cancels the subscription.0\x01\x42!\n\x1d\x63om.soulfiremc.grpc.generatedP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -67,27 +67,27 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_LOGSSERVICE'].methods_by_name['Subscribe']._loaded_options = None
   _globals['_LOGSSERVICE'].methods_by_name['Subscribe']._serialized_options = b'\312\363\030t\n\021Subscribe to logs\"\tlog.scope2\020Server streaming:BOpens a live log stream until the client cancels the subscription.'
   _globals['_LOGSTRING']._serialized_start=158
-  _globals['_LOGSTRING']._serialized_end=716
-  _globals['_GLOBALLOGSCOPE']._serialized_start=718
-  _globals['_GLOBALLOGSCOPE']._serialized_end=734
-  _globals['_INSTANCELOGSCOPE']._serialized_start=736
-  _globals['_INSTANCELOGSCOPE']._serialized_end=802
-  _globals['_BOTLOGSCOPE']._serialized_start=804
-  _globals['_BOTLOGSCOPE']._serialized_end=903
-  _globals['_INSTANCESCRIPTLOGSCOPE']._serialized_start=905
-  _globals['_INSTANCESCRIPTLOGSCOPE']._serialized_end=1021
-  _globals['_PERSONALLOGSCOPE']._serialized_start=1023
-  _globals['_PERSONALLOGSCOPE']._serialized_end=1041
-  _globals['_LOGSCOPE']._serialized_start=1044
-  _globals['_LOGSCOPE']._serialized_end=1366
-  _globals['_PREVIOUSLOGREQUEST']._serialized_start=1368
-  _globals['_PREVIOUSLOGREQUEST']._serialized_end=1465
-  _globals['_PREVIOUSLOGRESPONSE']._serialized_start=1467
-  _globals['_PREVIOUSLOGRESPONSE']._serialized_end=1545
-  _globals['_LOGREQUEST']._serialized_start=1547
-  _globals['_LOGREQUEST']._serialized_end=1609
-  _globals['_LOGRESPONSE']._serialized_start=1611
-  _globals['_LOGRESPONSE']._serialized_end=1679
-  _globals['_LOGSSERVICE']._serialized_start=1682
-  _globals['_LOGSSERVICE']._serialized_end=2028
+  _globals['_LOGSTRING']._serialized_end=769
+  _globals['_GLOBALLOGSCOPE']._serialized_start=771
+  _globals['_GLOBALLOGSCOPE']._serialized_end=787
+  _globals['_INSTANCELOGSCOPE']._serialized_start=789
+  _globals['_INSTANCELOGSCOPE']._serialized_end=855
+  _globals['_BOTLOGSCOPE']._serialized_start=857
+  _globals['_BOTLOGSCOPE']._serialized_end=956
+  _globals['_INSTANCESCRIPTLOGSCOPE']._serialized_start=958
+  _globals['_INSTANCESCRIPTLOGSCOPE']._serialized_end=1074
+  _globals['_PERSONALLOGSCOPE']._serialized_start=1076
+  _globals['_PERSONALLOGSCOPE']._serialized_end=1094
+  _globals['_LOGSCOPE']._serialized_start=1097
+  _globals['_LOGSCOPE']._serialized_end=1419
+  _globals['_PREVIOUSLOGREQUEST']._serialized_start=1421
+  _globals['_PREVIOUSLOGREQUEST']._serialized_end=1518
+  _globals['_PREVIOUSLOGRESPONSE']._serialized_start=1520
+  _globals['_PREVIOUSLOGRESPONSE']._serialized_end=1598
+  _globals['_LOGREQUEST']._serialized_start=1600
+  _globals['_LOGREQUEST']._serialized_end=1662
+  _globals['_LOGRESPONSE']._serialized_start=1664
+  _globals['_LOGRESPONSE']._serialized_end=1732
+  _globals['_LOGSSERVICE']._serialized_start=1735
+  _globals['_LOGSSERVICE']._serialized_end=2081
 # @@protoc_insertion_point(module_scope)

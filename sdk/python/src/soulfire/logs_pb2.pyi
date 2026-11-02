@@ -13,7 +13,7 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class LogString(_message.Message):
-    __slots__ = ("id", "message", "instance_id", "bot_account_id", "script_id", "personal", "instance_name", "bot_account_name", "timestamp", "logger_name", "level")
+    __slots__ = ("id", "message", "instance_id", "bot_account_id", "script_id", "personal", "instance_name", "bot_account_name", "timestamp", "logger_name", "level", "terminal_interactions")
     ID_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -25,6 +25,7 @@ class LogString(_message.Message):
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     LOGGER_NAME_FIELD_NUMBER: _ClassVar[int]
     LEVEL_FIELD_NUMBER: _ClassVar[int]
+    TERMINAL_INTERACTIONS_FIELD_NUMBER: _ClassVar[int]
     id: str
     message: str
     instance_id: str
@@ -36,7 +37,8 @@ class LogString(_message.Message):
     timestamp: _timestamp_pb2.Timestamp
     logger_name: str
     level: str
-    def __init__(self, id: _Optional[str] = ..., message: _Optional[str] = ..., instance_id: _Optional[str] = ..., bot_account_id: _Optional[str] = ..., script_id: _Optional[str] = ..., personal: bool = ..., instance_name: _Optional[str] = ..., bot_account_name: _Optional[str] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., logger_name: _Optional[str] = ..., level: _Optional[str] = ...) -> None: ...
+    terminal_interactions: bool
+    def __init__(self, id: _Optional[str] = ..., message: _Optional[str] = ..., instance_id: _Optional[str] = ..., bot_account_id: _Optional[str] = ..., script_id: _Optional[str] = ..., personal: bool = ..., instance_name: _Optional[str] = ..., bot_account_name: _Optional[str] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., logger_name: _Optional[str] = ..., level: _Optional[str] = ..., terminal_interactions: bool = ...) -> None: ...
 
 class GlobalLogScope(_message.Message):
     __slots__ = ()
