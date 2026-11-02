@@ -34,6 +34,8 @@ import java.sql.Statement;
 
 @Slf4j
 public final class DatabaseManager {
+  private static final int SQLITE_BUSY_TIMEOUT_MILLIS = 30_000;
+
   private DatabaseManager() {
   }
 
@@ -53,11 +55,15 @@ public final class DatabaseManager {
     // Keep those connections separate from the runtime pool that enforces them.
     var migrationDataSource = new SQLiteDataSource();
     migrationDataSource.setUrl(jdbcUrl);
+    migrationDataSource.setBusyTimeout(SQLITE_BUSY_TIMEOUT_MILLIS);
+    // Acquire the write lock before reading the schema, so contention can use the busy timeout.
+    migrationDataSource.setTransactionMode("IMMEDIATE");
     runMigrations(migrationDataSource);
 
     var hikariConfig = new HikariConfig();
     hikariConfig.setJdbcUrl(jdbcUrl);
     hikariConfig.addDataSourceProperty("foreign_keys", "true");
+    hikariConfig.addDataSourceProperty("busy_timeout", Integer.toString(SQLITE_BUSY_TIMEOUT_MILLIS));
     hikariConfig.setMinimumIdle(1);
     hikariConfig.setMaximumPoolSize(1);
     hikariConfig.setIdleTimeout(0);

@@ -23,7 +23,7 @@ class GlobalPermissionState(_message.Message):
     def __init__(self, global_permission: _Optional[_Union[_common_pb2.GlobalPermission, str]] = ..., granted: bool = ...) -> None: ...
 
 class ServerInfo(_message.Message):
-    __slots__ = ("version", "commit_hash", "branch_name", "public_api_address", "public_webdav_address", "public_docs_address", "public_mcp_address", "minecraft_version")
+    __slots__ = ("version", "commit_hash", "branch_name", "public_api_address", "public_webdav_address", "public_docs_address", "public_mcp_address", "minecraft_version", "installation_id")
     VERSION_FIELD_NUMBER: _ClassVar[int]
     COMMIT_HASH_FIELD_NUMBER: _ClassVar[int]
     BRANCH_NAME_FIELD_NUMBER: _ClassVar[int]
@@ -32,6 +32,7 @@ class ServerInfo(_message.Message):
     PUBLIC_DOCS_ADDRESS_FIELD_NUMBER: _ClassVar[int]
     PUBLIC_MCP_ADDRESS_FIELD_NUMBER: _ClassVar[int]
     MINECRAFT_VERSION_FIELD_NUMBER: _ClassVar[int]
+    INSTALLATION_ID_FIELD_NUMBER: _ClassVar[int]
     version: str
     commit_hash: str
     branch_name: str
@@ -40,7 +41,8 @@ class ServerInfo(_message.Message):
     public_docs_address: str
     public_mcp_address: str
     minecraft_version: str
-    def __init__(self, version: _Optional[str] = ..., commit_hash: _Optional[str] = ..., branch_name: _Optional[str] = ..., public_api_address: _Optional[str] = ..., public_webdav_address: _Optional[str] = ..., public_docs_address: _Optional[str] = ..., public_mcp_address: _Optional[str] = ..., minecraft_version: _Optional[str] = ...) -> None: ...
+    installation_id: str
+    def __init__(self, version: _Optional[str] = ..., commit_hash: _Optional[str] = ..., branch_name: _Optional[str] = ..., public_api_address: _Optional[str] = ..., public_webdav_address: _Optional[str] = ..., public_docs_address: _Optional[str] = ..., public_mcp_address: _Optional[str] = ..., minecraft_version: _Optional[str] = ..., installation_id: _Optional[str] = ...) -> None: ...
 
 class ClientDataResponse(_message.Message):
     __slots__ = ("id", "username", "role", "email", "server_permissions", "server_info")

@@ -95,6 +95,7 @@ public final class ClientServiceImpl extends ClientServiceGrpc.ClientServiceImpl
           })
           .addAllServerPermissions(getGlobalPermissions())
           .setServerInfo(ServerInfo.newBuilder()
+            .setInstallationId(soulFireServer.installationId().toString())
             .setVersion(BuildData.VERSION)
             .setCommitHash(BuildData.COMMIT)
             .setBranchName(BuildData.BRANCH)
