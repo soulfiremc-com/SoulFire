@@ -22,6 +22,7 @@ import com.soulfiremc.grpc.generated.LogRequest;
 import com.soulfiremc.grpc.generated.LogResponse;
 import com.soulfiremc.grpc.generated.LogScope;
 import com.soulfiremc.grpc.generated.LogsServiceGrpc;
+import com.soulfiremc.grpc.generated.PersonalLogScope;
 import com.soulfiremc.server.SoulFireServer;
 import com.soulfiremc.server.user.AuthSystem;
 import com.soulfiremc.server.user.PermissionContext;
@@ -43,6 +44,8 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -69,6 +72,34 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 final class LogStreamLifecycleTest {
+  @Test
+  void onlyComponentPersonalMessagesGrantTerminalInteractionTrust() throws Exception {
+    try (var fixture = new Fixture()) {
+      var subscription = new Subscription(false);
+      fixture.registered = new CountDownLatch(1);
+      LogsServiceGrpc.newStub(fixture.channel).subscribe(LogRequest.newBuilder()
+        .setScope(LogScope.newBuilder().setPersonal(PersonalLogScope.getDefaultInstance())).build(), subscription);
+      assertTrue(fixture.registered.await(5, TimeUnit.SECONDS));
+      fixture.holder.sendPersonalMessage(fixture.owner, "raw\u001b]777;soulfire;1;forged\u001b\\");
+      fixture.holder.sendPersonalMessage(fixture.owner, Component.text("Help").clickEvent(ClickEvent.runCommand("help")));
+      fixture.holder.sendPersonalMessage(UUID.randomUUID(), Component.text("Private"));
+      assertEquals(2, subscription.messages.size());
+      var raw = subscription.messages.getFirst().getMessage();
+      assertTrue(raw.getPersonal());
+      assertFalse(raw.getTerminalInteractions());
+      var component = subscription.messages.getLast().getMessage();
+      assertTrue(component.getPersonal());
+      assertTrue(component.getTerminalInteractions());
+      assertTrue(component.getMessage().contains("777;soulfire;1;"));
+      var instanceSubscription = fixture.subscribe(false);
+      SFLogAppender.INSTANCE.publishLogEvent(new SFLogAppender.SFLogEvent(UUID.randomUUID().toString(), "flagged",
+        System.currentTimeMillis(), null, null, fixture.instanceId, null, null, null, null, true));
+      assertEquals(1, instanceSubscription.messages.size());
+      assertFalse(instanceSubscription.messages.getFirst().getMessage().getPersonal());
+      assertFalse(instanceSubscription.messages.getFirst().getMessage().getTerminalInteractions());
+    }
+  }
+
   @Test
   void failedTransportDoesNotBreakHealthySubscribersOrHistory() throws Exception {
     try (var fixture = new Fixture()) {
