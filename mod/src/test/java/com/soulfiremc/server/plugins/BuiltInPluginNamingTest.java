@@ -33,7 +33,7 @@ import static org.mockito.Mockito.mock;
 final class BuiltInPluginNamingTest {
   @ParameterizedTest
   @MethodSource("renamedPages")
-  void retainsPluginAndSettingIdentifiers(String id, String displayName,
+  void retainsPluginAndSettingIdentifiers(String id, String displayName, String enabledKey,
                                          Consumer<InstanceSettingsRegistryInitEvent> register) {
     var registry = new SettingsPageRegistry();
     register.accept(new InstanceSettingsRegistryInitEvent(mock(InstanceManager.class), registry));
@@ -43,29 +43,30 @@ final class BuiltInPluginNamingTest {
     assertEquals(id, page.getId());
     assertEquals(id, page.getOwningPluginId());
     assertEquals(id, page.getEnabledIdentifier().getNamespace());
+    assertEquals(enabledKey, page.getEnabledIdentifier().getKey());
     assertEquals(id, registry.exportRegisteredPlugins().getFirst().getId());
   }
 
   private static Stream<Arguments> renamedPages() {
     return Stream.of(
-      Arguments.of("auto-eat", "Auto eat", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoEat()::onSettingsRegistryInit),
-      Arguments.of("auto-respawn", "Auto respawn", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoRespawn()::onSettingsRegistryInit),
-      Arguments.of("auto-armor", "Auto equip armor", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoArmor()::onSettingsRegistryInit),
-      Arguments.of("auto-totem", "Auto equip totem", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoTotem()::onSettingsRegistryInit),
-      Arguments.of("auto-reconnect", "Auto reconnect", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoReconnect()::onSettingsRegistryInit),
-      Arguments.of("auto-jump", "Random jump", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoJump()::onSettingsRegistryInit),
-      Arguments.of("auto-chat-message", "Auto chat", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoChatMessage()::onSettingsRegistryInit),
-      Arguments.of("auto-register", "Auto login and register", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoRegister()::onSettingsRegistryInit),
-      Arguments.of("ai-chat-bot", "AI chat", (Consumer<InstanceSettingsRegistryInitEvent>) new AIChatBot()::onSettingsRegistryInit),
-      Arguments.of("kill-aura", "Auto attack", (Consumer<InstanceSettingsRegistryInitEvent>) new KillAura()::onSettingsRegistryInit),
-      Arguments.of("captcha-solver", "Captcha solver", (Consumer<InstanceSettingsRegistryInitEvent>) new CaptchaSolver()::onSettingsRegistryInit),
-      Arguments.of("chat-logger", "Chat logger", (Consumer<InstanceSettingsRegistryInitEvent>) new ChatLogger()::onSettingsRegistryInit),
-      Arguments.of("disconnect-logger", "Disconnect logger", (Consumer<InstanceSettingsRegistryInitEvent>) new DisconnectLogger()::onSettingsRegistryInit),
-      Arguments.of("client-settings", "Minecraft client settings", (Consumer<InstanceSettingsRegistryInitEvent>) new ClientSettings()::onSettingsRegistryInit),
-      Arguments.of("client-brand", "Client brand", (Consumer<InstanceSettingsRegistryInitEvent>) new ClientBrand()::onSettingsRegistryInit),
-      Arguments.of("fake-virtual-host", "Handshake host override", (Consumer<InstanceSettingsRegistryInitEvent>) new FakeVirtualHost()::onSettingsRegistryInit),
-      Arguments.of("server-list-bypass", "Ping before join", (Consumer<InstanceSettingsRegistryInitEvent>) new ServerListBypass()::onSettingsRegistryInit),
-      Arguments.of("forwarding-bypass", "Player forwarding", (Consumer<InstanceSettingsRegistryInitEvent>) new ForwardingBypass()::onSettingsRegistryInit)
+      Arguments.of("auto-eat", "Auto eat", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoEat()::onSettingsRegistryInit),
+      Arguments.of("auto-respawn", "Auto respawn", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoRespawn()::onSettingsRegistryInit),
+      Arguments.of("auto-armor", "Auto equip armor", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoArmor()::onSettingsRegistryInit),
+      Arguments.of("auto-totem", "Auto equip totem", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoTotem()::onSettingsRegistryInit),
+      Arguments.of("auto-reconnect", "Auto reconnect", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoReconnect()::onSettingsRegistryInit),
+      Arguments.of("auto-jump", "Random jump", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoJump()::onSettingsRegistryInit),
+      Arguments.of("auto-chat-message", "Auto chat", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoChatMessage()::onSettingsRegistryInit),
+      Arguments.of("auto-register", "Auto login and register", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AutoRegister()::onSettingsRegistryInit),
+      Arguments.of("ai-chat-bot", "AI chat", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new AIChatBot()::onSettingsRegistryInit),
+      Arguments.of("kill-aura", "Auto attack", "enable", (Consumer<InstanceSettingsRegistryInitEvent>) new KillAura()::onSettingsRegistryInit),
+      Arguments.of("captcha-solver", "Captcha solver", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new CaptchaSolver()::onSettingsRegistryInit),
+      Arguments.of("chat-logger", "Chat logger", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new ChatLogger()::onSettingsRegistryInit),
+      Arguments.of("disconnect-logger", "Disconnect logger", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new DisconnectLogger()::onSettingsRegistryInit),
+      Arguments.of("client-settings", "Minecraft client settings", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new ClientSettings()::onSettingsRegistryInit),
+      Arguments.of("client-brand", "Client brand", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new ClientBrand()::onSettingsRegistryInit),
+      Arguments.of("fake-virtual-host", "Handshake host override", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new FakeVirtualHost()::onSettingsRegistryInit),
+      Arguments.of("server-list-bypass", "Ping before join", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new ServerListBypass()::onSettingsRegistryInit),
+      Arguments.of("forwarding-bypass", "Player forwarding", "enabled", (Consumer<InstanceSettingsRegistryInitEvent>) new ForwardingBypass()::onSettingsRegistryInit)
     );
   }
 }
