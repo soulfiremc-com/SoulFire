@@ -131,13 +131,13 @@ public final class BrigadierHelper {
     CommandFunction<InstanceManager> consumer) {
     var instances = context.getSource().getVisibleInstances();
     if (instances.isEmpty()) {
-      context.getSource().source().sendWarn("No instances found.");
+      context.getSource().source().sendWarn("No projects found.");
       return 0;
     }
 
     var resultSum = new AtomicInteger();
     for (var instance : instances) {
-      context.getSource().source().sendInfo("--- Running command for instance %s ---".formatted(instance.friendlyName()));
+      context.getSource().source().sendInfo("--- Running command for project %s ---".formatted(instance.friendlyName()));
 
       instance.addAuditLog(context.getSource().source(), AuditLogType.EXECUTE_COMMAND, context.getInput());
       instance.runnableWrapper().runWrapped(() ->
@@ -154,7 +154,7 @@ public final class BrigadierHelper {
       context,
       instance -> {
         if (context.getSource().getInstanceVisibleBots(instance).isEmpty()) {
-          context.getSource().source().sendWarn("Instance %s has no connected bots.".formatted(instance.friendlyName()));
+          context.getSource().source().sendWarn("Project %s has no connected bots.".formatted(instance.friendlyName()));
           return 0;
         }
 

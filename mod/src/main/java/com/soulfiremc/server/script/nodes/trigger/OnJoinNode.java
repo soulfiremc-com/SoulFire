@@ -20,6 +20,7 @@ package com.soulfiremc.server.script.nodes.trigger;
 import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Trigger node that fires when the bot has fully joined and is ready to interact.
@@ -28,7 +29,8 @@ import java.util.Map;
 public final class OnJoinNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("trigger.on_join")
-    .displayName("On Join")
+    .displayName("On player ready")
+    .keywords(List.of("On Join"))
     .category(CategoryRegistry.TRIGGERS)
     .addInputs()
     .addOutputs(

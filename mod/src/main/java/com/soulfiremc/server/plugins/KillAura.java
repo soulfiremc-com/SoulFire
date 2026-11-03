@@ -65,7 +65,7 @@ public final class KillAura extends InternalPlugin {
     super(new PluginInfo(
       "kill-aura",
       "1.0.0",
-      "Automatically attacks entities",
+      "Automatically attacks nearby entities (KillAura).",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com/docs/how-to/kill-aura"
@@ -317,7 +317,7 @@ public final class KillAura extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(KillAuraSettings.class, "kill-aura", "Kill Aura", this, "skull", KillAuraSettings.ENABLE);
+    event.settingsPageRegistry().addPluginPage(KillAuraSettings.class, "kill-aura", "Auto attack", this, "skull", KillAuraSettings.ENABLE);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -329,7 +329,7 @@ public final class KillAura extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("enable")
         .uiName("Enable")
-        .description("Enable KillAura")
+        .description("Automatically attack nearby targets (KillAura).")
         .defaultValue(false)
         .build();
     public static final StringListProperty<SettingsSource.Bot> WHITELISTED_USERS =

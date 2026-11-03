@@ -30,7 +30,7 @@ import java.util.Map;
 public final class GetPersistentBotVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.get_persistent_bot")
-    .displayName("Get Persistent Bot Variable")
+    .displayName("Get persistent bot variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -44,10 +44,10 @@ public final class GetPersistentBotVariableNode extends AbstractScriptNode {
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Retrieves a value from the bot's persistent metadata")
+    .description("Reads persistent metadata for the bot account, which survives reconnects and SoulFire server restarts.")
     .icon("download")
     .color("#10B981")
-    .addKeywords("variable", "persistent", "bot", "load", "get", "retrieve", "permanent")
+    .addKeywords("Get Persistent Bot Variable", "variable", "persistent", "bot", "load", "get", "retrieve", "permanent")
     .build();
 
   @Override

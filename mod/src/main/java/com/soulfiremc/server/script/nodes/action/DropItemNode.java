@@ -21,6 +21,7 @@ import com.soulfiremc.server.script.*;
 import net.minecraft.world.inventory.ContainerInput;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Action node that drops whatever item is currently held on the cursor.
@@ -29,7 +30,8 @@ import java.util.Map;
 public final class DropItemNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("action.drop_item")
-    .displayName("Drop Item")
+    .displayName("Drop cursor item")
+    .keywords(List.of("Drop Item"))
     .category(CategoryRegistry.ACTIONS)
     .addInputs(
       PortDefinition.execIn(),

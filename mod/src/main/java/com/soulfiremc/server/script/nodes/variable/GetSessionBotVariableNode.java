@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class GetSessionBotVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.get_session_bot")
-    .displayName("Get Session Bot Variable")
+    .displayName("Get connection variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -44,10 +44,10 @@ public final class GetSessionBotVariableNode extends AbstractScriptNode {
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Retrieves a value from the bot's session metadata")
+    .description("Reads temporary data for this bot connection. A new connection starts without these values.")
     .icon("file-input")
     .color("#10B981")
-    .addKeywords("variable", "session", "bot", "temporary", "get", "retrieve", "memory")
+    .addKeywords("Get Session Bot Variable", "variable", "session", "bot", "temporary", "get", "retrieve", "memory")
     .build();
 
   private static final MetadataKey<ConcurrentHashMap<String, NodeValue>> SESSION_VARS_KEY =

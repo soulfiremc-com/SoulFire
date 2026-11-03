@@ -29,7 +29,7 @@ import java.util.Map;
 public final class SetPersistentBotVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.set_persistent_bot")
-    .displayName("Set Persistent Bot Variable")
+    .displayName("Set persistent bot variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -42,10 +42,10 @@ public final class SetPersistentBotVariableNode extends AbstractScriptNode {
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores a value in the bot's persistent metadata (survives disconnects)")
+    .description("Stores persistent metadata for the bot account, which survives reconnects and SoulFire server restarts.")
     .icon("save")
     .color("#10B981")
-    .addKeywords("variable", "persistent", "bot", "save", "store", "set", "permanent")
+    .addKeywords("Set Persistent Bot Variable", "variable", "persistent", "bot", "save", "store", "set", "permanent")
     .build();
 
   @Override

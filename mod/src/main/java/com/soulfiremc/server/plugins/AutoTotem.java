@@ -105,7 +105,7 @@ public final class AutoTotem extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoTotemSettings.class, "auto-totem", "Auto Totem", this, "cross", AutoTotemSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoTotemSettings.class, "auto-totem", "Auto equip totem", this, "cross", AutoTotemSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -116,7 +116,7 @@ public final class AutoTotem extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Totem")
+        .uiName("Enable auto equip totem")
         .description("Always put available totems in the offhand slot")
         .defaultValue(false)
         .build();

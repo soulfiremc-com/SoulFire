@@ -36,7 +36,7 @@ public final class FakeVirtualHost extends InternalPlugin {
     super(new PluginInfo(
       "fake-virtual-host",
       "1.0.0",
-      "Fakes the virtual host",
+      "Overrides the host and port sent in the Minecraft connection handshake.",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com/docs/how-to/fake-virtual-host"
@@ -64,7 +64,7 @@ public final class FakeVirtualHost extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(FakeVirtualHostSettings.class, "fake-virtual-host", "Fake Virtual Host", this, "globe", FakeVirtualHostSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(FakeVirtualHostSettings.class, "fake-virtual-host", "Handshake host override", this, "globe", FakeVirtualHostSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -75,7 +75,7 @@ public final class FakeVirtualHost extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Fake virtual host")
+        .uiName("Handshake host override")
         .description("Whether to fake the virtual host or not")
         .defaultValue(false)
         .build();

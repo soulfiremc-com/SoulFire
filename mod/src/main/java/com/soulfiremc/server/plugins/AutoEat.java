@@ -98,7 +98,7 @@ public final class AutoEat extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoEatSettings.class, "auto-eat", "Auto Eat", this, "drumstick", AutoEatSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoEatSettings.class, "auto-eat", "Auto eat", this, "drumstick", AutoEatSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -109,7 +109,7 @@ public final class AutoEat extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Eat")
+        .uiName("Enable auto eat")
         .description("Eat available food automatically when hungry")
         .defaultValue(false)
         .build();

@@ -73,7 +73,7 @@ public final class AutoRegister extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoRegisterSettings.class, "auto-register", "Auto Register", this, "key-round", AutoRegisterSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoRegisterSettings.class, "auto-register", "Auto login and register", this, "key-round", AutoRegisterSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -84,7 +84,7 @@ public final class AutoRegister extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Register")
+        .uiName("Enable auto login and register")
         .description("Make bots run the /register and /login command after joining")
         .defaultValue(false)
         .build();

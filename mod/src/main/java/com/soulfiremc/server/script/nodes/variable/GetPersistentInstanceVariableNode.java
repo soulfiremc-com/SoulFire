@@ -30,7 +30,7 @@ import java.util.Map;
 public final class GetPersistentInstanceVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.get_persistent_instance")
-    .displayName("Get Persistent Instance Variable")
+    .displayName("Get persistent project variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -43,10 +43,10 @@ public final class GetPersistentInstanceVariableNode extends AbstractScriptNode 
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Retrieves a value from the instance's persistent metadata")
+    .description("Reads persistent project metadata, which survives SoulFire server restarts.")
     .icon("download")
     .color("#10B981")
-    .addKeywords("variable", "persistent", "instance", "load", "get", "retrieve", "permanent")
+    .addKeywords("Get Persistent Instance Variable", "variable", "persistent", "instance", "load", "get", "retrieve", "permanent")
     .build();
 
   @Override

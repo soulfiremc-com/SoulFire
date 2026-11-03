@@ -29,7 +29,7 @@ import java.util.Map;
 public final class SetPersistentInstanceVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.set_persistent_instance")
-    .displayName("Set Persistent Instance Variable")
+    .displayName("Set persistent project variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -41,10 +41,10 @@ public final class SetPersistentInstanceVariableNode extends AbstractScriptNode 
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores a value in the instance's persistent metadata (survives restarts)")
+    .description("Stores persistent project metadata, which survives SoulFire server restarts.")
     .icon("save")
     .color("#10B981")
-    .addKeywords("variable", "persistent", "instance", "save", "store", "set", "permanent")
+    .addKeywords("Set Persistent Instance Variable", "variable", "persistent", "instance", "save", "store", "set", "permanent")
     .build();
 
   @Override

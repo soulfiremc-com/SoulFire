@@ -20,6 +20,7 @@ package com.soulfiremc.server.script.nodes.data;
 import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Data node that gets various boolean states of the bot.
@@ -27,7 +28,8 @@ import java.util.Map;
 public final class GetBotStateNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("data.get_bot_state")
-    .displayName("Get Bot State")
+    .displayName("Get movement state")
+    .keywords(List.of("Get Bot State"))
     .category(CategoryRegistry.DATA)
     .addInputs(
       PortDefinition.execIn(),

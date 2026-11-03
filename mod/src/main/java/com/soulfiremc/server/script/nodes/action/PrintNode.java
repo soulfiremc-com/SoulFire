@@ -20,6 +20,7 @@ package com.soulfiremc.server.script.nodes.action;
 import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Action node that logs a message for debugging.
@@ -27,7 +28,8 @@ import java.util.Map;
 public final class PrintNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("action.print")
-    .displayName("Print")
+    .displayName("Log message")
+    .keywords(List.of("Print"))
     .category(CategoryRegistry.ACTIONS)
     .addInputs(
       PortDefinition.execIn(),

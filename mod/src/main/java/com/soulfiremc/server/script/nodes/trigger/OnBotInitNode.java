@@ -20,6 +20,7 @@ package com.soulfiremc.server.script.nodes.trigger;
 import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Trigger node that fires when the bot connection is initialized.
@@ -29,7 +30,8 @@ import java.util.Map;
 public final class OnBotInitNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("trigger.on_bot_init")
-    .displayName("On Bot Init")
+    .displayName("On connection created")
+    .keywords(List.of("On Bot Init"))
     .category(CategoryRegistry.TRIGGERS)
     .addInputs()
     .addOutputs(

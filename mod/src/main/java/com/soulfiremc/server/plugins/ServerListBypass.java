@@ -38,7 +38,7 @@ public final class ServerListBypass extends InternalPlugin {
     super(new PluginInfo(
       "server-list-bypass",
       "1.0.0",
-      "Pings the server list before connecting. (Bypasses anti-bots like EpicGuard)",
+      "Pings the Minecraft server before joining. Whether this satisfies a server check depends on its configuration.",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com/docs/how-to/server-list-bypass"
@@ -66,7 +66,7 @@ public final class ServerListBypass extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(ServerListBypassSettings.class, "server-list-bypass", "Server List Bypass", this, "network", ServerListBypassSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(ServerListBypassSettings.class, "server-list-bypass", "Ping before join", this, "network", ServerListBypassSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -77,7 +77,7 @@ public final class ServerListBypass extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Server List Bypass")
+        .uiName("Enable ping before join")
         .description("Whether to ping the server list before connecting.")
         .defaultValue(false)
         .build();

@@ -34,7 +34,7 @@ public final class ServerSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("public-address")
       .uiName("Public address")
-      .description("The address clients on the internet use to connect to this SoulFire instance.\nUsed for links in E-Mails and WebDAV.")
+      .description("The address clients on the internet use to connect to this SoulFire server.\nUsed for links in E-Mails and WebDAV.")
       .defaultValue("http://127.0.0.1:38765")
       .build();
   public static final BooleanProperty<SettingsSource.Server> ALLOW_CREATING_INSTANCES =
@@ -42,8 +42,8 @@ public final class ServerSettings implements SettingsObject {
       .sourceType(SettingsSource.Server.INSTANCE)
       .namespace(NAMESPACE)
       .key("allow-creating-instances")
-      .uiName("Allow creating instances")
-      .description("Allow (non-admin) users to create instances.")
+      .uiName("Allow creating projects")
+      .description("Allow (non-admin) users to create projects.")
       .defaultValue(true)
       .build();
   public static final BooleanProperty<SettingsSource.Server> ALLOW_UPDATING_SELF_USERNAME =
@@ -69,8 +69,8 @@ public final class ServerSettings implements SettingsObject {
       .sourceType(SettingsSource.Server.INSTANCE)
       .namespace(NAMESPACE)
       .key("allow-deleting-instances")
-      .uiName("Allow deleting instances")
-      .description("Allow the owner of an instance to delete it.")
+      .uiName("Allow deleting projects")
+      .description("Allow the owner of a project to delete it.")
       .defaultValue(true)
       .build();
   public static final BooleanProperty<SettingsSource.Server> ALLOW_CHANGING_INSTANCE_META =
@@ -78,8 +78,8 @@ public final class ServerSettings implements SettingsObject {
       .sourceType(SettingsSource.Server.INSTANCE)
       .namespace(NAMESPACE)
       .key("allow-changing-instance-meta")
-      .uiName("Allow changing instance meta")
-      .description("Allow the owner of an instance to change meta like instance name and icon.")
+      .uiName("Allow changing project details")
+      .description("Allow the owner of a project to change the project name and icon.")
       .defaultValue(true)
       .build();
   public static final ComboProperty<SettingsSource.Server> EMAIL_TYPE =

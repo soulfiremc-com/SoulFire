@@ -211,7 +211,7 @@ public final class CaptchaSolver extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(CaptchaSolverSettings.class, "captcha-solver", "Captcha Solver", this, "eye", CaptchaSolverSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(CaptchaSolverSettings.class, "captcha-solver", "Captcha solver", this, "eye", CaptchaSolverSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -222,7 +222,7 @@ public final class CaptchaSolver extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Captcha Solver")
+        .uiName("Enable captcha solver")
         .description("Enable the Captcha Solver")
         .defaultValue(false)
         .build();
