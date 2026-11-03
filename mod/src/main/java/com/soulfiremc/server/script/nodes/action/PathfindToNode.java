@@ -25,6 +25,7 @@ import com.soulfiremc.server.script.*;
 import net.minecraft.world.phys.Vec3;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 /// Action node that pathfinds the bot to a target position.
@@ -34,7 +35,8 @@ import java.util.Map;
 public final class PathfindToNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("action.pathfind_to")
-    .displayName("Pathfind To")
+    .displayName("Go to position")
+    .keywords(List.of("Pathfind To"))
     .category(CategoryRegistry.ACTIONS)
     .addInputs(
       PortDefinition.execIn(),

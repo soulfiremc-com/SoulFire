@@ -169,7 +169,7 @@ public final class AutoArmor extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoArmorSettings.class, "auto-armor", "Auto Armor", this, "shield", AutoArmorSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoArmorSettings.class, "auto-armor", "Auto equip armor", this, "shield", AutoArmorSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -180,7 +180,7 @@ public final class AutoArmor extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Armor")
+        .uiName("Enable auto equip armor")
         .description("Put on best armor automatically")
         .defaultValue(false)
         .build();

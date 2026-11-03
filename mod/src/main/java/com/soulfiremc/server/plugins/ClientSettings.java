@@ -86,7 +86,7 @@ public final class ClientSettings extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(ClientSettingsSettings.class, "client-settings", "Client Settings", this, "settings-2", ClientSettingsSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(ClientSettingsSettings.class, "client-settings", "Minecraft client settings", this, "settings-2", ClientSettingsSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)

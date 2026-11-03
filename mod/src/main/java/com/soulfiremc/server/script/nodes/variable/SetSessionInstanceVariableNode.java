@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SetSessionInstanceVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.set_session_instance")
-    .displayName("Set Session Instance Variable")
+    .displayName("Set project runtime variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -41,10 +41,10 @@ public final class SetSessionInstanceVariableNode extends AbstractScriptNode {
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores a value in the instance's session metadata (lost on restart)")
+    .description("Stores temporary data for this project runtime. Values reset when the SoulFire server restarts.")
     .icon("upload")
     .color("#10B981")
-    .addKeywords("variable", "session", "instance", "temporary", "store", "set", "memory")
+    .addKeywords("Set Session Instance Variable", "variable", "session", "instance", "temporary", "store", "set", "memory")
     .build();
 
   private static final MetadataKey<ConcurrentHashMap<String, NodeValue>> SESSION_VARS_KEY =

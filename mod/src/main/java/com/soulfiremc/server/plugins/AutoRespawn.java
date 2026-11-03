@@ -58,7 +58,7 @@ public final class AutoRespawn extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoRespawnSettings.class, "auto-respawn", "Auto Respawn", this, "repeat", AutoRespawnSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoRespawnSettings.class, "auto-respawn", "Auto respawn", this, "repeat", AutoRespawnSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -69,7 +69,7 @@ public final class AutoRespawn extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Respawn")
+        .uiName("Enable auto respawn")
         .description("Respawn automatically after death")
         .defaultValue(true)
         .build();

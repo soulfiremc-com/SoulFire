@@ -95,7 +95,7 @@ public final class DisconnectLogger extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(DisconnectLoggerSettings.class, "disconnect-logger", "Disconnect Logger", this, "logs", DisconnectLoggerSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(DisconnectLoggerSettings.class, "disconnect-logger", "Disconnect logger", this, "logs", DisconnectLoggerSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)

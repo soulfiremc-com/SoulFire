@@ -70,7 +70,7 @@ public final class ForwardingBypass extends InternalPlugin {
     super(new PluginInfo(
       "forwarding-bypass",
       "1.0.0",
-      "Allows bypassing proxy forwarding",
+      "Sets player forwarding data for the selected forwarding mode. Server acceptance depends on its configuration.",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com/docs/how-to/forwarding-bypass"
@@ -84,7 +84,7 @@ public final class ForwardingBypass extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(ForwardingBypassSettings.class, "forwarding-bypass", "Forwarding Bypass", this, "milestone", ForwardingBypassSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(ForwardingBypassSettings.class, "forwarding-bypass", "Player forwarding", this, "milestone", ForwardingBypassSettings.ENABLED);
   }
 
   @EventHandler
@@ -361,7 +361,7 @@ public final class ForwardingBypass extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable forwarding bypass")
+        .uiName("Enable player forwarding")
         .description("Enable the forwarding bypass")
         .defaultValue(false)
         .build();

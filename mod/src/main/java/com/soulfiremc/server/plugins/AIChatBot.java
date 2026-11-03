@@ -131,7 +131,7 @@ public final class AIChatBot extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AIChatBotSettings.class, "ai-chat-bot", "AI Chat Bot", this, "bot-message-square", AIChatBotSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AIChatBotSettings.class, "ai-chat-bot", "AI chat", this, "bot-message-square", AIChatBotSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -142,7 +142,7 @@ public final class AIChatBot extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable AI Chat Bot")
+        .uiName("Enable AI chat")
         .description("Enable the AI Chat Bot")
         .defaultValue(false)
         .build();

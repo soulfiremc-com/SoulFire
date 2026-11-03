@@ -39,7 +39,7 @@ public final class AutoChatMessage extends InternalPlugin {
     super(new PluginInfo(
       "auto-chat-message",
       "1.0.0",
-      "Automatically sends messages in a configured delay",
+      "Sends configured chat messages repeatedly after a configurable delay.",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com"
@@ -69,7 +69,7 @@ public final class AutoChatMessage extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoChatMessageSettings.class, "auto-chat-message", "Auto Chat Message", this, "message-circle-code", AutoChatMessageSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoChatMessageSettings.class, "auto-chat-message", "Auto chat", this, "message-circle-code", AutoChatMessageSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -80,7 +80,7 @@ public final class AutoChatMessage extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Chat Message")
+        .uiName("Enable auto chat")
         .description("Attempt to send chat messages automatically in random intervals")
         .defaultValue(false)
         .build();

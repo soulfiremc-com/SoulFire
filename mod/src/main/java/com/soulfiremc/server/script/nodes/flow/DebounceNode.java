@@ -21,6 +21,7 @@ import com.soulfiremc.server.script.*;
 import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,7 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class DebounceNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("flow.debounce")
-    .displayName("Debounce")
+    .displayName("Cooldown")
+    .keywords(List.of("Debounce"))
     .category(CategoryRegistry.FLOW)
     .addInputs(
       PortDefinition.execIn(),

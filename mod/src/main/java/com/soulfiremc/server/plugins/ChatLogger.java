@@ -116,7 +116,7 @@ public final class ChatLogger extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(ChatLoggerSettings.class, "chat-logger", "Chat Logger", this, "logs", ChatLoggerSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(ChatLoggerSettings.class, "chat-logger", "Chat logger", this, "logs", ChatLoggerSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.PRIVATE)

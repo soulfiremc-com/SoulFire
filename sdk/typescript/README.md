@@ -1,5 +1,9 @@
 # SoulFire TypeScript SDK
 
+Projects hold bots, configuration, scripts, files, access, and metadata.
+The SDK and protocol keep their existing `instance` names for compatibility.
+A project ID is the same ID used by `instanceId` and `instance_id`.
+
 `@soulfiremc/sdk` is the Effect SDK for SoulFire. It provides typed
 operations, streams, scopes, task handles, capability negotiation, and plugin
 RPC discovery over gRPC-Web.
@@ -26,7 +30,7 @@ transport policies portable.
 ## Quickstart
 
 Use managed installation for scripts. `SoulFire.createBot` downloads SoulFire
-and Java when needed, creates the instance and offline account, starts the bot,
+and Java when needed, creates the project and offline account, starts the bot,
 and waits for its initial player snapshot.
 
 ```ts
@@ -50,7 +54,7 @@ NodeRuntime.runMain(program);
 ```
 
 Point `server` at a Minecraft server that accepts offline accounts. The default
-`auth` is `"offline"`. No SoulFire URL, token, instance ID, or bot ID is needed.
+`auth` is `"offline"`. No SoulFire URL, token, project ID, or bot ID is needed.
 Node.js requires version 22 or newer. Use `@soulfiremc/sdk/bun` on Bun.
 
 Downloads and server data stay in `.soulfire` under the working directory.
@@ -62,7 +66,9 @@ process. When using an existing SoulFire server, cleanup stops bots started by
 this scope and leaves previously running bots running. Readiness has a 30-second
 deadline; change it with `readyTimeoutMs`.
 
-## Reuse named instances and bots
+<a id="reuse-named-instances-and-bots"></a>
+
+## Reuse named projects and bots
 
 For several bots, install once and get resources by name:
 
@@ -77,14 +83,14 @@ const builder = yield * instance.getOrCreateBot("Builder");
 const miner = yield * instance.getOrCreateBot("Miner");
 ```
 
-Instance names belong to the authenticated SoulFire user. Bot names belong to
-one instance. Repeated calls reuse accounts and preserve their configuration.
+Project names belong to the authenticated SoulFire user. Bot names belong to
+one project. Repeated calls reuse accounts and preserve their configuration.
 Conflicting addresses, usernames, or authentication methods fail explicitly.
 
-`createBot` uses the Minecraft server address as the instance name and the
+`createBot` uses the Minecraft server address as the project name and the
 username as the bot name. Set `instanceName` or `name` to choose other names.
 `getOrCreateBot(name, { start: false })` creates or finds an account without
-starting it. Configure the instance, then use `yield* bot.connect()` when ready.
+starting it. Configure the project, then use `yield* bot.connect()` when ready.
 
 Microsoft accounts need a device-code sign-in on their first creation:
 
@@ -676,7 +682,7 @@ yield *
 ```
 
 The admin API covers self-service tokens and profile changes, server settings,
-users and session revocation, scoped logs, server and instance metrics,
+users and session revocation, scoped logs, server and project metrics,
 commands and completion, permission-scoped downloads, plugin metrics, audit
 logs, and the complete script lifecycle. The generated clients remain
 available through `soulfire.service()` for uncommon fields.

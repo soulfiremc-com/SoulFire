@@ -46,7 +46,7 @@ public final class AutoReconnect extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoReconnectSettings.class, "auto-reconnect", "Auto Reconnect", this, "refresh-ccw", AutoReconnectSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoReconnectSettings.class, "auto-reconnect", "Auto reconnect", this, "refresh-ccw", AutoReconnectSettings.ENABLED);
   }
 
   public static OptionalLong reconnectDelaySeconds(BotSettingsSource settingsSource) {
@@ -64,7 +64,7 @@ public final class AutoReconnect extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Reconnect")
+        .uiName("Enable auto reconnect")
         .description("Reconnect a bot when it times out/is kicked")
         .defaultValue(true)
         .build();

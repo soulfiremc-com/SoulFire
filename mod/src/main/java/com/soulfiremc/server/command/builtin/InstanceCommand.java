@@ -46,7 +46,7 @@ public final class InstanceCommand {
             .forward(
               dispatcher.getRoot(),
               helpSingleRedirect(
-                "Run a command for specific instances. Separate instance names with commas.",
+                "Run a command for specific projects. Separate project names with commas.",
                 c -> {
                   var instanceNames = Set.copyOf(List.of(StringArgumentType.getString(c, "instance_names").split(",")));
                   return c.getSource()

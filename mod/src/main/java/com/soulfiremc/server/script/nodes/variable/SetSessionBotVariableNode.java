@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SetSessionBotVariableNode extends AbstractScriptNode {
   public static final NodeMetadata METADATA = NodeMetadata.builder()
     .type("variable.set_session_bot")
-    .displayName("Set Session Bot Variable")
+    .displayName("Set connection variable")
     .category(CategoryRegistry.VARIABLE)
     .addInputs(
       PortDefinition.execIn(),
@@ -42,10 +42,10 @@ public final class SetSessionBotVariableNode extends AbstractScriptNode {
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores a value in the bot's session metadata (lost on disconnect)")
+    .description("Stores temporary data for this bot connection. A new connection starts without these values.")
     .icon("upload")
     .color("#10B981")
-    .addKeywords("variable", "session", "bot", "temporary", "store", "set", "memory")
+    .addKeywords("Set Session Bot Variable", "variable", "session", "bot", "temporary", "store", "set", "memory")
     .build();
 
   private static final MetadataKey<ConcurrentHashMap<String, NodeValue>> SESSION_VARS_KEY =

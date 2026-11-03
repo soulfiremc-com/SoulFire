@@ -43,7 +43,7 @@ public final class AutoJump extends InternalPlugin {
     super(new PluginInfo(
       "auto-jump",
       "1.0.0",
-      "Automatically jumps randomly",
+      "Jumps after a random delay. This is separate from Minecraft obstacle auto-jump.",
       "AlexProgrammerDE",
       "AGPL-3.0",
       "https://soulfiremc.com"
@@ -82,7 +82,7 @@ public final class AutoJump extends InternalPlugin {
 
   @EventHandler
   public void onSettingsRegistryInit(InstanceSettingsRegistryInitEvent event) {
-    event.settingsPageRegistry().addPluginPage(AutoJumpSettings.class, "auto-jump", "Auto Jump", this, "footprints", AutoJumpSettings.ENABLED);
+    event.settingsPageRegistry().addPluginPage(AutoJumpSettings.class, "auto-jump", "Random jump", this, "footprints", AutoJumpSettings.ENABLED);
   }
 
   @NoArgsConstructor(access = AccessLevel.NONE)
@@ -93,7 +93,7 @@ public final class AutoJump extends InternalPlugin {
         .sourceType(SettingsSource.Bot.INSTANCE)
         .namespace(NAMESPACE)
         .key("enabled")
-        .uiName("Enable Auto Jump")
+        .uiName("Enable random jump")
         .description("Attempt to jump automatically in random intervals")
         .defaultValue(false)
         .build();

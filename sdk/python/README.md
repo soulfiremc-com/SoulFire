@@ -1,5 +1,9 @@
 # SoulFire Python SDK
 
+Projects hold bots, configuration, scripts, files, access, and metadata.
+The SDK and protocol keep their existing `instance` names for compatibility.
+A project ID is the same ID used by `instanceId` and `instance_id`.
+
 `soulfire` is the official Python SDK for SoulFire. Its high-level API uses
 [effect-py](https://github.com/dev-ankit/effect-py) for lazy operations,
 typed failures, services, and scoped resources. It requires CPython 3.14 or newer.
@@ -22,7 +26,7 @@ The SDK pins this alpha release so runtime changes can be tested together.
 ## Quickstart
 
 Use managed installation for scripts. `SoulFire.create_bot` downloads SoulFire
-and Java when needed, creates an instance and offline account, starts the bot,
+and Java when needed, creates a project and offline account, starts the bot,
 and waits for its initial player snapshot.
 
 ```python
@@ -46,7 +50,7 @@ asyncio.run(run_async(scoped(program).or_die()))
 ```
 
 Point `server` at a Minecraft server that accepts offline accounts. The default
-`auth` is `"offline"`. No SoulFire URL, token, instance ID, or bot ID is needed.
+`auth` is `"offline"`. No SoulFire URL, token, project ID, or bot ID is needed.
 Downloads and server data stay in `.soulfire` under the working directory.
 Set `installation={"directory": "...", "version": "..."}` to choose a directory
 and pin a release.
@@ -62,7 +66,9 @@ Use `run_async_exit` to inspect a workflow's result without converting expected
 errors into exceptions. `or_die()` belongs at a boundary where no recovery
 remains. RPCs, fibers, streams, and deadlines require the async runtime.
 
-## Reuse named instances and bots
+<a id="reuse-named-instances-and-bots"></a>
+
+## Reuse named projects and bots
 
 For several bots, install once and get resources by name:
 
@@ -73,11 +79,11 @@ builder = yield from instance.get_or_create_bot("Builder")
 miner = yield from instance.get_or_create_bot("Miner")
 ```
 
-Instance names belong to the authenticated SoulFire user. Bot names belong to
-one instance. Repeated calls reuse accounts and preserve their configuration.
+Project names belong to the authenticated SoulFire user. Bot names belong to
+one project. Repeated calls reuse accounts and preserve their configuration.
 Conflicting addresses, usernames, or authentication methods fail explicitly.
 
-`create_bot` uses the Minecraft server address as the instance name and the
+`create_bot` uses the Minecraft server address as the project name and the
 username as the bot name. Set `instance_name` or `name` to choose other names.
 Use `get_or_create_bot("Builder", start=False)` to configure an account before
 starting it, then use `yield from bot.connect()` when ready.
