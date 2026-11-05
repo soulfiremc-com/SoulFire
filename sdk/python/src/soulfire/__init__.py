@@ -290,7 +290,7 @@ __all__ = [
     "RpcFailureContext",
     "SchematicBlock",
     "ServerMetadata",
-    "Soulfire",
+    "SoulFire",
     "SoulFireActionError",
     "SoulFireAdmin",
     "SoulFireBehaviorError",
