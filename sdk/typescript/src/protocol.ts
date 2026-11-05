@@ -28,10 +28,10 @@ export interface SendRawPacketOptions {
 }
 
 /**
- * Advanced access to SoulFire's native Minecraft packet codec.
+ * Advanced access to Soulfire's native Minecraft packet codec.
  *
  * Encoded bytes use the native protocol reported by {@link info}, not the
- * remote server protocol. SoulFire applies ViaVersion translation afterward.
+ * remote server protocol. Soulfire applies ViaVersion translation afterward.
  */
 export class SoulFireProtocol {
   public constructor(

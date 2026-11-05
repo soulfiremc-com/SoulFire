@@ -44,7 +44,7 @@ val usedJavadocTool: Provider<JavadocTool> = javaToolchains.javadocToolFor {
 tasks {
   javadoc {
     dependsOn(":mod:classes")
-    title = "SoulFire Javadocs"
+    title = "Soulfire Javadocs"
 
     val opts = options as StandardJavadocDocletOptions
     opts.addStringOption("Xdoclint:none", "-quiet")

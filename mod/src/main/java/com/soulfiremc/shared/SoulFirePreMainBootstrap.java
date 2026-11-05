@@ -56,7 +56,7 @@ public final class SoulFirePreMainBootstrap {
       return;
     }
 
-    log.warn("We detected you are not using the recommended flags for SoulFire!");
+    log.warn("We detected you are not using the recommended flags for Soulfire!");
     log.warn("Please add the following flags to your JVM arguments:");
     log.warn("{}-XX:StackShadowPages=32 --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+UseStringDeduplication -XX:+UseCompactObjectHeaders -XX:+AlwaysActAsServerClassMachine -XX:+UseNUMA -XX:+UseFastUnorderedTimeStamps -XX:+UseVectorCmov -XX:+UseCriticalJavaThreadPriority -Dsf.flags.v2=true",
       System.getProperty("os.name").startsWith("Mac") ? "-XstartOnFirstThread " : "");

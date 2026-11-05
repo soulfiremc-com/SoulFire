@@ -387,7 +387,7 @@ access_mode_requirements() {
     cloudflared) echo "Requirements: Cloudflare account, browser access to the Cloudflare dashboard, and an existing tunnel token." ;;
     traefik)     echo "Requirements: a domain pointing to this server, ports 80/443 reachable from the internet, and an email for Let's Encrypt." ;;
     traefik-ip)  echo "Requirements: public IPv4 address, ports 80/443 reachable from the internet, and an email for Let's Encrypt." ;;
-    http)        echo "Requirements: port ${SF_PORT} reachable to your clients, or another reverse proxy in front of SoulFire." ;;
+    http)        echo "Requirements: port ${SF_PORT} reachable to your clients, or another reverse proxy in front of Soulfire." ;;
     *)           echo "Requirements unavailable." ;;
   esac
 }
@@ -641,15 +641,15 @@ EMAIL=${EMAIL}"
 
 show_before_you_start() {
   tui_msgbox "Before You Start" \
-    "This installer can set up Docker, generate a Docker Compose stack, and start SoulFire.\n\nSome access methods still require work outside this script:\n  - Cloudflared needs a Cloudflare account, browser access, and an existing tunnel/token\n  - Domain HTTPS needs DNS pointed to this server\n  - HTTPS certificate issuance requires public reachability for validation"
+    "This installer can set up Docker, generate a Docker Compose stack, and start Soulfire.\n\nSome access methods still require work outside this script:\n  - Cloudflared needs a Cloudflare account, browser access, and an existing tunnel/token\n  - Domain HTTPS needs DNS pointed to this server\n  - HTTPS certificate issuance requires public reachability for validation"
 
   tui_msgbox "HTTPS and Let's Encrypt" \
-    "HTTPS encrypts the connection between SoulFire and its clients.\n\nLet's Encrypt is the certificate authority used by the Traefik options. It issues the certificate that lets clients trust your server instead of showing security warnings.\n\nIf validation cannot reach your server on ports 80/443, certificate issuance will fail."
+    "HTTPS encrypts the connection between Soulfire and its clients.\n\nLet's Encrypt is the certificate authority used by the Traefik options. It issues the certificate that lets clients trust your server instead of showing security warnings.\n\nIf validation cannot reach your server on ports 80/443, certificate issuance will fail."
 }
 
 show_access_method_overview() {
   tui_msgbox "Access Methods" \
-    "Choose how clients should reach SoulFire:\n\n  - Cloudflared Tunnel: easiest public HTTPS if you already use Cloudflare\n  - Traefik + Domain HTTPS: best general-purpose production setup\n  - Traefik + IP HTTPS: HTTPS without a domain, but more niche\n  - HTTP Only: for local testing, LAN use, or when another proxy already handles HTTPS"
+    "Choose how clients should reach Soulfire:\n\n  - Cloudflared Tunnel: easiest public HTTPS if you already use Cloudflare\n  - Traefik + Domain HTTPS: best general-purpose production setup\n  - Traefik + IP HTTPS: HTTPS without a domain, but more niche\n  - HTTP Only: for local testing, LAN use, or when another proxy already handles HTTPS"
 }
 
 show_cloudflared_info() {
@@ -689,7 +689,7 @@ recommend_access_method() {
   fi
 
   if tui_yesno "Recommendation Wizard" \
-    "Do you already use Cloudflare and want to expose SoulFire through Cloudflare Tunnel?"; then
+    "Do you already use Cloudflare and want to expose Soulfire through Cloudflare Tunnel?"; then
     RECOMMENDED_ACCESS_MODE="cloudflared"
     return 0
   fi
@@ -775,7 +775,7 @@ show_ssl_menu() {
     fi
 
     while [[ -z "$SSL_MODE" ]]; do
-      choice=$(tui_menu "Access Method" "How should SoulFire be exposed?" \
+      choice=$(tui_menu "Access Method" "How should Soulfire be exposed?" \
         "cloudflared"  "Cloudflared Tunnel" \
         "traefik"      "Traefik + Domain HTTPS" \
         "traefik-ip"   "Traefik + IP HTTPS" \
@@ -948,7 +948,7 @@ confirm_http_warning() {
   show_http_info
 
   if ! tui_yesno "Security Warning" \
-    "HTTP mode serves SoulFire WITHOUT encryption.\n\nAll traffic including credentials will be sent in cleartext and can be intercepted.\n\nSome clients may not work correctly over plain HTTP, especially browser-based flows or environments that expect HTTPS by default.\n\nThis is not recommended for public production use.\n\nContinue with HTTP only?"; then
+    "HTTP mode serves Soulfire WITHOUT encryption.\n\nAll traffic including credentials will be sent in cleartext and can be intercepted.\n\nSome clients may not work correctly over plain HTTP, especially browser-based flows or environments that expect HTTPS by default.\n\nThis is not recommended for public production use.\n\nContinue with HTTP only?"; then
     return 1
   fi
 
@@ -962,7 +962,7 @@ confirm_http_warning() {
 
 prompt_root_default_email_override() {
   SF_ROOT_DEFAULT_EMAIL=$(tui_inputbox "Initial Root Email" \
-    "Enter the email SoulFire should assign to the root user on first startup.\n\nLeave this blank to keep the built-in default (${BUILTIN_ROOT_DEFAULT_EMAIL}).\n\nThis only affects the initial root-user creation before first boot." \
+    "Enter the email Soulfire should assign to the root user on first startup.\n\nLeave this blank to keep the built-in default (${BUILTIN_ROOT_DEFAULT_EMAIL}).\n\nThis only affects the initial root-user creation before first boot." \
     "$SF_ROOT_DEFAULT_EMAIL") || {
     msg_info "Setup cancelled"
     exit 0
@@ -1073,12 +1073,12 @@ wait_for_healthy() {
 
     if [[ "$state" = "running" && ( "$health" = "healthy" || "$health" = "none" ) ]]; then
       echo ""
-      msg_ok "SoulFire is ready"
+      msg_ok "Soulfire is ready"
       return 0
     fi
 
     attempts=$((attempts + 1))
-    echo -ne "\r\e[34m[INFO]\e[0m Waiting for SoulFire to become ready... (${attempts}s/${max_attempts}s) [state: ${state}, health: ${health}]"
+    echo -ne "\r\e[34m[INFO]\e[0m Waiting for Soulfire to become ready... (${attempts}s/${max_attempts}s) [state: ${state}, health: ${health}]"
     sleep 1
   done
 }
@@ -1086,8 +1086,8 @@ wait_for_healthy() {
 # --- Fresh install flow ---
 
 show_welcome() {
-  tui_msgbox "SoulFire Dedicated Server Setup" \
-    "Welcome to the SoulFire Dedicated Server installer!\n\nThis script will:\n  1. Update your system packages\n  2. Install Docker (if needed)\n  3. Help you choose an access method\n  4. Deploy SoulFire via Docker Compose\n\nInstall directory: /opt/soulfire/\n\nAfter installation, the management menu will open automatically."
+  tui_msgbox "Soulfire Dedicated Server Setup" \
+    "Welcome to the Soulfire Dedicated Server installer!\n\nThis script will:\n  1. Update your system packages\n  2. Install Docker (if needed)\n  3. Help you choose an access method\n  4. Deploy Soulfire via Docker Compose\n\nInstall directory: /opt/soulfire/\n\nAfter installation, the management menu will open automatically."
 }
 
 show_startup_troubleshooting() {
@@ -1095,28 +1095,28 @@ show_startup_troubleshooting() {
 
   case "$SSL_MODE" in
     cloudflared)
-      details="Likely causes:\n  - SoulFire is still starting\n  - the Cloudflare tunnel token is invalid\n  - Cloudflared is connected but the app is not healthy yet"
+      details="Likely causes:\n  - Soulfire is still starting\n  - the Cloudflare tunnel token is invalid\n  - Cloudflared is connected but the app is not healthy yet"
       ;;
     traefik)
-      details="Likely causes:\n  - SoulFire is still starting\n  - DNS does not point to this server yet\n  - ports 80/443 are blocked by a firewall or router"
+      details="Likely causes:\n  - Soulfire is still starting\n  - DNS does not point to this server yet\n  - ports 80/443 are blocked by a firewall or router"
       ;;
     traefik-ip)
-      details="Likely causes:\n  - SoulFire is still starting\n  - the public IP is wrong or changed\n  - ports 80/443 are blocked by a firewall or router"
+      details="Likely causes:\n  - Soulfire is still starting\n  - the public IP is wrong or changed\n  - ports 80/443 are blocked by a firewall or router"
       ;;
     http)
-      details="Likely causes:\n  - SoulFire is still starting\n  - port ${SF_PORT} is blocked or already in use\n  - another service is interfering with the container"
+      details="Likely causes:\n  - Soulfire is still starting\n  - port ${SF_PORT} is blocked or already in use\n  - another service is interfering with the container"
       ;;
   esac
 
   tui_msgbox "Startup Taking Longer Than Expected" \
-    "SoulFire is taking longer than expected to become ready.\n\n${details}\n\nUseful commands:\n  docker compose -f $COMPOSE_FILE ps\n  docker compose -f $COMPOSE_FILE logs app\n  docker compose -f $COMPOSE_FILE logs --tail 100"
+    "Soulfire is taking longer than expected to become ready.\n\n${details}\n\nUseful commands:\n  docker compose -f $COMPOSE_FILE ps\n  docker compose -f $COMPOSE_FILE logs app\n  docker compose -f $COMPOSE_FILE logs --tail 100"
 }
 
 show_post_install_guidance() {
   local access_url="$1"
 
   tui_msgbox "Next Steps" \
-    "SoulFire is now running.\n\nAccess: ${access_url}\n\nRecommended next steps:\n  1. Open the management menu next\n  2. Attach to the SoulFire console\n  3. Run: generate-token api\n  4. Change the root email later if needed\n  5. Use logs/status if something is not reachable yet"
+    "Soulfire is now running.\n\nAccess: ${access_url}\n\nRecommended next steps:\n  1. Open the management menu next\n  2. Attach to the Soulfire console\n  3. Run: generate-token api\n  4. Change the root email later if needed\n  5. Use logs/status if something is not reachable yet"
 }
 
 do_fresh_install() {
@@ -1139,11 +1139,11 @@ do_fresh_install() {
   write_compose_file || exit 1
   write_env_file || exit 1
 
-  msg_info "Starting SoulFire..."
+  msg_info "Starting Soulfire..."
   docker compose -f "$COMPOSE_FILE" pull
   docker compose -f "$COMPOSE_FILE" up -d
 
-  msg_info "Waiting for SoulFire to start..."
+  msg_info "Waiting for Soulfire to start..."
   if ! wait_for_healthy; then
     show_startup_troubleshooting
   fi
@@ -1154,7 +1154,7 @@ do_fresh_install() {
 
   show_post_install_guidance "$access_url"
 
-  msg_ok "SoulFire installed successfully"
+  msg_ok "Soulfire installed successfully"
   show_manage_menu
 }
 
@@ -1165,18 +1165,18 @@ do_attach() {
   state=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.State}}' app 2>/dev/null) || true
   if [[ "$state" != "running" ]]; then
     msg_warn "Container is not running yet (state: ${state:-not found})"
-    msg_info "Waiting for SoulFire to start..."
+    msg_info "Waiting for Soulfire to start..."
     if ! wait_for_healthy; then
       true  # timed out, check state below
     fi
     state=$(docker compose -f "$COMPOSE_FILE" ps --format '{{.State}}' app 2>/dev/null) || true
     if [[ "$state" != "running" ]]; then
       tui_msgbox "Container Not Ready" \
-        "The SoulFire container failed to start.\n\nCurrent state: ${state:-not found}\n\nCheck logs for details:\n  docker compose -f $COMPOSE_FILE logs app"
+        "The Soulfire container failed to start.\n\nCurrent state: ${state:-not found}\n\nCheck logs for details:\n  docker compose -f $COMPOSE_FILE logs app"
       return
     fi
   fi
-  msg_info "Attaching to SoulFire console (detach with Ctrl+P, Ctrl+Q)..."
+  msg_info "Attaching to Soulfire console (detach with Ctrl+P, Ctrl+Q)..."
   docker compose -f "$COMPOSE_FILE" attach app || true
 }
 
@@ -1190,12 +1190,12 @@ do_update() {
   docker compose -f "$COMPOSE_FILE" pull
   msg_info "Recreating containers..."
   docker compose -f "$COMPOSE_FILE" up -d
-  msg_info "Waiting for SoulFire to become ready..."
+  msg_info "Waiting for Soulfire to become ready..."
   if ! wait_for_healthy; then
     show_startup_troubleshooting
   fi
   verify_tls_access_ready || return 1
-  msg_ok "SoulFire updated successfully"
+  msg_ok "Soulfire updated successfully"
 }
 
 do_reconfigure() {
@@ -1206,17 +1206,17 @@ do_reconfigure() {
   write_env_file
   msg_info "Starting with new configuration..."
   docker compose -f "$COMPOSE_FILE" up -d
-  msg_info "Waiting for SoulFire to become ready..."
+  msg_info "Waiting for Soulfire to become ready..."
   if ! wait_for_healthy; then
     show_startup_troubleshooting
   fi
   verify_tls_access_ready || return 1
-  msg_ok "SoulFire reconfigured successfully"
+  msg_ok "Soulfire reconfigured successfully"
 }
 
 do_uninstall() {
   if ! tui_yesno "Confirm Uninstall" \
-    "This will stop all containers and remove all SoulFire data.\n\nAre you sure?"; then
+    "This will stop all containers and remove all Soulfire data.\n\nAre you sure?"; then
     return
   fi
 
@@ -1229,7 +1229,7 @@ do_uninstall() {
   docker compose -f "$COMPOSE_FILE" down -v
   msg_info "Removing $INSTALL_DIR..."
   rm -rf "$INSTALL_DIR"
-  msg_ok "SoulFire has been completely removed"
+  msg_ok "Soulfire has been completely removed"
 }
 
 do_status() {
@@ -1253,13 +1253,13 @@ show_manage_menu() {
   while true; do
     load_existing_config
     local choice
-    choice=$(tui_menu "SoulFire Management" "SoulFire is installed at $INSTALL_DIR\n\nAccess method: $(access_mode_name "$SSL_MODE")\nAccess URL: $(selected_access_url "$SSL_MODE")\nContainer: $(app_container_state) / $(app_container_health)" \
-      "attach"      "Attach to SoulFire console" \
+    choice=$(tui_menu "Soulfire Management" "Soulfire is installed at $INSTALL_DIR\n\nAccess method: $(access_mode_name "$SSL_MODE")\nAccess URL: $(selected_access_url "$SSL_MODE")\nContainer: $(app_container_state) / $(app_container_health)" \
+      "attach"      "Attach to Soulfire console" \
       "logs"        "View container logs" \
       "status"      "Show container status" \
-      "update"      "Update SoulFire (pull latest)" \
+      "update"      "Update Soulfire (pull latest)" \
       "reconfigure" "Change SSL configuration" \
-      "uninstall"   "Remove SoulFire completely" \
+      "uninstall"   "Remove Soulfire completely" \
       "exit"        "Exit") || break
 
     case "$choice" in

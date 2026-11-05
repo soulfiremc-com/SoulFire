@@ -22,7 +22,7 @@ from .transport import rpc, rpc_stream
 
 
 class SoulFireProtocol:
-    """Advanced access to SoulFire's native Minecraft packet codec."""
+    """Advanced access to Soulfire's native Minecraft packet codec."""
 
     def __init__(self, instance_id: str, bot_id: str, client: BotProtocolServiceClient) -> None:
         self._instance_id = instance_id

@@ -37,7 +37,7 @@ public record SmtpEmailSender(SoulFireServer soulFireServer) implements EmailSen
 
   @Override
   public void sendLoginCode(String recipient, String username, String code) {
-    sendEmail(recipient, "SoulFire login code for %s".formatted(username), SFHelpers.getResourceAsString("email/code.html")
+    sendEmail(recipient, "Soulfire login code for %s".formatted(username), SFHelpers.getResourceAsString("email/code.html")
       .replace("{username}", username)
       .replace("{code}", code)
     );

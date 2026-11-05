@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// Main package for any API SoulFire uses. SoulFire itself also uses the API for its own features.
+/// Main package for any API Soulfire uses. Soulfire itself also uses the API for its own features.
 package com.soulfiremc.server.api;

@@ -9,13 +9,13 @@
   "compatibilityBridge": false,
   "matching": "Rules are evaluated in order. The first matching rule owns the heading. The final catch-all applies only to the pinned source revision.",
   "statuses": {
-    "native": "SoulFire exposes the concept directly through its protocol and official SDKs.",
-    "different-semantics": "SoulFire exposes the concept through a remote, server-authoritative model instead of Mineflayer's in-process object model.",
+    "native": "Soulfire exposes the concept directly through its protocol and official SDKs.",
+    "different-semantics": "Soulfire exposes the concept through a remote, server-authoritative model instead of Mineflayer's in-process object model.",
     "sdk-convenience": "The official SDK composes the behavior from native streams and actions.",
-    "server-task": "SoulFire runs the operation as a durable server-side task near the game loop.",
-    "plugin-extension": "A permissioned SoulFire plugin owns the feature and publishes it through plugin RPC, task, event, or service descriptors.",
+    "server-task": "Soulfire runs the operation as a durable server-side task near the game loop.",
+    "plugin-extension": "A permissioned Soulfire plugin owns the feature and publishes it through plugin RPC, task, event, or service descriptors.",
     "raw-protocol": "The stable semantic API does not model this packet-level operation; advanced callers can use the versioned raw protocol API.",
-    "intentionally-unsupported": "SoulFire deliberately does not reproduce this in-process extension mechanism."
+    "intentionally-unsupported": "Soulfire deliberately does not reproduce this in-process extension mechanism."
   },
   "rules": [
     {
@@ -26,10 +26,10 @@
         "bot.loadPlugins(plugins)"
       ],
       "soulfire": [
-        "Install server plugins through SoulFire's explicit plugin lifecycle",
+        "Install server plugins through Soulfire's explicit plugin lifecycle",
         "Discover plugin capabilities through client.plugins"
       ],
-      "notes": "The SDK never uploads or evaluates arbitrary JavaScript in the SoulFire server process."
+      "notes": "The SDK never uploads or evaluates arbitrary JavaScript in the Soulfire server process."
     },
     {
       "status": "plugin-extension",
@@ -104,15 +104,15 @@
         "world snapshots and bounded queries",
         "server-authoritative movement and physics"
       ],
-      "notes": "SoulFire avoids exposing mutable in-process client internals. Consumers observe resumable semantic events and immutable snapshots."
+      "notes": "Soulfire avoids exposing mutable in-process client internals. Consumers observe resumable semantic events and immutable snapshots."
     },
     {
       "status": "native",
       "regex": ".*",
       "soulfire": [
-        "SoulFire protocol and official TypeScript/Python SDKs"
+        "Soulfire protocol and official TypeScript/Python SDKs"
       ],
-      "notes": "The concept has a direct semantic API, event, retained session state, capability, or action in the native SoulFire model."
+      "notes": "The concept has a direct semantic API, event, retained session state, capability, or action in the native Soulfire model."
     }
   ]
 }

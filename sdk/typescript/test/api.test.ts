@@ -47,7 +47,7 @@ import { makeEffectHttpClientFetch } from "../src/platform.js";
 import { ReflectivePlugin } from "../src/plugins.js";
 import { emptyBotSessionState, reduceBotSessionState } from "../src/session.js";
 
-describe("SoulFire", () => {
+describe("Soulfire", () => {
   it("creates a scoped bot through the public connection hierarchy", () =>
     Effect.runPromise(
       Effect.scoped(
@@ -748,7 +748,7 @@ function registerExamplePlugin(
 }
 
 describe("release resolution", () => {
-  it("uses the latest official SoulFire release by default", () =>
+  it("uses the latest official Soulfire release by default", () =>
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {

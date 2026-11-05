@@ -1,12 +1,12 @@
-# SoulFire Pathfinding Plan
+# Soulfire Pathfinding Plan
 
 ## Purpose
 
-This document defines the replacement for the current SoulFire pathfinder.
+This document defines the replacement for the current Soulfire pathfinder.
 The replacement combines movement coverage from Baritone with collision support from Botcraft.
 It does not copy their search compromises.
 
-The target reader is a SoulFire developer who changes navigation, movement, or task behavior.
+The target reader is a Soulfire developer who changes navigation, movement, or task behavior.
 The plan covers graph state, movement primitives, search, execution, testing, and migration.
 
 ## Required outcomes
@@ -49,7 +49,7 @@ pathfinder.
 Baritone also contains force-progress rules, heuristic favoring, and partial
 route selection that can discard useful alternatives. Those rules often keep
 a bot moving, but they make completeness and route quality difficult to
-explain. SoulFire must expose a bound or a named frontier reason for each such
+explain. Soulfire must expose a bound or a named frontier reason for each such
 tradeoff.
 
 ### Botcraft
@@ -61,7 +61,7 @@ uses a fixed search budget. It focuses on movement through the observed world,
 not Baritone-style terrain editing.
 
 The feet height itself is not the main performance risk. Unbounded branching,
-repeated collision queries, and unstable state equality cost more. SoulFire
+repeated collision queries, and unstable state equality cost more. Soulfire
 therefore keeps Botcraft's collision accuracy but stores a quantized support
 surface. Equal collision surfaces produce equal graph states.
 
@@ -71,7 +71,7 @@ surface. Equal collision surfaces produce equal graph states.
 provides configurable A* movements, goals, breaking, placement, swimming,
 long-distance routing, entity avoidance, and environment-driven replanning.
 Its plugin API is a useful reference for caller-defined movement policy.
-SoulFire needs stricter transition preconditions because its durable tasks can
+Soulfire needs stricter transition preconditions because its durable tasks can
 outlive one path request.
 
 ### AltoClef and UnionClef

@@ -58,7 +58,7 @@ publishing {
       }
     }
     pom {
-      name = "SoulFire Vulkan Runtime"
+      name = "Soulfire Vulkan Runtime"
       description = "Vulkan loader, Mesa lavapipe, and native dependencies for headless rendering."
       url = "https://github.com/soulfiremc-com/SoulFire/tree/main/vulkan-runtime"
       licenses {

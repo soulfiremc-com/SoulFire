@@ -53,7 +53,7 @@ public final class ReactiveScriptContext {
 
   /// Creates a new reactive script context.
   ///
-  /// @param instance      the SoulFire instance
+  /// @param instance      the Soulfire instance
   /// @param eventListener listener for script execution events
   /// @param quotas        execution quotas for this script
   public ReactiveScriptContext(InstanceManager instance, ScriptEventListener eventListener, ScriptQuotasConfig quotas) {

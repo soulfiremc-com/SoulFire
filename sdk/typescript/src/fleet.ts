@@ -256,7 +256,7 @@ export class SoulFireFleet {
           for (const capability of selector.requiredCapabilities ?? []) {
             if (this.capabilities === undefined)
               throw new Error(
-                "Fleet capability selection requires a negotiated SoulFire connection",
+                "Fleet capability selection requires a negotiated Soulfire connection",
               );
             this.capabilities.require(capability);
           }

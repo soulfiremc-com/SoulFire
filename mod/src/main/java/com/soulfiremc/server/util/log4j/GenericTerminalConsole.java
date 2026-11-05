@@ -110,7 +110,7 @@ public final class GenericTerminalConsole extends SimpleTerminalConsole {
   protected LineReader buildReader(LineReaderBuilder builder) {
     return super.buildReader(
       builder
-        .appName("SoulFire")
+        .appName("Soulfire")
         .variable(LineReader.HISTORY_FILE, historyDirectory.resolve(".console_history"))
         .completer(new TerminalCompleter(commandCompleter)));
   }

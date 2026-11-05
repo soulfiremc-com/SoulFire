@@ -50,7 +50,7 @@ export async function resolveRelease(
 ): Promise<Required<Pick<GitHubRelease, "assets" | "tag_name">>> {
   const requestedVersion = version?.trim();
   if (version !== undefined && !requestedVersion) {
-    throw new TypeError("SoulFire version must not be empty");
+    throw new TypeError("Soulfire version must not be empty");
   }
 
   const endpoint =
@@ -65,12 +65,12 @@ export async function resolveRelease(
     },
   });
   if (!response.ok) {
-    throw new Error(`Failed to fetch SoulFire release metadata (${response.status})`);
+    throw new Error(`Failed to fetch Soulfire release metadata (${response.status})`);
   }
 
   const release = (await response.json()) as GitHubRelease;
   if (!release.tag_name || !Array.isArray(release.assets)) {
-    throw new Error("SoulFire release metadata was incomplete");
+    throw new Error("Soulfire release metadata was incomplete");
   }
   return {
     assets: release.assets,
@@ -87,7 +87,7 @@ export function resolveDedicatedAsset(
     release.assets.find((candidate) => candidate.name === expectedName) ??
     release.assets.find((candidate) => /^SoulFireDedicated-.+\.jar$/.test(candidate.name ?? ""));
   if (!asset?.name || !asset.browser_download_url || !asset.digest) {
-    throw new Error(`SoulFire release ${release.tag_name} has no verified dedicated server JAR`);
+    throw new Error(`Soulfire release ${release.tag_name} has no verified dedicated server JAR`);
   }
   return {
     browser_download_url: asset.browser_download_url,

@@ -6,10 +6,10 @@
     "update_url": "https://raw.githubusercontent.com/soulfiremc-com/SoulFire/main/soulfire_egg.json"
   },
   "exported_at": "2026-06-02T14:43:51+00:00",
-  "name": "SoulFire",
+  "name": "Soulfire",
   "author": "mail@pistonmaster.net",
   "uuid": "dcbaf5f6-1418-40cc-9563-8fa1c3460cb2",
-  "description": "Creates a container that runs a SoulFire dedicated server.",
+  "description": "Creates a container that runs a Soulfire dedicated server.",
   "features": null,
   "docker_images": {
     "ghcr.io\/soulfiremc-com\/soulfire": "ghcr.io\/soulfiremc-com\/soulfire"
@@ -52,7 +52,7 @@
     },
     {
       "name": "JVM JAR",
-      "description": "Path to the SoulFire jar file to run. The default value points to the jar bundled with the image.",
+      "description": "Path to the Soulfire jar file to run. The default value points to the jar bundled with the image.",
       "env_variable": "SF_JAR",
       "default_value": "/soulfire/soulfire.jar",
       "user_viewable": true,

@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "soulfire"
 version = "2.10.7"
-description = "Python SDK for automating SoulFire bots over gRPC-Web."
+description = "Python SDK for automating Soulfire bots over gRPC-Web."
 readme = "README.md"
 requires-python = ">=3.14"
 license = "AGPL-3.0-only"
 authors = [
-  { name = "SoulFire" },
+  { name = "Soulfire" },
 ]
 dependencies = [
   "effect-python==0.1.0a2",

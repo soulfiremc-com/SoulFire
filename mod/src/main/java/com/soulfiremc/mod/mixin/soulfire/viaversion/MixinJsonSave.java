@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinJsonSave {
   @Inject(method = "write", at = @At("HEAD"), cancellable = true, remap = false)
   private static void onSave(CallbackInfo ci) {
-    // No need to save anything, we save within SoulFire
+    // No need to save anything, we save within Soulfire
     ci.cancel();
   }
 }

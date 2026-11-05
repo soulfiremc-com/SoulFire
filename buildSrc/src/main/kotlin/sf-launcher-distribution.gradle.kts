@@ -37,11 +37,11 @@ val uberJar = tasks.register<ShadowJar>("uberJar") {
   manifest {
     attributes(
       "Main-Class" to launcherDistribution.mainClass,
-      "Name" to "SoulFire",
-      "Specification-Title" to "SoulFire",
+      "Name" to "Soulfire",
+      "Specification-Title" to "Soulfire",
       "Specification-Version" to projectVersion,
       "Specification-Vendor" to "AlexProgrammerDE",
-      "Implementation-Title" to "SoulFire",
+      "Implementation-Title" to "Soulfire",
       "Implementation-Version" to projectVersion,
       "Implementation-Vendor" to "AlexProgrammerDE",
       "Multi-Release" to "true",

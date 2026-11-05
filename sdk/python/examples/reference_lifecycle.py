@@ -14,7 +14,7 @@ from soulfire import SoulFire, SoulFireOperationError
 
 @gen
 def collect_with_client() -> EffectGen[None, SoulFireOperationError, Scope]:
-    # Use the SoulFire gRPC-Web address here, not the Minecraft address.
+    # Use the Soulfire gRPC-Web address here, not the Minecraft address.
     client = yield from SoulFire.connect(
         "http://localhost:38765", token=os.environ.get("SOULFIRE_TOKEN")
     )

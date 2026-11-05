@@ -1,4 +1,4 @@
-Use this reference to connect to SoulFire, control bots, and run server tasks.
+Use this reference to connect to Soulfire, control bots, and run server tasks.
 It documents the SDK source and generated protocol types for the version in the page title.
 For a first bot, start with the [TypeScript tutorial](https://soulfiremc.com/docs/sdk/typescript).
 
@@ -6,7 +6,7 @@ For a first bot, start with the [TypeScript tutorial](https://soulfiremc.com/doc
 
 | Goal                                        | Start here                      |
 | ------------------------------------------- | ------------------------------- |
-| Connect or install SoulFire                 | {@link index.SoulFire           | SoulFire}, {@link index.SoulFireClient    | SoulFireClient} |
+| Connect or install Soulfire                 | {@link index.SoulFire           | SoulFire}, {@link index.SoulFireClient    | SoulFireClient} |
 | Provision accounts in an instance           | {@link index.SoulFireInstance   | SoulFireInstance}                         |
 | Start a bot, read state, or perform actions | {@link index.SoulFireBot        | SoulFireBot}                              |
 | Run and inspect server jobs                 | {@link index.SoulFireTasks      | SoulFireTasks}, {@link index.SoulFireTask | SoulFireTask}   |
@@ -21,7 +21,7 @@ Read [task execution](tasks.md) for results, progress, and cancellation ownershi
 ## Package entry points
 
 - {@link node} and {@link bun} provide runtime transports, managed installation, and `createBot`.
-- {@link browser} connects browsers to an existing SoulFire server.
+- {@link browser} connects browsers to an existing Soulfire server.
 - {@link index} exposes the universal SDK object model.
 - {@link platform} provides Effect HTTP transport integration.
 - {@link plugin-generator} generates typed companion SDKs for plugin APIs.

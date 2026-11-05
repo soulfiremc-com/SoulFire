@@ -20,7 +20,7 @@ package com.soulfiremc.server.api.event;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.bot.BotConnection;
 
-/// Represents a bot event of a SoulFire bot in an attack.
+/// Represents a bot event of a Soulfire bot in an attack.
 public non-sealed interface SoulFireBotEvent extends SoulFireEvent, SoulFireInstanceEvent {
   BotConnection connection();
 

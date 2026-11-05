@@ -1,4 +1,4 @@
-// The end-to-end harness: a real Minecraft server (Docker) with a void world, SoulFire started from
+// The end-to-end harness: a real Minecraft server (Docker) with a void world, Soulfire started from
 // a local jar, and one bot on that server. Tests build their scene with server commands (RCON),
 // drive the bot through the SDK and check the result.
 import { execFile } from "node:child_process";
@@ -60,7 +60,7 @@ const run = (
 const CONTAINER = "soulfire-e2e";
 /** The image the beat-game smoke uses. */
 const IMAGE = "itzg/minecraft-server:2026.3.2-java25";
-/** SoulFire's native version, so the bot needs no protocol translation. */
+/** Soulfire's native version, so the bot needs no protocol translation. */
 export const MINECRAFT_VERSION = "26.3";
 /** Not 25565, so a server someone runs for play keeps its port. */
 const MINECRAFT_PORT = Number(process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566);
@@ -212,7 +212,7 @@ function env(vars: Record<string, string>) {
   return Object.entries(vars).flatMap(([k, v]) => ["--env", `${k}=${v}`]);
 }
 
-// ---- SoulFire --------------------------------------------------------------------------------
+// ---- Soulfire --------------------------------------------------------------------------------
 
 /** The jar `./gradlew :dedicated-launcher:uberJar` builds, unless SOULFIRE_E2E_JAR names another. */
 export function soulfireJar() {
@@ -258,8 +258,8 @@ const BOT_SETTINGS: Record<string, Record<string, ReturnType<typeof value>>> = {
 };
 
 /**
- * Starts SoulFire from the jar, points a fresh instance at the Minecraft server, and brings the bot
- * in. SoulFire's console goes to `logFile`. Closing the scope stops the bot and SoulFire, whether
+ * Starts Soulfire from the jar, points a fresh instance at the Minecraft server, and brings the bot
+ * in. Soulfire's console goes to `logFile`. Closing the scope stops the bot and Soulfire, whether
  * the setup finished or not.
  */
 export const startSoulFire = Effect.fn("startSoulFire")(function* (
@@ -282,7 +282,7 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
   );
   yield* Console.log(`[soulfire] ready in ${seconds(took)}`);
 
-  // SoulFire keeps its instances in its database: start from a clean one each run.
+  // Soulfire keeps its instances in its database: start from a clean one each run.
   const old = (yield* soulfire.instances()).filter((i) => i.friendlyName === INSTANCE_NAME);
   yield* Effect.forEach(old, (i) => soulfire.instance(i.id).delete(), { discard: true });
   const instance = yield* Effect.acquireRelease(
@@ -320,7 +320,7 @@ export interface E2ETest {
 
 /**
  * Moves the bot to `at` (feet position) with an empty inventory and no effects, and waits until
- * SoulFire sees it there with the chunks around it loaded.
+ * Soulfire sees it there with the chunks around it loaded.
  */
 export const placeBot = Effect.fn("placeBot")(function* (bot: SoulFireBot, at: Pos, yaw = 0) {
   yield* rcon(`clear ${BOT_NAME}`, { check: false }); // "No items were found" when already empty
@@ -342,7 +342,7 @@ export const placeBot = Effect.fn("placeBot")(function* (bot: SoulFireBot, at: P
   yield* bot.waitForChunks({ radiusChunks: 2, timeoutMs: 10_000 }, { timeoutMs: 15_000 });
 });
 
-/** The bot's position as the server has it (not as SoulFire believes it is). */
+/** The bot's position as the server has it (not as Soulfire believes it is). */
 export const serverPosition: Effect.Effect<Pos, CommandFailed | CheckFailed> = Effect.flatMap(
   rcon(`data get entity ${BOT_NAME} Pos`),
   (out) => {

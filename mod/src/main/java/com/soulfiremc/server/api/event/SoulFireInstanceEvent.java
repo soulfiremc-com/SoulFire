@@ -20,7 +20,7 @@ package com.soulfiremc.server.api.event;
 import com.soulfiremc.server.InstanceManager;
 import com.soulfiremc.server.SoulFireServer;
 
-/// Represents an attack event of a SoulFire instance.
+/// Represents an attack event of a Soulfire instance.
 public non-sealed interface SoulFireInstanceEvent extends SoulFireEvent, SoulFireGlobalEvent {
   InstanceManager instanceManager();
 

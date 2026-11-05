@@ -20,7 +20,7 @@ fun PublishingExtension.applyMainPublishing(project: Project) {
   publications {
     register<MavenPublication>("mavenJava") {
       pom {
-        name = "SoulFire"
+        name = "Soulfire"
         description = project.rootProject.description
         url = "https://soulfiremc.com"
         organization {

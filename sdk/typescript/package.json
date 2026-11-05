@@ -1,7 +1,7 @@
 {
   "name": "@soulfiremc/sdk",
   "version": "2.10.7",
-  "description": "TypeScript SDK for automating SoulFire bots over gRPC-Web.",
+  "description": "TypeScript SDK for automating Soulfire bots over gRPC-Web.",
   "keywords": [
     "automation",
     "bot",
@@ -14,7 +14,7 @@
     "url": "https://github.com/soulfiremc-com/SoulFire/issues"
   },
   "license": "AGPL-3.0-only",
-  "author": "SoulFire",
+  "author": "Soulfire",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/soulfiremc-com/SoulFire.git",

@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// The launcher package for the SoulFire dedicated server platform.
+/// The launcher package for the Soulfire dedicated server platform.
 package com.soulfiremc.launcher.dedicated;

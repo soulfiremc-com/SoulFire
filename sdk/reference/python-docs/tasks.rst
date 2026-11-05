@@ -1,7 +1,7 @@
 Task execution and ownership
 ============================
 
-SoulFire tasks run on the server. Choose the API according to the workflow's ownership:
+Soulfire tasks run on the server. Choose the API according to the workflow's ownership:
 
 .. list-table::
    :header-rows: 1

@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Setup and usage support
     url: https://soulfiremc.com/discord
-    about: Ask the SoulFire community about configuration, accounts, proxies, plugins, and scripts.
+    about: Ask the Soulfire community about configuration, accounts, proxies, plugins, and scripts.
   - name: Documentation and guides
     url: https://soulfiremc.com/docs
     about: Read installation instructions, usage guides, and API documentation.

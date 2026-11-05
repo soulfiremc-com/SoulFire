@@ -34,7 +34,7 @@ public final class ServerSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("public-address")
       .uiName("Public address")
-      .description("The address clients on the internet use to connect to this SoulFire server.\nUsed for links in E-Mails and WebDAV.")
+      .description("The address clients on the internet use to connect to this Soulfire server.\nUsed for links in E-Mails and WebDAV.")
       .defaultValue("http://127.0.0.1:38765")
       .build();
   public static final BooleanProperty<SettingsSource.Server> ALLOW_CREATING_INSTANCES =
@@ -88,7 +88,7 @@ public final class ServerSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("email-type")
       .uiName("Email Type")
-      .description("SoulFire uses this method to deliver emails.")
+      .description("Soulfire uses this method to deliver emails.")
       .defaultValue(EmailType.CONSOLE.name())
       .addOptions(ComboProperty.optionsFromEnum(EmailType.values(), EmailType::toString, e -> switch (e) {
         case CONSOLE -> "logs";

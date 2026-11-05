@@ -1,12 +1,12 @@
-# Getting help with SoulFire
+# Getting help with Soulfire
 
 ## Setup and usage questions
 
-Start with the [SoulFire documentation](https://soulfiremc.com/docs), including the installation and usage guides.
+Start with the [Soulfire documentation](https://soulfiremc.com/docs), including the installation and usage guides.
 For questions about configuration, accounts, proxies, plugins, or scripts, ask in the [Discord community](https://soulfiremc.com/discord).
 The [SDK overview](sdk/README.md) links to the TypeScript and Python guides.
 
-Include your SoulFire version, operating system, launch method, and the steps that led to the problem.
+Include your Soulfire version, operating system, launch method, and the steps that led to the problem.
 For SDK questions, include the package and runtime versions and a small code example.
 Share relevant logs as text. Remove API tokens, passwords, account data, and proxy credentials first.
 Screenshots can provide context, but text logs make errors easier to search.

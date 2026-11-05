@@ -28,7 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /// Holds all instances of plugins running in this JVM.
-/// The SoulFire server accesses this class on startup and advertises itself to all plugins.
+/// The Soulfire server accesses this class on startup and advertises itself to all plugins.
 /// It also holds the event manager for all events in this JVM.
 public final class SoulFireAPI {
   private static final List<Plugin> SERVER_EXTENSIONS = new CopyOnWriteArrayList<>();

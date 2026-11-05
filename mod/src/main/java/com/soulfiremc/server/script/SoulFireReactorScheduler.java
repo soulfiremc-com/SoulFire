@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /// Adapter that wraps SoulFireScheduler to implement Reactor's Scheduler interface.
-/// This allows reactive pipelines to execute on SoulFire's virtual thread executor.
+/// This allows reactive pipelines to execute on Soulfire's virtual thread executor.
 /// Supports an optional additional RunnableWrapper for per-invocation context
 /// (e.g., bot context for trigger executions).
 public final class SoulFireReactorScheduler implements Scheduler {

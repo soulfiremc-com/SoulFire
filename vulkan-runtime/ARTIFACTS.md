@@ -44,10 +44,10 @@ The runtime extracts these files together so native dependencies remain beside t
 
 ## Licenses
 
-The SoulFire build scripts and native smoke test use the project's GNU AGPLv3 license.
+The Soulfire build scripts and native smoke test use the project's GNU AGPLv3 license.
 Bundled components retain their upstream licenses, including the Mesa, Vulkan loader, LLVM, and system library licenses.
 Each platform JAR includes the collected license notices under `licenses/`.
-The POM's SoulFire license does not replace those component licenses.
+The POM's Soulfire license does not replace those component licenses.
 
 Upstream source archives and their checksums appear in `sources.json` inside each platform JAR.
 The sources JAR contains the scripts that retrieve those archives and build the runtime.

@@ -730,7 +730,7 @@ public final class BotTaskManager implements AutoCloseable {
       .forEach(task -> cancel(
         task,
         BotTaskStatus.BOT_TASK_STATUS_CANCELLED,
-        "SoulFire server is shutting down"
+        "Soulfire server is shutting down"
       ));
   }
 

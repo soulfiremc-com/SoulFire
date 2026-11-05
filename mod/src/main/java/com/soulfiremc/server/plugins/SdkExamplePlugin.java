@@ -37,7 +37,7 @@ public final class SdkExamplePlugin extends InternalPlugin {
     super(new PluginInfo(
       "example",
       "1.0.0",
-      "Reference implementation for SoulFire plugin-defined RPCs",
+      "Reference implementation for Soulfire plugin-defined RPCs",
       "SoulFireMC",
       "AGPL-3.0",
       "https://soulfiremc.com/docs/sdk/plugins"

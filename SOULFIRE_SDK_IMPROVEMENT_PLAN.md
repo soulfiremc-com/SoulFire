@@ -1,7 +1,7 @@
-# SoulFire SDK Improvement Plan
+# Soulfire SDK Improvement Plan
 
-Status: Implemented locally; external release gates remain  
-Audience: SoulFire maintainers, SDK maintainers, plugin authors, and contributors  
+Status: Implemented locally; external release gates remain
+Audience: Soulfire maintainers, SDK maintainers, plugin authors, and contributors
 Document type: Explanation and implementation roadmap
 
 ## Implementation status
@@ -19,17 +19,17 @@ implementation work.
 
 ## North star
 
-SoulFire should become the default recommendation for developers who would otherwise use mineflayer.
+Soulfire should become the default recommendation for developers who would otherwise use mineflayer.
 
-A developer should be able to install the official SoulFire SDK, connect to one or many bots, and build anything from a chat bot to a survival agent without reaching for raw generated RPC clients or reimplementing basic Minecraft behavior.
+A developer should be able to install the official Soulfire SDK, connect to one or many bots, and build anything from a chat bot to a survival agent without reaching for raw generated RPC clients or reimplementing basic Minecraft behavior.
 
-SoulFire must also remain open-ended. A server plugin must be able to define new typed RPCs, events, tasks, permissions, and SDK features. Plugin authors should be able to publish a SoulFire plugin and companion TypeScript or Python package that feels like a native part of the official SDK.
+Soulfire must also remain open-ended. A server plugin must be able to define new typed RPCs, events, tasks, permissions, and SDK features. Plugin authors should be able to publish a Soulfire plugin and companion TypeScript or Python package that feels like a native part of the official SDK.
 
 The replacement promise is:
 
-> SoulFire provides an idiomatic, typed, observable, extensible, and multi-bot Minecraft automation SDK with enough high-level capability for mineflayer users and enough low-level access for advanced protocol work.
+> Soulfire provides an idiomatic, typed, observable, extensible, and multi-bot Minecraft automation SDK with enough high-level capability for mineflayer users and enough low-level access for advanced protocol work.
 
-This is broader than feature-for-feature API copying. SoulFire should preserve the useful ideas behind mineflayer while taking advantage of its own architecture:
+This is broader than feature-for-feature API copying. Soulfire should preserve the useful ideas behind mineflayer while taking advantage of its own architecture:
 
 - Bots run in a managed server process rather than inside each application.
 - Bot intent can survive an SDK process restart.
@@ -44,11 +44,11 @@ This is broader than feature-for-feature API copying. SoulFire should preserve t
 
 By the end of this document, a maintainer should understand:
 
-- What a complete SoulFire SDK needs to expose.
+- What a complete Soulfire SDK needs to expose.
 - How low-level actions differ from long-running tasks and team automation.
 - How plugins define RPCs and make them callable from the SDK.
 - How the TypeScript and Python SDKs remain idiomatic and aligned.
-- How SoulFire reaches mineflayer feature parity without inheriting its architectural limitations.
+- How Soulfire reaches mineflayer feature parity without inheriting its architectural limitations.
 - Which implementation phases should happen first.
 - What must be true before the SDK is declared stable.
 
@@ -73,15 +73,15 @@ This plan does not replace the survival automation roadmap. Beat-game planning, 
 
 ## Success criteria
 
-SoulFire can call the first official SDK release successful when:
+Soulfire can call the first official SDK release successful when:
 
 - A new user can build a useful bot without importing a generated protobuf service.
 - The official SDK covers the common mineflayer object model and action surface.
-- Long-running behaviors execute reliably on the SoulFire server.
+- Long-running behaviors execute reliably on the Soulfire server.
 - TypeScript and Python expose the same capabilities with language-appropriate naming.
-- Every core mineflayer method and event has a documented SoulFire mapping.
+- Every core mineflayer method and event has a documented Soulfire mapping.
 - Popular mineflayer plugin categories have a native equivalent or a documented migration.
-- A SoulFire plugin can register typed unary and server-streaming RPCs.
+- A Soulfire plugin can register typed unary and server-streaming RPCs.
 - Plugin protobuf descriptors are discoverable at runtime.
 - Plugin SDK bindings can be generated for TypeScript and Python.
 - A plugin can publish a companion ergonomic SDK module.
@@ -124,7 +124,7 @@ Generated protobuf and transport clients remain implementation details in both S
 
 ### Remote work belongs near the game loop
 
-Mineflayer executes in the same process as the bot. SoulFire SDK applications are remote. A high-level behavior built from dozens of network round trips will be slower and less reliable than the equivalent server-side task.
+Mineflayer executes in the same process as the bot. Soulfire SDK applications are remote. A high-level behavior built from dozens of network round trips will be slower and less reliable than the equivalent server-side task.
 
 The SDK may compose atomic actions for short workflows, but continuous behaviors such as combat, following, auto-eating, collection, and construction should run on the server.
 
@@ -145,7 +145,7 @@ Generated protobuf messages and Minecraft packet names are advanced surfaces. Th
 
 ### Extensibility is part of compatibility
 
-Mineflayer is useful because an application can load plugins and reach low-level behavior. SoulFire cannot be a credible replacement if server capabilities are closed.
+Mineflayer is useful because an application can load plugins and reach low-level behavior. Soulfire cannot be a credible replacement if server capabilities are closed.
 
 Plugin-defined RPCs, tasks, events, permissions, and SDK modules are release requirements, not optional ecosystem work.
 
@@ -166,7 +166,7 @@ Multi-bot support should not be a loop around a single-bot API when the server c
 
 The SDK should never silently assume a server supports a feature. It should negotiate:
 
-- SoulFire server version.
+- Soulfire server version.
 - Core API version.
 - Minecraft version.
 - Connection protocol version.
@@ -175,7 +175,7 @@ The SDK should never silently assume a server supports a feature. It should nego
 
 ## Baseline at proposal time
 
-SoulFire already had a useful foundation when this plan was written.
+Soulfire already had a useful foundation when this plan was written.
 
 ### Core protocol
 
@@ -302,7 +302,7 @@ The task layer owns work that has progress, retries, cancellation, resource conf
 - Build a structure.
 - Farm an area.
 
-Tasks execute on the SoulFire server and return task handles to SDK applications.
+Tasks execute on the Soulfire server and return task handles to SDK applications.
 
 ### Team automation layer
 
@@ -401,14 +401,14 @@ const program = Effect.scoped(
     });
 
     const bot = yield* soulfire.instance(instanceId).bot(botId);
-    yield* bot.chat.send("Hello from SoulFire");
+    yield* bot.chat.send("Hello from Soulfire");
   }),
 );
 
 await Effect.runPromise(program);
 ```
 
-Also provide `SoulFire.layer(options)` so applications can install SoulFire as a service, replace it in tests, and compose it with application layers.
+Also provide `SoulFire.layer(options)` so applications can install Soulfire as a service, replace it in tests, and compose it with application layers.
 
 #### Effect error model
 
@@ -466,7 +466,7 @@ Use these package boundaries:
   `@soulfiremc/sdk/bun` provide platform layers and convenience constructors.
 - `effect` v4 provides execution, host interoperability, and portable runtime service contracts.
 
-An Effect application composes SoulFire with its layers and runtime. An async
+An Effect application composes Soulfire with its layers and runtime. An async
 application runs one scoped workflow with `Effect.runPromise`. It forwards
 its `AbortSignal` to that runtime boundary.
 
@@ -479,7 +479,7 @@ await Effect.runPromise(
     Effect.gen(function* () {
       const soulfire = yield* SoulFire.connect(options);
       const bot = soulfire.instance(instanceId).bot(botId);
-      yield* bot.chat.send("Hello from SoulFire");
+      yield* bot.chat.send("Hello from Soulfire");
     }),
   ),
   { signal },
@@ -507,9 +507,9 @@ The Effect package roles should be:
   their stable Web Fetch implementations meet ConnectRPC's requirements.
   Other runtime services can come from `@effect/platform-browser` and
   `@effect/platform-bun` as the SDK adopts them.
-- `@effect/opentelemetry`: optional tracing and metrics integration that consumes SoulFire spans and attributes.
+- `@effect/opentelemetry`: optional tracing and metrics integration that consumes Soulfire spans and attributes.
 - `@effect/vitest`: development-only helpers for deterministic Effect, stream, scope, and interruption tests.
-- `effect/rpc`: an optional source of client API design ideas, not the SoulFire wire protocol.
+- `effect/rpc`: an optional source of client API design ideas, not the Soulfire wire protocol.
 
 The SDK should:
 
@@ -524,7 +524,7 @@ The SDK should:
 - Use stable Effect modules in the SDK when dependencies are frozen.
 - Test that only one compatible Effect runtime is installed when the SDK is consumed through workspaces, npm, pnpm, Bun, and Deno.
 
-`effect/rpc` should not replace SoulFire's protobuf protocol. It may inform internal ergonomics, but doing so must not weaken TypeScript and Python protocol parity, server reflection, or plugin descriptor interoperability.
+`effect/rpc` should not replace Soulfire's protobuf protocol. It may inform internal ergonomics, but doing so must not weaken TypeScript and Python protocol parity, server reflection, or plugin descriptor interoperability.
 
 ### Modern Python baseline
 
@@ -609,7 +609,7 @@ Before freezing the APIs, implement the same representative programs in Effect T
 5. Start, observe, interrupt, resume, and cancel a server task.
 6. Call a generated plugin RPC and consume a plugin event stream.
 7. Call an unknown plugin reflectively.
-8. Install and stop a local SoulFire server.
+8. Install and stop a local Soulfire server.
 
 Treat these programs as compile-time and integration tests. The native language surfaces may look different, but their capabilities and protocol behavior must match.
 
@@ -621,7 +621,7 @@ The SDK should perform an explicit handshake before returning a ready client.
 
 The handshake returns:
 
-- SoulFire version and commit.
+- Soulfire version and commit.
 - Core API compatibility version.
 - Native Minecraft version.
 - Supported connection protocol versions.
@@ -641,7 +641,7 @@ const inspectServer = Effect.scoped(
       token: process.env.SOULFIRE_TOKEN,
     });
 
-    yield* Effect.logInfo("Connected to SoulFire", {
+    yield* Effect.logInfo("Connected to Soulfire", {
       version: soulfire.server.version,
       minecraftVersion: soulfire.server.minecraftVersion,
       tasks: soulfire.capabilities.supports("bot.tasks.v1"),
@@ -867,7 +867,7 @@ const logs = await bot.world.findBlocks({
 
 ### Query execution
 
-World queries should not scan every block in a large cube on the bot game thread. SoulFire should maintain indexed loaded-chunk data or use the world-memory layer for repeated searches.
+World queries should not scan every block in a large cube on the bot game thread. Soulfire should maintain indexed loaded-chunk data or use the world-memory layer for repeated searches.
 
 Large responses need:
 
@@ -913,7 +913,7 @@ const recipes = registry.recipes.forResult("minecraft:chest");
 
 Registry results should be cached by:
 
-- SoulFire version.
+- Soulfire version.
 - Minecraft version.
 - Target protocol version.
 - Registry hash.
@@ -1649,7 +1649,7 @@ Rules:
 - Normalized plugin ID.
 - Explicit API major version.
 - Unique service and message names.
-- Core messages may be imported from published SoulFire protocol modules.
+- Core messages may be imported from published Soulfire protocol modules.
 - Plugins may not redefine core packages.
 
 HTTP bindings should use:
@@ -1689,7 +1689,7 @@ Each catalog entry includes:
 - Plugin ID.
 - Plugin version.
 - Description and author.
-- Required SoulFire version range.
+- Required Soulfire version range.
 - Plugin API major version.
 - Descriptor set hash.
 - Services and methods.
@@ -1736,7 +1736,7 @@ The companion package:
 - Depends on the official SDK.
 - Includes generated protobuf descriptors.
 - Exposes ergonomic wrappers.
-- Declares compatible plugin and SoulFire versions.
+- Declares compatible plugin and Soulfire versions.
 - Registers event and task decoders.
 - Fails clearly when the server plugin is missing or incompatible.
 
@@ -1916,7 +1916,7 @@ Extensions need ownership, priority, compatibility, and failure isolation. A fau
 Registered plugin services should automatically appear in:
 
 - gRPC reflection.
-- SoulFire API docs.
+- Soulfire API docs.
 - OpenAPI.
 - Plugin catalog.
 
@@ -1937,7 +1937,7 @@ Mutating or destructive MCP tools require explicit action metadata and confirmat
 
 Server plugins and SDK modules are different concepts:
 
-- A server plugin adds SoulFire server capability.
+- A server plugin adds Soulfire server capability.
 - An SDK module adds TypeScript or Python ergonomics.
 
 SDK modules should be able to:
@@ -2005,7 +2005,7 @@ Plugin service clients should use the same transport abstraction as core clients
 
 ## Low-level protocol escape hatch
 
-Some mineflayer users depend on raw packet access. SoulFire needs an official answer so advanced applications do not hit an artificial ceiling.
+Some mineflayer users depend on raw packet access. Soulfire needs an official answer so advanced applications do not hit an artificial ceiling.
 
 Add an explicitly low-level `bot.protocol` namespace:
 
@@ -2037,7 +2037,7 @@ Raw packet sending should:
 - Record audit events.
 - Mark the API as version-dependent.
 
-Stable applications should prefer domain APIs or a SoulFire server plugin.
+Stable applications should prefer domain APIs or a Soulfire server plugin.
 
 ## Mineflayer parity program
 
@@ -2045,8 +2045,8 @@ Maintain a machine-readable and human-readable parity matrix.
 
 Every mineflayer API entry receives one status:
 
-- Native SoulFire equivalent.
-- SoulFire equivalent with different semantics.
+- Native Soulfire equivalent.
+- Soulfire equivalent with different semantics.
 - SDK convenience API needed.
 - Core server task needed.
 - Plugin API needed.
@@ -2216,13 +2216,13 @@ For complex persistent behavior, provide a server-side state-machine or behavior
 
 ### Idiomatic SDK first
 
-New applications should use the official SoulFire object model. Documentation and migration guidance should lead developers directly to the native SDK so they benefit from server-side tasks, synchronized state, fleet control, permissions, and plugin-defined capabilities.
+New applications should use the official Soulfire object model. Documentation and migration guidance should lead developers directly to the native SDK so they benefit from server-side tasks, synchronized state, fleet control, permissions, and plugin-defined capabilities.
 
 ### Migration resources
 
 Publish:
 
-- Mineflayer-to-SoulFire API mapping.
+- Mineflayer-to-Soulfire API mapping.
 - Popular plugin replacement guide.
 - Side-by-side examples.
 - Automated codemods where practical.
@@ -2231,7 +2231,7 @@ Publish:
 - Migration case studies.
 
 The mapping explains conceptual replacements and directs developers to
-SoulFire's native object model.
+Soulfire's native object model.
 
 ## SoulFireClient dogfooding
 
@@ -2260,7 +2260,7 @@ Dogfooding ensures that:
 
 ### One source of truth
 
-Core protobuf sources live in SoulFire and are published as a versioned protocol artifact.
+Core protobuf sources live in Soulfire and are published as a versioned protocol artifact.
 
 Consumers should:
 
@@ -2417,7 +2417,7 @@ Use a shared capability suite for TypeScript and Python:
 - Pathfinding.
 - Plugin discovery and invocation.
 
-Each SDK runs the same scenarios against a real local SoulFire server.
+Each SDK runs the same scenarios against a real local Soulfire server.
 
 ### Minecraft integration tests
 
@@ -2465,8 +2465,8 @@ Expand that section using the Diátaxis structure below. Documentation work is p
 
 ### Tutorials
 
-- Build your first SoulFire bot with Effect.
-- Run a scoped SoulFire workflow from an async host.
+- Build your first Soulfire bot with Effect.
+- Run a scoped Soulfire workflow from an async host.
 - Build your first effect-py Python bot.
 - Run a complete Python workflow from a synchronous script.
 - Build a chat bot.
@@ -2479,9 +2479,9 @@ Expand that section using the Diátaxis structure below. Documentation work is p
 
 ### How-to guides
 
-- Provide SoulFire through an Effect `Layer`.
-- Run SoulFire Effects from a Promise application.
-- Convert SoulFire streams to async iterables and readable streams.
+- Provide Soulfire through an Effect `Layer`.
+- Run Soulfire Effects from a Promise application.
+- Convert Soulfire streams to async iterables and readable streams.
 - Use scoped Python fibers for concurrent bot work.
 - Resume event streams.
 - Cancel and replace tasks.
@@ -2625,7 +2625,7 @@ Deliver:
 
 Exit criteria:
 
-- Common mineflayer inventory and production programs can be written using only high-level SoulFire APIs.
+- Common mineflayer inventory and production programs can be written using only high-level Soulfire APIs.
 
 ### Phase 5: First-party behavior suite
 
@@ -2742,9 +2742,9 @@ Reflective invocation is valuable but more complex than generated packages. Type
 
 ### Effect release and platform stability
 
-The SDK should use the latest stable Effect release when dependencies are frozen. Do not make a stable SoulFire SDK depend on a prerelease Effect major.
+The SDK should use the latest stable Effect release when dependencies are frozen. Do not make a stable Soulfire SDK depend on a prerelease Effect major.
 
-Keep the protobuf transport behind SoulFire Effect services and layers. Check Effect modules for stability, browser behavior, bundle impact, and compatibility with ConnectRPC before adoption.
+Keep the protobuf transport behind Soulfire Effect services and layers. Check Effect modules for stability, browser behavior, bundle impact, and compatibility with ConnectRPC before adoption.
 
 The SDK keeps one Effect implementation. Async hosts use standard Effect runtime and stream adapters.
 
@@ -2760,7 +2760,7 @@ Mineflayer parity creates a large API. Keep it coherent through subsystem object
 
 ### Plugin trust
 
-Server plugins execute inside the SoulFire process and are trusted code. Permissions protect SDK callers from plugin operations, not the host from a malicious plugin. Process isolation is a separate future concern.
+Server plugins execute inside the Soulfire process and are trusted code. Permissions protect SDK callers from plugin operations, not the host from a malicious plugin. Process isolation is a separate future concern.
 
 ### Raw protocol stability
 
@@ -2768,7 +2768,7 @@ Raw packets vary by Minecraft version. Keep them in a clearly marked low-level n
 
 ## Definition of done
 
-SoulFire is ready to be recommended as a general mineflayer replacement when:
+Soulfire is ready to be recommended as a general mineflayer replacement when:
 
 - The official SDK is the documented default for all core operations.
 - Generated clients are an advanced fallback.
@@ -2800,7 +2800,7 @@ SoulFire is ready to be recommended as a general mineflayer replacement when:
 
 ## Final direction
 
-The first official SoulFire SDK should not be framed as a thin client for controlling an existing SoulFire installation.
+The first official Soulfire SDK should not be framed as a thin client for controlling an existing Soulfire installation.
 
 It should be presented as the official programming environment for Minecraft automation:
 

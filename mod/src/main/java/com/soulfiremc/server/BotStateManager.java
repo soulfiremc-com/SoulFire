@@ -380,7 +380,7 @@ public final class BotStateManager {
     }
 
     var futures = bots.stream()
-      .map(bot -> bot.disconnect(Component.text("SoulFire is shutting down"))
+      .map(bot -> bot.disconnect(Component.text("Soulfire is shutting down"))
         .thenRun(() -> instanceManager.removeBot(bot)))
       .toArray(CompletableFuture[]::new);
     return CompletableFuture.allOf(futures);

@@ -243,7 +243,7 @@ abstract class GenerateLauncherAssets : DefaultTask() {
         natives.putIfAbsent(arm.name, arm)
       }
       require(natives.values.filter { it.name.startsWith("org.lwjgl:lwjgl:") }.map { it.platform }.toSet() == nativePlatforms.values.toSet()) {
-        "Minecraft metadata must provide LWJGL system natives for all six SoulFire platforms"
+        "Minecraft metadata must provide LWJGL system natives for all six Soulfire platforms"
       }
       return natives.values.toList()
     }

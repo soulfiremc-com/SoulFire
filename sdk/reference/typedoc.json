@@ -10,7 +10,7 @@
     "../typescript/src/generated/**/*.ts"
   ],
   "tsconfig": "tsconfig.json",
-  "name": "SoulFire TypeScript SDK",
+  "name": "Soulfire TypeScript SDK",
   "readme": "typescript-docs/index.md",
   "navigationLinks": {
     "Guides": "https://soulfiremc.com/docs/sdk",

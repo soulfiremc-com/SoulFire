@@ -1,4 +1,4 @@
-"""The SoulFire SDK automates Minecraft bots with lazy Effect operations.
+"""The Soulfire SDK automates Minecraft bots with lazy Effect operations.
 
 Start with the `Python tutorial <https://soulfiremc.com/docs/sdk/python>`_.
 Keep bot operations inside a scope and run the complete workflow at its boundary.

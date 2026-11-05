@@ -8,7 +8,7 @@ const program = Effect.scoped(
       server: "localhost:25565",
       username: "Builder",
     });
-    yield* bot.chat.send("Hello from SoulFire");
+    yield* bot.chat.send("Hello from Soulfire");
     yield* Effect.logInfo(`Health: ${bot.state.player?.health}`);
   }),
 );

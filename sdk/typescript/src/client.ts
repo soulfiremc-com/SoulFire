@@ -148,14 +148,14 @@ export { SoulFireActionError } from "./actions.js";
 export type TokenProvider = () => Promise<string | undefined> | string | undefined;
 
 /**
- * Connection options for an existing SoulFire gRPC-Web server.
+ * Connection options for an existing Soulfire gRPC-Web server.
  *
  * The Minecraft address belongs to instance or bot provisioning, not `baseUrl`.
  * @category Connection
  */
 export interface SoulFireOptions {
   /**
-   * SoulFire gRPC-Web URL, including its scheme. This is not the Minecraft address.
+   * Soulfire gRPC-Web URL, including its scheme. This is not the Minecraft address.
    */
   baseUrl: string;
   /**
@@ -293,13 +293,13 @@ const DEFAULT_INSTANCE_EVENT_FILTER: MessageInitShape<typeof InstanceEventFilter
 function normalizeBaseUrl(baseUrl: string): string {
   const normalized = baseUrl.trim().replace(/\/+$/, "");
   if (normalized.length === 0) {
-    throw new TypeError("SoulFire baseUrl must not be empty");
+    throw new TypeError("Soulfire baseUrl must not be empty");
   }
   return normalized;
 }
 
 /**
- * A scoped connection to a SoulFire server and its instances.
+ * A scoped connection to a Soulfire server and its instances.
  *
  * Use {@link SoulFire.connect} for an existing server. The Node and Bun entry
  * points also provide managed installation and a one-call `createBot` helper.
@@ -365,7 +365,7 @@ export class SoulFireClient {
    * @remarks
    * The handshake checks the SDK API version, required capabilities, and plugin
    * versions. Requires `Scope`; cleanup closes any resources this client owns.
-   * A remote SoulFire server continues running after the scope closes.
+   * A remote Soulfire server continues running after the scope closes.
    * Failures use `SoulFireConnectionError` in the Effect error channel.
    *
    * @param options - gRPC-Web URL, authentication, timeouts, and compatibility requirements.
@@ -449,7 +449,7 @@ export class SoulFireClient {
 
   public get plugins(): PluginCatalog {
     if (this.#plugins === undefined) {
-      throw new Error("SoulFire connection has not completed its SDK handshake");
+      throw new Error("Soulfire connection has not completed its SDK handshake");
     }
     return this.#plugins;
   }
@@ -566,7 +566,7 @@ export class SoulFireClient {
   }
 
   /**
-   * Create or reuse a ready bot on this connected SoulFire server.
+   * Create or reuse a ready bot on this connected Soulfire server.
    *
    * @param options - Minecraft address, username, authentication, and readiness options.
    * @returns An Effect that produces an observed bot and requires `Scope`.
@@ -636,14 +636,14 @@ export class SoulFireClient {
 
   #requireLocalServer(): LocalServerController {
     if (this.#localServer === undefined) {
-      throw new Error("This client does not manage a local SoulFire server");
+      throw new Error("This client does not manage a local Soulfire server");
     }
     return this.#localServer;
   }
 
   #requireConnection(): ConnectionMetadata {
     if (this.#connection === undefined) {
-      throw new Error("SoulFire connection has not completed its SDK handshake");
+      throw new Error("Soulfire connection has not completed its SDK handshake");
     }
     return this.#connection;
   }
@@ -864,7 +864,7 @@ export class SoulFireInstance {
         return yield* Effect.fail(
           operationError(
             "SoulFireInstance.info",
-            new Error(`SoulFire did not return instance ${this.id}`),
+            new Error(`Soulfire did not return instance ${this.id}`),
           ),
         );
       }
@@ -1565,7 +1565,7 @@ export class SoulFireBot {
         return yield* Effect.fail(
           operationError(
             "SoulFireBot.status",
-            new Error(`SoulFire did not return status for bot ${this.id}`),
+            new Error(`Soulfire did not return status for bot ${this.id}`),
           ),
         );
       }
@@ -1615,7 +1615,7 @@ export class SoulFireBot {
       const current = yield* this.info(options?.call);
       if (current.status === undefined)
         return yield* Effect.fail(
-          rpcError("bot.waitForOnline", new Error("SoulFire did not return bot status")),
+          rpcError("bot.waitForOnline", new Error("Soulfire did not return bot status")),
         );
       if (current.liveState !== undefined) return current.status;
       let latestStatus = current.status;
@@ -2677,7 +2677,7 @@ export class SoulFireBot {
         return yield* Effect.fail(
           operationError(
             "SoulFireBot.acquireControl",
-            new Error("SoulFire did not return the acquired control lease"),
+            new Error("Soulfire did not return the acquired control lease"),
           ),
         );
       }
@@ -2726,7 +2726,7 @@ export class SoulFireBot {
         return yield* Effect.fail(
           operationError(
             "SoulFireBot.renewControl",
-            new Error("SoulFire did not return the renewed control lease"),
+            new Error("Soulfire did not return the renewed control lease"),
           ),
         );
       }
@@ -2853,7 +2853,7 @@ function shuffle<T>(values: T[]): void {
 function requiredBotStatus(statuses: readonly BotStatus[], botId: string): BotStatus {
   const status = statuses.find((candidate) => candidate.profileId === botId);
   if (status === undefined) {
-    throw new Error(`SoulFire did not return status for bot ${botId}`);
+    throw new Error(`Soulfire did not return status for bot ${botId}`);
   }
   return status;
 }

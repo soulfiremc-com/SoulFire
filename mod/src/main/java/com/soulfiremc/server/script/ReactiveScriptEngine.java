@@ -876,7 +876,7 @@ public final class ReactiveScriptEngine {
   /// Executes the full graph (for testing/one-shot execution).
   ///
   /// @param graph         the script graph to execute
-  /// @param instance      the SoulFire instance
+  /// @param instance      the Soulfire instance
   /// @param eventListener listener for execution events
   /// @return a Mono that completes when the script finishes
   public Mono<Void> execute(

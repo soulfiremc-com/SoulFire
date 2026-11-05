@@ -43,7 +43,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
-/// Runs only in the separate manual native client, without SoulFire's headless lifecycle.
+/// Runs only in the separate manual native client, without Soulfire's headless lifecycle.
 public final class LavapipeComparison {
   private static final boolean HEADLESS = Boolean.getBoolean("sf.lavapipe.headless");
   private static final long START = System.nanoTime();

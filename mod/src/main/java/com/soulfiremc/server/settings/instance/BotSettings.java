@@ -141,7 +141,7 @@ public final class BotSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("restore-on-reboot")
       .uiName("Restore on Reboot")
-      .description("Reconnect this bot when SoulFire starts if it was previously desired to be running.")
+      .description("Reconnect this bot when Soulfire starts if it was previously desired to be running.")
       .defaultValue(true)
       .build();
   public static final BooleanProperty<SettingsSource.Bot> IGNORE_PACKET_HANDLING_ERRORS =
@@ -152,7 +152,7 @@ public final class BotSettings implements SettingsObject {
       .uiName("Ignore Packet Handling Errors")
       .description("""
         Sometimes a bot fails to process a packet. When that happens it disconnects due to "packet errors".
-        When this option is turned on, SoulFire will ignore errors during the packet handling process and keep bots connected.
+        When this option is turned on, Soulfire will ignore errors during the packet handling process and keep bots connected.
         This might cause bots to have inconsistent world state though, so it could be detected by the server.""")
       .defaultValue(true)
       .build();

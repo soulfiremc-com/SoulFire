@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "soulfire_lavapipe_test",
   "version": "1.0.0",
-  "name": "SoulFire manual Lavapipe test",
+  "name": "Soulfire manual Lavapipe test",
   "environment": "client",
   "accessWidener": "soulfire.accesswidener",
   "mixins": [
