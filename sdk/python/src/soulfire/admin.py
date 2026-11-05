@@ -94,7 +94,7 @@ type Headers = dict[str, str] | None
 
 
 class SoulFireAdmin:
-    """Async high-level access to SoulFire's administrative control plane."""
+    """Async high-level access to Soulfire's administrative control plane."""
 
     def __init__(
         self,

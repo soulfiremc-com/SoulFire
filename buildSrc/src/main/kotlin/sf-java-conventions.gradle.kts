@@ -53,7 +53,7 @@ tasks {
     }
   }
   javadoc {
-    title = "SoulFire Javadocs"
+    title = "Soulfire Javadocs"
     (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
   }
   withType<JavaCompile> {

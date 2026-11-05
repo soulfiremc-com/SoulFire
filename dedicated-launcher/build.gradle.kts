@@ -10,7 +10,7 @@ val projectMainClass = "com.soulfiremc.launcher.SoulFireDedicatedJava8Launcher"
 
 tasks.register("runSFDedicated", JavaExec::class) {
   group = "application"
-  description = "Runs the SoulFire dedicated server"
+  description = "Runs the Soulfire dedicated server"
 
   javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)
@@ -58,7 +58,7 @@ tasks.register("runSFDedicated", JavaExec::class) {
 
 tasks.register("dumpSFOpenAPI", JavaExec::class) {
   group = "application"
-  description = "Runs the SoulFire dedicated server and dumps the OpenAPI schema"
+  description = "Runs the Soulfire dedicated server and dumps the OpenAPI schema"
 
   javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)

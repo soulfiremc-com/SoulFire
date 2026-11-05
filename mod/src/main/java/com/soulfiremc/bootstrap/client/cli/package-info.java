@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// The main package for the SoulFire CLI client.
+/// The main package for the Soulfire CLI client.
 package com.soulfiremc.bootstrap.client.cli;

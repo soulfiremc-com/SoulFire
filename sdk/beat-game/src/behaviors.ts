@@ -4215,7 +4215,7 @@ function settleOnStaircaseTread(
 
 /**
  * Sand and gravel above a freshly carved staircase can fall into its tread
- * while the player moves forward. SoulFire may then finish the short path on
+ * while the player moves forward. Soulfire may then finish the short path on
  * top of that block instead of one level lower. Re-open the already-supported
  * tread until the player drops onto it.
  */
@@ -4873,7 +4873,7 @@ function reachPortalCastingStand(
         .pathfind(stand, 0, {
           ...strictPolicy,
           // Baritone handles this as a graph transition with a consumable
-          // block. SoulFire's projected inventory gives ARA* the same option
+          // block. Soulfire's projected inventory gives ARA* the same option
           // without scripting another remote staircase.
           allowPlacing: true,
         })

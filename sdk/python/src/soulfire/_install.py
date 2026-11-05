@@ -111,7 +111,7 @@ def install_local_server(
     _ensure_download(
         asset["browser_download_url"],
         jar_path,
-        _require_sha256_digest(asset["digest"], "SoulFire release"),
+        _require_sha256_digest(asset["digest"], "Soulfire release"),
     )
 
     run_directory = install_directory / "server"
@@ -191,7 +191,7 @@ def _spawn_server(
 def _resolve_release(version: str | None) -> _ReleaseMetadata:
     requested_version = version.strip() if version is not None else None
     if version is not None and not requested_version:
-        raise ValueError("SoulFire version must not be empty")
+        raise ValueError("Soulfire version must not be empty")
 
     endpoint = (
         f"{RELEASES_API}/latest"
@@ -202,7 +202,7 @@ def _resolve_release(version: str | None) -> _ReleaseMetadata:
     tag_name = release.get("tag_name")
     raw_assets = release.get("assets")
     if not isinstance(tag_name, str) or not isinstance(raw_assets, list):
-        raise RuntimeError("SoulFire release metadata was incomplete")
+        raise RuntimeError("Soulfire release metadata was incomplete")
     assets = tuple(
         _object_mapping(cast(object, asset))
         for asset in cast(list[object], raw_assets)
@@ -240,7 +240,7 @@ def _resolve_dedicated_asset(
 
     if asset is None:
         raise RuntimeError(
-            f"SoulFire release {release['tag_name']} has no verified dedicated server JAR"
+            f"Soulfire release {release['tag_name']} has no verified dedicated server JAR"
         )
     browser_download_url = asset.get("browser_download_url")
     digest = asset.get("digest")
@@ -254,7 +254,7 @@ def _resolve_dedicated_asset(
         or not name
     ):
         raise RuntimeError(
-            f"SoulFire release {release['tag_name']} has no verified dedicated server JAR"
+            f"Soulfire release {release['tag_name']} has no verified dedicated server JAR"
         )
     return {
         "browser_download_url": browser_download_url,
@@ -415,7 +415,7 @@ def _wait_for_server_ready(
         raise ValueError("startup_timeout must be positive")
     stdout = process.stdout
     if stdout is None:
-        raise RuntimeError("SoulFire process output is unavailable")
+        raise RuntimeError("Soulfire process output is unavailable")
 
     result: queue.Queue[tuple[str, int | None]] = queue.Queue(maxsize=1)
 
@@ -443,10 +443,10 @@ def _wait_for_server_ready(
         status, exit_code = result.get(timeout=startup_timeout)
     except queue.Empty as error:
         raise TimeoutError(
-            f"SoulFire did not finish loading within {startup_timeout:g} seconds"
+            f"Soulfire did not finish loading within {startup_timeout:g} seconds"
         ) from error
     if status == "exit":
-        raise RuntimeError(f"SoulFire exited before finishing loading (exit code {exit_code})")
+        raise RuntimeError(f"Soulfire exited before finishing loading (exit code {exit_code})")
 
 
 def _stop_process(process: subprocess.Popen[str]) -> None:

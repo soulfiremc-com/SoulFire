@@ -1,6 +1,6 @@
 # Beat-game live smoke worker
 
-`run-live.mjs` runs the packed SoulFire SDK and beat-game package in a separate
+`run-live.mjs` runs the packed Soulfire SDK and beat-game package in a separate
 Node.js process. It is intentionally outside the package tarball so the smoke
 test proves that a normal consumer can install and use the published entry
 points.
@@ -27,4 +27,4 @@ one.
 
 The worker writes newline-delimited JSON events to standard output. If a run
 fails, configure CI to retain this output, the checkpoint directory, the
-SoulFire log, and the Minecraft world.
+Soulfire log, and the Minecraft world.

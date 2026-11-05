@@ -1,6 +1,6 @@
 # Beat-game SDK architecture
 
-SoulFire exposes a remote Minecraft client. It owns protocol translation,
+Soulfire exposes a remote Minecraft client. It owns protocol translation,
 observations, control leases, pathfinding, direct actions, and reusable
 server-side tasks. It does not own a first-party progression planner.
 
@@ -10,7 +10,7 @@ official SDK the same interface used by first-party applications.
 
 ## The ownership boundary
 
-SoulFire owns work that needs immediate access to the Minecraft connection:
+Soulfire owns work that needs immediate access to the Minecraft connection:
 
 - ordered player, world, entity, inventory, and container state;
 - path planning and execution;
@@ -28,7 +28,7 @@ The TypeScript package owns decisions that only make sense for a game plan:
 - world memory, checkpoints, and action retry decisions;
 - multi-bot roles, claims, shared discoveries, and End-entry quotas.
 
-A reusable task is an actuator. For example, SoulFire can execute a generic
+A reusable task is an actuator. For example, Soulfire can execute a generic
 collect-blocks task close to the game loop. TypeScript decides which block to
 collect, how many are needed, and the next action.
 

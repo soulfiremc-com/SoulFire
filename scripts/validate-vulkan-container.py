@@ -328,7 +328,7 @@ def main():
                 check=True,
                 env={**os.environ, "SF_POV_TEST_TOKEN": token},
             )
-            wait_for(lambda: "<NativeProbeA> SoulFire clipboard validation" in (destination / "minecraft.log").read_text(), 15)
+            wait_for(lambda: "<NativeProbeA> Soulfire clipboard validation" in (destination / "minecraft.log").read_text(), 15)
             subprocess.run(
                 ["bun", "scripts/validate-pov-session.ts", f"http://127.0.0.1:{api_port}",
                  instance, *bots, str(destination), "adaptive"],

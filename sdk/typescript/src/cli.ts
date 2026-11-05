@@ -193,7 +193,7 @@ function requireValue(value: string | undefined, option: string): string {
 }
 
 function help(): string {
-  return `SoulFire plugin SDK generator
+  return `Soulfire plugin SDK generator
 
 Usage:
   soulfire-sdk generate --server <url> --plugin <id> --language <typescript|python>
@@ -203,13 +203,13 @@ Options:
   --server <url>                       Download the descriptor from SoulFire
   --descriptor <path>                 Read a FileDescriptorSet from disk
   --plugin <id>                       Plugin ID, required with --server
-  --token <token>                     SoulFire token, or use SOULFIRE_TOKEN
+  --token <token>                     Soulfire token, or use SOULFIRE_TOKEN
   --language <typescript|python>       Companion SDK language
   --output <directory>                Output directory
   --package <name>                    npm or Python distribution name
   --plugin-version <version>          Override descriptor-only package version
   --api-major-version <number>        Override inferred API major version
-  --required-soulfire-version <range> Override inferred SoulFire version range
+  --required-soulfire-version <range> Override inferred Soulfire version range
 `;
 }
 

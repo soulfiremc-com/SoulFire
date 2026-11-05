@@ -47,7 +47,7 @@ release gate still needs provisioned Minecraft endpoints and test accounts.
 - Include authenticated and offline-mode fixtures without storing account
   secrets in the repository.
 
-Completion means the same conformance scenarios pass against real SoulFire
+Completion means the same conformance scenarios pass against real Soulfire
 processes and Minecraft servers for the supported version matrix.
 
 ## Provision the beat-game fixture and scheduled completion gate
@@ -58,7 +58,7 @@ gate still requires infrastructure and two maintainer-owned choices: the first
 Minecraft version and fixture world, plus the fixed seed and server
 implementation.
 
-- Provision a disposable offline fixture server, a real SoulFire release
+- Provision a disposable offline fixture server, a real Soulfire release
   candidate, test bot accounts, and a scoped `SOULFIRE_SMOKE_TOKEN`.
 - Stage resources for collect, craft, portal, item-entity, dimension, and
   combat assertions before promoting the workflow to a required release gate.
@@ -66,7 +66,7 @@ implementation.
   restarts the separate Node process against the same JSON checkpoint.
 - Add scheduled clean-world single-bot and multi-bot completion runs after the
   fixed seed and server implementation are approved.
-- Retain SoulFire logs, Minecraft logs, checkpoints, event traces, timings,
+- Retain Soulfire logs, Minecraft logs, checkpoints, event traces, timings,
   and the failed world as artifacts.
 - Establish a repeated-success threshold instead of accepting one successful
   completion.
@@ -94,7 +94,7 @@ recovers without leaked tasks, subscriptions, or control leases.
 
 The implemented permission, audit, rate-limit, and dangerous raw-protocol
 boundaries protect callers. Server plugins still run as trusted code in the
-SoulFire process.
+Soulfire process.
 
 - Review authentication, scoped plugin grants, descriptor downloads,
   reflective invocation, MCP exposure, raw packet access, archive handling,
@@ -153,4 +153,4 @@ The complete SDK documentation and Mineflayer parity dashboard build in
 - Add the deployed URL to the SDK release notes.
 
 Completion means the release documentation is publicly reachable from the SDK
-package metadata and SoulFire website navigation.
+package metadata and Soulfire website navigation.

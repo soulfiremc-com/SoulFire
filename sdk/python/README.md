@@ -1,10 +1,10 @@
-# SoulFire Python SDK
+# Soulfire Python SDK
 
 Projects hold bots, configuration, scripts, files, access, and metadata.
 The SDK and protocol keep their existing `instance` names for compatibility.
 A project ID is the same ID used by `instanceId` and `instance_id`.
 
-`soulfire` is the official Python SDK for SoulFire. Its high-level API uses
+`soulfire` is the official Python SDK for Soulfire. Its high-level API uses
 [effect-py](https://github.com/dev-ankit/effect-py) for lazy operations,
 typed failures, services, and scoped resources. It requires CPython 3.14 or newer.
 
@@ -25,7 +25,7 @@ The SDK pins this alpha release so runtime changes can be tested together.
 
 ## Quickstart
 
-Use managed installation for scripts. `SoulFire.create_bot` downloads SoulFire
+Use managed installation for scripts. `SoulFire.create_bot` downloads Soulfire
 and Java when needed, creates a project and offline account, starts the bot,
 and waits for its initial player snapshot.
 
@@ -42,7 +42,7 @@ def program() -> EffectGen[None, SoulFireOperationError, Scope]:
         server="localhost:25565",
         username="Builder",
     )
-    yield from bot.chat.send("Hello from SoulFire")
+    yield from bot.chat.send("Hello from Soulfire")
     yield from sync(lambda: print(bot.state.player))
 
 
@@ -50,14 +50,14 @@ asyncio.run(run_async(scoped(program).or_die()))
 ```
 
 Point `server` at a Minecraft server that accepts offline accounts. The default
-`auth` is `"offline"`. No SoulFire URL, token, project ID, or bot ID is needed.
+`auth` is `"offline"`. No Soulfire URL, token, project ID, or bot ID is needed.
 Downloads and server data stay in `.soulfire` under the working directory.
 Set `installation={"directory": "...", "version": "..."}` to choose a directory
 and pin a release.
 
 SDK methods return lazy `Effect[A, E, R]` operations. Execute the complete
 workflow at the application boundary. Keep bot work inside the scope: it owns
-subscriptions, transports, and the managed process. For an existing SoulFire
+subscriptions, transports, and the managed process. For an existing Soulfire
 server, cleanup stops bots started by this scope and leaves previously running
 bots running. Readiness has a 30-second deadline; set `ready_timeout` in seconds
 to change it.
@@ -79,7 +79,7 @@ builder = yield from instance.get_or_create_bot("Builder")
 miner = yield from instance.get_or_create_bot("Miner")
 ```
 
-Project names belong to the authenticated SoulFire user. Bot names belong to
+Project names belong to the authenticated Soulfire user. Bot names belong to
 one project. Repeated calls reuse accounts and preserve their configuration.
 Conflicting addresses, usernames, or authentication methods fail explicitly.
 
@@ -110,7 +110,7 @@ logs = yield from bot.inventory.count("#logs")
 Use `bot.tasks.collect_blocks` when you need a durable task handle. Structured
 selectors remain available for advanced inventory queries.
 
-## Connect to an existing SoulFire server
+## Connect to an existing Soulfire server
 
 ```python
 client = yield from SoulFire.connect(
@@ -251,7 +251,7 @@ Raw events remain available through `bot.events()`.
 
 ## Run durable tasks
 
-Continuous tasks execute on the SoulFire server:
+Continuous tasks execute on the Soulfire server:
 
 ```python
 task = yield from bot.tasks.auto_eat(
@@ -394,7 +394,7 @@ calls validate the service, method, payload, and descriptor before sending RPCs.
 Generated companion packages expose one effect-based high-level API. Their
 protobuf messages and generated transport clients remain available directly.
 
-## Administer SoulFire and inspect packets
+## Administer Soulfire and inspect packets
 
 `client.admin` covers tokens, profiles, users, permissions, settings, logs,
 metrics, commands, downloads, audit records, and script lifecycle operations.
@@ -402,7 +402,7 @@ Unary operations return effects; log and script subscriptions return streams.
 
 `bot.protocol` provides packet schemas, filtered packet observation, and raw
 packet sends. Raw sends require `RAW_PROTOCOL` permission. Supply
-`expected_name` and use the native protocol reported by SoulFire.
+`expected_name` and use the native protocol reported by Soulfire.
 
 ## Install a local server
 
@@ -426,5 +426,5 @@ provide synchronous transport calls. Application code should normally compose
 the high-level effects to retain validation, task semantics, and scope cleanup.
 
 Python applications can build progression policies from these primitives.
-SoulFire's first-party beat-game runner remains the separate TypeScript package
+Soulfire's first-party beat-game runner remains the separate TypeScript package
 `@soulfiremc/beat-game`.

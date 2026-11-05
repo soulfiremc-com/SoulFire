@@ -18,7 +18,7 @@ export class SoulFireActionError extends Error {
  */
 export function requireCompletedAction(result: BotActionResult | undefined): BotActionResult {
   if (result === undefined) {
-    throw new Error("SoulFire did not return a bot action result");
+    throw new Error("Soulfire did not return a bot action result");
   }
   if (result.status !== BotActionStatus.COMPLETED) {
     throw new SoulFireActionError(result);

@@ -10,7 +10,7 @@ val projectMainClass = "com.soulfiremc.launcher.SoulFireCLIJava8Launcher"
 
 tasks.register("runSFCLI", JavaExec::class) {
   group = "application"
-  description = "Runs the SoulFire client"
+  description = "Runs the Soulfire client"
 
   javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)
@@ -54,7 +54,7 @@ tasks.register("runSFCLI", JavaExec::class) {
 
 tasks.register("printSFCLIFlags", JavaExec::class) {
   group = "application"
-  description = "Runs the SoulFire client"
+  description = "Runs the Soulfire client"
 
   javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)

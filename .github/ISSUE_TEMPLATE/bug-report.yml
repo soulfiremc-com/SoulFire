@@ -34,7 +34,7 @@ body:
   - type: input
     id: soulfire-version
     attributes:
-      label: SoulFire version
+      label: Soulfire version
       description: Copy the exact startup version. For a source build, include the revision or its GitHub link.
       placeholder: Release version, nightly build identifier, or source revision
     validations:
@@ -73,7 +73,7 @@ body:
       label: Steps to reproduce
       description: Include minimal configuration or code. If reproduction is intermittent, describe the conditions you observed.
       placeholder: |
-        1. Start SoulFire with ...
+        1. Start Soulfire with ...
         2. Connect a bot to ...
         3. Run ...
         4. Observe ...

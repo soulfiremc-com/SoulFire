@@ -58,7 +58,7 @@ jobs:
             index:org.opencontainers.image.source=https://github.com/soulfiremc-com/SoulFire
             index:org.opencontainers.image.description=Advanced Minecraft Bot Tool. Deploy bots for testing, automation, and server development.
             index:org.opencontainers.image.licenses=AGPL-3.0-only
-            index:org.opencontainers.image.title=SoulFire
+            index:org.opencontainers.image.title=Soulfire
             index:org.opencontainers.image.vendor=AlexProgrammerDE
       - name: Push README.md to Dockerhub
         uses: christian-korneck/update-container-description-action@d36005551adeaba9698d8d67a296bd16fa91f8e8 # v1

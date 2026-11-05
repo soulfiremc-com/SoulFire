@@ -96,7 +96,7 @@ class SoulFireCapabilityError(TaggedError):
     """The server does not provide a required SDK capability."""
 
     def __init__(self, capability: str) -> None:
-        super().__init__(f"SoulFire capability is unavailable: {capability}")
+        super().__init__(f"Soulfire capability is unavailable: {capability}")
         self.capability = capability
 
 
@@ -113,7 +113,7 @@ class SoulFirePluginNotFoundError(TaggedError):
     """A required plugin is not installed on the server."""
 
     def __init__(self, plugin_id: str) -> None:
-        super().__init__(f"SoulFire plugin is not installed: {plugin_id}")
+        super().__init__(f"Soulfire plugin is not installed: {plugin_id}")
         self.plugin_id = plugin_id
 
 
@@ -150,7 +150,7 @@ class SoulFireStateError(TaggedError):
 
 
 class SoulFireInstallError(TaggedError):
-    """The SDK could not install or start a managed SoulFire server."""
+    """The SDK could not install or start a managed Soulfire server."""
 
 
 class SoulFireTimeoutError(TaggedError):

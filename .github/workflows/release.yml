@@ -135,8 +135,8 @@ jobs:
           body: |
             ---
             > [!IMPORTANT]
-            > These downloads are for users who want to host Dedicated Servers for SoulFire clients or use the CLI client of SoulFire.
-            > This is not the right download if you want to use the GUI client for SoulFire, which is recommended for most users.
+            > These downloads are for users who want to host Dedicated Servers for Soulfire clients or use the CLI client of Soulfire.
+            > This is not the right download if you want to use the GUI client for Soulfire, which is recommended for most users.
             > Instead you should look at the [SoulFireClient releases page](https://github.com/soulfiremc-com/SoulFireClient/releases).
             ---
 
@@ -148,18 +148,18 @@ jobs:
           target_commitish: main
           token: ${{ secrets.GITHUB_TOKEN }}
           fail_on_unmatched_files: true
-          name: SoulFire ${{ inputs.version }}
+          name: Soulfire ${{ inputs.version }}
           preserve_order: true
           files: |
             dedicated-launcher/build/libs/SoulFireDedicated-${{ inputs.version }}.jar
             client-launcher/build/libs/SoulFireCLI-${{ inputs.version }}.jar
-      - name: Announce new SoulFire release
+      - name: Announce new Soulfire release
         uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # 7.0.0
         with:
           webhook-url: ${{ secrets.WEBHOOK_URL }}
-          content: <@&850705047938793503> New SoulFire version released!
-          embed-title: SoulFire ${{ inputs.version }}
-          embed-description: SoulFire ${{ inputs.version }} has been released! Changelog and download can be found at https://github.com/soulfiremc-com/SoulFire/releases/tag/${{ inputs.version }}
+          content: <@&850705047938793503> New Soulfire version released!
+          embed-title: Soulfire ${{ inputs.version }}
+          embed-description: Soulfire ${{ inputs.version }} has been released! Changelog and download can be found at https://github.com/soulfiremc-com/SoulFire/releases/tag/${{ inputs.version }}
           embed-color: 3312063
           embed-thumbnail-url: https://soulfiremc.com/logo.png
 

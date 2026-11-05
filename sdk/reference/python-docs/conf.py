@@ -10,7 +10,7 @@ from docutils import nodes
 from sphinx import addnodes
 
 reference = Path(__file__).resolve().parent.parent
-project = "SoulFire Python SDK"
+project = "Soulfire Python SDK"
 version = json.loads((reference.parent / "typescript/package.json").read_text())[
     "version"
 ]

@@ -1,4 +1,4 @@
-# Contributing to SoulFire
+# Contributing to Soulfire
 
 Contributions can include bug fixes, tests, documentation, SDK improvements, and new features.
 This guide explains how to prepare a change and give reviewers enough information to evaluate it.
@@ -61,7 +61,7 @@ Keep work on the branch selected for your contribution.
 | `e2e/` | Scenarios against a vanilla Minecraft server |
 | `docs/`, `scripts/`, `config/` | Technical references, development tools, and IDE configuration |
 
-## Build and run SoulFire
+## Build and run Soulfire
 
 Gradle builds the host Vulkan runtime through the `:vulkan-runtime` subproject before it packages launcher JARs.
 Release builds require all six supported platforms.
@@ -143,7 +143,7 @@ On Windows, replace `sdk/python/.venv/bin/python` with `sdk/python/.venv/Scripts
 
 ### Database changes
 
-SoulFire uses Flyway migrations in `mod/src/main/resources/db/migration/`.
+Soulfire uses Flyway migrations in `mod/src/main/resources/db/migration/`.
 For schema changes, add a migration with the next unused version and the existing `V<number>__<description>.sql` naming pattern.
 Do not rewrite migrations that users already applied.
 Gradle generates the jOOQ classes from these migrations before Java compilation. Do not edit or commit the generated build output.
@@ -229,7 +229,7 @@ Maintainers decide whether a change fits the project and is ready to merge after
 
 ## License and community
 
-SoulFire uses the [GNU Affero General Public License v3.0](LICENSE).
+Soulfire uses the [GNU Affero General Public License v3.0](LICENSE).
 Submit only work that you have the right to contribute under the project license.
 Keep existing license notices and identify the source and license of added third-party material.
 

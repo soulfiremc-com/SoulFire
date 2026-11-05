@@ -664,7 +664,7 @@ def _distribute[ItemT](
 
 def _require_capabilities(selector: FleetSelector, capabilities: CapabilitySet | None) -> None:
     if selector.required_capabilities and capabilities is None:
-        raise RuntimeError("Fleet capability selection requires a negotiated SoulFire connection")
+        raise RuntimeError("Fleet capability selection requires a negotiated Soulfire connection")
     if capabilities is not None:
         for capability in selector.required_capabilities:
             capabilities.require(capability)

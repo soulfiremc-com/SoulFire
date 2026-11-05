@@ -53,6 +53,6 @@ public final class BuildData {
   }
 
   public static String versionInfo() {
-    return "SoulFire v%s (%s @ %s)".formatted(VERSION, BRANCH, COMMIT_SHORT);
+    return "Soulfire v%s (%s @ %s)".formatted(VERSION, BRANCH, COMMIT_SHORT);
   }
 }

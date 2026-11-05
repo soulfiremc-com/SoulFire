@@ -59,7 +59,7 @@ function installLayer(
 /**
  * Bun connection and managed installation helpers.
  *
- * `connect` checks compatibility with an existing SoulFire server. `install`
+ * `connect` checks compatibility with an existing Soulfire server. `install`
  * downloads and starts a local server, while `createBot` also provisions a ready
  * bot. These operations require `Scope`. Cleanup stops the managed process and
  * leaves downloaded files and persistent data in place.

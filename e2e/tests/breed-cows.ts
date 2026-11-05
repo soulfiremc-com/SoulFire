@@ -52,7 +52,7 @@ export default {
       yield* eventually(
         Effect.flatMap(
           bot.world.queryEntities({ radius: 16, selector: { entityTypes: ["minecraft:cow"] } }),
-          ({ entities }) => check(entities.length === 2, "SoulFire never saw both cows"),
+          ({ entities }) => check(entities.length === 2, "Soulfire never saw both cows"),
         ),
         "10 seconds",
       );

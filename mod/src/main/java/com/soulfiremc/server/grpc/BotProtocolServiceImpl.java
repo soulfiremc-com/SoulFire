@@ -65,7 +65,7 @@ import java.util.function.Consumer;
 
 /// Advanced, version-dependent access to Minecraft's native packet codec.
 ///
-/// Packet bytes exposed here use SoulFire's native Minecraft protocol. The
+/// Packet bytes exposed here use Soulfire's native Minecraft protocol. The
 /// connection pipeline translates them to the remote server version afterward.
 @Slf4j
 @RequiredArgsConstructor

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "soulfire",
   "version": "${version}",
-  "name": "SoulFire",
+  "name": "Soulfire",
   "description": "${description}",
   "authors": [
     "Pistonmaster"

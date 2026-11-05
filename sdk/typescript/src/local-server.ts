@@ -76,7 +76,7 @@ export function installLocalServer(
       });
       jarPath = path.join(directory, "jars", jar.name);
       const digest = yield* Effect.try({
-        try: () => requireSha256Digest(jar.digest, "SoulFire release"),
+        try: () => requireSha256Digest(jar.digest, "Soulfire release"),
         catch: (cause) => operationError("install.release", cause),
       });
       yield* installIO("install.download", (signal) =>
@@ -87,7 +87,7 @@ export function installLocalServer(
       installedVersion = release.tag_name;
     } else
       jarPath = yield* installIO("install.jar", () =>
-        requireLocalFile(options.jarPath!, "SoulFire JAR"),
+        requireLocalFile(options.jarPath!, "Soulfire JAR"),
       );
     const runDirectory = path.join(directory, "server");
     yield* installIO("install.mkdir", () => mkdir(runDirectory, { recursive: true }));
@@ -141,7 +141,7 @@ export function installLocalServer(
             Effect.fail(
               operationError(
                 "install.ready",
-                new Error("SoulFire did not finish loading before the startup timeout"),
+                new Error("Soulfire did not finish loading before the startup timeout"),
               ),
             ),
         }),
@@ -149,7 +149,7 @@ export function installLocalServer(
       );
       if (current.pid === undefined)
         return yield* Effect.fail(
-          operationError("install.pid", new Error("SoulFire process did not provide a process ID")),
+          operationError("install.pid", new Error("Soulfire process did not provide a process ID")),
         );
       info = {
         baseUrl: `http://127.0.0.1:${port}`,
@@ -207,7 +207,7 @@ function waitForServerReady(
         Effect.fail(
           operationError(
             "install.ready",
-            new Error(`SoulFire exited before finishing loading (exit code ${code ?? "unknown"})`),
+            new Error(`Soulfire exited before finishing loading (exit code ${code ?? "unknown"})`),
           ),
         ),
       );

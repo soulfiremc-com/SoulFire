@@ -157,7 +157,7 @@ export function rpcError(operation: string, cause: unknown): SoulFireRpcError {
 function errorMessage(cause: unknown, operation: string): string {
   return cause instanceof Error && cause.message.length > 0
     ? cause.message
-    : `SoulFire RPC ${operation} failed`;
+    : `Soulfire RPC ${operation} failed`;
 }
 
 function isRetryableCode(code: Code): boolean {

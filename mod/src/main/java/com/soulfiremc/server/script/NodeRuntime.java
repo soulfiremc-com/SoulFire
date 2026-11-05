@@ -35,7 +35,7 @@ public interface NodeRuntime {
   /// @return the script state store
   ScriptStateStore stateStore();
 
-  /// Gets the SoulFire instance for accessing bots and game state.
+  /// Gets the Soulfire instance for accessing bots and game state.
   ///
   /// @return the instance manager
   InstanceManager instance();

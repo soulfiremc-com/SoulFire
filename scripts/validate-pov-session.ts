@@ -226,7 +226,7 @@ try {
       width,
       height,
       captured,
-      clipboard: "SoulFire clipboard validation",
+      clipboard: "Soulfire clipboard validation",
     });
     await input([
       { kind: Kind.KEY, code: 257, action: 1 },

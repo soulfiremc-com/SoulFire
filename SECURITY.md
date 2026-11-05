@@ -6,11 +6,11 @@ Do not open a public issue or pull request for a security vulnerability.
 Use either confidential contact:
 
 - Email: [security@soulfiremc.com](mailto:security@soulfiremc.com).
-- Discord: send a private message to `pistonmaster` through the [SoulFire community](https://soulfiremc.com/discord).
+- Discord: send a private message to `pistonmaster` through the [Soulfire community](https://soulfiremc.com/discord).
 
 Include enough information for maintainers to reproduce and assess the problem:
 
-- The affected SoulFire version and component, including SDK versions if relevant.
+- The affected Soulfire version and component, including SDK versions if relevant.
 - Your operating system, Java or SDK runtime version, and deployment method.
 - Reproduction steps or a minimal proof of concept.
 - The expected result, actual result, and potential impact.

@@ -3,7 +3,7 @@
 This document is intended to help developers get started with the project and learn how to learn the tools used.
 
 - [Beat-game SDK architecture](docs/beat-game-architecture.md): ownership
-  boundaries between SoulFire, reusable tasks, plugins, and the TypeScript
+  boundaries between Soulfire, reusable tasks, plugins, and the TypeScript
   runner.
 - [Beat-game SDK plan](SOULFIRE_BEAT_GAME_SDK_PLAN.md): migration decisions,
   implementation stages, and release acceptance criteria.
@@ -24,6 +24,6 @@ GitHub: https://github.com/adepierre/SniffCraft
 
 ## MC Data
 
-All data that SoulFire sources from the Minecraft game are inside the
+All data that Soulfire sources from the Minecraft game are inside the
 `data-generator` module. Inside of it run `runServer` and it'll generate all
-files for SoulFire into the `data-generator/run/minecraft-data` directory.
+files for Soulfire into the `data-generator/run/minecraft-data` directory.

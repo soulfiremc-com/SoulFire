@@ -34,9 +34,9 @@ public final class StopCommand {
         .requires(CommandSourceStack.IS_ADMIN)
         .executes(
           help(
-            "Shut down the SoulFire server.",
+            "Shut down the Soulfire server.",
             c -> {
-              c.getSource().source().sendInfo("SoulFire server is shutting down.");
+              c.getSource().source().sendInfo("Soulfire server is shutting down.");
               c.getSource().soulFire().shutdownManager().shutdownSoftware(true);
 
               return Command.SINGLE_SUCCESS;

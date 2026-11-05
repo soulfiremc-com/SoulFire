@@ -327,7 +327,7 @@ class PluginApiRegistryTest {
       id,
       "1.0.0",
       "Plugin API test",
-      "SoulFire",
+      "Soulfire",
       "AGPL-3.0",
       "https://soulfiremc.com"
     );

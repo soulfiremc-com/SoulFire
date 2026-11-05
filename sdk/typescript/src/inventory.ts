@@ -230,7 +230,7 @@ export class SoulFireInventory {
         return yield* Effect.fail(
           operationError(
             "SoulFireInventory.snapshot",
-            new Error("SoulFire did not return a container snapshot"),
+            new Error("Soulfire did not return a container snapshot"),
           ),
         );
       }
@@ -498,7 +498,7 @@ export class SoulFireInventory {
 
 function requireContainer(response: InventoryMutationResponse): ContainerSnapshot {
   if (response.container === undefined) {
-    throw new Error("SoulFire did not return a container snapshot");
+    throw new Error("Soulfire did not return a container snapshot");
   }
   return response.container;
 }

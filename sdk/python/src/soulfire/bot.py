@@ -1395,7 +1395,7 @@ class SoulFireBot:
                 yield from fail(
                     operation_error(
                         "SoulFireBot.acquire_control",
-                        RuntimeError("SoulFire did not return the acquired control lease"),
+                        RuntimeError("Soulfire did not return the acquired control lease"),
                     )
                 )
             )
@@ -1423,7 +1423,7 @@ class SoulFireBot:
                 yield from fail(
                     operation_error(
                         "SoulFireBot.renew_control",
-                        RuntimeError("SoulFire did not return the renewed control lease"),
+                        RuntimeError("Soulfire did not return the renewed control lease"),
                     )
                 )
             )
@@ -1531,4 +1531,4 @@ def _required_status(statuses: Iterable[BotStatus], bot_id: str) -> BotStatus:
     for status in statuses:
         if status.profile_id == bot_id:
             return status
-    raise RuntimeError(f"SoulFire did not return status for bot {bot_id}")
+    raise RuntimeError(f"Soulfire did not return status for bot {bot_id}")

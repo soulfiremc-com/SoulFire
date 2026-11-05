@@ -16,6 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Contains the visual node-based scripting system for SoulFire automation.
+/// Contains the visual node-based scripting system for Soulfire automation.
 /// This package provides the execution engine for scripts created in the visual editor.
 package com.soulfiremc.server.script;

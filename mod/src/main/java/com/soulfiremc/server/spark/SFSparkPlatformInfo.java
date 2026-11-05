@@ -29,12 +29,12 @@ public final class SFSparkPlatformInfo implements PlatformInfo {
 
   @Override
   public String getName() {
-    return "SoulFire";
+    return "Soulfire";
   }
 
   @Override
   public String getBrand() {
-    return "SoulFire";
+    return "Soulfire";
   }
 
   @Override

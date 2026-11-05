@@ -85,4 +85,4 @@ The app updates its `en-US` source strings first. Crowdin translations need revi
 Public SDK types, permission identifiers, routes, generated bindings, and configuration payloads retain their existing spelling.
 
 Temporary connection variables belong to one bot connection. Project runtime variables remain available while bots stop and start.
-Project runtime variables reset when the SoulFire server restarts. Persistent variables use the project's or bot account's saved metadata.
+Project runtime variables reset when the Soulfire server restarts. Persistent variables use the project's or bot account's saved metadata.

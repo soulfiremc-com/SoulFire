@@ -1,15 +1,15 @@
-# SoulFire Game-Beating Plan
+# Soulfire Game-Beating Plan
 
 ## Purpose
 
 This document records the game-beating investigation and the required reliability work.
 It connects progression planning with pathfinding, local skills, recovery, and release gates.
 
-The target reader is a SoulFire developer who changes the beat-game SDK or its bot tasks.
+The target reader is a Soulfire developer who changes the beat-game SDK or its bot tasks.
 
 ## Main finding
 
-SoulFire has a broad progression planner.
+Soulfire has a broad progression planner.
 Its main weakness is reliable execution of mechanically coupled Minecraft actions.
 
 The current SDK can select resources, phases, portal strategies, and recovery actions.
@@ -20,7 +20,7 @@ This failure occurs before the later stronghold and End stages receive comparabl
 
 ## Current architecture
 
-SoulFire owns these functions near the Minecraft connection:
+Soulfire owns these functions near the Minecraft connection:
 
 - protocol state;
 - world and entity observations;
@@ -56,7 +56,7 @@ Its last checkpoint contains these values:
 - 64 unreachable memories;
 - 6 remembered death positions.
 
-The SoulFire log contains these repeated errors:
+The Soulfire log contains these repeated errors:
 
 - 5,873 occurrences of `No route found to the goal`;
 - 136 occurrences of `Bot action was replaced`.
@@ -96,7 +96,7 @@ Its source describes that task as unreliable.
 Water spills and pathfinder stalls reduce its success rate.
 
 The methodical portal task replaces speed with persistent state and local checks.
-SoulFire needs the same property.
+Soulfire needs the same property.
 
 ## Qualification of the comparison
 
@@ -106,7 +106,7 @@ Its published completion claim applies to its supported Minecraft 1.18 environme
 It does not prove reliable completion on every current version or seed.
 It does prove that its task and movement architecture completed a historical autonomous run.
 
-SoulFire targets newer protocol and game versions.
+Soulfire targets newer protocol and game versions.
 Its wider compatibility increases the required collision, item, combat, and progression coverage.
 
 ## Other GitHub projects
@@ -129,7 +129,7 @@ It exposes typed tools and keeps reactive modes near the game tick.
 Its published progress reaches the earlier survival and diamond stages.
 Its Nether and finale stages remain incomplete in its current progress table.
 
-This project supports one SoulFire design choice.
+This project supports one Soulfire design choice.
 An external planner can work when local typed skills own immediate reactions.
 
 ### MineDojo and Voyager
@@ -164,7 +164,7 @@ These repositories show why feature lists are not sufficient evidence. A
 game-beating claim needs a fixed version, seed policy, recorded completion
 condition, retry policy, and repeated run results.
 
-## Main gaps in SoulFire
+## Main gaps in Soulfire
 
 ### No qualified completion gate
 

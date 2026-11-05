@@ -74,7 +74,7 @@ public final class SoulFirePostLibLauncher {
 
       IO.println("[bootstrap] Installing startup hooks");
       injectEarlyMixins();
-      IO.println("[bootstrap] Installing SoulFire mod");
+      IO.println("[bootstrap] Installing Soulfire mod");
       setupManagedMods(basePath);
       System.setProperty(SystemProperties.GAME_MAPPING_NAMESPACE, "official");
       System.setProperty(SystemProperties.GAME_JAR_PATH_CLIENT, System.getProperty("sf.minecraftJar"));
@@ -84,13 +84,13 @@ public final class SoulFirePostLibLauncher {
       IO.println("[bootstrap] Starting Fabric Loader");
       KnotClient.main(new String[]{
         "--graphicsBackend", "VULKAN",
-        "--username", "SoulFire",
+        "--username", "Soulfire",
         "--assetsDir", basePath.resolve("assets").toAbsolutePath().toString(),
         "--assetIndex", assetIndex
       });
     } catch (Throwable t) {
       // Catches fabric errors during launch
-      System.err.println("Fatal error during SoulFire launch:");
+      System.err.println("Fatal error during Soulfire launch:");
       t.printStackTrace(System.err);
       LogManager.shutdown();
     }

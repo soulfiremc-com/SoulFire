@@ -163,7 +163,7 @@ public final class SdkServiceImpl extends SdkServiceGrpc.SdkServiceImplBase {
       || compare(current, request.getMaximumApiVersion()) > 0) {
       throw Status.FAILED_PRECONDITION
         .withDescription(
-          "SoulFire API %s is outside the SDK-supported range %s to %s".formatted(
+          "Soulfire API %s is outside the SDK-supported range %s to %s".formatted(
             format(current),
             format(request.getMinimumApiVersion()),
             format(request.getMaximumApiVersion())

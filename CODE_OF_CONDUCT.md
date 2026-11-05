@@ -1,6 +1,6 @@
-# SoulFire community code of conduct
+# Soulfire community code of conduct
 
-SoulFire welcomes contributors with different backgrounds and experience levels.
+Soulfire welcomes contributors with different backgrounds and experience levels.
 This code applies to project issues, pull requests, reviews, and community discussions.
 It also applies when someone represents the project in another public space.
 
@@ -17,7 +17,7 @@ Do not publish private information, repeatedly disrupt discussions, or retaliate
 
 ## Report a concern
 
-Contact `pistonmaster` privately on Discord through the [SoulFire community](https://soulfiremc.com/discord).
+Contact `pistonmaster` privately on Discord through the [Soulfire community](https://soulfiremc.com/discord).
 Include links or screenshots, what happened, and any context that helps explain the concern.
 Do not open a public issue with sensitive details.
 

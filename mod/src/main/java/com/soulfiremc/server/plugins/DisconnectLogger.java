@@ -116,7 +116,7 @@ public final class DisconnectLogger extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("deduplicate-amount")
         .uiName("Deduplicate amount")
-        .description("SoulFire logs the same disconnect message no more than this number of times within five seconds.")
+        .description("Soulfire logs the same disconnect message no more than this number of times within five seconds.")
         .defaultValue(1)
         .minValue(1)
         .maxValue(Integer.MAX_VALUE)

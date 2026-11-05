@@ -6,7 +6,7 @@ The Vulkan runtime has a separate release version in `gradle.properties`:
 vulkan_runtime_version=1.0.0
 ```
 
-SoulFire releases change `maven_version`. They do not change this runtime version.
+Soulfire releases change `maven_version`. They do not change this runtime version.
 Bump the runtime version when its native binaries, dependencies, or package layout change.
 Published versions are immutable.
 
@@ -30,7 +30,7 @@ Google's mirror serves downloads after publication and does not change Central's
 1. Verify the `com.soulfiremc` namespace in the [Central Portal](https://central.sonatype.com/).
 2. Create a [Central Portal user token](https://central.sonatype.org/publish/generate-portal-token/).
 3. Create a GPG signing key and [publish its public key](https://central.sonatype.org/publish/requirements/gpg/).
-4. Add these GitHub Actions secrets to the SoulFire repository:
+4. Add these GitHub Actions secrets to the Soulfire repository:
 
 | Secret | Value |
 | --- | --- |
@@ -51,7 +51,7 @@ The workflow does not write the key to the repository.
 The workflow builds and smoke-tests all six platforms through **Native Vulkan runtime**.
 It publishes the platform JARs, a metadata JAR, sources, documentation, POM, checksums, and GPG signatures.
 It releases the version automatically after Central accepts the deployment.
-It does not create a SoulFire release or update `maven_version`.
+It does not create a Soulfire release or update `maven_version`.
 
 The [artifact reference](ARTIFACTS.md) lists the coordinates and package layout.
 
@@ -91,7 +91,7 @@ It rejects packages whose bytes differ from the published version.
 
 Each launcher manifest pins the platform, URL, size, and SHA-256 checksum.
 The launcher downloads only its host platform and reuses the verified local cache.
-Other SoulFire modules remain embedded.
+Other Soulfire modules remain embedded.
 
-Publishing the runtime separately avoids uploading unchanged native packages with every SoulFire release.
+Publishing the runtime separately avoids uploading unchanged native packages with every Soulfire release.
 It does not reduce the bytes required for the first native release.

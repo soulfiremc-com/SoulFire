@@ -396,7 +396,7 @@ public final class ForwardingBypass extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("player-address")
         .uiName("Player Address")
-        .description("SoulFire uses this value as the player IP. Only some forwarding modes use this setting.")
+        .description("Soulfire uses this value as the player IP. Only some forwarding modes use this setting.")
         .defaultValue("127.0.0.1")
         .build();
 
@@ -405,7 +405,7 @@ public final class ForwardingBypass extends InternalPlugin {
       LEGACY("Legacy"),
       BUNGEE_GUARD("BungeeGuard"),
       MODERN("Modern"),
-      SF_BYPASS("SoulFire Bypass");
+      SF_BYPASS("Soulfire Bypass");
 
       private final String displayName;
 

@@ -19,7 +19,7 @@ package com.soulfiremc.server.api;
 
 import lombok.Getter;
 
-/// Base type for plugins that extend the SoulFire server.
+/// Base type for plugins that extend the Soulfire server.
 @Getter
 public abstract sealed class Plugin permits ExternalPlugin, InternalPlugin {
   private final PluginInfo pluginInfo;

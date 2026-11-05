@@ -114,7 +114,7 @@ public final class AutoRegister extends InternalPlugin {
         .key("password-format")
         .uiName("Password Format")
         .description("The password for registering")
-        .defaultValue("SoulFire")
+        .defaultValue("Soulfire")
         .build();
 
     public static final MinMaxProperty<SettingsSource.Bot> DELAY =

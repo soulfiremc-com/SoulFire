@@ -5,7 +5,7 @@ import { Effect, Stream } from "effect";
 
 /**
  * Adapts an Effect Platform HTTP client to the Fetch contract used by
- * ConnectRPC. This keeps SoulFire transports portable across any runtime with
+ * ConnectRPC. This keeps Soulfire transports portable across any runtime with
  * an `HttpClient` layer.
  */
 export function makeEffectHttpClientFetch(client: HttpClient.HttpClient): typeof globalThis.fetch {

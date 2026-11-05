@@ -1,7 +1,7 @@
 {
   "name": "@soulfiremc/beat-game",
   "version": "2.10.7",
-  "description": "Effect-first beat-the-game runner for the official SoulFire SDK.",
+  "description": "Effect-first beat-the-game runner for the official Soulfire SDK.",
   "keywords": [
     "automation",
     "bot",
@@ -14,7 +14,7 @@
     "url": "https://github.com/soulfiremc-com/SoulFire/issues"
   },
   "license": "AGPL-3.0-only",
-  "author": "SoulFire",
+  "author": "Soulfire",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/soulfiremc-com/SoulFire.git",

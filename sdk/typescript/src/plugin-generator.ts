@@ -320,7 +320,7 @@ function inferMetadata(
   return {
     pluginId,
     pluginVersion: "0.1.0",
-    description: `Generated SoulFire SDK for ${pluginId || "plugin"}`,
+    description: `Generated Soulfire SDK for ${pluginId || "plugin"}`,
     author: "",
     license: "LicenseRef-Proprietary",
     requiredSoulFireVersion: "*",
@@ -664,7 +664,7 @@ function resolveBufExecutable(): string {
   const packageName = platformPackages[key];
   if (packageName === undefined) {
     throw new Error(
-      `The SoulFire SDK generator does not support ${process.platform} ${process.arch}`,
+      `The Soulfire SDK generator does not support ${process.platform} ${process.arch}`,
     );
   }
   try {
@@ -1186,7 +1186,7 @@ ${exports.map((name) => `    ${JSON.stringify(name)},`).join("\n")}
 function typeScriptReadme(model: GenerationModel): string {
   return `# ${model.typescriptPackageName}
 
-Typed TypeScript companion SDK for the SoulFire \`${model.metadata.pluginId}\` plugin.
+Typed TypeScript companion SDK for the Soulfire \`${model.metadata.pluginId}\` plugin.
 
 The companion API returns Effect operations and streams. Run a scoped workflow with \`Effect.runPromise\` from an async application.
 
@@ -1214,7 +1214,7 @@ This package requires plugin API major version ${model.metadata.apiMajorVersion}
 function pythonReadme(model: GenerationModel): string {
   return `# ${model.pythonPackageName}
 
-Typed Python 3.14 companion SDK for the SoulFire \`${model.metadata.pluginId}\` plugin.
+Typed Python 3.14 companion SDK for the Soulfire \`${model.metadata.pluginId}\` plugin.
 
 The companion API returns native effect-py effects and scoped streams:
 
@@ -1282,7 +1282,7 @@ function pascalCase(value: string): string {
       .split(/[^a-zA-Z0-9]+/)
       .filter((part) => part.length > 0)
       .map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`)
-      .join("") || "SoulFire"
+      .join("") || "Soulfire"
   );
 }
 
@@ -1299,7 +1299,7 @@ function nextMinorVersion(version: string): string {
   const major = Number.parseInt(majorText ?? "", 10);
   const minor = Number.parseInt(minorText ?? "", 10);
   if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor)) {
-    throw new Error(`Invalid SoulFire SDK version: ${version}`);
+    throw new Error(`Invalid Soulfire SDK version: ${version}`);
   }
   return `${major}.${minor + 1}`;
 }

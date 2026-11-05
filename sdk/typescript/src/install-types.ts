@@ -7,16 +7,16 @@ export interface ManagedBotOptions extends CreateBotOptions {
 
 export interface SoulFireInstallOptions {
   /**
-   * Directory used for the managed JVM, SoulFire JAR, and server data.
+   * Directory used for the managed JVM, Soulfire JAR, and server data.
    * Defaults to `.soulfire` below the current working directory.
    */
   directory?: string;
   /**
-   * SoulFire release tag. Omit this value to install the latest release.
+   * Soulfire release tag. Omit this value to install the latest release.
    */
   version?: string;
   /**
-   * Existing SoulFire dedicated server JAR to run instead of downloading a
+   * Existing Soulfire dedicated server JAR to run instead of downloading a
    * published release. This is useful for release-candidate and source-tree
    * smoke tests.
    */
@@ -26,7 +26,7 @@ export interface SoulFireInstallOptions {
    */
   javaPath?: string;
   /**
-   * Java arguments added before the SoulFire JAR.
+   * Java arguments added before the Soulfire JAR.
    */
   javaArgs?: string[];
   /**
@@ -34,7 +34,7 @@ export interface SoulFireInstallOptions {
    */
   port?: number;
   /**
-   * Maximum time to wait for SoulFire to finish loading.
+   * Maximum time to wait for Soulfire to finish loading.
    */
   startupTimeoutMs?: number;
   /**

@@ -70,9 +70,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
-/// MCP (Model Context Protocol) service that exposes all SoulFire gRPC operations
+/// MCP (Model Context Protocol) service that exposes all Soulfire gRPC operations
 /// as MCP tools. This enables AI assistants (like Claude, ChatGPT, etc.) to
-/// control SoulFire instances, manage bots, execute commands, and more.
+/// control Soulfire instances, manage bots, execute commands, and more.
 ///
 /// Authentication is done via Bearer token in the HTTP Authorization header,
 /// reusing the same JWT system as the gRPC API.
@@ -122,13 +122,13 @@ public final class MCPService {
 
     // === Instance Management Tools ===
     tools.add(tool("list_instances",
-      "List all SoulFire instances visible to the current user. Returns instance IDs, names, bot summaries, and permissions.",
+      "List all Soulfire instances visible to the current user. Returns instance IDs, names, bot summaries, and permissions.",
       Map.of(), List.of(),
       authed((_, _) ->
         MCPService.<InstanceListResponse>grpc(o -> instanceService.listInstances(InstanceListRequest.newBuilder().build(), o)))));
 
     tools.add(tool("create_instance",
-      "Create a new SoulFire instance with the given name. Returns the UUID of the new instance.",
+      "Create a new Soulfire instance with the given name. Returns the UUID of the new instance.",
       Map.of("friendly_name", prop("string", "Human-readable name for the instance")),
       List.of("friendly_name"),
       authed((_, args) ->
@@ -136,7 +136,7 @@ public final class MCPService {
           InstanceCreateRequest.newBuilder().setFriendlyName(str(args, "friendly_name")).build(), o)))));
 
     tools.add(tool("delete_instance",
-      "Permanently delete a SoulFire instance and all its data. Cannot be undone.",
+      "Permanently delete a Soulfire instance and all its data. Cannot be undone.",
       Map.of("id", prop("string", "UUID of the instance to delete")),
       List.of("id"),
       authed((_, args) ->
@@ -270,7 +270,7 @@ public final class MCPService {
 
     // === Command Execution Tools ===
     tools.add(tool("execute_command",
-      "Execute a SoulFire command (Brigadier format). Supports global, instance, or bot scoped execution. Examples: 'help', 'move 100 64 200', 'say Hello'.",
+      "Execute a Soulfire command (Brigadier format). Supports global, instance, or bot scoped execution. Examples: 'help', 'move 100 64 200', 'say Hello'.",
       Map.of(
         "command", prop("string", "The command to execute"),
         "scope_type", prop("string", "Scope: 'global', 'instance', or 'bot'"),
@@ -304,7 +304,7 @@ public final class MCPService {
 
     // === Bot Control Tools ===
     tools.add(tool("set_bots_desired_state",
-      "Set configured bots to running or stopped. SoulFire persists the desired state and reconciles connections asynchronously.",
+      "Set configured bots to running or stopped. Soulfire persists the desired state and reconciles connections asynchronously.",
       Map.of(
         "instance_id", prop("string", "UUID of the instance"),
         "bot_ids", arrayProp("Profile UUIDs of the configured bots"),
@@ -507,7 +507,7 @@ public final class MCPService {
 
     // === User Management Tools ===
     tools.add(tool("list_users",
-      "List all users in the SoulFire system.",
+      "List all users in the Soulfire system.",
       Map.of(), List.of(),
       authed((_, _) ->
         MCPService.<UserListResponse>grpc(o -> userService.listUsers(UserListRequest.newBuilder().build(), o)))));
@@ -796,9 +796,9 @@ public final class MCPService {
 
     // Build the MCP server
     McpServer.async(transportProvider)
-      .serverInfo("SoulFire", BuildData.VERSION)
+      .serverInfo("Soulfire", BuildData.VERSION)
       .instructions("""
-        SoulFire is a Minecraft bot automation tool. You can use these tools to:
+        Soulfire is a Minecraft bot automation tool. You can use these tools to:
         - Manage instances (create, delete, start, stop, pause, configure)
         - Control bots (movement, rotation, inventory, hotbar)
         - Execute commands (Brigadier command format)

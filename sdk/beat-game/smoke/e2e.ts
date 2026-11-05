@@ -244,7 +244,7 @@ const program = Effect.scoped(
           const [dedicatedJar, javaPath] = yield* Effect.all([findDedicatedJar, findJava], {
             concurrency: "unbounded",
           });
-          yield* fromPromise("reset reusable SoulFire runtime", () =>
+          yield* fromPromise("reset reusable Soulfire runtime", () =>
             resetReusableSoulFireRuntime(soulfireRuntimeDirectory, dedicatedJar),
           );
           const soulfire = yield* SoulFire.install({
@@ -265,17 +265,17 @@ const program = Effect.scoped(
                 process.stdout.write(`[soulfire] ${line}\n`);
               }
               void soulfireLog.append(`${line}\n`).catch((cause: unknown) => {
-                process.stderr.write(`Could not write SoulFire log: ${String(cause)}\n`);
+                process.stderr.write(`Could not write Soulfire log: ${String(cause)}\n`);
               });
             },
           });
           const localServer = soulfire.localServer;
           if (localServer === undefined) {
             return yield* Effect.fail(
-              new Error("Auto-provisioned SoulFire did not expose its local process"),
+              new Error("Auto-provisioned Soulfire did not expose its local process"),
             );
           }
-          yield* fromPromise("record SoulFire process", () =>
+          yield* fromPromise("record Soulfire process", () =>
             writeFile(
               soulfireProcessFile,
               `${json(
@@ -294,7 +294,7 @@ const program = Effect.scoped(
               .pipe(
                 Effect.ignore,
                 Effect.andThen(
-                  fromPromise("remove SoulFire process record", () =>
+                  fromPromise("remove Soulfire process record", () =>
                     rm(soulfireProcessFile, { force: true }),
                   ).pipe(Effect.ignore),
                 ),
@@ -437,7 +437,7 @@ const program = Effect.scoped(
             : Effect.fail(new Error("Bot has not loaded its position")),
         ),
       ),
-      "SoulFire world readiness",
+      "Soulfire world readiness",
       180,
       500,
     );
@@ -1964,7 +1964,7 @@ async function stopReusableSoulFireProcesses(
     ]);
     if (recordedRunDirectory !== expectedRunDirectory || recordedJar !== expectedJar) {
       throw new Error(
-        `Refusing to stop recorded process ${recorded.pid}: its SoulFire runtime does not match ${expectedRunDirectory}`,
+        `Refusing to stop recorded process ${recorded.pid}: its Soulfire runtime does not match ${expectedRunDirectory}`,
       );
     }
     processIds.add(recorded.pid);
@@ -2014,7 +2014,7 @@ async function readSoulFireProcessRecord(): Promise<SoulFireProcessRecord | unde
     !("runDirectory" in value) ||
     typeof value.runDirectory !== "string"
   ) {
-    throw new Error(`Invalid SoulFire process record at ${soulfireProcessFile}`);
+    throw new Error(`Invalid Soulfire process record at ${soulfireProcessFile}`);
   }
   return {
     jarPath: value.jarPath,
@@ -2065,7 +2065,7 @@ async function stopProcess(pid: number): Promise<void> {
     return;
   }
   if (!(await waitForProcessExit(pid, 2_000))) {
-    throw new Error(`SoulFire process ${pid} did not stop`);
+    throw new Error(`Soulfire process ${pid} did not stop`);
   }
 }
 
@@ -2263,7 +2263,7 @@ function controlEndEncounter(
   });
 }
 
-const findDedicatedJar = fromPromise("find dedicated SoulFire JAR", async () => {
+const findDedicatedJar = fromPromise("find dedicated Soulfire JAR", async () => {
   const directory = path.join(repositoryRoot, "dedicated-launcher", "build", "libs");
   const candidates = (await readdir(directory)).filter(
     (name) =>
@@ -2274,7 +2274,7 @@ const findDedicatedJar = fromPromise("find dedicated SoulFire JAR", async () => 
   );
   if (candidates.length !== 1) {
     throw new Error(
-      `Expected one dedicated SoulFire JAR in ${directory}, found ${
+      `Expected one dedicated Soulfire JAR in ${directory}, found ${
         candidates.join(", ") || "none"
       }`,
     );

@@ -51,9 +51,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/// The RPC server for the SoulFire server.
-/// This server is used to communicate with the SoulFire client.
-/// The CLI may also use this RPC server to communicate with the SoulFire server.
+/// The RPC server for the Soulfire server.
+/// This server is used to communicate with the Soulfire client.
+/// The CLI may also use this RPC server to communicate with the Soulfire server.
 @Slf4j
 public final class RPCServer {
   @Getter

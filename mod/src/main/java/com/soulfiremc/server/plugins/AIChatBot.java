@@ -169,7 +169,7 @@ public final class AIChatBot extends InternalPlugin {
         .namespace(NAMESPACE)
         .key("model")
         .uiName("AI Model")
-        .description("SoulFire uses this AI model for inference.")
+        .description("Soulfire uses this AI model for inference.")
         .defaultValue("nemotron-mini")
         .build();
     public static final StringProperty<SettingsSource.Bot> KEYWORD =

@@ -1,7 +1,7 @@
-SoulFire Python SDK
+Soulfire Python SDK
 ===================
 
-Use this reference to connect to SoulFire, control bots, and run server tasks.
+Use this reference to connect to Soulfire, control bots, and run server tasks.
 It documents the SDK source and generated protocol types for the version in the page title.
 For a first bot, start with the `Python tutorial <https://soulfiremc.com/docs/sdk/python>`_.
 
@@ -14,7 +14,7 @@ Choose an API
 
    * - Goal
      - Start here
-   * - Connect or install SoulFire
+   * - Connect or install Soulfire
      - :class:`soulfire.SoulFire`
    * - Provision accounts in an instance
      - :class:`soulfire.SoulFireInstance`

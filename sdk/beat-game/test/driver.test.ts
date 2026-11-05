@@ -179,7 +179,7 @@ function effectBot(
   return { bot: bot as unknown as SoulFireBot, calls };
 }
 
-describe("production SoulFire beat-game driver", () => {
+describe("production Soulfire beat-game driver", () => {
   it("shares one control lease across nested control scopes", async () => {
     const { bot, calls } = effectBot();
     const driver = makeSoulFireBeatGameDriver(bot);

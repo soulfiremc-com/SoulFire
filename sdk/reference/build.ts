@@ -34,7 +34,7 @@ if (language === "typescript") {
     "--options",
     "typedoc.json",
     "--name",
-    `SoulFire TypeScript SDK ${version}`,
+    `Soulfire TypeScript SDK ${version}`,
   ]);
 } else {
   const python = join(root, ".venv", "bin", "python");

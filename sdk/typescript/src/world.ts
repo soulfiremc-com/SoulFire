@@ -52,7 +52,7 @@ export class SoulFireWorld {
         return yield* Effect.fail(
           operationError(
             "SoulFireWorld.player",
-            new Error("SoulFire did not return a player snapshot"),
+            new Error("Soulfire did not return a player snapshot"),
           ),
         );
       }
