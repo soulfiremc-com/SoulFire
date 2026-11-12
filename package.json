@@ -7,7 +7,7 @@
     "sdk/typescript"
   ],
   "scripts": {
-    "prepare": "./scripts/prepare-effect.sh && effect-tsgo patch --no-typescript --oxlint",
+    "prepare": "lefthook install && ./scripts/prepare-effect.sh && effect-tsgo patch --no-typescript --oxlint",
     "sdk:generate": "buf generate && node scripts/format-generated-sdks.mjs && oxfmt sdk/typescript/jsr.json",
     "sdk:lint-proto": "buf lint",
     "sdk:check": "bun run sdk:generate && bun run sdk:lint-proto && bun run --filter @soulfiremc/sdk check",
@@ -15,12 +15,14 @@
     "format": "oxfmt --write e2e sdk/typescript sdk/beat-game sdk/reference scripts package.json tsconfig.json .oxlintrc.json .oxfmtrc.json",
     "format:check": "oxfmt --check e2e sdk/typescript sdk/beat-game sdk/reference scripts package.json tsconfig.json .oxlintrc.json .oxfmtrc.json",
     "check": "bun run lint && bun run format:check",
-    "fix": "oxlint --type-aware --fix e2e sdk/typescript sdk/beat-game sdk/reference scripts && bun run format"
+    "fix": "oxlint --type-aware --fix e2e sdk/typescript sdk/beat-game sdk/reference scripts && bun run format",
+    "pre-commit": "lefthook run pre-commit"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.73.0",
     "@bufbuild/protoc-gen-es": "2.15.0",
     "@effect/tsgo": "0.51.1",
+    "lefthook": "2.2.2",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003"
