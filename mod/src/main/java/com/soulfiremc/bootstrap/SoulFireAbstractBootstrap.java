@@ -57,17 +57,12 @@ public abstract class SoulFireAbstractBootstrap {
   }
 
   private void initPlugins() {
-    try (var scanResult =
-           new ClassGraph()
-             .verbose()
-             .enableAllInfo()
-             .acceptPackages("com.soulfiremc.server.plugins")
-             .scan()) {
+    try (var scanResult = internalPluginScanner().scan()) {
       scanResult.getClassesWithAnnotation(InternalPluginClass.class)
         .stream()
         .sorted((a, b) -> {
-          var aOrder = (int) a.getAnnotationInfo(InternalPluginClass.class).getParameterValues().getValue("order");
-          var bOrder = (int) b.getAnnotationInfo(InternalPluginClass.class).getParameterValues().getValue("order");
+          var aOrder = (int) a.getAllAnnotationInfo().get(InternalPluginClass.class.getName()).getParameterValues().getValue("order");
+          var bOrder = (int) b.getAllAnnotationInfo().get(InternalPluginClass.class.getName()).getParameterValues().getValue("order");
           return Integer.compare(aOrder, bOrder);
         })
         .forEach(this::processRouteClass);
@@ -75,6 +70,15 @@ public abstract class SoulFireAbstractBootstrap {
       log.error("Failed to initialize plugins", t);
       throw new RuntimeException("Failed to initialize plugins", t);
     }
+  }
+
+  static ClassGraph internalPluginScanner() {
+    return new ClassGraph()
+      .verbose()
+      .enableClasspath()
+      .enableClassInfo()
+      .enableAnnotationInfo()
+      .acceptPackages("com.soulfiremc.server.plugins");
   }
 
   private void processRouteClass(ClassInfo classInfo) {
