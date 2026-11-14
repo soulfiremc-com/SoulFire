@@ -44,7 +44,7 @@ public final class GetPersistentBotVariableNode extends AbstractScriptNode {
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Reads persistent metadata for the bot account, which survives reconnects and SoulFire server restarts.")
+    .description("Reads persistent metadata for the bot account, which survives reconnects and Soulfire server restarts.")
     .icon("download")
     .color("#10B981")
     .addKeywords("Get Persistent Bot Variable", "variable", "persistent", "bot", "load", "get", "retrieve", "permanent")

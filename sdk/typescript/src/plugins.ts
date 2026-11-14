@@ -57,7 +57,7 @@ export interface SoulFirePluginModule<T extends SoulFireExtension> {
 
 export class SoulFirePluginNotFoundError extends Error {
   public constructor(public readonly pluginId: string) {
-    super(`SoulFire plugin is not installed: ${pluginId}`);
+    super(`Soulfire plugin is not installed: ${pluginId}`);
     this.name = "SoulFirePluginNotFoundError";
   }
 }
@@ -646,6 +646,6 @@ export function defineSoulFirePlugin<T extends SoulFireExtension>(
   module: SoulFirePluginModule<T>,
 ): SoulFirePluginModule<T> {
   if (module.pluginId.trim().length === 0)
-    throw new TypeError("SoulFire plugin modules require a non-empty pluginId");
+    throw new TypeError("Soulfire plugin modules require a non-empty pluginId");
   return Object.freeze(module);
 }

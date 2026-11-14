@@ -42,7 +42,7 @@ public final class SetPersistentBotVariableNode extends AbstractScriptNode {
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores persistent metadata for the bot account, which survives reconnects and SoulFire server restarts.")
+    .description("Stores persistent metadata for the bot account, which survives reconnects and Soulfire server restarts.")
     .icon("save")
     .color("#10B981")
     .addKeywords("Set Persistent Bot Variable", "variable", "persistent", "bot", "save", "store", "set", "permanent")

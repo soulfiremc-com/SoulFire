@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// Implementation of object metadata storage in SoulFire.
+/// Implementation of object metadata storage in Soulfire.
 package com.soulfiremc.server.api.metadata;

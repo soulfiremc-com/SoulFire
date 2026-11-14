@@ -1,11 +1,11 @@
-// Runs the end-to-end tests: starts the Minecraft server and SoulFire, then each test in turn.
+// Runs the end-to-end tests: starts the Minecraft server and Soulfire, then each test in turn.
 //
 //   bun run test                      every test in tests/
 //   bun run test walk-straight        only those named
 //   bun run test --fresh              a new Minecraft server (and world) instead of the running one
 //   bun run test --stop               remove the Minecraft server at the end
 //
-// SOULFIRE_E2E_JAR runs another SoulFire jar (e.g. one built from upstream, to compare).
+// SOULFIRE_E2E_JAR runs another Soulfire jar (e.g. one built from upstream, to compare).
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -49,7 +49,7 @@ if (unknown.length)
 const jar = soulfireJar();
 if (!existsSync(jar))
   throw new Error(
-    `no SoulFire jar at ${jar}: run ./gradlew :dedicated-launcher:uberJar, or set SOULFIRE_E2E_JAR`,
+    `no Soulfire jar at ${jar}: run ./gradlew :dedicated-launcher:uberJar, or set SOULFIRE_E2E_JAR`,
   );
 
 const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replace(/[:.]/g, "-"));
@@ -57,7 +57,7 @@ mkdirSync(runDir, { recursive: true });
 
 const program = Effect.gen(function* () {
   yield* Console.log(`[e2e] logs in ${path.relative(process.cwd(), runDir)}`);
-  // Added first, so it runs last: after the bot and SoulFire have stopped.
+  // Added first, so it runs last: after the bot and Soulfire have stopped.
   yield* Effect.addFinalizer(() =>
     saveMinecraftLog(path.join(runDir, "minecraft.log")).pipe(
       Effect.andThen(flags.stop ? stopMinecraft : Effect.void),

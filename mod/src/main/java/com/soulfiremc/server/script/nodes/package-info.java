@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Script node implementations for the SoulFire visual scripting system.
+/// Script node implementations for the Soulfire visual scripting system.
 ///
 /// This package contains all built-in script node types organized by category:
 /// - trigger: Entry points that start script execution (OnPreEntityTickNode, OnChatNode, etc.)

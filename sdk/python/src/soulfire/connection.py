@@ -64,7 +64,7 @@ class ConnectionMetadata:
     @classmethod
     def from_response(cls, response: SdkHandshakeResponse) -> ConnectionMetadata:
         if not response.HasField("api_version") or not response.HasField("identity"):
-            raise SoulFireCompatibilityError("SoulFire returned an incomplete SDK handshake")
+            raise SoulFireCompatibilityError("Soulfire returned an incomplete SDK handshake")
         return cls(
             server=ServerMetadata(
                 id=response.server_id,

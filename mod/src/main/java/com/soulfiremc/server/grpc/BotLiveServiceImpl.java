@@ -137,7 +137,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
-/// BotLiveService is the remote-control API for SoulFire bots. It provides the
+/// BotLiveService is the remote-control API for Soulfire bots. It provides the
 /// streaming event channel, imperative per-position / per-entity actions, world
 /// queries, and pathfinding RPCs that make the public gRPC surface feel like a
 /// mineflayer/azalea style bot library.

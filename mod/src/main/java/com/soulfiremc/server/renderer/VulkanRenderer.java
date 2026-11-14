@@ -418,7 +418,7 @@ public final class VulkanRenderer {
       if (buffers[0] == null || buffers[0].size() != size) {
         close();
         for (var i = 0; i < buffers.length; i++) buffers[i] = RenderSystem.getDevice().createBuffer(
-          () -> "SoulFire live video", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, size);
+          () -> "Soulfire live video", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, size);
       }
       var current = next;
       var encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -448,7 +448,7 @@ public final class VulkanRenderer {
   private static BufferedImage readback(RenderTarget target, boolean opaque) {
     var texture = Objects.requireNonNull(target.getColorTexture());
     var encoder = RenderSystem.getDevice().createCommandEncoder();
-    try (var buffer = RenderSystem.getDevice().createBuffer(() -> "SoulFire capture",
+    try (var buffer = RenderSystem.getDevice().createBuffer(() -> "Soulfire capture",
       GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, (long) target.width * target.height * 4)) {
       encoder.copyTextureToBuffer(texture, buffer, 0, () -> {}, 0);
       awaitDevice();

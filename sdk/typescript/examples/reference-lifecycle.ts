@@ -1,7 +1,7 @@
 import { Effect, Stream } from "effect";
 import { SoulFire } from "../src/node.js";
 
-// Use the SoulFire gRPC-Web address here, not the Minecraft address.
+// Use the Soulfire gRPC-Web address here, not the Minecraft address.
 // #region collectWithClient
 export const collectWithClient = Effect.scoped(
   Effect.gen(function* () {

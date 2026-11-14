@@ -1,11 +1,11 @@
 # `@soulfiremc/beat-game`
 
-`@soulfiremc/beat-game` is SoulFire's Effect progression application. It
+`@soulfiremc/beat-game` is Soulfire's Effect progression application. It
 composes the official SDK's observations, direct actions, pathfinding,
 control leases, generic tasks, and plugin APIs into checkpointed single-bot
 and multi-bot runs.
 
-SoulFire remains the remote Minecraft client. This package owns game policy.
+Soulfire remains the remote Minecraft client. This package owns game policy.
 
 ## Install
 
@@ -107,7 +107,7 @@ const run =
 ```
 
 A hook can call a typed plugin companion SDK. The plugin remains opt-in and
-SoulFire core stays independent of the game plan.
+Soulfire core stays independent of the game plan.
 
 ```ts
 const combatPlugin = yield * soulfire.plugins.require(combatPluginModule);
@@ -153,7 +153,7 @@ Behavior programs can be used without starting a full run:
   `triangulateStronghold`, `activateEndPortal`, and `fightEnderDragon`.
 
 These functions use public SDK calls. Game-specific names do not correspond
-to core SoulFire RPCs.
+to core Soulfire RPCs.
 
 ## Public modules
 

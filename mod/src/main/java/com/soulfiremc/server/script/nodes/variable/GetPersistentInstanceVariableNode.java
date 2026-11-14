@@ -43,7 +43,7 @@ public final class GetPersistentInstanceVariableNode extends AbstractScriptNode 
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Reads persistent project metadata, which survives SoulFire server restarts.")
+    .description("Reads persistent project metadata, which survives Soulfire server restarts.")
     .icon("download")
     .color("#10B981")
     .addKeywords("Get Persistent Instance Variable", "variable", "persistent", "instance", "load", "get", "retrieve", "permanent")

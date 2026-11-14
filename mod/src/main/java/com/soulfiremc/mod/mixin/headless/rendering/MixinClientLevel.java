@@ -32,7 +32,7 @@ public abstract class MixinClientLevel {
 
   @Inject(method = "queueLightUpdate", at = @At("HEAD"), cancellable = true)
   private void queueLightUpdateHook(Runnable runnable, CallbackInfo ci) {
-    // The vanilla render loop normally drains this queue. SoulFire renders on demand,
+    // The vanilla render loop normally drains this queue. Soulfire renders on demand,
     // so apply the server-provided light data immediately and keep the queue empty.
     runnable.run();
     this.getChunkSource().getLightEngine().runLightUpdates();

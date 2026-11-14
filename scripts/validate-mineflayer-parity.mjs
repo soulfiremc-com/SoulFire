@@ -50,5 +50,5 @@ for (const heading of headings) {
 }
 
 console.log(
-  `Validated ${headings.length} Mineflayer API headings against the SoulFire parity matrix.`,
+  `Validated ${headings.length} Mineflayer API headings against the Soulfire parity matrix.`,
 );

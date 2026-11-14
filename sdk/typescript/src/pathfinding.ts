@@ -60,7 +60,7 @@ export class SoulFirePathfinder {
         return yield* Effect.fail(
           operationError(
             "SoulFirePathfinder.plan",
-            new Error("SoulFire did not return a path plan"),
+            new Error("Soulfire did not return a path plan"),
           ),
         );
       }

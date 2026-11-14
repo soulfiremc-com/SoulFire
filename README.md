@@ -2,7 +2,9 @@
 
 [![discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-singular_vector.svg)](https://discord.gg/vHgRd6YZmH) [![kofi](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/donate/kofi-singular_vector.svg)](https://ko-fi.com/alexprogrammerde)
 
-# SoulFire
+# Soulfire
+
+Soulfire is the display name. Existing repository names, Java types, SDK exports, package coordinates, protocol identifiers, and download filenames retain their compatible spelling.
 
 Advanced Minecraft Bot Tool. Deploy automated bots for server testing, automation, and development.
 
@@ -10,7 +12,7 @@ This repository only contains the CLI and server implementation. The official GU
 
 > [!WARNING]
 > Use this tool only on servers that you own or have permission to test. Make sure that your hosting provider allows
-> automated bot testing. You are responsible for unauthorized use. The SoulFire developers are not responsible for your actions.
+> automated bot testing. You are responsible for unauthorized use. The Soulfire developers are not responsible for your actions.
 
 ---
 
@@ -40,9 +42,9 @@ Check it out: [https://enderdash.com](https://enderdash.com/?utm_source=github&u
 ## 🖥 Installation
 
 > [!TIP]
-> Want to check out how SoulFire looks before installing it? Take a look at the official [demo page](https://demo.soulfiremc.com).
+> Want to check out how Soulfire looks before installing it? Take a look at the official [demo page](https://demo.soulfiremc.com).
 
-Follow the [installation guide](https://soulfiremc.com/docs/installation) to install SoulFire.
+Follow the [installation guide](https://soulfiremc.com/docs/installation) to install Soulfire.
 
 The server bundles a headless Vulkan runtime and Mesa lavapipe for CPU rendering. No system Vulkan packages or display server are required.
 Installed compatible GPU drivers provide hardware acceleration. See [native runtime packaging](docs/vulkan-runtime.md) for supported platforms and build instructions.
@@ -62,7 +64,7 @@ or run `help` in the GUI or CLI.
 
 ## 📻 Plugins
 
-You can read about the SoulFire plugins in the [documentation](https://soulfiremc.com/docs/usage/plugins).
+You can read about the Soulfire plugins in the [documentation](https://soulfiremc.com/docs/usage/plugins).
 
 ## 🗃 Import accounts and proxies
 
@@ -74,23 +76,23 @@ how to import proxies in the [proxy documentation](https://soulfiremc.com/docs/u
 There are many websites that offer free proxies, but be careful as many of them are not reliable or secure.
 
 Our recommended proxy providers are [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=soulfire) and
-[Proxy-Seller](https://proxy-seller.com/?partner=GRJY71PA3XWPPP&utm_source=get-proxies&utm_campaign=soulfire), who sponsor SoulFire.
+[Proxy-Seller](https://proxy-seller.com/?partner=GRJY71PA3XWPPP&utm_source=get-proxies&utm_campaign=soulfire), who sponsor Soulfire.
 
 For a full list of recommended providers, check out our [Get Proxies](https://soulfiremc.com/get-proxies) page.
 
 ## 💻 Command Line Usage
 
-If you want to use the CLI of SoulFire, please refer to the [CLI Mode Guide](https://soulfiremc.com/docs/guides/cli-mode).
+If you want to use the CLI of Soulfire, please refer to the [CLI Mode Guide](https://soulfiremc.com/docs/guides/cli-mode).
 
 ## 🧵 Demo
 
-SoulFire has a built-in GUI for easy usage. Try a SoulFire demo yourself at the [demo page](https://demo.soulfiremc.com).
+Soulfire has a built-in GUI for easy usage. Try a Soulfire demo yourself at the [demo page](https://demo.soulfiremc.com).
 
 https://github.com/user-attachments/assets/6244d54c-a1e5-4467-a705-c929b9de2b57
 
 ## ✨ Nightly builds
 
-You can download the latest development version of SoulFire
+You can download the latest development version of Soulfire
 through [nightly.link](https://nightly.link/soulfiremc-com/SoulFire/workflows/build/main).
 
 ## 🔧 Build from source
@@ -105,13 +107,13 @@ For environment setup, module locations, SDK generation, and tests, read the [co
 
 ## 👨‍💻 Developer API
 
-SoulFire offers a Developer API to create your own plugins using the plugin API and mixins.
-SoulFire can include breaking changes. Pin your plugin to a SoulFire version, or update it when SoulFire changes.
+Soulfire offers a Developer API to create your own plugins using the plugin API and mixins.
+Soulfire can include breaking changes. Pin your plugin to a Soulfire version, or update it when Soulfire changes.
 
 To learn more about the Developer API, take a look at the
 official [plugin example](https://github.com/soulfiremc-com/SoulFirePluginExample).
 
-SoulFire also includes [TypeScript and Python SDKs](sdk/README.md) for
+Soulfire also includes [TypeScript and Python SDKs](sdk/README.md) for
 connecting over gRPC-Web, streaming bot events, issuing current per-bot
 actions, and provisioning a local dedicated server.
 

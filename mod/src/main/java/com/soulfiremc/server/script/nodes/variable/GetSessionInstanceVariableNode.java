@@ -42,7 +42,7 @@ public final class GetSessionInstanceVariableNode extends AbstractScriptNode {
       PortDefinition.output("value", "Value", PortType.ANY, "Retrieved value"),
       PortDefinition.output("found", "Found", PortType.BOOLEAN, "Whether variable was found")
     )
-    .description("Reads temporary data for this project runtime. Values reset when the SoulFire server restarts.")
+    .description("Reads temporary data for this project runtime. Values reset when the Soulfire server restarts.")
     .icon("file-input")
     .color("#10B981")
     .addKeywords("Get Session Instance Variable", "variable", "session", "instance", "temporary", "get", "retrieve", "memory")

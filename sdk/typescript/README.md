@@ -1,10 +1,10 @@
-# SoulFire TypeScript SDK
+# Soulfire TypeScript SDK
 
 Projects hold bots, configuration, scripts, files, access, and metadata.
 The SDK and protocol keep their existing `instance` names for compatibility.
 A project ID is the same ID used by `instanceId` and `instance_id`.
 
-`@soulfiremc/sdk` is the Effect SDK for SoulFire. It provides typed
+`@soulfiremc/sdk` is the Effect SDK for Soulfire. It provides typed
 operations, streams, scopes, task handles, capability negotiation, and plugin
 RPC discovery over gRPC-Web.
 
@@ -22,14 +22,14 @@ bun add @soulfiremc/sdk effect@^4
 
 The SDK requires Effect v4. Use
 `@soulfiremc/sdk/node`, `@soulfiremc/sdk/browser`, or
-`@soulfiremc/sdk/bun` to use the matching live HTTP layer from SoulFire. The
+`@soulfiremc/sdk/bun` to use the matching live HTTP layer from Soulfire. The
 universal entry point also accepts any
 `effect/http/HttpClient`, which keeps tests, workers, Deno, and custom
 transport policies portable.
 
 ## Quickstart
 
-Use managed installation for scripts. `SoulFire.createBot` downloads SoulFire
+Use managed installation for scripts. `SoulFire.createBot` downloads Soulfire
 and Java when needed, creates the project and offline account, starts the bot,
 and waits for its initial player snapshot.
 
@@ -45,7 +45,7 @@ const program = Effect.scoped(
       username: "Builder",
     });
 
-    yield* bot.chat.send("Hello from SoulFire");
+    yield* bot.chat.send("Hello from Soulfire");
     yield* Effect.logInfo(`Health: ${bot.state.player?.health}`);
   }),
 );
@@ -54,15 +54,15 @@ NodeRuntime.runMain(program);
 ```
 
 Point `server` at a Minecraft server that accepts offline accounts. The default
-`auth` is `"offline"`. No SoulFire URL, token, project ID, or bot ID is needed.
+`auth` is `"offline"`. No Soulfire URL, token, project ID, or bot ID is needed.
 Node.js requires version 22 or newer. Use `@soulfiremc/sdk/bun` on Bun.
 
 Downloads and server data stay in `.soulfire` under the working directory.
 Set `installation.directory` to choose another location. Set
-`installation.version` to pin a SoulFire release.
+`installation.version` to pin a Soulfire release.
 
 Keep bot work inside the scope. Scope exit closes subscriptions and the managed
-process. When using an existing SoulFire server, cleanup stops bots started by
+process. When using an existing Soulfire server, cleanup stops bots started by
 this scope and leaves previously running bots running. Readiness has a 30-second
 deadline; change it with `readyTimeoutMs`.
 
@@ -83,7 +83,7 @@ const builder = yield * instance.getOrCreateBot("Builder");
 const miner = yield * instance.getOrCreateBot("Miner");
 ```
 
-Project names belong to the authenticated SoulFire user. Bot names belong to
+Project names belong to the authenticated Soulfire user. Bot names belong to
 one project. Repeated calls reuse accounts and preserve their configuration.
 Conflicting addresses, usernames, or authentication methods fail explicitly.
 
@@ -120,7 +120,7 @@ const logs = yield * bot.inventory.count("#logs");
 Use `bot.tasks.collectBlocks` when you need a durable task handle. Structured
 selectors remain available for advanced inventory queries.
 
-## Connect to an existing SoulFire server
+## Connect to an existing Soulfire server
 
 Use the universal entry point for browser or worker code. It keeps process and
 filesystem code out of those bundles.
@@ -139,7 +139,7 @@ const program = Effect.scoped(
       server: "localhost:25565",
       username: "Builder",
     });
-    yield* bot.chat.send("Hello from SoulFire");
+    yield* bot.chat.send("Hello from Soulfire");
   }),
 );
 ```
@@ -149,9 +149,9 @@ Named provisioning requires the `instance.provisioning.v1` server capability.
 The universal entry point accepts any `effect/http/HttpClient` for custom
 transport policies.
 
-## Provide SoulFire as a layer
+## Provide Soulfire as a layer
 
-Use `SoulFire.layer` to provide one shared SoulFire client to application
+Use `SoulFire.layer` to provide one shared Soulfire client to application
 services:
 
 ```ts
@@ -335,7 +335,7 @@ height, block, biome, and light data, plus optional entity overlays.
 
 ## Run durable tasks
 
-Continuous work belongs on the SoulFire server. A task remains observable by
+Continuous work belongs on the Soulfire server. A task remains observable by
 ID, reports progress, participates in resource arbitration, and can be
 cancelled explicitly.
 
@@ -554,7 +554,7 @@ defects, and losing fibers finish cleanup before a race returns.
 
 ## Call plugin APIs
 
-SoulFire plugins can register typed unary and server-streaming RPCs. The SDK
+Soulfire plugins can register typed unary and server-streaming RPCs. The SDK
 handshake exposes the installed plugin catalog and downloadable protobuf
 descriptors.
 
@@ -657,7 +657,7 @@ Generated ConnectRPC clients still expose the wire API through
 `soulfire.service()`. Their Promises and async iterables belong at transport
 boundaries, where cancellation signals must reach the RPC call.
 
-## Administer SoulFire
+## Administer Soulfire
 
 `soulfire.admin` wraps the existing administrative services in the same
 Effect-first object model:

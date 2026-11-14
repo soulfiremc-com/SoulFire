@@ -150,7 +150,7 @@ type ClientInterceptor = (
 
 
 class ManagedInstallOptions(TypedDict, total=False):
-    """Options for a local SoulFire server managed by the SDK."""
+    """Options for a local Soulfire server managed by the SDK."""
 
     directory: str | os.PathLike[str] | None
     version: str | None
@@ -165,12 +165,12 @@ class ManagedInstallOptions(TypedDict, total=False):
 def normalize_base_url(base_url: str) -> str:
     normalized = base_url.strip().rstrip("/")
     if not normalized:
-        raise ValueError("SoulFire base_url must not be empty")
+        raise ValueError("Soulfire base_url must not be empty")
     return normalized
 
 
 class SoulFire:
-    """A scoped client for a SoulFire server and its bot instances.
+    """A scoped client for a Soulfire server and its bot instances.
 
     Use :meth:`connect` for an existing server, :meth:`install` for a managed
     local server, or :meth:`create_bot` for a ready bot in one operation.
@@ -258,10 +258,10 @@ class SoulFire:
 
         The handshake checks the API version, required capabilities, and required
         plugin versions. The scope closes the client's transports on exit.
-        It does not stop the remote SoulFire server.
+        It does not stop the remote Soulfire server.
 
         Args:
-            base_url: SoulFire gRPC-Web URL, including ``http://`` or ``https://``.
+            base_url: Soulfire gRPC-Web URL, including ``http://`` or ``https://``.
                 This is separate from the Minecraft server address.
             token: Bearer token or token provider. Omit it for a public server.
             timeout_ms: Default RPC timeout in milliseconds. ``None`` uses the
@@ -340,9 +340,9 @@ class SoulFire:
         timeout_ms: int | None = None,
         interceptors: Iterable[ClientInterceptor] = (),
     ) -> EffectGen[SoulFire, SoulFireOperationError, Scope]:
-        """Download and start a local SoulFire server owned by the scope.
+        """Download and start a local Soulfire server owned by the scope.
 
-        The installer downloads Java and SoulFire when needed, starts the process,
+        The installer downloads Java and Soulfire when needed, starts the process,
         then connects with its local token and completes the SDK handshake.
         The scope closes the client and stops the managed process on exit.
         Downloaded files and server data remain available for later runs.
@@ -351,7 +351,7 @@ class SoulFire:
             directory: Installation and data directory. Defaults to ``.soulfire``
                 in the current working directory.
             version: Release tag to install. ``None`` selects the latest release.
-            java_args: Extra JVM arguments before the SoulFire JAR.
+            java_args: Extra JVM arguments before the Soulfire JAR.
             port: Local gRPC-Web port. ``None`` selects an available port.
             startup_timeout: Maximum startup wait in seconds. Defaults to 120.
             on_log: Callback for server log lines.
@@ -413,7 +413,7 @@ class SoulFire:
         on_device_code: Callable[[DeviceCode], Effect[None, SoulFireOperationError]] | None = None,
         installation: ManagedInstallOptions | None = None,
     ) -> EffectGen[SoulFireBot, SoulFireOperationError, Scope]:
-        """Install SoulFire and create or reuse a ready bot by name.
+        """Install Soulfire and create or reuse a ready bot by name.
 
         The instance name defaults to the Minecraft server address. The bot name
         and offline username default to ``username``. Repeated calls reuse named
@@ -477,7 +477,7 @@ class SoulFire:
     @property
     def plugins(self) -> PluginCatalog:
         if self._plugins is None:
-            raise RuntimeError("SoulFire connection has not completed its SDK handshake")
+            raise RuntimeError("Soulfire connection has not completed its SDK handshake")
         return self._plugins
 
     @property
@@ -681,12 +681,12 @@ class SoulFire:
 
     def _require_local_server(self) -> LocalServerHandle:
         if self._local_server_handle is None:
-            raise RuntimeError("This client does not manage a local SoulFire server")
+            raise RuntimeError("This client does not manage a local Soulfire server")
         return self._local_server_handle
 
     def _require_connection(self) -> ConnectionMetadata:
         if self._connection is None:
-            raise RuntimeError("SoulFire connection has not completed its SDK handshake")
+            raise RuntimeError("Soulfire connection has not completed its SDK handshake")
         return self._connection
 
     @fn("SoulFire.negotiate")
@@ -916,7 +916,7 @@ class SoulFireInstance:
                 yield from fail(
                     operation_error(
                         "SoulFireInstance.info",
-                        RuntimeError(f"SoulFire did not return instance {self.id}"),
+                        RuntimeError(f"Soulfire did not return instance {self.id}"),
                     )
                 )
             )

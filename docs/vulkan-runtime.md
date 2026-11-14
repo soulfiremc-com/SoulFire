@@ -1,9 +1,9 @@
 # Bundled headless Vulkan runtime
 
-SoulFire renders through Minecraft's Vulkan backend and LWJGL. Release JARs include a Vulkan loader and Mesa lavapipe for CPU rendering.
+Soulfire renders through Minecraft's Vulkan backend and LWJGL. Release JARs include a Vulkan loader and Mesa lavapipe for CPU rendering.
 The runtime does not require a system Vulkan loader, Mesa installation, display server, or GPU.
 
-Installed GPU drivers remain available. SoulFire prefers discrete GPUs, then integrated GPUs, then CPU rendering. Minecraft validates each candidate's features and extensions.
+Installed GPU drivers remain available. Soulfire prefers discrete GPUs, then integrated GPUs, then CPU rendering. Minecraft validates each candidate's features and extensions.
 On macOS, the JAR also includes LWJGL's MoltenVK libraries for Metal hardware rendering.
 
 ## Runtime packages
@@ -18,7 +18,7 @@ The Java runtime and baseline OS libraries remain prerequisites. Linux packages 
 Hardware rendering still requires the host's GPU driver. Containers also need explicit GPU access to use that driver.
 
 Each package includes the loader, lavapipe, its native dependency closure, license notices, and SHA-256 hashes.
-Libraries extract into the SoulFire data directory under `natives/vulkan/<platform>/<manifest-hash>`.
+Libraries extract into the Soulfire data directory under `natives/vulkan/<platform>/<manifest-hash>`.
 Extraction uses a file lock, verifies hashes, and replaces corrupt cache files before loading them.
 
 The loader uses `VK_LUNARG_direct_driver_loading` in inclusive mode to add lavapipe alongside normal driver discovery.
@@ -29,8 +29,8 @@ An explicit `org.lwjgl.vulkan.libname` override retains LWJGL's normal behavior 
 ## Force software rendering
 
 If a GPU driver crashes during startup, add `-Dsf.vulkan.software=true` before `-jar` in the Java command.
-This flag requires SoulFire 2.11 or newer.
-SoulFire then uses only bundled lavapipe and does not discover or initialize GPU drivers.
+This flag requires Soulfire 2.11 or newer.
+Soulfire then uses only bundled lavapipe and does not discover or initialize GPU drivers.
 This mode also overrides `VK_DRIVER_FILES`, `VK_ICD_FILENAMES`, and `org.lwjgl.vulkan.libname`.
 CPU rendering can reduce performance and increase CPU usage.
 
@@ -72,7 +72,7 @@ Linux ARM64, Windows, and macOS retain shared LLVM until equivalent native valid
 The Debian x86-64 builder also installs `libclang-common-15-dev` for LLVM's static Polly archives.
 Linux x86-64 builds without Docker require LLVM's static development libraries.
 
-Windows retains Mesa's Win32 support, but SoulFire creates no native window or presentation surface.
+Windows retains Mesa's Win32 support, but Soulfire creates no native window or presentation surface.
 Before packaging, a native smoke test creates a CPU device, submits work, and verifies buffer readback.
 
 ## Build an all-platform release

@@ -1,15 +1,15 @@
-# SoulFire SDKs
+# Soulfire SDKs
 
 Projects hold bots, configuration, scripts, files, access, and metadata.
 The SDK and protocol keep their existing `instance` names for compatibility.
 A project ID is the same ID used by `instanceId` and `instance_id`.
 
-The SoulFire SDKs provide typed gRPC-Web clients for scripting bots managed by
-a SoulFire server.
+The Soulfire SDKs provide typed gRPC-Web clients for scripting bots managed by
+a Soulfire server.
 
 Scripts can create a ready offline bot by Minecraft server address and username.
-Managed installation downloads Java and SoulFire automatically and reuses named
-projects and accounts. The SDK can also connect to an existing SoulFire server. Projects provide permission and configuration boundaries, while each
+Managed installation downloads Java and Soulfire automatically and reuses named
+projects and accounts. The SDK can also connect to an existing Soulfire server. Projects provide permission and configuration boundaries, while each
 configured account is controlled as an independent bot with its own persistent
 desired state.
 

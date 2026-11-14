@@ -123,12 +123,12 @@ final class OpenApiSpecGenerator {
 
   private ObjectNode buildInfo() {
     var info = JSON_MAPPER.createObjectNode();
-    info.put("title", "SoulFire HTTP API");
+    info.put("title", "Soulfire HTTP API");
     info.put("version", BuildData.VERSION);
     info.put(
       "description",
       """
-        Generated from SoulFire's Armeria gRPC metadata.
+        Generated from Soulfire's Armeria gRPC metadata.
 
         This document only covers HTTP-accessible unary operations:
         - unframed JSON POST routes generated from gRPC services
@@ -140,7 +140,7 @@ final class OpenApiSpecGenerator {
         - Bearer: `Authorization: Bearer <api-jwt>`
         - Basic: `Authorization: Basic <base64(username:api-jwt)>`
 
-        `LoginService` is public. Every other operation requires an API token audience accepted by SoulFire.
+        `LoginService` is public. Every other operation requires an API token audience accepted by Soulfire.
         """
     );
     return info;
@@ -150,7 +150,7 @@ final class OpenApiSpecGenerator {
     var servers = JSON_MAPPER.createArrayNode();
     servers.addObject()
       .put("url", publicAddress)
-      .put("description", "Configured SoulFire public API address");
+      .put("description", "Configured Soulfire public API address");
     var templateDefaults = serverTemplateDefaults(publicAddress);
     var templateServer = servers.addObject();
     templateServer
@@ -717,7 +717,7 @@ final class OpenApiSpecGenerator {
       .put("scheme", "basic")
       .put(
         "description",
-        "Compatibility authentication. Encode `username:api-jwt` as the HTTP Basic credentials. SoulFire ignores the username and validates the token in the password slot."
+        "Compatibility authentication. Encode `username:api-jwt` as the HTTP Basic credentials. Soulfire ignores the username and validates the token in the password slot."
       );
 
     return securitySchemes;

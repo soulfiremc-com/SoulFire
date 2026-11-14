@@ -32,8 +32,8 @@ public final class DevSettings implements SettingsObject {
       .sourceType(SettingsSource.Server.INSTANCE)
       .namespace(NAMESPACE)
       .key("soulfire-debug")
-      .uiName("SoulFire debug")
-      .description("Enable SoulFire debug logging")
+      .uiName("Soulfire debug")
+      .description("Enable Soulfire debug logging")
       .defaultValue(false)
       .build();
   public static final BooleanProperty<SettingsSource.Server> MINECRAFT_DEBUG =

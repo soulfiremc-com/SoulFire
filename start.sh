@@ -14,5 +14,5 @@ if [ -z "$SF_JAR" ]; then
   SF_JAR="/soulfire/soulfire.jar"
 fi
 
-echo "Starting SoulFire dedicated server..."
+echo "Starting Soulfire dedicated server..."
 java -Xmx$SF_RAM $SF_JVM_FLAGS -XX:+EnableDynamicAgentLoading -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+AlwaysActAsServerClassMachine -XX:+UseNUMA -XX:+UseFastUnorderedTimeStamps -XX:+UseVectorCmov -XX:+UseCriticalJavaThreadPriority -Dsf.flags.v2=true -jar $SF_JAR

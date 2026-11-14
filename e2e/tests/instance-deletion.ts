@@ -14,7 +14,7 @@ export default {
       const directory = client.localServer?.runDirectory;
       if (!directory)
         return yield* new CheckFailed({
-          message: "Deletion test requires the local SoulFire runtime",
+          message: "Deletion test requires the local Soulfire runtime",
         });
       const settings = (yield* client.instance(bot.instanceId).info()).config?.settings;
       if (!settings)

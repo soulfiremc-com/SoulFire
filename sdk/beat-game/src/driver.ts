@@ -1446,7 +1446,7 @@ function blockPosition(
 
 function required<T>(value: T | undefined, name: string): T {
   if (value === undefined) {
-    throw new Error(`SoulFire omitted required ${name}`);
+    throw new Error(`Soulfire omitted required ${name}`);
   }
   return value;
 }
@@ -1457,7 +1457,7 @@ function driverError(operation: string, cause: unknown): BeatGameDriverError {
     operation,
     ...(code === undefined ? {} : { code }),
     retryable: isRetryable(cause),
-    message: cause instanceof Error ? cause.message : `SoulFire ${operation} failed`,
+    message: cause instanceof Error ? cause.message : `Soulfire ${operation} failed`,
     cause,
   });
 }

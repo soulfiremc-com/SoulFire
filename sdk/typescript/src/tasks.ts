@@ -425,7 +425,7 @@ export interface FishTaskOptions extends TaskStartOptions {
 
 export interface FarmTaskOptions extends TaskStartOptions {
   /**
-   * Empty (the default) farms every crop SoulFire supports.
+   * Empty (the default) farms every crop Soulfire supports.
    */
   cropIds?: readonly string[];
   /**

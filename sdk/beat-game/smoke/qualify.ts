@@ -7,7 +7,7 @@ import process from "node:process";
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 const packageDirectory = path.resolve(import.meta.dirname, "..");
 const runCount = positiveIntegerEnvironment("SOULFIRE_QUALIFICATION_RUNS", 5);
-const seed = environment("SOULFIRE_QUALIFICATION_SEED", "SoulFire beat-game qualification v1");
+const seed = environment("SOULFIRE_QUALIFICATION_SEED", "Soulfire beat-game qualification v1");
 const controlled = booleanEnvironment("SOULFIRE_QUALIFICATION_CONTROLLED", false);
 const continueAfterFailure = booleanEnvironment(
   "SOULFIRE_QUALIFICATION_CONTINUE_ON_FAILURE",

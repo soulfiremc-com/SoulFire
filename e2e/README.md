@@ -1,6 +1,6 @@
 # End-to-end scenarios
 
-Runs SoulFire against a real vanilla Minecraft server: a void world in Docker, SoulFire started
+Runs Soulfire against a real vanilla Minecraft server: a void world in Docker, Soulfire started
 from a jar, and one offline-mode bot. Each test builds its scene with server commands (RCON),
 drives the bot through the TypeScript SDK, and checks the outcome on the server.
 
@@ -31,6 +31,6 @@ throws when a check fails. `walk-straight.ts` is the smallest example.
 
 - The world has no terrain, time, weather, mobs or random ticks: only what tests build. Build
   your scene away from the other tests' coordinates, and clear it first.
-- `placeBot` teleports the bot and waits until SoulFire has the chunks around it.
+- `placeBot` teleports the bot and waits until Soulfire has the chunks around it.
 - Check the result on the server (`execute if block`, `data get entity`, `serverPosition`),
   not only what the bot reports.

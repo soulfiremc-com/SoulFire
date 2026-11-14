@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// The bootstrap package for java SoulFire clients.
+/// The bootstrap package for java Soulfire clients.
 @DefaultQualifier(value = NonNull.class, locations = {TypeUseLocation.PARAMETER, TypeUseLocation.RETURN})
 package com.soulfiremc.bootstrap.client;
 

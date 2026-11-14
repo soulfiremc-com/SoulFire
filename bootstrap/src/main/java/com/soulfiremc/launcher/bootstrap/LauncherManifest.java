@@ -32,7 +32,7 @@ import java.util.Set;
 record LauncherManifest(int formatVersion, String minecraftVersion, String assetIndex, List<Asset> assets) {
   LauncherManifest {
     if (formatVersion != 1 || minecraftVersion == null || assetIndex == null || assets == null) {
-      throw new IllegalArgumentException("Invalid SoulFire asset manifest");
+      throw new IllegalArgumentException("Invalid Soulfire asset manifest");
     }
     assets = List.copyOf(assets);
     var paths = new HashSet<String>();
@@ -61,7 +61,7 @@ record LauncherManifest(int formatVersion, String minecraftVersion, String asset
       default -> null;
     };
     if (os == null || arch == null) {
-      throw new IllegalStateException("Unsupported SoulFire platform: " + osName + " / " + System.getProperty("os.arch"));
+      throw new IllegalStateException("Unsupported Soulfire platform: " + osName + " / " + System.getProperty("os.arch"));
     }
     return os + "-" + arch;
   }

@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 
-/// Serves an OpenAPI document for SoulFire's HTTP-accessible unary RPC surface.
+/// Serves an OpenAPI document for Soulfire's HTTP-accessible unary RPC surface.
 ///
 /// The document is derived from the same Armeria gRPC metadata that powers the DocService,
 /// but trimmed to what OpenAPI can faithfully describe: unary JSON endpoints.

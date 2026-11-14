@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// The launcher package for java SoulFire clients.
+/// The launcher package for java Soulfire clients.
 package com.soulfiremc.launcher.client;

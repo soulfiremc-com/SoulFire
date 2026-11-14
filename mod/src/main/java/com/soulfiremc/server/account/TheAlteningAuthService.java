@@ -44,7 +44,7 @@ public final class TheAlteningAuthService
   public static final String SESSION_SERVER_URL = "http://sessionserver.thealtening.com";
   private static final Agent MINECRAFT_AGENT = new Agent("Minecraft", 1);
   private static final String CLIENT_TOKEN = UUID.randomUUID().toString();
-  private static final String AUTH_PASSWORD = "SoulFire";
+  private static final String AUTH_PASSWORD = "Soulfire";
 
   private TheAlteningAuthService() {}
 

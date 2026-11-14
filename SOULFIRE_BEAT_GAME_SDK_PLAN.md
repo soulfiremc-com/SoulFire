@@ -1,27 +1,27 @@
-# SoulFire Beat-Game TypeScript SDK Plan
+# Soulfire Beat-Game TypeScript SDK Plan
 
-Status: Local implementation complete; live-fixture release gates await the two open infrastructure decisions  
-Audience: SoulFire, TypeScript SDK, SoulFireClient, and documentation maintainers  
+Status: Local implementation complete; live-fixture release gates await the two open infrastructure decisions
+Audience: Soulfire, TypeScript SDK, SoulFireClient, and documentation maintainers
 Document type: Architecture explanation and implementation roadmap
 
 ## Decision
 
-Move SoulFire's entire first-party game-beating system out of the Java server and SoulFireClient. Reimplement it as an Effect-first TypeScript application layer built exclusively on the official SoulFire SDK.
+Move Soulfire's entire first-party game-beating system out of the Java server and SoulFireClient. Reimplement it as an Effect-first TypeScript application layer built exclusively on the official Soulfire SDK.
 
-SoulFire should behave like a remotely controlled Minecraft client:
+Soulfire should behave like a remotely controlled Minecraft client:
 
-- SoulFire observes the game.
-- SoulFire performs direct Minecraft actions.
-- SoulFire provides general-purpose Mineflayer-parity tasks.
-- SoulFire arbitrates access when multiple controllers want the same bot.
-- SoulFire plans and executes paths.
+- Soulfire observes the game.
+- Soulfire performs direct Minecraft actions.
+- Soulfire provides general-purpose Mineflayer-parity tasks.
+- Soulfire arbitrates access when multiple controllers want the same bot.
+- Soulfire plans and executes paths.
 - The TypeScript runner decides how those capabilities serve the beat-game plan.
 
-The existing Mineflayer-parity tasks remain first-party SoulFire capabilities. They provide reusable operations such as collecting blocks, attacking entities, crafting, smelting, farming, and automatic equipment management. The beat-game runner should use them where they fit. What moves to TypeScript is the game-specific strategy that chooses goals, connects those operations, builds portals, locates strongholds, recovers runs, and coordinates a team.
+The existing Mineflayer-parity tasks remain first-party Soulfire capabilities. They provide reusable operations such as collecting blocks, attacking entities, crafting, smelting, farming, and automatic equipment management. The beat-game runner should use them where they fit. What moves to TypeScript is the game-specific strategy that chooses goals, connects those operations, builds portals, locates strongholds, recovers runs, and coordinates a team.
 
-Throwing an ender pearl illustrates the boundary. The SDK selects the pearl, rotates the bot, calls the ordinary item-use primitive, and observes the projectile and player movement. SoulFire does not need a `ThrowEnderPearl` RPC or a pearl-specific task.
+Throwing an ender pearl illustrates the boundary. The SDK selects the pearl, rotates the bot, calls the ordinary item-use primitive, and observes the projectile and player movement. Soulfire does not need a `ThrowEnderPearl` RPC or a pearl-specific task.
 
-This plan preserves the recommendation in `SOULFIRE_SDK_IMPROVEMENT_PLAN.md` that reusable continuous behaviors may run close to the game loop. It draws the boundary above those behaviors: SoulFire may execute a general task, but it must not own the beat-game objective graph or phase planner.
+This plan preserves the recommendation in `SOULFIRE_SDK_IMPROVEMENT_PLAN.md` that reusable continuous behaviors may run close to the game loop. It draws the boundary above those behaviors: Soulfire may execute a general task, but it must not own the beat-game objective graph or phase planner.
 
 ## Locked implementation decisions
 
@@ -41,14 +41,14 @@ These decisions constrain the migration. They do not authorize deleting pathfind
 - Remove the native Java beat-game planner completely.
 - Remove the native beat-game controls from SoulFireClient.
 - Make TypeScript the canonical home of first-party beat-game strategy.
-- Keep SoulFire core free of beat-game-specific policy.
+- Keep Soulfire core free of beat-game-specific policy.
 - Make the beat-game implementation a demanding real-world consumer of the public SDK.
 - Preserve and exercise every general Mineflayer-parity task provider.
 - Expose reusable TypeScript behaviors instead of one opaque `beatGame()` black box.
 - Preserve generic plugin-defined RPCs, events, and durable tasks.
 - Support single-bot and multi-bot runs.
-- Survive SDK process restarts, SoulFire reconnects, bot deaths, and partial actions.
-- Prove the design against real SoulFire and Minecraft processes.
+- Survive SDK process restarts, Soulfire reconnects, bot deaths, and partial actions.
+- Prove the design against real Soulfire and Minecraft processes.
 - Document the architecture and APIs in this repository and `./soulfiremc.com`.
 
 ## Non-goals
@@ -64,9 +64,9 @@ These decisions constrain the migration. They do not authorize deleting pathfind
 
 ## Architectural model
 
-### SoulFire is the puppet
+### Soulfire is the puppet
 
-SoulFire owns mechanics that require authoritative access to the connected Minecraft client:
+Soulfire owns mechanics that require authoritative access to the connected Minecraft client:
 
 - protocol translation across supported Minecraft versions;
 - connection, authentication, and session lifecycle;
@@ -85,7 +85,7 @@ SoulFire owns mechanics that require authoritative access to the connected Minec
 - plugin RPC hosting;
 - provider-independent plugin task hosting.
 
-SoulFire reports what happened. It does not decide what the event means for a game plan.
+Soulfire reports what happened. It does not decide what the event means for a game plan.
 
 ### TypeScript pulls the strings
 
@@ -110,13 +110,13 @@ The TypeScript SDK owns:
 
 ### Reusable tasks are actuators, not the planner
 
-General tasks remain in SoulFire when they are useful outside one game plan and benefit from tight game-loop execution. Examples include following an entity, collecting blocks, attacking, crafting, smelting, fishing, farming, building a supplied schematic, and maintaining equipment.
+General tasks remain in Soulfire when they are useful outside one game plan and benefit from tight game-loop execution. Examples include following an entity, collecting blocks, attacking, crafting, smelting, fishing, farming, building a supplied schematic, and maintaining equipment.
 
 The TypeScript runner may compose these tasks with direct primitives. It still owns target selectors, requirement priorities, phase transitions, portal and stronghold strategy, retry policy, and team objectives.
 
 ### Pathfinding remains server-side
 
-The SDK tells SoulFire where to go and with which path constraints. SoulFire resolves and executes the route.
+The SDK tells Soulfire where to go and with which path constraints. Soulfire resolves and executes the route.
 
 Allowed pathfinding inputs include:
 
@@ -131,7 +131,7 @@ Pathfinding may react locally to invalidated nodes and ordinary route execution 
 
 ## Boundary examples
 
-| Workflow | TypeScript decides | SoulFire performs or observes |
+| Workflow | TypeScript decides | Soulfire performs or observes |
 | --- | --- | --- |
 | Collect a log | Required count, selector, priority, retries | Run the generic collect task and report progress and inventory changes |
 | Fight a blaze | Target selector, required drops, safety policy | Run generic attack or pathfinding tasks and report entity, damage, and inventory events |
@@ -334,7 +334,7 @@ Export the useful parts of the runner independently:
 - `activateEndPortal`
 - `fightEnderDragon`
 
-These are TypeScript programs composed from public SDK calls. Their names must not become SoulFire core RPCs.
+These are TypeScript programs composed from public SDK calls. Their names must not become Soulfire core RPCs.
 
 ### Driver boundary
 
@@ -473,7 +473,7 @@ Cancellation must reset held movement, stop pathfinding, release leases, and clo
 - Collect output.
 - Confirm the inventory result.
 
-The existing generic `CraftTask` remains in SoulFire core and is the preferred execution path. The beat-game package owns recipe choice, dependency expansion, and sequencing.
+The existing generic `CraftTask` remains in Soulfire core and is the preferred execution path. The beat-game package owns recipe choice, dependency expansion, and sequencing.
 
 ### Smelting, brewing, and trading
 
@@ -541,7 +541,7 @@ This workflow exists to prove that the SDK can derive behavior from primitives w
 
 ## Multi-bot coordination
 
-Multi-bot coordination is required for the first TypeScript release. Coordination runs outside SoulFire and may span multiple SoulFire instances.
+Multi-bot coordination is required for the first TypeScript release. Coordination runs outside Soulfire and may span multiple Soulfire instances.
 
 Provide:
 
@@ -557,7 +557,7 @@ Provide:
 
 Define interfaces for coordination and storage. Ship an in-memory coordinator for local runs and allow applications to provide Redis, Postgres, or another durable backend.
 
-SoulFire core must remain unaware of beat-game roles and objectives.
+Soulfire core must remain unaware of beat-game roles and objectives.
 
 ## Durability and recovery
 
@@ -565,7 +565,7 @@ The runner must recover from:
 
 - TypeScript process restarts;
 - temporary network loss;
-- SoulFire process restarts;
+- Soulfire process restarts;
 - bot disconnects and reconnects;
 - changed connection epochs;
 - death and respawn;
@@ -679,7 +679,7 @@ Keep and verify:
 - plugin-defined durable tasks;
 - audit records for plugin RPC calls.
 
-The beat-game runner may accept strategy extensions that call plugin features through the normal official SDK. A plugin can intentionally provide server-side domain behavior, but it remains plugin-owned and opt-in. SoulFire core does not depend on it.
+The beat-game runner may accept strategy extensions that call plugin features through the normal official SDK. A plugin can intentionally provide server-side domain behavior, but it remains plugin-owned and opt-in. Soulfire core does not depend on it.
 
 ## SoulFireClient migration
 
@@ -720,7 +720,7 @@ Keep:
 - control leases;
 - plugin RPCs, events, and tasks.
 
-The first-party runner is TypeScript-first. A future Python runner should implement the same behavioral contract using modern Python rather than moving policy back into SoulFire.
+The first-party runner is TypeScript-first. A future Python runner should implement the same behavioral contract using modern Python rather than moving policy back into Soulfire.
 
 ## Test strategy
 
@@ -771,7 +771,7 @@ These tests verify the adapter, not planner strategy.
 Create a disposable environment containing:
 
 1. A deterministic offline Minecraft server and fixture world.
-2. A real SoulFire server process.
+2. A real Soulfire server process.
 3. A real bot connection.
 4. The packed official TypeScript SDK.
 5. The beat-game runner in a separate Node process.
@@ -820,7 +820,7 @@ Update repository documentation and `./soulfiremc.com`.
 
 ### Explanation
 
-- SoulFire's puppet architecture.
+- Soulfire's puppet architecture.
 - Why gameplay strategy runs in TypeScript.
 - The boundary between a primitive, a reusable parity task, pathfinding, and beat-game policy.
 - Effect-first runtime and structured concurrency.
@@ -913,7 +913,7 @@ Do not publish an SDK version that points to removed server APIs. The removal an
 
 The migration is complete only when:
 
-- no native beat-game controller runs in SoulFire;
+- no native beat-game controller runs in Soulfire;
 - no automation service, settings page, command, capability, audit value, or generated binding remains;
 - every existing Mineflayer-parity task provider remains available and covered by tests;
 - plugin-defined RPCs, events, and tasks still work;
@@ -934,7 +934,7 @@ The migration is complete only when:
 
 ### Remote latency harms action timing
 
-Use state streams, keep action calls small, colocate the TypeScript worker with SoulFire for demanding runs, and measure before adding bounded generic input scheduling.
+Use state streams, keep action calls small, colocate the TypeScript worker with Soulfire for demanding runs, and measure before adding bounded generic input scheduling.
 
 ### The SDK lacks enough observations
 
@@ -977,8 +977,8 @@ the environment, bot accounts, version, fixture, and seed.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Game strategy lives in TypeScript | Accepted | SoulFire should be a general remote client, not a game-policy engine |
-| SoulFire retains pathfinding | Accepted | Path execution needs tight access to world state and the game tick |
+| Game strategy lives in TypeScript | Accepted | Soulfire should be a general remote client, not a game-policy engine |
+| Soulfire retains pathfinding | Accepted | Path execution needs tight access to world state and the game tick |
 | Portal construction lives in TypeScript | Accepted | It composes placement, interaction, observation, and pathfinding |
 | Item throwing uses normal item actions | Accepted | A named throw RPC would encode unnecessary item-specific policy |
 | Native Java beat-game system is removed | Accepted | Two planners would drift and preserve the wrong ownership boundary |
@@ -1002,8 +1002,8 @@ the environment, bot accounts, version, fixture, and seed.
 
 ## Architectural guardrail
 
-When considering a future SoulFire RPC, ask:
+When considering a future Soulfire RPC, ask:
 
 > Is this a direct Minecraft action or observation, a reusable general-purpose task, a pathfinding operation, or a decision in the beat-game plan?
 
-Direct actions, observations, reusable Mineflayer-parity tasks, and pathfinding belong in SoulFire. Beat-game objectives, phase transitions, portal and stronghold strategy, recovery, and team coordination belong in `@soulfiremc/beat-game`.
+Direct actions, observations, reusable Mineflayer-parity tasks, and pathfinding belong in Soulfire. Beat-game objectives, phase transitions, portal and stronghold strategy, recovery, and team coordination belong in `@soulfiremc/beat-game`.

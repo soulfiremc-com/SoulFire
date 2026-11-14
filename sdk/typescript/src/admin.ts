@@ -81,7 +81,7 @@ type InstanceInput<T extends DescMessage> = Omit<Input<T>, "instanceId">;
 type UserInput<T extends DescMessage> = Omit<Input<T>, "userId">;
 
 /**
- * High-level access to SoulFire's administrative control plane.
+ * High-level access to Soulfire's administrative control plane.
  *
  * Generated service clients remain available through `soulfire.service()` for
  * new or uncommon fields.

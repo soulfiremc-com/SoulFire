@@ -39,7 +39,7 @@ export class SoulFireCompatibilityError extends Error {
 export class SoulFireCapabilityError extends Error {
   public readonly _tag = "SoulFireCapabilityError";
   public constructor(public readonly capability: string) {
-    super(`SoulFire capability is unavailable: ${capability}`);
+    super(`Soulfire capability is unavailable: ${capability}`);
     this.name = "SoulFireCapabilityError";
   }
 }
@@ -80,7 +80,7 @@ export interface ConnectionMetadata {
 
 export function connectionMetadata(handshake: SdkHandshakeResponse): ConnectionMetadata {
   if (handshake.apiVersion === undefined || handshake.identity === undefined) {
-    throw new SoulFireCompatibilityError("SoulFire returned an incomplete SDK handshake");
+    throw new SoulFireCompatibilityError("Soulfire returned an incomplete SDK handshake");
   }
   return {
     server: {

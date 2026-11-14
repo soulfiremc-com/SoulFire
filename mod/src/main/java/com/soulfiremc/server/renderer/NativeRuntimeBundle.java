@@ -105,7 +105,7 @@ public record NativeRuntimeBundle(Path loader, Path driver) {
 
   private static InputStream resource(ClassLoader resources, String name) throws IOException {
     var input = resources.getResourceAsStream(name);
-    if (input == null) throw new IOException("Missing bundled Vulkan resource: " + name + ". Build the native runtime before packaging SoulFire.");
+    if (input == null) throw new IOException("Missing bundled Vulkan resource: " + name + ". Build the native runtime before packaging Soulfire.");
     return input;
   }
 

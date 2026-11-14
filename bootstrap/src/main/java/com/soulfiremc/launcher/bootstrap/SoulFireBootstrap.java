@@ -71,7 +71,7 @@ public final class SoulFireBootstrap {
            var lockChannel = FileChannel.open(baseDirectory.resolve(".asset-cache.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
            var lock = acquireCacheLock(lockChannel)) {
         if (!lock.isValid()) {
-          throw new IOException("Unable to lock the SoulFire asset cache");
+          throw new IOException("Unable to lock the Soulfire asset cache");
         }
         var cache = new AssetCache(baseDirectory, asset -> open(client, asset), progress);
         try (var executor = Executors.newFixedThreadPool(6);
@@ -124,9 +124,9 @@ public final class SoulFireBootstrap {
         .getMethod("runPostLib", Path.class, String.class, String[].class)
         .invoke(null, baseDirectory, bootstrapClassName, args);
     } catch (InvocationTargetException e) {
-      throw new IllegalStateException("SoulFire runtime failed", e.getCause());
+      throw new IllegalStateException("Soulfire runtime failed", e.getCause());
     } catch (IOException | ReflectiveOperationException e) {
-      throw new IllegalStateException("Failed to prepare SoulFire runtime", e);
+      throw new IllegalStateException("Failed to prepare Soulfire runtime", e);
     }
   }
 
@@ -153,7 +153,7 @@ public final class SoulFireBootstrap {
     if (lock != null) {
       return lock;
     }
-    StartupProgress.log("Waiting for another SoulFire process to release the runtime cache");
+    StartupProgress.log("Waiting for another Soulfire process to release the runtime cache");
     return channel.lock();
   }
 

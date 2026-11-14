@@ -41,7 +41,7 @@ public final class SetSessionInstanceVariableNode extends AbstractScriptNode {
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores temporary data for this project runtime. Values reset when the SoulFire server restarts.")
+    .description("Stores temporary data for this project runtime. Values reset when the Soulfire server restarts.")
     .icon("upload")
     .color("#10B981")
     .addKeywords("Set Session Instance Variable", "variable", "session", "instance", "temporary", "store", "set", "memory")

@@ -29,9 +29,9 @@ USER soulfire
 EXPOSE 38765/tcp
 
 LABEL org.opencontainers.image.source="https://github.com/soulfiremc-com/SoulFire" \
-      org.opencontainers.image.description="SoulFire Dedicated Server" \
+      org.opencontainers.image.description="Soulfire Dedicated Server" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
-      org.opencontainers.image.title="SoulFire" \
+      org.opencontainers.image.title="Soulfire" \
       org.opencontainers.image.vendor="AlexProgrammerDE"
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=5 \

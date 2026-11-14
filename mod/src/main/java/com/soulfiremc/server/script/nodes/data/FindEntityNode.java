@@ -47,7 +47,7 @@ public final class FindEntityNode extends AbstractScriptNode {
       PortDefinition.inputWithDefault("maxDistance", "Max Distance", PortType.NUMBER, "32", "Maximum search radius"),
       PortDefinition.inputWithDefault("excludeDead", "Exclude Dead", PortType.BOOLEAN, "true", "Skip dead or non-enemy entities"),
       PortDefinition.inputWithDefault("playersOnly", "Players Only", PortType.BOOLEAN, "false", "Only return player entities"),
-      PortDefinition.inputWithDefault("excludeBots", "Exclude Bots", PortType.BOOLEAN, "false", "Skip other SoulFire bots in the same instance"),
+      PortDefinition.inputWithDefault("excludeBots", "Exclude Bots", PortType.BOOLEAN, "false", "Skip other Soulfire bots in the same instance"),
       PortDefinition.inputWithDefault("mustBeSeen", "Must Be Seen", PortType.BOOLEAN, "false", "Only return entities with line-of-sight (raytrace)")
     )
     .addOutputs(
@@ -122,7 +122,7 @@ public final class FindEntityNode extends AbstractScriptNode {
         }
       }
 
-      // Exclude other SoulFire bots in the same instance
+      // Exclude other Soulfire bots in the same instance
       if (excludeBots) {
         var isBot = bot.instanceManager().getConnectedBots().stream()
           .anyMatch(b -> {

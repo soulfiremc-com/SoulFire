@@ -19,7 +19,7 @@ body:
     attributes:
       label: Document or example
       description: Include the file path or GitHub link and the section name.
-      placeholder: CONTRIBUTING.md, Build and run SoulFire
+      placeholder: CONTRIBUTING.md, Build and run Soulfire
     validations:
       required: true
   - type: textarea

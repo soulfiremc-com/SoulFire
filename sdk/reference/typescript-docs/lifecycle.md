@@ -6,10 +6,10 @@ Choose the entry point for your runtime:
 | ------------------------- | --------------------------------------------------------------------------- |
 | `@soulfiremc/sdk/node`    | Node.js connections, managed installation, and `createBot`                  |
 | `@soulfiremc/sdk/bun`     | Bun connections, managed installation, and `createBot`                      |
-| `@soulfiremc/sdk/browser` | Browser connections to an existing SoulFire server                          |
+| `@soulfiremc/sdk/browser` | Browser connections to an existing Soulfire server                          |
 | `@soulfiremc/sdk`         | Universal connection API with an existing transport or fetch implementation |
 
-`SoulFire.connect` takes a SoulFire gRPC-Web URL, such as `http://localhost:38765`.
+`SoulFire.connect` takes a Soulfire gRPC-Web URL, such as `http://localhost:38765`.
 Bot provisioning takes a Minecraft address, such as `localhost:25565`.
 These addresses point to different services.
 
@@ -45,7 +45,7 @@ The following workflow connects, provisions a ready bot, and collects 16 log blo
 {@includeCode ../../typescript/examples/reference-lifecycle.ts#collectWithClient}
 
 The Minecraft server must accept offline accounts for this example. Set
-`SOULFIRE_TOKEN` if the SoulFire server requires authentication.
+`SOULFIRE_TOKEN` if the Soulfire server requires authentication.
 
 ## Understand readiness and cleanup
 
@@ -55,7 +55,7 @@ to 30,000 milliseconds and must be positive and finite.
 
 The scope closes observation and stops a bot only if the SDK started it.
 A previously running bot stays running. Managed installation also stops its
-local SoulFire process when the outer scope closes. Keep all bot work inside
+local Soulfire process when the outer scope closes. Keep all bot work inside
 that scope; returning a handle from a closed scope does not keep resources alive.
 
 `bot.start()` changes desired state without a readiness wait or cleanup ownership.
@@ -68,7 +68,7 @@ Read that session's state when you open observation separately.
 | Limit                                  | Unit            | Controls                                |
 | -------------------------------------- | --------------- | --------------------------------------- |
 | `readyTimeoutMs`                       | Milliseconds    | Bot startup and initial player snapshot |
-| `startupTimeoutMs`                     | Milliseconds    | Managed SoulFire process startup        |
+| `startupTimeoutMs`                     | Milliseconds    | Managed Soulfire process startup        |
 | `defaultTimeoutMs` or `call.timeoutMs` | Milliseconds    | RPC transport timeout                   |
 | Task `deadline`                        | Absolute `Date` | Server task execution                   |
 

@@ -29,4 +29,4 @@ def test_resolve_dedicated_asset_prefers_the_versioned_jar() -> None:
 
 def test_release_digest_must_be_sha256() -> None:
     with pytest.raises(RuntimeError, match="SHA-256"):
-        _require_sha256_digest("sha512:not-supported", "SoulFire release")
+        _require_sha256_digest("sha512:not-supported", "Soulfire release")

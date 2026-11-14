@@ -41,7 +41,7 @@ public final class SetPersistentInstanceVariableNode extends AbstractScriptNode 
       PortDefinition.execOut(),
       PortDefinition.output("success", "Success", PortType.BOOLEAN, "Whether storage succeeded")
     )
-    .description("Stores persistent project metadata, which survives SoulFire server restarts.")
+    .description("Stores persistent project metadata, which survives Soulfire server restarts.")
     .icon("save")
     .color("#10B981")
     .addKeywords("Set Persistent Instance Variable", "variable", "persistent", "instance", "save", "store", "set", "permanent")

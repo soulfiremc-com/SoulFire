@@ -2623,7 +2623,7 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
-  it("adopts a durable checkpoint on a replacement SoulFire instance", async () => {
+  it("adopts a durable checkpoint on a replacement Soulfire instance", async () => {
     const driver = new FakeBeatGameDriver("replacement-instance", "bot-1");
     const store = new InMemoryBeatGameCheckpointStore();
     await Effect.runPromise(
@@ -3024,7 +3024,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "flee")).toBe(false);
   });
 
-  it("restores a known durable corpse when SoulFire starts on the death screen", async () => {
+  it("restores a known durable corpse when Soulfire starts on the death screen", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
     const deathPosition = {

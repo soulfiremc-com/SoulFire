@@ -1,6 +1,6 @@
 # Task execution and ownership
 
-SoulFire tasks run on the server. The SDK offers three ways to use them:
+Soulfire tasks run on the server. The SDK offers three ways to use them:
 
 | API                               | Result                         | Cancellation ownership                                    |
 | --------------------------------- | ------------------------------ | --------------------------------------------------------- |

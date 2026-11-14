@@ -42,8 +42,8 @@ public final class AccountSettings implements SettingsObject {
       .key("use-proxies-for-account-auth")
       .uiName("Use proxies for account auth")
       .description("""
-        SoulFire uses imported proxies for account authentication.
-        Otherwise, the SoulFire server connects directly.""")
+        Soulfire uses imported proxies for account authentication.
+        Otherwise, the Soulfire server connects directly.""")
       .defaultValue(false)
       .build();
   public static final IntProperty<SettingsSource.Instance> ACCOUNT_IMPORT_CONCURRENCY =
@@ -52,7 +52,7 @@ public final class AccountSettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("account-import-concurrency")
       .uiName("Account import concurrency")
-      .description("SoulFire imports no more than this number of accounts at the same time when authentication requires credentials.")
+      .description("Soulfire imports no more than this number of accounts at the same time when authentication requires credentials.")
       .defaultValue(3)
       .minValue(1)
       .maxValue(Integer.MAX_VALUE)

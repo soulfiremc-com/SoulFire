@@ -4,7 +4,7 @@ Connection and bot lifecycle
 Choose a setup method
 ---------------------
 
-* :meth:`soulfire.SoulFire.create_bot` installs a local SoulFire server and returns a ready bot.
+* :meth:`soulfire.SoulFire.create_bot` installs a local Soulfire server and returns a ready bot.
 * :meth:`soulfire.SoulFire.install` installs once so several bots can share the managed server.
 * :meth:`soulfire.SoulFire.connect` connects to an existing server and checks compatibility.
 * :meth:`soulfire.SoulFire.instance` and :meth:`soulfire.SoulFireInstance.bot` create handles for existing UUIDs.
@@ -49,7 +49,7 @@ contains the imports and decorated workflows. Run a workflow at the application 
    asyncio.run(run_async(scoped(collect_with_client).or_die()))
 
 The Minecraft server must accept offline accounts for this example.
-Set ``SOULFIRE_TOKEN`` if the SoulFire server requires authentication.
+Set ``SOULFIRE_TOKEN`` if the Soulfire server requires authentication.
 ``or_die()`` converts expected errors into defects at this script boundary.
 For application recovery, handle the Effect error channel or inspect ``run_async_exit`` instead.
 
@@ -86,7 +86,7 @@ Use the correct timeout
      - Bot startup and initial player snapshot
    * - ``startup_timeout``
      - Seconds
-     - Managed SoulFire process startup
+     - Managed Soulfire process startup
    * - ``timeout_ms``
      - Milliseconds
      - RPC transport timeout

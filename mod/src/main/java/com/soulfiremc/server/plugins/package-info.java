@@ -15,5 +15,5 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-/// Built-in plugins for the SoulFire server.
+/// Built-in plugins for the Soulfire server.
 package com.soulfiremc.server.plugins;

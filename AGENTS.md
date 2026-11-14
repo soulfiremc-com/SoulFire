@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-SoulFire is a multi-module Gradle build targeting Java 25. `mod/` holds the Fabric-based bot logic, mixins, and resources in `mod/src/main/resources`, with tests under `mod/src/test/java`. Shared utilities live in `shared/`, protocol definitions in `proto/`, and launchers in `client-launcher/`, `dedicated-launcher/`, and `launcher/`; each publishes jars to its `build/libs`. Auxiliary assets live in `build-data/`, `scripts/`, and `config/` (IDE inspections, lint configs).
+Soulfire is a multi-module Gradle build targeting Java 25. `mod/` holds the Fabric-based bot logic, mixins, and resources in `mod/src/main/resources`, with tests under `mod/src/test/java`. Shared utilities live in `shared/`, protocol definitions in `proto/`, and launchers in `client-launcher/`, `dedicated-launcher/`, and `launcher/`; each publishes jars to its `build/libs`. Auxiliary assets live in `build-data/`, `scripts/`, and `config/` (IDE inspections, lint configs).
 
 ## Build, Test, and Development Commands
 
@@ -21,7 +21,7 @@ Place tests beside the module you modify, e.g., new mod behavior belongs in `mod
 
 ## Checking Behaviour in a Real Game
 
-Unit tests check SoulFire against what their author believes Minecraft does. When a fix depends on how the game behaves (what the client sees of an entity, what the server accepts, which packets arrive and when), check that belief first with `e2e/`: it runs SoulFire against a vanilla server in Docker and drives a bot through the TypeScript SDK (see `e2e/README.md`). Then write the unit test from what the game did. A fix you can stage there should fail the scenario without the change and pass with it. Add a scenario to `e2e/tests/` only when it covers something a unit test can't.
+Unit tests check Soulfire against what their author believes Minecraft does. When a fix depends on how the game behaves (what the client sees of an entity, what the server accepts, which packets arrive and when), check that belief first with `e2e/`: it runs Soulfire against a vanilla server in Docker and drives a bot through the TypeScript SDK (see `e2e/README.md`). Then write the unit test from what the game did. A fix you can stage there should fail the scenario without the change and pass with it. Add a scenario to `e2e/tests/` only when it covers something a unit test can't.
 
 ## Commit & Pull Request Guidelines
 
@@ -44,7 +44,7 @@ After running the `./gradlew genSources` command, the generated sources jar is p
 
 ## Branding and product language
 
-Before naming features or changing user-facing text and visuals, read the [SoulFire brand guidance](https://github.com/soulfiremc-com/brand).
+Before naming features or changing user-facing text and visuals, read the [Soulfire brand guidance](https://github.com/soulfiremc-com/brand).
 Use its terminology, naming, writing, and visual identity guides.
 Keep proposed renames separate from accepted guidance.
 Preserve public identifiers until the owning repository approves a migration.

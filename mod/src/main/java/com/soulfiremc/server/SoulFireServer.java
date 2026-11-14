@@ -74,9 +74,9 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/// The main class of the SoulFire server.
- /// A SoulFire server can hold and manage multiple instances.
- /// It also provides an RPC server to communicate with the SoulFire client.
+/// The main class of the Soulfire server.
+ /// A Soulfire server can hold and manage multiple instances.
+ /// It also provides an RPC server to communicate with the Soulfire client.
  /// More than one SoulFireServer can be running at the same time, but on different ports.
  /// Usually there is only one SoulFireServer running on a jvm, but it is possible to run multiple.
 @Slf4j
@@ -124,7 +124,7 @@ public final class SoulFireServer {
     String host,
     int port,
     Instant startTime) {
-    log.info("Starting SoulFire v{} ({} @ {})", BuildData.VERSION, BuildData.BRANCH, BuildData.COMMIT_SHORT);
+    log.info("Starting Soulfire v{} ({} @ {})", BuildData.VERSION, BuildData.BRANCH, BuildData.COMMIT_SHORT);
 
     this.shutdownManager = new ShutdownManager(this::shutdownHook);
 
@@ -184,11 +184,11 @@ public final class SoulFireServer {
     var newVersion = updateCheck.join();
     if (newVersion != null) {
       log.warn(
-        "SoulFire is outdated! Current version: {}, latest version: {}",
+        "Soulfire is outdated! Current version: {}, latest version: {}",
         BuildData.VERSION,
         newVersion);
     } else {
-      log.info("SoulFire is up to date!");
+      log.info("Soulfire is up to date!");
     }
 
     this.settingsPageRegistry = serverSettingsRegistryFuture.join();
