@@ -75,7 +75,7 @@ public final class DatabaseManager {
   }
 
   private static DatabaseContext forMysql() {
-    var jdbcUrl = "jdbc:mysql://%s:%s/%s".formatted(
+    var jdbcUrl = "jdbc:mariadb://%s:%s/%s".formatted(
       System.getProperty("mysql.host", "localhost"),
       Integer.getInteger("mysql.port", 3306),
       System.getProperty("mysql.database", "soulfire")
@@ -85,6 +85,7 @@ public final class DatabaseManager {
     hikariConfig.setJdbcUrl(jdbcUrl);
     hikariConfig.setUsername(System.getProperty("mysql.user"));
     hikariConfig.setPassword(System.getProperty("mysql.password"));
+    hikariConfig.addDataSourceProperty("sslMode", System.getProperty("mysql.sslMode", "disable"));
     hikariConfig.setMinimumIdle(Integer.getInteger("mysql.minimumIdle", 1));
     hikariConfig.setMaximumPoolSize(Integer.getInteger("mysql.maximumPoolSize", 10));
     hikariConfig.setIdleTimeout(0);

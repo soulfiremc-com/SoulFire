@@ -33,7 +33,7 @@ jobs:
       - name: Set up JDK 25
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '25'
+          java-version: '27'
           distribution: 'temurin'
           check-latest: true
       - name: Execute Gradle Build
@@ -66,7 +66,7 @@ jobs:
       - name: Set up JDK 25
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '25'
+          java-version: '27'
           distribution: 'temurin'
       - name: Download Linux-built launcher
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8

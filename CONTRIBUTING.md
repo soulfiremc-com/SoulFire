@@ -48,18 +48,18 @@ Keep work on the branch selected for your contribution.
 
 ### Find the right module
 
-| Location | Purpose |
-| --- | --- |
-| `mod/` | Bot behavior, server services, shared Java utilities, mixins, resources, and most Java tests |
-| `proto/src/main/proto/` | Protobuf definitions shared by the server and SDKs |
-| `sdk/typescript/`, `sdk/python/` | SDK implementations and language-specific tests |
-| `launcher/` | Shared bootstrap and dependency loading |
-| `client-launcher/`, `dedicated-launcher/` | CLI and dedicated server entry points and packaged JARs |
-| `j8-launcher/` | Compatibility entry points that report unsupported Java versions |
-| `vulkan-runtime/` | Native Vulkan loader, CPU rendering driver, and runtime packages |
-| `build-data/`, `buildSrc/`, `gradle/` | Build resources, Gradle conventions, and dependency configuration |
-| `e2e/` | Scenarios against a vanilla Minecraft server |
-| `docs/`, `scripts/`, `config/` | Technical references, development tools, and IDE configuration |
+| Location                                  | Purpose                                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `mod/`                                    | Bot behavior, server services, shared Java utilities, mixins, resources, and most Java tests |
+| `proto/src/main/proto/`                   | Protobuf definitions shared by the server and SDKs                                           |
+| `sdk/typescript/`, `sdk/python/`          | SDK implementations and language-specific tests                                              |
+| `launcher/`                               | Shared bootstrap and dependency loading                                                      |
+| `client-launcher/`, `dedicated-launcher/` | CLI and dedicated server entry points and packaged JARs                                      |
+| `j8-launcher/`                            | Compatibility entry points that report unsupported Java versions                             |
+| `vulkan-runtime/`                         | Native Vulkan loader, CPU rendering driver, and runtime packages                             |
+| `build-data/`, `buildSrc/`, `gradle/`     | Build resources, Gradle conventions, and dependency configuration                            |
+| `e2e/`                                    | Scenarios against a vanilla Minecraft server                                                 |
+| `docs/`, `scripts/`, `config/`            | Technical references, development tools, and IDE configuration                               |
 
 ## Build and run SoulFire
 
@@ -235,3 +235,9 @@ Keep existing license notices and identify the source and license of added third
 
 Use respectful, specific feedback in issues and reviews. Questions and corrections are welcome.
 For help with your first contribution, describe your goal and where you are stuck in the [Discord community](https://soulfiremc.com/discord).
+
+## Git hooks
+
+`bun install` installs Lefthook for this checkout and preserves the existing preparation steps.
+Run `bun run pre-commit` to run the commit checks manually.
+The hooks use the existing project tools. Before pushing, they run the relevant project checks for changed files.
