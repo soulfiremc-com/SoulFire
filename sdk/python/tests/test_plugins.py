@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from connectrpc.client import ConnectClient
+from connectrpc.method import StreamType
 from effect_py import gen, run_async, scoped, succeed
 from google.protobuf import any_pb2, descriptor_pb2
 
@@ -28,9 +29,11 @@ class FakeExampleService:
 
 class FakeReflectiveClient:
     async def execute_unary(self, *, request: Any, method: Any, **_: Any) -> Any:
+        assert method.stream_type is StreamType.UNARY
         return method.output(message=request.message)
 
     def execute_server_stream(self, *, request: Any, method: Any, **_: Any) -> AsyncIterator[Any]:
+        assert method.stream_type is StreamType.SERVER_STREAM
 
         async def values() -> AsyncIterator[Any]:
             for sequence in range(1, request.count + 1):
