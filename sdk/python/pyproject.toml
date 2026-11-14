@@ -14,11 +14,11 @@ authors = [
 ]
 dependencies = [
   "effect-python==0.1.0a2",
-  "connectrpc>=0.12.1,<0.13",
+  "connectrpc>=0.13,<0.14",
   "googleapis-common-protos>=1.70,<2",
   "protobuf>=6.31.1,<8",
   # Connect 0.12 imports WKT symbols removed in protobuf-py 0.7.
-  "protobuf-py>=0.3.0,<0.7",
+  "protobuf-py>=0.7,<0.8",
 ]
 
 [project.urls]
@@ -31,7 +31,7 @@ dev = [
   "pytest>=9.1,<10",
   "pytest-asyncio>=1.2,<2",
   "pyright>=1.1.411,<1.2",
-  "ruff>=0.16,<0.17",
+  "ruff>=0.17,<0.18",
 ]
 
 [tool.hatch.build.targets.wheel]
