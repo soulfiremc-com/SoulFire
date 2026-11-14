@@ -497,7 +497,7 @@ async function generateTypeScript(outputDirectory: string, model: GenerationMode
       effect: "^4.0.0",
     },
     dependencies: {
-      "@bufbuild/protobuf": "2.14.0",
+      "@bufbuild/protobuf": "2.17.0",
       "@connectrpc/connect": "2.1.2",
     },
     devDependencies: {
@@ -544,7 +544,7 @@ async function generateTypeScript(outputDirectory: string, model: GenerationMode
     version: "v2",
     plugins: [
       {
-        remote: "buf.build/bufbuild/es:v2.13.0",
+        remote: "buf.build/bufbuild/es:v2.17.0",
         out: "src/generated",
         opt: ["target=ts", "import_extension=js"],
       },
