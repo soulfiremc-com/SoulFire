@@ -1,7 +1,7 @@
 import pytest
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
-from connectrpc.method import IdempotencyLevel, MethodInfo
+from connectrpc.method import IdempotencyLevel, MethodInfo, StreamType
 from connectrpc.request import Headers, RequestContext
 
 from soulfire.errors import (
@@ -19,6 +19,7 @@ def request_context() -> RequestContext[object, object]:
             input=object,
             output=object,
             idempotency_level=IdempotencyLevel.UNKNOWN,
+            stream_type=StreamType.UNARY,
         ),
         http_method="POST",
         request_headers=Headers(),

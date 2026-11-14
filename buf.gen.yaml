@@ -10,7 +10,7 @@ plugins:
     out: sdk/python/src
   - remote: buf.build/protocolbuffers/pyi:v31.1
     out: sdk/python/src
-  - remote: buf.build/connectrpc/py:v0.11.1
+  - remote: buf.build/connectrpc/py:v0.13.0
     out: sdk/python/src
     opt:
       - protobuf=google

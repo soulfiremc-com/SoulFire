@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, Unpack, cast
 
 from connectrpc.client import ConnectClient
-from connectrpc.method import IdempotencyLevel, MethodInfo
+from connectrpc.method import IdempotencyLevel, MethodInfo, StreamType
 from effect_py import EffectGen, fail, fn, gen, sync
 from google.protobuf import descriptor_pb2, descriptor_pool, json_format, message_factory
 from google.protobuf.descriptor import MethodDescriptor, ServiceDescriptor
@@ -100,6 +100,7 @@ class _ReflectivePluginBase:
             input=message_factory.GetMessageClass(method.input_type),
             output=message_factory.GetMessageClass(method.output_type),
             idempotency_level=IdempotencyLevel.UNKNOWN,
+            stream_type=StreamType.SERVER_STREAM if method.server_streaming else StreamType.UNARY,
         )
 
     def _response(self, method: MethodDescriptor, value: Message) -> ReflectiveMessage:
