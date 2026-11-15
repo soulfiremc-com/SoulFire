@@ -28,7 +28,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinRenderSystem {
   @Inject(method = "isOnRenderThread", at = @At("HEAD"), cancellable = true)
   private static void isOnRenderThreadHook(CallbackInfoReturnable<Boolean> cir) {
-    if (VulkanRenderer.DEVICE_LOCK.isHeldByCurrentThread()) {
+    if (VulkanRenderer.claimDeviceAccess()) {
       cir.setReturnValue(true);
     }
   }

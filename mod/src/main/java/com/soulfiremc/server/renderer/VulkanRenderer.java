@@ -60,8 +60,47 @@ public final class VulkanRenderer {
   private static final ScopedValue<Options> REQUEST = ScopedValue.newInstance();
   private static final ScopedValue<Viewport> INTERACTIVE_VIEWPORT = ScopedValue.newInstance();
   private static final ScopedValue<Boolean> CAPTURE = ScopedValue.newInstance();
+  private static final ScopedValue<DeferredDeviceAccess> DEFERRED_ACCESS = ScopedValue.newInstance();
 
   private VulkanRenderer() {}
+
+  /// Runs a bot's client tick without the device lock, so bots simulate in parallel.
+  ///
+  /// The caller must hold the lock exactly once. Shared render state used during the tick takes the
+  /// lock through [#claimDeviceAccess()] and keeps it until the caller releases it. Otherwise the
+  /// lock is taken again before this method returns.
+  public static void runWithoutDeviceLock(Runnable tick) {
+    if (DEVICE_LOCK.getHoldCount() != 1) {
+      tick.run();
+      return;
+    }
+
+    var access = new DeferredDeviceAccess();
+    DEVICE_LOCK.unlock();
+    try {
+      ScopedValue.where(DEFERRED_ACCESS, access).run(tick);
+    } finally {
+      if (!access.claimed) {
+        DEVICE_LOCK.lock();
+      }
+    }
+  }
+
+  /// Takes the device lock for code that uses the device or shared render state.
+  ///
+  /// Returns whether the current thread holds the lock afterwards.
+  public static boolean claimDeviceAccess() {
+    if (DEVICE_LOCK.isHeldByCurrentThread()) {
+      return true;
+    }
+    if (!DEFERRED_ACCESS.isBound()) {
+      return false;
+    }
+
+    DEVICE_LOCK.lock();
+    DEFERRED_ACCESS.get().claimed = true;
+    return true;
+  }
 
   private static void activate(Minecraft minecraft) {
     tickSharedTextures();
@@ -513,4 +552,7 @@ public final class VulkanRenderer {
     }
   }
 
+  private static final class DeferredDeviceAccess {
+    private boolean claimed;
+  }
 }

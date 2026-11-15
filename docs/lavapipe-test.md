@@ -6,7 +6,7 @@ Device selection prefers discrete, integrated, and virtual GPUs before CPU devic
 
 The process shares one Vulkan device and caches one bot scene. Captures run on demand, on the owning bot thread.
 Switching bots releases the previous scene resources. Bots retain their simulation state while another bot owns the cached scene.
-Device access is serialized, including bot ticks that can upload textures. Alternating between bots requires rebuilding their visible geometry.
+Device access is serialized. Bot client ticks run in parallel and take the device lock only when they use the device, shared fonts, or the shared level renderer. Alternating between bots requires rebuilding their visible geometry.
 Inventory endpoints return transparent PNG snapshots. Animated GIF generation from the former CPU backend is no longer available.
 
 The manual tests compare a windowed vanilla framebuffer with a separate headless capture of the same deterministic fixture.
@@ -93,16 +93,16 @@ These counts describe stage contents. Objects can obscure other objects, so a co
 
 Each scene writes files under `mod/build/lavapipe-test/output/<scene>`:
 
-| File | Contents |
-| --- | --- |
-| `lavapipe.png` | Windowed vanilla reference |
-| `headless.png` | SoulFire offscreen Vulkan capture |
-| `diff.png` | Amplified color differences |
-| `comparison.png` | Reference, headless capture, and diff, from left to right |
-| `metrics.json` | Changed pixels and channel errors |
-| `device.txt` | Graphics backend, driver, and device details |
-| `scene.json` | Camera configuration and fixture details |
-| `vulkan-trace.json` | World capture duration and device details |
+| File                | Contents                                                  |
+| ------------------- | --------------------------------------------------------- |
+| `lavapipe.png`      | Windowed vanilla reference                                |
+| `headless.png`      | SoulFire offscreen Vulkan capture                         |
+| `diff.png`          | Amplified color differences                               |
+| `comparison.png`    | Reference, headless capture, and diff, from left to right |
+| `metrics.json`      | Changed pixels and channel errors                         |
+| `device.txt`        | Graphics backend, driver, and device details              |
+| `scene.json`        | Camera configuration and fixture details                  |
+| `vulkan-trace.json` | World capture duration and device details                 |
 
 The comparison checks all RGBA channels. Any changed pixel fails the comparison.
 Inventory comparisons also report errors inside and outside the inventory rectangle.

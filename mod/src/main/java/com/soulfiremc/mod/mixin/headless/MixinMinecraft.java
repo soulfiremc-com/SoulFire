@@ -86,4 +86,16 @@ public class MixinMinecraft {
       VulkanRenderer.DEVICE_LOCK.unlock();
     }
   }
+
+  @WrapMethod(method = "tick")
+  private void simulateInParallel(Operation<Void> original) {
+    // Client ticks are most of a frame. Device and shared render state claim the lock on use.
+    VulkanRenderer.runWithoutDeviceLock(() -> original.call());
+  }
+
+  @Inject(method = "updateLevelInEngines(Lnet/minecraft/client/multiplayer/ClientLevel;Z)V", at = @At("HEAD"))
+  private void claimSharedLevelRenderer(CallbackInfo ci) {
+    // Bots share the base client's level renderer.
+    VulkanRenderer.claimDeviceAccess();
+  }
 }
