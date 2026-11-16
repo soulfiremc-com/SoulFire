@@ -11697,6 +11697,96 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("moves on after a failed flee from a zombie that is not chasing", async () => {
+    const driver = new FakeBeatGameDriver();
+    const zombie = {
+      connectionEpoch: "epoch-1",
+      networkId: 36,
+      entityType: "minecraft:zombie",
+      position: {
+        x: -4,
+        y: 75,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      // As in a live run, the zombie stands nearby without chasing the bot.
+      aggressive: false,
+      observedAt: "2026-01-01T00:00:01.000Z",
+    } as const;
+    driver.currentObservation = observation({
+      health: 8,
+      food: 8,
+      position: { x: 0, y: 70, z: 0 },
+    });
+    driver.entityResults = [zombie];
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(2) === true ||
+      query.selector.networkId === zombie.networkId
+        ? driver.entityResults
+        : [];
+    driver.surfaceColumns = [
+      {
+        x: 3,
+        z: 0,
+        loaded: true,
+        surfaceY: 76,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "The pursuer is above the bot on rough terrain",
+                }),
+              )
+            : Effect.never,
+        ),
+      );
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (
+            !driver.paths.some(
+              ({ policy }) => policy.allowMining === true && policy.allowPlacing === true,
+            )
+          ) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual(
+      expect.objectContaining({
+        policy: expect.objectContaining({ allowMining: true, allowPlacing: true }),
+      }),
+    );
+  }, 10_000);
+
   it("keeps monitoring for new attackers after resuming item recovery", async () => {
     const driver = new FakeBeatGameDriver();
     const deathObservedAt = new Date().toISOString();

@@ -4953,12 +4953,15 @@ function recoverAfterFailedEscape(
         return;
       }
     }
+    // A mob that is neither aggressive nor targeting anything is not chasing
+    // the bot. Waiting for it to leave stalled a live run for 9 minutes.
     const activeMeleePursuer =
       closeMeleeThreat !== undefined &&
       PROACTIVE_MELEE_HOSTILE_ENTITY_TYPES.has(closeMeleeThreat.entityType) &&
       !PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(closeMeleeThreat.entityType) &&
       !ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(closeMeleeThreat.entityType) &&
-      closeMeleeThreat.entityType !== "minecraft:enderman";
+      closeMeleeThreat.entityType !== "minecraft:enderman" &&
+      (closeMeleeThreat.aggressive !== false || closeMeleeThreat.target !== undefined);
     if (activeMeleePursuer) {
       yield* emit(state, {
         type: "diagnostic",
