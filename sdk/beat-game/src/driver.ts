@@ -444,6 +444,14 @@ export type BeatGameDriverEvent =
       readonly observedAt: string;
     }
   | {
+      readonly type: "bot-damaged";
+      readonly observedAt: string;
+      readonly amount: number;
+      readonly health: number;
+      // The damage type id, such as minecraft:freeze, when the server reported one.
+      readonly damageType?: string;
+    }
+  | {
       readonly type: "game-event";
       readonly observedAt: string;
       readonly event: string;
@@ -1004,6 +1012,16 @@ export function makeSoulFireBeatGameDriver(
           if (payload.event.value.kind === BotLifecycleKind.BOT_LIFECYCLE_RESPAWNED) {
             return { type: "bot-respawned", observedAt };
           }
+        }
+        if (payload.event.case === "damage") {
+          const { amount, health, damageType } = payload.event.value;
+          return {
+            type: "bot-damaged",
+            observedAt,
+            amount,
+            health,
+            ...(damageType === undefined ? {} : { damageType }),
+          };
         }
         if (
           payload.event.case === "environment" &&

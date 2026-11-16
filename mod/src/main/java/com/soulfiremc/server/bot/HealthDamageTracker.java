@@ -25,15 +25,27 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /// comes as entity data, sometimes before this packet, so the player can already have the new value.
 public final class HealthDamageTracker {
   private float lastHealth = Float.NaN;
+  private @Nullable String pendingDamageType;
+
+  /// Records the damage type of a `ClientboundDamageEventPacket` for the player. The server sends it
+  /// before the health packet that reports the same damage.
+  public void recordDamageType(String damageType) {
+    pendingDamageType = damageType;
+  }
 
   /// Records the health of a packet.
   ///
   /// @return the damage since the previous packet, or null if health didn't drop or this is the first packet
   public @Nullable Damage update(float health) {
     var previousHealth = lastHealth;
+    var damageType = pendingDamageType;
     lastHealth = health;
-    return health < previousHealth ? new Damage(previousHealth, health, previousHealth - health) : null;
+    pendingDamageType = null;
+    return health < previousHealth
+      ? new Damage(previousHealth, health, previousHealth - health, damageType)
+      : null;
   }
 
-  public record Damage(float previousHealth, float newHealth, float amount) {}
+  /// @param damageType the damage type id, such as `minecraft:freeze`, or null when no damage event came first
+  public record Damage(float previousHealth, float newHealth, float amount, @Nullable String damageType) {}
 }

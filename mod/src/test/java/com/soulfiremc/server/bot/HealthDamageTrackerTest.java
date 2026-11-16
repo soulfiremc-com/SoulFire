@@ -28,7 +28,7 @@ final class HealthDamageTrackerTest {
     var tracker = new HealthDamageTracker();
 
     assertNull(tracker.update(15));
-    assertEquals(new HealthDamageTracker.Damage(15, 13, 2), tracker.update(13));
+    assertEquals(new HealthDamageTracker.Damage(15, 13, 2, null), tracker.update(13));
   }
 
   @Test
@@ -36,12 +36,34 @@ final class HealthDamageTrackerTest {
     var tracker = new HealthDamageTracker();
     tracker.update(20);
 
-    assertEquals(new HealthDamageTracker.Damage(20, 18, 2), tracker.update(18));
+    assertEquals(new HealthDamageTracker.Damage(20, 18, 2, null), tracker.update(18));
     // Same health again (a food change): no damage
     assertNull(tracker.update(18));
     // Healing: no damage, and the next drop starts from the healed health
     assertNull(tracker.update(19));
-    assertEquals(new HealthDamageTracker.Damage(19, 18, 1), tracker.update(18));
+    assertEquals(new HealthDamageTracker.Damage(19, 18, 1, null), tracker.update(18));
+  }
+
+  @Test
+  void attachesTheDamageTypeReportedBeforeTheDrop() {
+    var tracker = new HealthDamageTracker();
+    tracker.update(20);
+
+    tracker.recordDamageType("minecraft:freeze");
+    assertEquals(new HealthDamageTracker.Damage(20, 19, 1, "minecraft:freeze"), tracker.update(19));
+    // The type belongs to one drop only
+    assertEquals(new HealthDamageTracker.Damage(19, 18, 1, null), tracker.update(18));
+  }
+
+  @Test
+  void dropsADamageTypeWhenHealthDidNotFall() {
+    var tracker = new HealthDamageTracker();
+    tracker.update(20);
+
+    // Absorption can soak damage, so the health packet shows no drop
+    tracker.recordDamageType("minecraft:fall");
+    assertNull(tracker.update(20));
+    assertEquals(new HealthDamageTracker.Damage(20, 17, 3, null), tracker.update(17));
   }
 
   @Test
@@ -49,7 +71,7 @@ final class HealthDamageTrackerTest {
     var tracker = new HealthDamageTracker();
     tracker.update(4);
 
-    assertEquals(new HealthDamageTracker.Damage(4, 0, 4), tracker.update(0));
+    assertEquals(new HealthDamageTracker.Damage(4, 0, 4, null), tracker.update(0));
     assertNull(tracker.update(20));
   }
 }

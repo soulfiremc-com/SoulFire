@@ -19,6 +19,7 @@ package com.soulfiremc.server.api.event.bot;
 
 import com.soulfiremc.server.api.event.SoulFireBotEvent;
 import com.soulfiremc.server.bot.BotConnection;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /// This event is called when the bot takes damage (health decreases).
 ///
@@ -26,10 +27,12 @@ import com.soulfiremc.server.bot.BotConnection;
 /// @param previousHealth The health before the damage was taken.
 /// @param newHealth     The health after the damage was taken.
 /// @param damageAmount  The amount of damage taken (previousHealth - newHealth).
+/// @param damageType    The damage type id, such as `minecraft:freeze`, or null when the server did not report one.
 public record BotDamageEvent(
   BotConnection connection,
   float previousHealth,
   float newHealth,
-  float damageAmount
+  float damageAmount,
+  @Nullable String damageType
 ) implements SoulFireBotEvent {
 }

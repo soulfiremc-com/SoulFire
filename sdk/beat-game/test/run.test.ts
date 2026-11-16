@@ -4554,6 +4554,58 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(0);
   });
 
+  it("names the damage type when environmental damage interrupts an action", async () => {
+    const driver = new FakeBeatGameDriver();
+    let actionStarted = false;
+    let health = 20;
+    driver.currentObservation = observation({ health });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 19;
+        }
+        driver.currentObservation = observation({ health });
+        return driver.currentObservation;
+      });
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 1,
+      health: 19,
+      damageType: "minecraft:freeze",
+    } as const).pipe(Stream.concat(Stream.never));
+
+    const diagnostic = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted = true;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            run.events.pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === "diagnostic" &&
+                  event.message === "Environmental damage interrupted the action",
+              ),
+              Stream.runHead,
+              Effect.timeout("5 seconds"),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(Option.getOrUndefined(diagnostic)).toMatchObject({
+      data: { damageType: "minecraft:freeze" },
+    });
+  });
+
   it("does not restart an in-progress corpse recovery meal", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

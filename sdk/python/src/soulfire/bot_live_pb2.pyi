@@ -433,14 +433,16 @@ class BotInventoryEvent(_message.Message):
     def __init__(self, state: _Optional[_Union[_bot_pb2.BotInventoryStateResponse, _Mapping]] = ...) -> None: ...
 
 class BotDamageEvent(_message.Message):
-    __slots__ = ("previous_health", "health", "amount")
+    __slots__ = ("previous_health", "health", "amount", "damage_type")
     PREVIOUS_HEALTH_FIELD_NUMBER: _ClassVar[int]
     HEALTH_FIELD_NUMBER: _ClassVar[int]
     AMOUNT_FIELD_NUMBER: _ClassVar[int]
+    DAMAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     previous_health: float
     health: float
     amount: float
-    def __init__(self, previous_health: _Optional[float] = ..., health: _Optional[float] = ..., amount: _Optional[float] = ...) -> None: ...
+    damage_type: str
+    def __init__(self, previous_health: _Optional[float] = ..., health: _Optional[float] = ..., amount: _Optional[float] = ..., damage_type: _Optional[str] = ...) -> None: ...
 
 class ClockSnapshot(_message.Message):
     __slots__ = ("clock_id", "total_ticks", "partial_tick", "rate")

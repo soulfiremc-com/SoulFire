@@ -283,6 +283,8 @@ message BotDamageEvent {
   float previous_health = 1 [(google.api.field_behavior) = REQUIRED];
   float health = 2 [(google.api.field_behavior) = REQUIRED];
   float amount = 3 [(google.api.field_behavior) = REQUIRED];
+  // Damage type id, such as minecraft:freeze or minecraft:fall, when the server reported one.
+  optional string damage_type = 4;
 }
 
 message ClockSnapshot {

@@ -29,6 +29,7 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
+import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
@@ -95,10 +96,25 @@ public class MixinClientPacketListener {
         BotConnection.current(),
         damage.previousHealth(),
         damage.newHealth(),
-        damage.amount()
+        damage.amount(),
+        damage.damageType()
       );
       SoulFireAPI.postEvent(event);
     }
+  }
+
+  @Inject(method = "handleDamageEvent", at = @At("HEAD"))
+  private void onDamageEvent(ClientboundDamageEventPacket packet, CallbackInfo ci) {
+    var bot = BotConnection.current();
+    var player = bot.minecraft().player;
+    if (!bot.minecraft().packetProcessor().isSameThread()
+      || player == null
+      || packet.entityId() != player.getId()) {
+      return;
+    }
+
+    packet.sourceType().unwrapKey().ifPresent(key ->
+      soulfire$damageTracker.recordDamageType(key.identifier().toString()));
   }
 
   @Inject(method = "handleOpenScreen", at = @At("HEAD"))

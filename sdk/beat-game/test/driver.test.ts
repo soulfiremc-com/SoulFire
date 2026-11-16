@@ -300,6 +300,31 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("reports damage with its damage type", async () => {
+    const { bot } = effectBot(
+      Effect.succeed({}),
+      Effect.succeed({}),
+      Stream.make({
+        event: {
+          case: "damage",
+          value: { previousHealth: 20, health: 19, amount: 1, damageType: "minecraft:freeze" },
+        },
+      }),
+    );
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const events = await Effect.runPromise(driver.events.pipe(Stream.take(1), Stream.runCollect));
+
+    expect(Array.from(events)).toEqual([
+      expect.objectContaining({
+        type: "bot-damaged",
+        amount: 1,
+        health: 19,
+        damageType: "minecraft:freeze",
+      }),
+    ]);
+  });
+
   it("normalizes the End credits game event", async () => {
     const { bot } = effectBot(
       Effect.succeed({}),

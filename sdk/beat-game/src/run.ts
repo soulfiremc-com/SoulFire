@@ -33,6 +33,7 @@ import {
   makeSoulFireBeatGameDriver,
   type BeatGameBlockFace,
   type BeatGameDriver,
+  type BeatGameDriverEvent,
   type BeatGameEntitySelector,
   type BeatGameSurfaceColumn,
 } from "./driver.js";
@@ -875,6 +876,7 @@ interface RunState {
   readonly observation: Ref.Ref<BeatGameObservation>;
   readonly lastLivingObservation: Ref.Ref<BeatGameObservation>;
   readonly portalScanDimension: Ref.Ref<string | undefined>;
+  readonly lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1016,6 +1018,9 @@ export function beatGameWithDriver(
       observation: observationRef,
       lastLivingObservation,
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
+      lastDamage: yield* Ref.make<
+        Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
+      >(undefined),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -3958,10 +3963,26 @@ function monitorObservedSafety(
           if (decision.type === "eat") {
             return Effect.suspend(() => monitor(observation));
           }
-          return Effect.succeed({
-            replanReason: "environmental damage was observed without a nearby attacker",
-            environmentalEscapePosition: observation.player.position,
-          } satisfies ActionResult);
+          return Ref.get(state.lastDamage).pipe(
+            Effect.flatMap((damage) =>
+              emit(state, {
+                type: "diagnostic",
+                message: "Environmental damage interrupted the action",
+                data: {
+                  action: decision.action,
+                  position: observation.player.position,
+                  health: observation.player.health,
+                  ...(damage?.damageType === undefined
+                    ? {}
+                    : { damageType: damage.damageType, damagedAt: damage.observedAt }),
+                },
+              }),
+            ),
+            Effect.as({
+              replanReason: "environmental damage was observed without a nearby attacker",
+              environmentalEscapePosition: observation.player.position,
+            } satisfies ActionResult),
+          );
         }
         const response = threat.response;
         return Effect.succeed({
@@ -16359,6 +16380,9 @@ function monitorDriverEvents(state: RunState): Effect.Effect<void, never> {
   // A failed or finished subscription must not end death tracking for the rest of the run.
   return state.driver.events.pipe(
     Stream.runForEach((event) => {
+      if (event.type === "bot-damaged") {
+        return Ref.set(state.lastDamage, event);
+      }
       if (event.type !== "bot-died") {
         return Effect.void;
       }

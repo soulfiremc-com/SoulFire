@@ -701,9 +701,11 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         var damage = com.soulfiremc.grpc.generated.BotDamageEvent.newBuilder()
           .setPreviousHealth(event.previousHealth())
           .setHealth(event.newHealth())
-          .setAmount(event.damageAmount())
-          .build();
-        emitBotEvent(serverObserver, closed, BotEvent.newBuilder().setDamage(damage).build());
+          .setAmount(event.damageAmount());
+        if (event.damageType() != null) {
+          damage.setDamageType(event.damageType());
+        }
+        emitBotEvent(serverObserver, closed, BotEvent.newBuilder().setDamage(damage.build()).build());
       };
       subscription.listen(BotDamageEvent.class, damageListener);
     }
