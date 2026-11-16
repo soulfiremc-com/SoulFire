@@ -3498,9 +3498,9 @@ function executeDecision(
               : approachLinkedNetherPortal(state, actionCheckpoint, observation).pipe(
                   Effect.flatMap((approached) =>
                     approached
-                      ? state.driver.observe.pipe(
-                          Effect.flatMap((current) =>
-                            enterKnownPortal(state, actionCheckpoint, current),
+                      ? Effect.all([Ref.get(state.checkpoint), state.driver.observe]).pipe(
+                          Effect.flatMap(([checkpoint, current]) =>
+                            enterKnownPortal(state, checkpoint, current),
                           ),
                         )
                       : Effect.succeed(false),
@@ -15220,16 +15220,20 @@ function rememberPortal(checkpoint: BeatGameCheckpoint, frame: PortalFrame): Bea
 }
 
 const LINKED_NETHER_PORTAL_ARRIVAL_RADIUS = 8;
+// Centered halfway up the Nether, this radius covers its full height.
+const LINKED_NETHER_PORTAL_SEARCH_Y = 64;
+const LINKED_NETHER_PORTAL_SEARCH_RADIUS = 72;
 
 // Minecraft links an Overworld portal to a Nether portal near its X and Z
-// divided by 8. When the bot is in the Nether without a remembered portal
-// there, it walks to the spot linked to a remembered Overworld portal so the
-// next portal search can see it.
+// divided by 8, at any height. When the bot is in the Nether without a
+// remembered portal there, it searches the full height at that X and Z,
+// walking there first when the search finds nothing from afar, and
+// remembers the portal so the remembered-portal route can reach it.
 function approachLinkedNetherPortal(
   state: RunState,
   checkpoint: BeatGameCheckpoint,
   observation: BeatGameObservation,
-): Effect.Effect<boolean, BeatGameDriverError> {
+): Effect.Effect<boolean, BeatGameError | BeatGameDriverError> {
   const player = observation.player.position;
   if (!isNether(player.dimension)) {
     return Effect.succeed(false);
@@ -15250,29 +15254,62 @@ function approachLinkedNetherPortal(
         (left.z - player.z) ** 2 -
         ((right.x - player.x) ** 2 + (right.z - player.z) ** 2),
     )[0];
-  if (
-    target === undefined ||
-    (target.x - player.x) ** 2 + (target.z - player.z) ** 2 <=
-      LINKED_NETHER_PORTAL_ARRIVAL_RADIUS ** 2
-  ) {
+  if (target === undefined) {
     return Effect.succeed(false);
   }
-  return emit(state, {
-    type: "diagnostic",
-    message: "Walking to the Nether position linked to a remembered Overworld portal",
-    data: { position: player, target },
-  }).pipe(
-    Effect.andThen(
-      state.driver.pathfindXZ(
+  const findLinkedPortal = state.driver
+    .queryBlocks({
+      center: {
+        x: target.x + 0.5,
+        y: LINKED_NETHER_PORTAL_SEARCH_Y,
+        z: target.z + 0.5,
+        dimension: player.dimension,
+      },
+      radius: LINKED_NETHER_PORTAL_SEARCH_RADIUS,
+      selector: { blockIds: ["minecraft:nether_portal"] },
+      maximumResults: 16,
+    })
+    .pipe(
+      Effect.map(
+        (portals) =>
+          portals
+            .filter(({ position }) => !isPortalRouteOnCooldown(checkpoint, position))
+            .sort(
+              (left, right) =>
+                (left.position.x - target.x) ** 2 +
+                (left.position.z - target.z) ** 2 -
+                ((right.position.x - target.x) ** 2 + (right.position.z - target.z) ** 2),
+            )[0],
+      ),
+    );
+  return Effect.gen(function* () {
+    let portal = yield* findLinkedPortal;
+    if (
+      portal === undefined &&
+      (target.x - player.x) ** 2 + (target.z - player.z) ** 2 >
+        LINKED_NETHER_PORTAL_ARRIVAL_RADIUS ** 2
+    ) {
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Walking to the Nether position linked to a remembered Overworld portal",
+        data: { position: player, target },
+      });
+      yield* state.driver.pathfindXZ(
         target.x,
         target.z,
         player.dimension,
         LINKED_NETHER_PORTAL_ARRIVAL_RADIUS,
         state.strategy.path,
-      ),
-    ),
-    Effect.as(true),
-  );
+      );
+      portal = yield* findLinkedPortal;
+    }
+    if (portal === undefined) {
+      return false;
+    }
+    const found = portal;
+    yield* persist(state, (current) => rememberObservedPortal(current, found));
+    return true;
+  });
 }
 
 const ARRIVAL_PORTAL_SCAN_RADIUS = 4;
@@ -15303,28 +15340,33 @@ function rememberArrivalPortal(
     if (portal === undefined) {
       return;
     }
-    yield* persist(state, (checkpoint) => {
-      const key = `portal:${positionKey(portal.position)}`;
-      const known = checkpoint.memory.portals.some(
-        ({ confidence, value }) =>
-          confidence > 0 &&
-          value.position.dimension === portal.position.dimension &&
-          distanceSquared(value.position, portal.position) <= 8 ** 2,
-      );
-      return known
-        ? checkpoint
-        : {
-            ...checkpoint,
-            memory: {
-              ...checkpoint.memory,
-              portals: [
-                ...checkpoint.memory.portals.filter((entry) => entry.key !== key),
-                { key, value: portal, observedAt: portal.observedAt, confidence: 1 },
-              ].slice(-32),
-            },
-          };
-    });
+    yield* persist(state, (checkpoint) => rememberObservedPortal(checkpoint, portal));
   });
+}
+
+function rememberObservedPortal(
+  checkpoint: BeatGameCheckpoint,
+  portal: BeatGameBlockObservation,
+): BeatGameCheckpoint {
+  const key = `portal:${positionKey(portal.position)}`;
+  const known = checkpoint.memory.portals.some(
+    ({ confidence, value }) =>
+      confidence > 0 &&
+      value.position.dimension === portal.position.dimension &&
+      distanceSquared(value.position, portal.position) <= 8 ** 2,
+  );
+  return known
+    ? checkpoint
+    : {
+        ...checkpoint,
+        memory: {
+          ...checkpoint.memory,
+          portals: [
+            ...checkpoint.memory.portals.filter((entry) => entry.key !== key),
+            { key, value: portal, observedAt: portal.observedAt, confidence: 1 },
+          ].slice(-32),
+        },
+      };
 }
 
 function portalCarefulPathPolicy(path: BeatGameStrategy["path"]): BeatGameStrategy["path"] {

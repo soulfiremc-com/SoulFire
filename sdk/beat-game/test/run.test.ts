@@ -15,6 +15,7 @@ import {
   beatGameWithDriver,
   createNetherPortalFrame,
   defaultBeatGameStrategy,
+  distanceSquared,
   type BeatGameBlockPosition,
   type BeatGameDriverEvent,
   type BeatGameEntityObservation,
@@ -816,6 +817,90 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.xzPaths[0]).toMatchObject({ x: 55, z: 0, dimension: "minecraft:the_nether" });
+  });
+
+  it("finds a linked Nether portal far above the bot", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "linked-portal-height-run";
+    const teamId = "linked-portal-height-team";
+    const overworldPortal = blockObservation(
+      { x: 446, y: 130, z: 3, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    const netherPortal = blockObservation(
+      { x: 55, y: 91, z: -6, dimension: "minecraft:the_nether" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    // As in a live run, the bot reached the linked X and Z at y=29, 62 blocks
+    // below the portal and out of reach of a search around itself.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { x: 49.5, y: 29, z: 5.5 },
+      counts: { "minecraft:cooked_beef": 16, "minecraft:stone_sword": 1 },
+    });
+    driver.blockQueryResolver = ({ center, radius, selector }) =>
+      selector.blockIds?.includes("minecraft:nether_portal") === true &&
+      center.dimension === "minecraft:the_nether" &&
+      distanceSquared(center, netherPortal.position) <= radius ** 2
+        ? [netherPortal]
+        : [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+    const initial = checkpoint(BeatGamePhase.RETURN_TO_OVERWORLD, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:overworld",
+                value: overworldPortal,
+                observedAt: overworldPortal.observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.paths.length === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The bot never headed for the linked portal")),
+          }),
+        ),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.memory.portals.map(({ value }) => value.position)).toContainEqual(
+      netherPortal.position,
+    );
+    expect(driver.xzPaths).toHaveLength(0);
+    expect(driver.paths[0]?.position).toMatchObject({ dimension: "minecraft:the_nether" });
   });
 
   it("ignores one transient under-equipped observation at night", async () => {
