@@ -12912,6 +12912,211 @@ describe("beat-game run lifecycle", () => {
     ).toHaveLength(1);
   }, 10_000);
 
+  it("replans when the server refuses a recovery stair block", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 61.2, z: 0.5 },
+      counts: {
+        "minecraft:cobblestone": 64,
+        "minecraft:cooked_beef": 4,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    driver.surfaceColumns = Array.from({ length: 9 }, (_, index) => ({
+      x: (index % 3) + 2,
+      z: Math.floor(index / 3) - 1,
+      loaded: true,
+      surfaceY: 64,
+      blockId: "minecraft:grass_block",
+      biomeId: "minecraft:plains",
+      skyLight: 15,
+      blockLight: 0,
+    }));
+    const blocks = new Map<string, ReturnType<typeof blockObservation>>();
+    const setBlock = (
+      position: BeatGameBlockPosition,
+      overrides: Parameters<typeof blockObservation>[1] = {},
+    ) => {
+      blocks.set(
+        `${position.x}:${position.y}:${position.z}`,
+        blockObservation(position, overrides),
+      );
+    };
+    setBlock({
+      x: 0,
+      y: 60,
+      z: 0,
+      dimension: "minecraft:overworld",
+    });
+    for (let rise = 1; rise <= 4; rise += 1) {
+      setBlock(
+        {
+          x: rise,
+          y: 61 + rise - 1,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        rise === 4 ? { blockId: "minecraft:grass_block" } : {},
+      );
+      for (const y of [61 + rise, 62 + rise]) {
+        setBlock(
+          {
+            x: rise,
+            y,
+            z: 0,
+            dimension: "minecraft:overworld",
+          },
+          rise === 4
+            ? {
+                blockId: "minecraft:air",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              }
+            : {},
+        );
+      }
+      setBlock(
+        {
+          x: rise - 1,
+          y: 62 + rise,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        },
+      );
+    }
+    // The first stair step has no support, so the bot must place its only
+    // cobblestone there.
+    setBlock(
+      { x: 1, y: 61, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+    );
+    setBlock({ x: 1, y: 60, z: 0, dimension: "minecraft:overworld" });
+    driver.blockQueryResolver = ({ center, radius, selector }) => {
+      if (radius > 0.25 || Object.keys(selector).length > 0) {
+        return [];
+      }
+      const block = blocks.get(
+        `${Math.floor(center.x)}:${Math.floor(center.y)}:${Math.floor(center.z)}`,
+      );
+      return block === undefined ? [] : [block];
+    };
+    // As in a live run, the server reports a placement it cannot see as final.
+    driver.actionResolver = (action) =>
+      Effect.suspend(() => {
+        driver.actionObserver(action);
+        return action.type === "place-block"
+          ? Effect.fail(
+              new BeatGameDriverError({
+                operation: "act.place-block",
+                code: "failed_precondition",
+                retryable: false,
+                message:
+                  "Block placement is not ready (FACE_OCCLUDED): No placement face is visible from the player's eye position",
+              }),
+            )
+          : Effect.succeed({});
+      });
+    // As on the live mountain, no exploration walk leaves the pocket, so log
+    // collection falls back to digging a stair out.
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfindXZ",
+              code: "unreachable",
+              retryable: true,
+              message: "No route found to the goal!",
+            }),
+          ),
+        ),
+      );
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "The bot is trapped in a dry shaft",
+                }),
+              )
+            : Effect.never,
+        ),
+      );
+    driver.pathResolver = (position, radius, policy) => {
+      const record = Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      });
+      if (radius !== 0.35) {
+        return record.pipe(
+          Effect.andThen(
+            Effect.fail(
+              new BeatGameDriverError({
+                operation: "pathfind",
+                code: "unreachable",
+                retryable: true,
+                message: "The sealed vertical shaft has no walkable route",
+              }),
+            ),
+          ),
+        );
+      }
+      return record.pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            driver.currentObservation = {
+              ...driver.currentObservation,
+              player: {
+                ...driver.currentObservation.player,
+                position,
+              },
+            };
+            if (position.y === 65) {
+              driver.entityResults = [];
+            }
+          }),
+        ),
+      );
+    };
+
+    const outcome = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.actions.filter((action) => action.type === "place-block").length < 3) {
+            yield* Effect.sleep(1);
+          }
+          const completion = yield* run.awaitCompletion.pipe(
+            Effect.result,
+            Effect.timeoutOption("1500 millis"),
+          );
+          yield* run.stop;
+          return completion;
+        }),
+      ),
+    );
+
+    // The run keeps going instead of failing on the refused placement.
+    expect(Option.isNone(outcome)).toBe(true);
+  }, 10_000);
+
   it("detects nearby creepers without requiring line of sight", async () => {
     const driver = new FakeBeatGameDriver();
     const creeper = {

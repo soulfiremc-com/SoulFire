@@ -13153,15 +13153,16 @@ function placeDryShaftRecoveryBlock(
         attemptsRemaining - 1,
       );
     }
-    if (placement._tag === "Failure") {
-      return yield* Effect.fail(placement.failure);
-    }
+    // The server can refuse a placement it cannot see, which it reports as
+    // final. Another stair or route may still work, so the bot replans.
     return yield* Effect.fail(
       new BeatGameDriverError({
         operation: "recover-dry-shaft",
         code: "no-progress",
         retryable: true,
-        message: `The recovery support was not placed at ${positionKey(expected)}`,
+        message: `The recovery support was not placed at ${positionKey(expected)}${
+          placement._tag === "Failure" ? `: ${placement.failure.message}` : ""
+        }`,
       }),
     );
   });
