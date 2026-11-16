@@ -55,6 +55,8 @@ public final class Costs {
   public static final double SUBMERGED_MOVEMENT = 4;
   /// Landing on farmland can trample it, so prefer a short detour.
   public static final double TRAMPLE_FARMLAND = 5;
+  /// Ice keeps the bot sliding after a step, which can carry it off a ledge. Prefer a short detour.
+  public static final double SLIPPERY_FLOOR = 5;
   /// Vertical climbables are slower than walking one horizontal block.
   public static final double CLIMB = 2;
   /// Falling 1 block takes ~5.63 ticks.

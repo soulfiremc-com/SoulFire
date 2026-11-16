@@ -588,6 +588,9 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
         ) {
           simpleMovement.cost += Costs.TRAMPLE_FARMLAND;
         }
+        if (SFBlockHelpers.isSlippery(blockState)) {
+          simpleMovement.cost += Costs.SLIPPERY_FLOOR;
+        }
         simpleMovement.floorHasSupport = true;
         return MinecraftGraph.SubscriptionSingleResult.CONTINUE;
       }

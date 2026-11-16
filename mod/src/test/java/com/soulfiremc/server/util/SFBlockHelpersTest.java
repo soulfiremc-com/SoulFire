@@ -144,6 +144,15 @@ final class SFBlockHelpersTest {
   }
 
   @Test
+  void iceIsSlipperyAndStoneIsNot() {
+    assertTrue(SFBlockHelpers.isSlippery(Blocks.ICE.defaultBlockState()));
+    assertTrue(SFBlockHelpers.isSlippery(Blocks.PACKED_ICE.defaultBlockState()));
+    assertTrue(SFBlockHelpers.isSlippery(Blocks.BLUE_ICE.defaultBlockState()));
+    assertFalse(SFBlockHelpers.isSlippery(Blocks.STONE.defaultBlockState()));
+    assertFalse(SFBlockHelpers.isSlippery(Blocks.SNOW_BLOCK.defaultBlockState()));
+  }
+
+  @Test
   void onlyFarmlandBreaksWhenFallenOn() {
     assertTrue(SFBlockHelpers.breaksWhenFallenOn(Blocks.FARMLAND.defaultBlockState()));
     assertFalse(SFBlockHelpers.breaksWhenFallenOn(Blocks.DIRT_PATH.defaultBlockState()));

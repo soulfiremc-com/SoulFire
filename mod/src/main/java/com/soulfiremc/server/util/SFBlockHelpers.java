@@ -96,6 +96,11 @@ public final class SFBlockHelpers {
       || blockType == Blocks.SLIME_BLOCK;
   }
 
+  /// Whether the block keeps the player sliding, like ice, which can carry it past a step.
+  public static boolean isSlippery(BlockState blockState) {
+    return blockState.getBlock().getFriction() > Blocks.STONE.getFriction();
+  }
+
   public static boolean isHurtOnTouchFluid(Fluid fluidType) {
     return fluidType == Fluids.LAVA
       || fluidType == Fluids.FLOWING_LAVA;

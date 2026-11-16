@@ -434,6 +434,43 @@ final class PathfindingTest {
   }
 
   @Test
+  void pathfindingDetoursAroundPackedIce() {
+    // A mountain ridge of packed ice beside a stone ledge: sliding on the ice
+    // can carry the bot off the edge, so the route takes the stone instead
+    var accessor = new TestBlockAccessorBuilder();
+    for (var x = 0; x <= 4; x++) {
+      accessor.setBlockAt(x, 0, 0, x == 0 || x == 4 ? Blocks.STONE : Blocks.PACKED_ICE);
+      accessor.setBlockAt(x, 0, 1, Blocks.STONE);
+    }
+    var constraint = new NoBlockActionsConstraint(TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(
+      List.of(),
+      TestMiningCostCalculator.INSTANCE,
+      constraint
+    );
+    var routeFinder = new RouteFinder(new MinecraftGraph(
+      accessor.build(),
+      inventory,
+      constraint
+    ), new PosGoal(4, 1, 0));
+
+    var route = routeFinder.findRouteFuture(
+      NodeState.forInfo(new SFVec3i(0, 1, 0), inventory)
+    ).join();
+
+    var foundRouteResult = assertInstanceOf(
+      RouteFinder.FoundRouteResult.class,
+      route
+    );
+    var steppedOnIce = foundRouteResult.actions().stream()
+      .filter(MovementAction.class::isInstance)
+      .map(MovementAction.class::cast)
+      .map(MovementAction::blockPosition)
+      .anyMatch(position -> position.z == 0 && position.x >= 1 && position.x <= 3);
+    assertFalse(steppedOnIce);
+  }
+
+  @Test
   void pathfindingDownStaircaseWithoutBlockActions() {
     var accessor = new TestBlockAccessorBuilder();
     accessor.setBlockAt(0, 0, 0, Blocks.STONE);
