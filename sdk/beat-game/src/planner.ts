@@ -107,7 +107,11 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
     reusablePortalAvailable,
     bedUnavailable: bedSearchExhausted(checkpoint),
   });
-  if (observation.player.food <= strategy.eatBelowFood && hasCookableRawFood(observation)) {
+  if (
+    observation.player.food <= strategy.eatBelowFood &&
+    hasCookableRawFood(observation) &&
+    !needsOverworldForPreparation(phase, observation)
+  ) {
     const food =
       requirements.find(({ key }) => key === "food") ??
       (isOverworld(observation.player.position.dimension)
@@ -288,7 +292,8 @@ function canCraftWoodenSword(observation: BeatGameObservation): boolean {
 
 // A death can reset the run to Overworld preparation while the bot is still
 // in the Nether, for example after it goes back for its items. Its trees,
-// animals and stone are only in the Overworld.
+// animals and stone, including the stone for a furnace, are only in the
+// Overworld.
 function needsOverworldForPreparation(
   phase: BeatGamePhase,
   observation: BeatGameObservation,

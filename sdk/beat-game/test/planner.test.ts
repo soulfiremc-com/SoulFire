@@ -17,15 +17,21 @@ describe("beat-game planner", () => {
     });
   });
 
-  it.each([20, 4])(
+  it.each([
+    [20, {}],
+    [4, {}],
+    // At the eating threshold with raw beef, cooking would need a furnace.
+    [14, { "minecraft:beef": 1, "minecraft:dark_oak_log": 12 }],
+  ])(
     "returns to the Overworld to prepare gear after a reset in the Nether at food %i",
-    (food) => {
+    (food, extraItems) => {
       // A death reset the run to Overworld preparation while the bot went back
       // into the Nether for its items, as in a live run.
       const inventory = {
         "minecraft:shield": 1,
         "minecraft:stone_pickaxe": 1,
         "minecraft:wooden_sword": 1,
+        ...extraItems,
       };
       const nether = decideBeatGameAction({
         checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
