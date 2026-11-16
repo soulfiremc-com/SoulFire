@@ -32,7 +32,7 @@ public final class ProxySettings implements SettingsObject {
       .namespace(NAMESPACE)
       .key("bots-per-proxy")
       .uiName("Bots per proxy")
-      .description("Amount of bots that can be on a single proxy")
+      .description("Maximum number of bots that can use one proxy. Use -1 for no limit.")
       .defaultValue(-1)
       .minValue(-1)
       .maxValue(Integer.MAX_VALUE)
