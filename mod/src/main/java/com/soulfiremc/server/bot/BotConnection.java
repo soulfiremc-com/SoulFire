@@ -117,6 +117,7 @@ import net.minecraft.gizmos.SimpleGizmoCollector;
 import net.minecraft.network.Connection;
 import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.PacketProcessor;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import net.minecraft.network.protocol.ping.ServerboundPingRequestPacket;
 import net.minecraft.network.protocol.status.ClientStatusPacketListener;
@@ -633,9 +634,12 @@ public final class BotConnection {
       var resolved = ServerNameResolver.DEFAULT.resolveAddress(address)
         .orElseThrow(() -> new UnknownHostException(address.getHost()));
       if (isDisconnecting()) return;
-      var pingConnection = Connection.connectToServer(resolved.asInetSocketAddress(),
-        EventLoopGroupHolder.remote(minecraft.options.useNativeTransport()), null);
+      var pingConnection = new Connection(PacketFlow.CLIENTBOUND);
       connection = pingConnection;
+      // A proxy handshake delays channelActive, so the connection reports itself as disconnected
+      // until the proxy answers. The channel stays open until the exchange ends or fails.
+      var channel = Connection.connect(resolved.asInetSocketAddress(),
+        EventLoopGroupHolder.remote(minecraft.options.useNativeTransport()), pingConnection).syncUninterruptibly().channel();
       pingConnection.initiateServerboundStatusConnection(address.getHost(), address.getPort(), new ClientStatusPacketListener() {
         private boolean receivedStatus;
 
@@ -666,11 +670,11 @@ public final class BotConnection {
       });
       pingConnection.send(ServerboundStatusRequestPacket.INSTANCE);
       var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settingsSource.get(BotSettings.READ_TIMEOUT));
-      while (pingConnection.isConnected() && !isDisconnecting() && System.nanoTime() < deadline) {
+      while (channel.isOpen() && !isDisconnecting() && System.nanoTime() < deadline) {
         pingConnection.tick();
         TimeUnit.MILLISECONDS.sleep(10);
       }
-      if (pingConnection.isConnected() && !isDisconnecting()) {
+      if (channel.isOpen() && !isDisconnecting()) {
         reason = net.minecraft.network.chat.Component.translatable("disconnect.timeout");
         pingConnection.disconnect(reason);
       }
