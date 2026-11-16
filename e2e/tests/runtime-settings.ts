@@ -78,6 +78,8 @@ export default {
         enabled(false).pipe(
           Effect.andThen(rcon(`clear ${BOT_NAME}`, { check: false })),
           Effect.andThen(rcon(`gamemode creative ${BOT_NAME}`)),
+          // Leave the platform before removing it, or the bot falls out of the world.
+          Effect.andThen(placeBot(bot, { x: 0.5, y: 64, z: 0.5 })),
           Effect.andThen(rcon("fill 864 63 0 868 63 4 air")),
           Effect.andThen(rcon("forceload remove 864 0")),
           Effect.ignore,

@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { InventoryService } from "@soulfiremc/sdk/generated/soulfire/inventory_pb";
 import { Effect } from "effect";
-import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 import { nativeInput } from "../native-input.ts";
 
 const NAME = "FleetE2EA";
@@ -90,6 +90,8 @@ export default {
           "The death fixture must have an empty inventory",
         );
         yield* rcon("fill 4260 63 4 4268 63 12 stone");
+        // Players push each other, so the shared bot must not stand where this bot respawns.
+        yield* rcon(`tp ${BOT_NAME} 2.5 64 2.5`);
         const service = client.service(InventoryService);
         const run = Effect.runPromiseWith(yield* Effect.context());
         for (const native of [false, true, false, true]) {
@@ -160,7 +162,7 @@ export default {
                       player.health === 20 &&
                       player.position?.x === 0.5 &&
                       player.position.z === 0.5,
-                    "Respawning did not restore health and spawn position",
+                    `Respawning did not restore health and spawn position (native ${native}: dead ${player.dead}, health ${player.health}, at ${player.position?.x} ${player.position?.y} ${player.position?.z})`,
                   ),
                 ),
               ),

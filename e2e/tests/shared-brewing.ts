@@ -2,7 +2,7 @@ import { fromBinary } from "@bufbuild/protobuf";
 import { BrewTaskResultSchema } from "@soulfiremc/sdk/generated/soulfire/recipe_pb";
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 
 const NAMES = ["SharedBrewA", "SharedBrewB"];
 const STATIONS = [3927, 3930];
@@ -121,6 +121,23 @@ export default {
                 tasks,
                 (task) => task.wait({ call: { timeoutMs: 40_000 } }),
                 { concurrency: 2 },
+              ).pipe(
+                Effect.catch((error) =>
+                  Effect.flatMap(
+                    Effect.forEach(tasks, (task) => task.refresh()),
+                    (states) =>
+                      Effect.fail(
+                        new CheckFailed({
+                          message: `Round ${round} brewing did not finish (${error.message}): ${states
+                            .map(
+                              (state) =>
+                                `${BotTaskStatus[state.status]} ${JSON.stringify(state.failure ?? null)}`,
+                            )
+                            .join(", ")}`,
+                        }),
+                      ),
+                  ),
+                ),
               );
               yield* Effect.sleep("300 millis");
               let completed = 0;

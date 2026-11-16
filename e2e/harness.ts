@@ -300,6 +300,9 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
     }),
   );
   yield* Console.log(`[soulfire] ${BOT_NAME} online in ${seconds(joined)}`);
+  // The server keeps the bot's state between runs. An earlier run can leave it dead or falling.
+  if ((yield* eventually(bot.world.player(), "30 seconds")).dead) yield* bot.respawn();
+  yield* placeBot(bot, { x: 0.5, y: 64, z: 0.5 });
   return { bot, client: soulfire };
 });
 

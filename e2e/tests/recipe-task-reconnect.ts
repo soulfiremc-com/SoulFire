@@ -124,7 +124,7 @@ export default {
                         Effect.tap((value) =>
                           check(
                             value.status === BotTaskStatus.SUSPENDED,
-                            "Recipe missed its suspension checkpoint",
+                            `Recipe missed its suspension checkpoint (${kind} ${phase}: ${BotTaskStatus[value.status]}, progress ${value.progress?.current})`,
                           ),
                         ),
                       ),
