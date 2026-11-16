@@ -2491,7 +2491,7 @@ function digAndSealNightShelter(
       let placement: (typeof placementFaces)[number] | undefined;
       for (const candidate of placementFaces) {
         const support = yield* queryExactBlock(state.driver, candidate.against);
-        if (support !== undefined && !support.replaceable) {
+        if (support !== undefined && !support.replaceable && support.solid !== false) {
           placement = candidate;
           break;
         }
@@ -2560,8 +2560,13 @@ function encloseNightShelterInPlace(
     z: roof.z + side.z,
   }));
   const roofCorner = { ...roof, x: roof.x + 1 };
+  // Powder snow is not replaceable but has no collision, so it neither walls
+  // the bot in nor supports a placed block.
   const isSolid = (block: BeatGameBlockObservation | undefined): boolean =>
-    block !== undefined && !block.replaceable && !isPlayerFluidBlock(block.blockId);
+    block !== undefined &&
+    !block.replaceable &&
+    block.solid !== false &&
+    !isPlayerFluidBlock(block.blockId);
   return Effect.gen(function* () {
     if (!isSolid(yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 1 }))) {
       return undefined;
@@ -2603,34 +2608,37 @@ function encloseNightShelterInPlace(
             { against: { ...target, z: target.z - 1 }, face: "south" },
             { against: { ...target, y: target.y + 1 }, face: "down" },
           ] as const;
-          let support: (typeof supports)[number] | undefined;
-          for (const candidate of supports) {
-            if (body.some((cell) => samePosition(cell, candidate.against))) {
+          // The server can still refuse a support it cannot see, so each
+          // solid neighbor is tried in turn.
+          let confirmed = false;
+          for (const support of supports) {
+            if (
+              confirmed ||
+              body.some((cell) => samePosition(cell, support.against)) ||
+              !isSolid(yield* queryExactBlock(state.driver, support.against))
+            ) {
               continue;
             }
-            if (isSolid(yield* queryExactBlock(state.driver, candidate.against))) {
-              support = candidate;
-              break;
+            yield* state.driver.act({
+              type: "select-item",
+              selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
+            });
+            const placement = yield* state.driver
+              .act({
+                type: "place-block",
+                against: support.against,
+                face: support.face,
+                hand: "main",
+              })
+              .pipe(Effect.result);
+            if (placement._tag === "Failure") {
+              continue;
             }
-          }
-          if (support === undefined) {
-            return false;
-          }
-          yield* state.driver.act({
-            type: "select-item",
-            selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
-          });
-          yield* state.driver.act({
-            type: "place-block",
-            against: support.against,
-            face: support.face,
-            hand: "main",
-          });
-          let confirmed = false;
-          for (let attempt = 0; attempt < 20 && !confirmed; attempt += 1) {
-            confirmed = isSolid(yield* queryExactBlock(state.driver, target));
-            if (!confirmed) {
-              yield* Effect.sleep(100);
+            for (let attempt = 0; attempt < 20 && !confirmed; attempt += 1) {
+              confirmed = isSolid(yield* queryExactBlock(state.driver, target));
+              if (!confirmed) {
+                yield* Effect.sleep(100);
+              }
             }
           }
           if (!confirmed) {
