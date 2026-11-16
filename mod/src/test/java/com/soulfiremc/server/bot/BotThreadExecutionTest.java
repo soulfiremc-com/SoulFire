@@ -17,9 +17,15 @@
  */
 package com.soulfiremc.server.bot;
 
+import com.mojang.blaze3d.platform.FramerateLimitTracker;
+import com.mojang.blaze3d.platform.Window;
 import com.soulfiremc.server.SoulFireScheduler;
 import io.grpc.Status;
+import net.minecraft.client.InactivityFpsLimit;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.util.Util;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
@@ -32,8 +38,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 final class BotThreadExecutionTest {
@@ -78,6 +86,32 @@ final class BotThreadExecutionTest {
       tasks.close();
       when(bot.minecraft().isSameThread()).thenReturn(true);
       assertEquals(42, BotThreadExecution.call(bot, () -> 42));
+    }
+  }
+
+  @Test
+  void apiCallsKeepAnIdleBotAtItsFullFrameRate() throws Exception {
+    try (var tasks = new BotThreadTasks(); var clock = mockStatic(Util.class)) {
+      var bot = bot(tasks);
+      var minecraft = bot.minecraft();
+      minecraft.level = mock(ClientLevel.class);
+      when(minecraft.getWindow()).thenReturn(mock(Window.class));
+      var options = mock(Options.class, RETURNS_DEEP_STUBS);
+      when(options.framerateLimit().get()).thenReturn(120);
+      when(options.inactivityFpsLimit().get()).thenReturn(InactivityFpsLimit.AFK);
+      var limiter = new FramerateLimitTracker(options, minecraft);
+      when(minecraft.getFramerateLimitTracker()).thenReturn(limiter);
+      doAnswer(call -> {
+        call.<Runnable>getArgument(0).run();
+        return null;
+      }).when(minecraft).execute(any(Runnable.class));
+
+      clock.when(Util::getMillis).thenReturn(600_001L);
+      assertEquals(10, limiter.getFramerateLimit());
+      assertEquals(120, BotThreadExecution.call(bot, limiter::getFramerateLimit));
+
+      clock.when(Util::getMillis).thenReturn(1_200_002L);
+      assertEquals(10, limiter.getFramerateLimit());
     }
   }
 

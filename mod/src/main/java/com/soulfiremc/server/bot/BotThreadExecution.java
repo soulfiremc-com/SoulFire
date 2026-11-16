@@ -41,7 +41,11 @@ public final class BotThreadExecution {
       return bot.runnableWrapper().wrap(action).call();
     }
 
-    var result = bot.gameThreadTasks().submit(minecraft::execute, bot.runnableWrapper().wrap(action));
+    var result = bot.gameThreadTasks().submit(minecraft::execute, bot.runnableWrapper().wrap(() -> {
+      // API callers drive the bot, so vanilla must not throttle it as idle while they do.
+      minecraft.getFramerateLimitTracker().onInputReceived();
+      return action.call();
+    }));
     try {
       return result.get(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
     } catch (CancellationException exception) {
