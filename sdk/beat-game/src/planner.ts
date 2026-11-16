@@ -158,6 +158,11 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
           ).find(({ key }) => key === "food")
         : undefined);
     if (!hasFood(observation, strategy)) {
+      // Without food a retreat cannot heal, and food is only in the
+      // Overworld, so the wounded bot heads back first.
+      if (needsOverworldForPreparation(phase, observation)) {
+        return { type: "return-through-portal", action: "return-through-portal" };
+      }
       if (
         food !== undefined &&
         !food.satisfied &&

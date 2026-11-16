@@ -49,6 +49,21 @@ describe("beat-game planner", () => {
     },
   );
 
+  it("returns to the Overworld while wounded without food after a reset in the Nether", () => {
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
+      observation: observation({
+        dimension: "minecraft:the_nether",
+        food: 17,
+        health: 13,
+        counts: { "minecraft:red_mushroom": 3, "minecraft:wooden_sword": 1 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({ type: "return-through-portal", action: "return-through-portal" });
+  });
+
   it("acquires emergency food instead of retreating without regeneration", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),

@@ -37762,7 +37762,20 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
-  it("keeps walking back to a portal with only raw food at the meal threshold", async () => {
+  it.each([
+    {
+      name: "only raw food at the meal threshold",
+      food: 14,
+      health: 20,
+      foodItems: { "minecraft:beef": 1 },
+    },
+    {
+      name: "low health and no food",
+      food: 17,
+      health: 13,
+      foodItems: { "minecraft:red_mushroom": 3 },
+    },
+  ])("keeps walking back to a portal with $name", async ({ food, health, foodItems }) => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
     const runId = "raw-food-portal-trip-run";
@@ -37772,7 +37785,7 @@ describe("beat-game run lifecycle", () => {
       { blockId: "minecraft:nether_portal", diggable: false },
     );
     const counts = {
-      "minecraft:beef": 1,
+      ...foodItems,
       "minecraft:dark_oak_log": 12,
       "minecraft:shield": 1,
       "minecraft:stone_pickaxe": 1,
@@ -37782,6 +37795,7 @@ describe("beat-game run lifecycle", () => {
       dimension: "minecraft:the_nether",
       position: { x: 0.5, y: 64, z: 0.5 },
       food: 15,
+      health,
       counts,
     });
     let interruptedTrips = 0;
@@ -37791,7 +37805,8 @@ describe("beat-game run lifecycle", () => {
         driver.currentObservation = observation({
           dimension: "minecraft:the_nether",
           position: { x: 0.5, y: 64, z: 0.5 },
-          food: 14,
+          food,
+          health,
           counts,
         });
       }).pipe(
@@ -37832,12 +37847,24 @@ describe("beat-game run lifecycle", () => {
             checkpointStore: store,
             strategy: { observationPollMs: 1 },
           });
+          const startedActions: string[] = [];
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              Effect.sync(() => {
+                if (event.type === "action-started") {
+                  startedActions.push(event.action);
+                }
+              }),
+            ),
+            Effect.forkScoped,
+          );
           while (driver.xzPaths.length === 0) {
             yield* Effect.sleep(1);
           }
           yield* Effect.sleep(200);
           expect(interruptedTrips).toBe(0);
           expect(driver.xzPaths).toHaveLength(1);
+          expect(new Set(startedActions)).toEqual(new Set(["return-through-portal"]));
           yield* run.stop;
         }).pipe(
           Effect.timeoutOrElse({

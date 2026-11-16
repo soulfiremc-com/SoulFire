@@ -4001,7 +4001,10 @@ function monitorObservedSafety(
       (((decision.requirement.key === "food" || decision.requirement.key === "food-supply") &&
         !hasRecoveryFood(observation)) ||
         decision.requirement.key === "lava-bucket")
-    )
+    ) &&
+    // Without food the bot cannot heal by retreating, so it keeps heading for
+    // the Overworld, where it can find some.
+    !(decision.type === "return-through-portal" && !hasRecoveryFood(observation))
   ) {
     return Effect.succeed({
       replanReason: "health fell below the safety threshold",
