@@ -219,6 +219,40 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("maps sheep wool color and shearing metadata", async () => {
+    const { bot } = effectBot(Effect.succeed({}), Effect.succeed({}), Stream.empty, [
+      {
+        reference: {
+          connectionEpoch: "connection-epoch",
+          networkId: 43,
+        },
+        entityType: "minecraft:sheep",
+        position: {
+          x: 2,
+          y: 64,
+          z: 2,
+          dimension: "minecraft:overworld",
+        },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        metadata: {
+          sheep_color: "light_blue",
+          sheep_sheared: true,
+        },
+      },
+    ]);
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const entities = await Effect.runPromise(
+      driver.queryEntities({
+        radius: 8,
+        selector: { entityTypes: ["minecraft:sheep"] },
+      }),
+    );
+
+    expect(entities[0]?.sheep).toEqual({ color: "light_blue", sheared: true });
+  });
+
   it("maps semantic creeper fuse metadata", async () => {
     const { bot } = effectBot(Effect.succeed({}), Effect.succeed({}), Stream.empty, [
       {

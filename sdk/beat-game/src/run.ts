@@ -8569,21 +8569,32 @@ function satisfyBedRequirement(
   if (craftableBed !== undefined) {
     return craftWithTable(state, observation, craftableBed, 1);
   }
-  // A bed needs three wool of one color. Each sheep drops one wool of its own color.
-  const mostWoolOfOneColor = Math.max(
-    ...WOOL_ITEM_IDS.map((itemId) => observation.inventory.counts[itemId] ?? 0),
+  // A bed needs three wool of one color. Each sheep drops one wool of its own
+  // color, so the bot hunts the color it already holds most of, and only
+  // unsheared sheep, which still drop wool.
+  const targetWool = WOOL_ITEM_IDS.reduce<{ itemId?: string; count: number }>(
+    (best, itemId) => {
+      const count = observation.inventory.counts[itemId] ?? 0;
+      return count > best.count ? { itemId, count } : best;
+    },
+    { count: 0 },
   );
+  const targetColor = targetWool.itemId?.replace(/^minecraft:/u, "").replace(/_wool$/u, "");
   return huntOrExplore(
     state,
     observation,
     { entityTypes: ["minecraft:sheep"], alive: true },
-    Math.max(1, BED_WOOL_COUNT - mostWoolOfOneColor),
+    Math.max(1, BED_WOOL_COUNT - targetWool.count),
     BED_SHEEP_SEARCH_PURPOSE,
     {
       preferredEntityTypes: new Set(["minecraft:sheep"]),
       preferredRadius: state.strategy.entitySearchRadius,
       maximumExplorationHops: 1,
-      dropItemIds: WOOL_ITEM_IDS,
+      dropItemIds: targetWool.itemId === undefined ? WOOL_ITEM_IDS : [targetWool.itemId],
+      // A server that does not report sheep details leaves every sheep eligible.
+      acceptsTarget: ({ sheep }) =>
+        sheep === undefined ||
+        (!sheep.sheared && (targetColor === undefined || sheep.color === targetColor)),
       path: state.strategy.path,
     },
   );
@@ -11382,8 +11393,10 @@ interface HuntTargetPreference {
   readonly maximumExplorationHops?: number;
   readonly path?: BeatGameStrategy["path"];
   readonly explorationTarget?: BeatGamePosition;
-  /// The drops that count toward the hunt, when they differ from the target's usual drops.
+  // The drops that count toward the hunt, when they differ from the target's usual drops.
   readonly dropItemIds?: readonly string[];
+  // Skips observed targets that cannot give the wanted drops.
+  readonly acceptsTarget?: (target: BeatGameEntityObservation) => boolean;
   readonly allowFluidFallback?: boolean;
   readonly fallbackToLocalExploration?: boolean;
   readonly structureSearch?: Readonly<{
@@ -11595,12 +11608,12 @@ function huntOrExplore(
           .filter(({ expiresAt }) => expiresAt === undefined || Date.parse(expiresAt) > now)
           .map((entry) => [entry.key, entry] as const),
       );
-      const observedTargets = yield* state.driver.queryEntities({
+      const observedTargets = (yield* state.driver.queryEntities({
         origin: current.player.position,
         radius: state.strategy.entitySearchRadius,
         selector,
         maximumResults: Math.min(256, Math.max(64, maximumTargets + attemptedTargets.size)),
-      });
+      })).filter((target) => targetPreference?.acceptsTarget?.(target) ?? true);
       const observedBlaze = observedTargets.find(
         ({ entityType }) => entityType === "minecraft:blaze",
       );

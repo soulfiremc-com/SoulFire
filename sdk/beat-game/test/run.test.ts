@@ -1940,6 +1940,93 @@ describe("beat-game run lifecycle", () => {
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
   });
 
+  it("hunts only unsheared sheep of the wool color it already holds", async () => {
+    const driver = new FakeBeatGameDriver();
+    const preparedCounts = {
+      "minecraft:oak_log": 8,
+      "minecraft:wooden_sword": 1,
+      "minecraft:cooked_beef": 5,
+      "minecraft:cobblestone": 20,
+    };
+    const wool: Record<string, number> = { "minecraft:white_wool": 1 };
+    const sheep = [
+      { networkId: 401, color: "black", sheared: false },
+      { networkId: 402, color: "white", sheared: true },
+      { networkId: 403, color: "white", sheared: false },
+      { networkId: 404, color: "white", sheared: false },
+    ].map(
+      ({ networkId, color, sheared }) =>
+        ({
+          connectionEpoch: "epoch-1",
+          networkId,
+          entityType: "minecraft:sheep",
+          position: { x: 3, y: 64, z: networkId - 400, dimension: "minecraft:overworld" },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 8,
+          sheep: { color, sheared },
+          observedAt: "2026-01-01T00:00:00.000Z",
+        }) as const,
+    );
+    const killed = new Set<number>();
+    driver.currentObservation = observation({ counts: { ...preparedCounts, ...wool } });
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:sheep") === true
+        ? sheep.filter(({ networkId }) => !killed.has(networkId))
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity") {
+          const target = sheep.find(({ networkId }) => networkId === task.target.networkId);
+          killed.add(task.target.networkId);
+          if (target !== undefined && !target.sheep.sheared) {
+            const itemId = `minecraft:${target.sheep.color}_wool`;
+            wool[itemId] = (wool[itemId] ?? 0) + 1;
+          }
+          driver.currentObservation = observation({ counts: { ...preparedCounts, ...wool } });
+        }
+      });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 2, y: 64, z: 0, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    const requestedRecipes: string[] = [];
+    driver.recipeResolver = (resultItemId) => {
+      requestedRecipes.push(resultItemId);
+      return [];
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!requestedRecipes.includes("minecraft:white_bed")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(
+      driver.tasks
+        .filter((task) => task.type === "attack-entity")
+        .map((task) => task.target.networkId),
+    ).toEqual([403, 404]);
+    expect(wool).toEqual({ "minecraft:white_wool": 3 });
+  });
+
   it("leaves a night shelter when the night outlasts its maximum length", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

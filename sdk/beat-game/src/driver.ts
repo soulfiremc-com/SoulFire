@@ -1062,6 +1062,10 @@ export function makeSoulFireBeatGameDriver(
                 entity.entityType === "minecraft:creeper"
                   ? creeperObservation(entity.metadata)
                   : undefined;
+              const sheep =
+                entity.entityType === "minecraft:sheep"
+                  ? sheepObservation(entity.metadata)
+                  : undefined;
               return {
                 connectionEpoch: reference.connectionEpoch,
                 networkId: reference.networkId,
@@ -1087,6 +1091,7 @@ export function makeSoulFireBeatGameDriver(
                     }),
                 ...(entity.aggressive === undefined ? {} : { aggressive: entity.aggressive }),
                 ...(creeper === undefined ? {} : { creeper }),
+                ...(sheep === undefined ? {} : { sheep }),
                 observedAt: new Date().toISOString(),
               };
             }),
@@ -1262,6 +1267,14 @@ function creeperObservation(
         powered,
         ignited,
       };
+}
+
+function sheepObservation(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): BeatGameEntityObservation["sheep"] | undefined {
+  const color = metadata?.sheep_color;
+  const sheared = metadata?.sheep_sheared;
+  return typeof color !== "string" || typeof sheared !== "boolean" ? undefined : { color, sheared };
 }
 
 function finiteMetadataNumber(

@@ -40,6 +40,7 @@ import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enderman;
@@ -271,6 +272,14 @@ public final class MinecraftDomainMapper {
           .build())
         .putFields("creeper_ignited", Value.newBuilder()
           .setBoolValue(creeper.isIgnited())
+          .build()));
+    } else if (entity instanceof Sheep sheep) {
+      builder.setMetadata(Struct.newBuilder()
+        .putFields("sheep_color", Value.newBuilder()
+          .setStringValue(sheep.getColor().getSerializedName())
+          .build())
+        .putFields("sheep_sheared", Value.newBuilder()
+          .setBoolValue(sheep.isSheared())
           .build()));
     }
     return builder.build();

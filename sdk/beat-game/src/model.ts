@@ -240,7 +240,14 @@ export interface BeatGameEntityObservation {
   readonly target?: BeatGameEntityReference;
   readonly aggressive?: boolean;
   readonly creeper?: BeatGameCreeperObservation;
+  readonly sheep?: BeatGameSheepObservation;
   readonly observedAt: string;
+}
+
+export interface BeatGameSheepObservation {
+  // The dye color name, such as "white", which names the wool it drops.
+  readonly color: string;
+  readonly sheared: boolean;
 }
 
 export interface BeatGameCreeperObservation {
