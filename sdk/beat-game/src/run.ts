@@ -13007,37 +13007,42 @@ function ensureDryShaftRecoverySupport(
     if (!step.placeSupport) {
       return;
     }
-    const observation = yield* state.driver.observe;
-    const material = DRY_SHAFT_RECOVERY_SUPPORT_ITEM_IDS.find(
-      (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
-    );
-    if (material === undefined) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "recover-dry-shaft",
-          code: "not-found",
-          retryable: true,
-          message: "No solid block is available to support the recovery stair",
-        }),
-      );
-    }
-
     if (step.placeLowerAnchor) {
       yield* placeDryShaftRecoveryBlock(
         state.driver,
-        material,
         step.previousSupport,
         horizontalPlacementFace(step.previousSupport, step.lowerAnchor),
         step.lowerAnchor,
       );
     }
-    yield* placeDryShaftRecoveryBlock(state.driver, material, step.lowerAnchor, "up", step.support);
+    yield* placeDryShaftRecoveryBlock(state.driver, step.lowerAnchor, "up", step.support);
   });
+}
+
+function dryShaftRecoveryMaterial(
+  driver: BeatGameDriver,
+): Effect.Effect<string, BeatGameDriverError> {
+  return driver.observe.pipe(
+    Effect.flatMap((observation) => {
+      const material = DRY_SHAFT_RECOVERY_SUPPORT_ITEM_IDS.find(
+        (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
+      );
+      return material === undefined
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "recover-dry-shaft",
+              code: "not-found",
+              retryable: true,
+              message: "No solid block is available to support the recovery stair",
+            }),
+          )
+        : Effect.succeed(material);
+    }),
+  );
 }
 
 function placeDryShaftRecoveryBlock(
   driver: BeatGameDriver,
-  material: string,
   against: BeatGameBlockPosition,
   face: BeatGameBlockFace,
   expected: BeatGameBlockPosition,
@@ -13048,6 +13053,9 @@ function placeDryShaftRecoveryBlock(
     if (isStableDryShaftSupport(existing)) {
       return;
     }
+    // An unconfirmed attempt may still have used up a block, so every attempt
+    // checks the inventory again.
+    const material = yield* dryShaftRecoveryMaterial(driver);
     const placement = yield* driver
       .act({
         type: "select-item",
@@ -13074,7 +13082,6 @@ function placeDryShaftRecoveryBlock(
     if (attemptsRemaining > 1) {
       return yield* placeDryShaftRecoveryBlock(
         driver,
-        material,
         against,
         face,
         expected,

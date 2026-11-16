@@ -12277,6 +12277,229 @@ describe("beat-game run lifecycle", () => {
     ]);
   }, 10_000);
 
+  it("replans when an unconfirmed recovery stair block used the last one", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 61.2, z: 0.5 },
+      counts: {
+        "minecraft:cobblestone": 1,
+        "minecraft:cooked_beef": 4,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 43,
+        entityType: "minecraft:creeper",
+        position: {
+          x: 4,
+          y: 64,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.surfaceColumns = Array.from({ length: 9 }, (_, index) => ({
+      x: (index % 3) + 2,
+      z: Math.floor(index / 3) - 1,
+      loaded: true,
+      surfaceY: 64,
+      blockId: "minecraft:grass_block",
+      biomeId: "minecraft:plains",
+      skyLight: 15,
+      blockLight: 0,
+    }));
+    const blocks = new Map<string, ReturnType<typeof blockObservation>>();
+    const setBlock = (
+      position: BeatGameBlockPosition,
+      overrides: Parameters<typeof blockObservation>[1] = {},
+    ) => {
+      blocks.set(
+        `${position.x}:${position.y}:${position.z}`,
+        blockObservation(position, overrides),
+      );
+    };
+    setBlock({
+      x: 0,
+      y: 60,
+      z: 0,
+      dimension: "minecraft:overworld",
+    });
+    for (let rise = 1; rise <= 4; rise += 1) {
+      setBlock(
+        {
+          x: rise,
+          y: 61 + rise - 1,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        rise === 4 ? { blockId: "minecraft:grass_block" } : {},
+      );
+      for (const y of [61 + rise, 62 + rise]) {
+        setBlock(
+          {
+            x: rise,
+            y,
+            z: 0,
+            dimension: "minecraft:overworld",
+          },
+          rise === 4
+            ? {
+                blockId: "minecraft:air",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              }
+            : {},
+        );
+      }
+      setBlock(
+        {
+          x: rise - 1,
+          y: 62 + rise,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        },
+      );
+    }
+    // The first stair step has no support, so the bot must place its only
+    // cobblestone there.
+    setBlock(
+      { x: 1, y: 61, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+    );
+    setBlock({ x: 1, y: 60, z: 0, dimension: "minecraft:overworld" });
+    driver.blockQueryResolver = ({ center, radius, selector }) => {
+      if (radius > 0.25 || Object.keys(selector).length > 0) {
+        return [];
+      }
+      const block = blocks.get(
+        `${Math.floor(center.x)}:${Math.floor(center.y)}:${Math.floor(center.z)}`,
+      );
+      return block === undefined ? [] : [block];
+    };
+    // The server rejects selecting an item the bot no longer carries. The
+    // placement uses the block, but the bot never sees it appear.
+    driver.actionResolver = (action) =>
+      Effect.suspend(() => {
+        driver.actionObserver(action);
+        const counts = driver.currentObservation.inventory.counts;
+        if (
+          action.type === "select-item" &&
+          !(action.selector.itemIds ?? []).some((itemId) => (counts[itemId] ?? 0) > 0)
+        ) {
+          return Effect.fail(
+            new BeatGameDriverError({
+              operation: "act.select-item",
+              code: "not_found",
+              retryable: false,
+              message: "No matching item is available",
+            }),
+          );
+        }
+        if (action.type === "place-block") {
+          driver.currentObservation = observation({
+            position: driver.currentObservation.player.position,
+            counts: { ...counts, "minecraft:cobblestone": 0 },
+          });
+        }
+        return Effect.succeed({});
+      });
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "The bot is trapped in a dry shaft",
+                }),
+              )
+            : Effect.never,
+        ),
+      );
+    driver.pathResolver = (position, radius, policy) => {
+      const record = Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      });
+      if (radius !== 0.35) {
+        return record.pipe(
+          Effect.andThen(
+            Effect.fail(
+              new BeatGameDriverError({
+                operation: "pathfind",
+                code: "unreachable",
+                retryable: true,
+                message: "The sealed vertical shaft has no walkable route",
+              }),
+            ),
+          ),
+        );
+      }
+      return record.pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            driver.currentObservation = {
+              ...driver.currentObservation,
+              player: {
+                ...driver.currentObservation.player,
+                position,
+              },
+            };
+            if (position.y === 65) {
+              driver.entityResults = [];
+            }
+          }),
+        ),
+      );
+    };
+
+    const outcome = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.actions.some((action) => action.type === "place-block")) {
+            yield* Effect.sleep(1);
+          }
+          const completion = yield* run.awaitCompletion.pipe(
+            Effect.result,
+            Effect.timeoutOption("500 millis"),
+          );
+          yield* run.stop;
+          return completion;
+        }),
+      ),
+    );
+
+    // The run keeps going instead of failing on a rejected item selection.
+    expect(Option.isNone(outcome)).toBe(true);
+    expect(
+      driver.actions.filter(
+        (action) =>
+          action.type === "select-item" &&
+          action.selector.itemIds?.includes("minecraft:cobblestone") === true,
+      ),
+    ).toHaveLength(1);
+  }, 10_000);
+
   it("detects nearby creepers without requiring line of sight", async () => {
     const driver = new FakeBeatGameDriver();
     const creeper = {
