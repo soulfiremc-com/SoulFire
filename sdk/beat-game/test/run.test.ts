@@ -4739,6 +4739,38 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("logs every damage event with its type", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 3,
+      health: 14,
+      damageType: "minecraft:fall",
+    } as const).pipe(Stream.concat(Stream.never));
+    driver.taskResolver = () => Effect.never;
+
+    const diagnostic = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+          Effect.flatMap((run) =>
+            run.events.pipe(
+              Stream.filter(
+                (event) => event.type === "diagnostic" && event.message === "Took damage",
+              ),
+              Stream.runHead,
+              Effect.timeout("5 seconds"),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(Option.getOrUndefined(diagnostic)).toMatchObject({
+      data: { amount: 3, health: 14, damageType: "minecraft:fall" },
+    });
+  });
+
   it("replans an action the world refuses before failing the run", async () => {
     const driver = new FakeBeatGameDriver();
     let attempts = 0;

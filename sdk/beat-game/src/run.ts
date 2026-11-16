@@ -16440,7 +16440,19 @@ function monitorDriverEvents(state: RunState): Effect.Effect<void, never> {
   return state.driver.events.pipe(
     Stream.runForEach((event) => {
       if (event.type === "bot-damaged") {
-        return Ref.set(state.lastDamage, event);
+        return Ref.set(state.lastDamage, event).pipe(
+          Effect.andThen(
+            emit(state, {
+              type: "diagnostic",
+              message: "Took damage",
+              data: {
+                amount: event.amount,
+                health: event.health,
+                ...(event.damageType === undefined ? {} : { damageType: event.damageType }),
+              },
+            }),
+          ),
+        );
       }
       if (event.type !== "bot-died") {
         return Effect.void;
