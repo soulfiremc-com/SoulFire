@@ -8774,11 +8774,13 @@ function ensureNetherExplorationPickaxe(
     (total, itemId) => total + (observation.inventory.counts[itemId] ?? 0),
     0,
   );
-  if (ironIngots >= 3) {
-    return craftWithTable(state, observation, "minecraft:iron_pickaxe", 1);
-  }
-  if (stoneToolMaterials >= 3) {
-    return craftWithTable(state, observation, "minecraft:stone_pickaxe", 1);
+  if (ironIngots >= 3 || stoneToolMaterials >= 3) {
+    return craftNetherPickaxe(
+      state,
+      observation,
+      ironIngots >= 3 ? "minecraft:iron_pickaxe" : "minecraft:stone_pickaxe",
+      1,
+    );
   }
   const reportedDurability = observation.inventory.remainingDurability;
   const remainingDurability =
@@ -8795,7 +8797,39 @@ function ensureNetherExplorationPickaxe(
         WOODEN_PICKAXE_MAXIMUM_DURABILITY,
     ),
   );
-  return craftWithTable(state, observation, "minecraft:wooden_pickaxe", woodenPickaxes);
+  return craftNetherPickaxe(state, observation, "minecraft:wooden_pickaxe", woodenPickaxes);
+}
+
+const NETHER_STEM_ITEM_IDS = ["minecraft:crimson_stem", "minecraft:warped_stem"] as const;
+
+// The Nether has no trees, so a pickaxe crafted there must be paid for with
+// carried wood or with stems. Without enough wood the craft fails on every
+// attempt, so the bot collects stems first.
+function craftNetherPickaxe(
+  state: RunState,
+  observation: BeatGameObservation,
+  resultItemId: "minecraft:wooden_pickaxe" | "minecraft:stone_pickaxe" | "minecraft:iron_pickaxe",
+  count: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  const counts = observation.inventory.counts;
+  const total = (itemIds: readonly string[]) =>
+    itemIds.reduce((sum, itemId) => sum + (counts[itemId] ?? 0), 0);
+  const sticksNeeded = Math.max(0, 2 * count - (counts["minecraft:stick"] ?? 0));
+  const planksNeeded =
+    ((counts["minecraft:crafting_table"] ?? 0) > 0 ? 0 : 4) +
+    2 * Math.ceil(sticksNeeded / 4) +
+    (resultItemId === "minecraft:wooden_pickaxe" ? 3 * count : 0);
+  const planksAvailable = total(PLANK_ITEM_IDS) + 4 * total(LOG_ITEM_IDS);
+  if (planksAvailable >= planksNeeded) {
+    return craftWithTable(state, observation, resultItemId, count);
+  }
+  return collectBlocksOrExplore(state, observation, {
+    blockIds: NETHER_STEM_ITEM_IDS,
+    count: Math.ceil((planksNeeded - planksAvailable) / 4),
+    progressItemIds: NETHER_STEM_ITEM_IDS,
+    purpose: "find-nether-stems",
+    avoidFluids: true,
+  });
 }
 
 function satisfyFoodSupplyRequirement(

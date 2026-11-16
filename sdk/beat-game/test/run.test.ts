@@ -623,6 +623,82 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
   });
 
+  it("collects Nether stems when a broken pickaxe cannot be paid for with carried wood", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "nether-stem-pickaxe-run";
+    const teamId = "nether-stem-pickaxe-team";
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:ender_pearl": 14,
+        "minecraft:netherrack": 64,
+        "minecraft:shield": 1,
+        "minecraft:spruce_planks": 5,
+        "minecraft:stick": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:wooden_pickaxe"
+        ? [
+            {
+              recipeId: "wooden-pickaxe",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: false,
+      maximumCraftCount: 0,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The bot never looked for Nether stems")),
+          }),
+        ),
+      ),
+    );
+
+    // A crafting table, two more sticks and two wooden pickaxes need 12
+    // planks, and the bot carries the wood for 5.
+    expect(driver.tasks).toEqual([
+      expect.objectContaining({
+        type: "collect-blocks",
+        blockIds: ["minecraft:crimson_stem", "minecraft:warped_stem"],
+        count: 2,
+      }),
+    ]);
+  });
+
   it("ignores one transient under-equipped observation at night", async () => {
     const driver = new FakeBeatGameDriver();
     const protectedObservation = observation({
