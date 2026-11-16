@@ -61,3 +61,15 @@ export function withSignal(options: CallOptions | undefined, signal: AbortSignal
     signal: options?.signal === undefined ? signal : AbortSignal.any([options.signal, signal]),
   };
 }
+
+/**
+ * Call options for a stream that stays open for as long as its consumer runs.
+ * The client's default timeout bounds requests, so it must not end such a
+ * stream unless the caller sets its own timeout.
+ */
+export function withWatchSignal(
+  options: CallOptions | undefined,
+  signal: AbortSignal,
+): CallOptions {
+  return withSignal({ timeoutMs: 0, ...options }, signal);
+}

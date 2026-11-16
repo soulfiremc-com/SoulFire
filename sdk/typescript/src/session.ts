@@ -1,5 +1,5 @@
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
-import type { CallOptions } from "@connectrpc/connect";
+import { Code, type CallOptions } from "@connectrpc/connect";
 import { Cause, Deferred, Effect, Exit, Option, PubSub, Scope, Stream } from "effect";
 import { operationError, SoulFireTimeoutError, type SoulFireOperationError } from "./errors.js";
 
@@ -292,7 +292,9 @@ export class BotSession {
             !receivedEvent ||
             Option.isNone(failure) ||
             failure.value._tag !== "SoulFireRpcError" ||
-            !failure.value.retryable
+            // Closing the session interrupts this loop, so a cancellation seen here came from the
+            // transport. Resuming keeps the state current instead of freezing it.
+            !(failure.value.retryable || failure.value.code === Code.Canceled)
           ) {
             yield* Deferred.failCause(this.ready, exit.cause);
             this.#failure = exit.cause;

@@ -8,7 +8,7 @@ import { anyPack, anyUnpack, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { CallOptions, Client } from "@connectrpc/connect";
 import { Effect, Stream } from "effect";
 import { operationError, SoulFireTaskError, type SoulFireOperationError } from "./errors.js";
-import { rpc, rpcStream, withSignal } from "./transport.js";
+import { rpc, rpcStream, withSignal, withWatchSignal } from "./transport.js";
 import { blockSelectors } from "./selectors.js";
 
 import type { PathfindGoal } from "./generated/soulfire/bot_live_pb.js";
@@ -867,7 +867,7 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
               afterRevision: options?.afterRevision ?? this.#snapshot.revision,
               follow: true,
             },
-            withSignal(options?.call, signal),
+            withWatchSignal(options?.call, signal),
           ),
         );
       }),
@@ -2699,7 +2699,7 @@ export class SoulFireTasks {
               includeSnapshot: options?.includeSnapshot ?? true,
               statuses: options?.statuses === undefined ? [] : [...options.statuses],
             },
-            withSignal(options?.call, signal),
+            withWatchSignal(options?.call, signal),
           ),
         );
       }),

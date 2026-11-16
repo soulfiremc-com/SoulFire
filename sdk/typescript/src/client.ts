@@ -18,7 +18,7 @@ import {
   type SoulFireOperationError,
 } from "./errors.js";
 import { makeEffectHttpClientFetch } from "./platform.js";
-import { rpc, rpcStream, withSignal } from "./transport.js";
+import { rpc, rpcStream, withSignal, withWatchSignal } from "./transport.js";
 
 import { requireCompletedAction } from "./actions.js";
 import { SoulFireAdmin } from "./admin.js";
@@ -1075,7 +1075,10 @@ export class SoulFireInstance {
     return Stream.unwrap(
       Effect.sync(() => {
         return rpcStream("SoulFireInstance.watchBotStatuses", (signal) =>
-          this.#botClient.watchBotStatuses({ instanceId: this.id }, withSignal(options, signal)),
+          this.#botClient.watchBotStatuses(
+            { instanceId: this.id },
+            withWatchSignal(options, signal),
+          ),
         );
       }),
     );
@@ -1107,7 +1110,7 @@ export class SoulFireInstance {
               instanceId: this.id,
               filter,
             },
-            withSignal(options, signal),
+            withWatchSignal(options, signal),
           ),
         );
       }),
@@ -1657,7 +1660,7 @@ export class SoulFireBot {
               botId: this.id,
               filter,
             },
-            withSignal(options, signal),
+            withWatchSignal(options, signal),
           ),
         );
       }),
@@ -1684,7 +1687,7 @@ export class SoulFireBot {
         rpcStream("bot.observe", (signal) =>
           this.liveClient.watchBotEvents(
             { ...request, instanceId: this.instanceId, botId: this.id },
-            withSignal(options, signal),
+            withWatchSignal(options, signal),
           ),
         ),
       options,

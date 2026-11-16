@@ -467,6 +467,48 @@ describe("SoulFire", () => {
       ),
     ));
 
+  it("keeps bot event watches open past the client's default timeout", () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const deadlines: (number | undefined)[] = [];
+          const transport = createRouterTransport(
+            ({ service }) => {
+              service(SdkService, {
+                handshake() {
+                  return handshakeResponse();
+                },
+              });
+              service(BotLiveService, {
+                async *watchBotEvents(_request, context) {
+                  deadlines.push(context.timeoutMs());
+                  await new Promise((resolve) => setTimeout(resolve, 100));
+                  yield create(BotEventSchema, {
+                    envelope: { botId: "bot-id", sequence: 1n, streamEpoch: "epoch" },
+                    event: { case: "heartbeat", value: {} },
+                  });
+                  await new Promise(() => undefined);
+                },
+              });
+            },
+            { transport: { defaultTimeoutMs: 20 } },
+          );
+          const soulfire = yield* SoulFire.connect({
+            baseUrl: "https://soulfire.example.com",
+            transport,
+          });
+          const bot = soulfire.instance("instance-id").bot("bot-id");
+          const event = yield* bot.events().pipe(Stream.runHead);
+          const session = yield* bot.observe({ filter: {} });
+          expect(event._tag).toBe("Some");
+          expect(session.state.sequence).toBe(1n);
+          expect(deadlines).toEqual([undefined, undefined]);
+          yield* session.close();
+          yield* soulfire.close();
+        }),
+      ),
+    ));
+
   it("indexes semantic entity and block snapshots from live events", () =>
     Effect.runPromise(
       Effect.scoped(

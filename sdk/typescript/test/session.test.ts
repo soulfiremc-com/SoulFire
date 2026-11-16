@@ -71,6 +71,37 @@ describe("observation scopes", () => {
       ).pipe(Effect.provide(TestClock.layer())),
     ));
 
+  it("resumes after the transport cancels a stream the session still uses", () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          let attempts = 0;
+          const resumed = yield* Deferred.make<void>();
+          const session = yield* BotSession.open(() =>
+            Stream.suspend(() => {
+              attempts += 1;
+              const event = create(BotEventSchema, {
+                envelope: { sequence: BigInt(attempts), streamEpoch: "epoch" },
+              });
+              return attempts === 1
+                ? Stream.concat(
+                    Stream.make(event),
+                    Stream.fail(rpcError("watch", new ConnectError("aborted", Code.Canceled))),
+                  )
+                : Stream.make(event).pipe(
+                    Stream.tap(() => Deferred.succeed(resumed, undefined)),
+                    Stream.concat(Stream.never),
+                  );
+            }),
+          );
+          yield* TestClock.adjust(250);
+          yield* Deferred.await(resumed);
+          expect(attempts).toBe(2);
+          expect(session.state.sequence).toBe(2n);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    ));
+
   it("closes a subscription interrupted before its first event", () =>
     Effect.runPromise(
       Effect.scoped(
