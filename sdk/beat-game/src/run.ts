@@ -10021,7 +10021,12 @@ function collectBlocksOrExplore(
         ).pipe(
           Effect.catchTag("BeatGameDriverError", (error) =>
             error.operation === "pathfind" || error.operation === "pathfindXZ"
-              ? Effect.void
+              ? // A walk that may not dig finds no route out of a small pocket,
+                // such as a ledge on a cliff, so every later search fails the
+                // same way. Digging out to nearby solid ground breaks the loop.
+                frontierPath.allowMining === false && /No route found/iu.test(error.message)
+                ? recoverLocalNavigationTrap(state, current.player.position).pipe(Effect.asVoid)
+                : Effect.void
               : Effect.fail(error),
           ),
         );

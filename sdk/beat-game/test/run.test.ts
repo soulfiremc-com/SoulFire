@@ -2027,6 +2027,75 @@ describe("beat-game run lifecycle", () => {
     expect(wool).toEqual({ "minecraft:white_wool": 3 });
   });
 
+  it("digs out of a pocket when log exploration finds no route", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 64, z: 0.5 },
+      counts: { "minecraft:dirt": 2 },
+    });
+    driver.surfaceColumns = [-1, 0, 1].flatMap((deltaX) =>
+      [-1, 0, 1].map((deltaZ) => ({
+        x: 8 + deltaX,
+        z: deltaZ,
+        loaded: true,
+        surfaceY: 63,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      })),
+    );
+    const noRoute = (operation: string) =>
+      new BeatGameDriverError({
+        operation,
+        code: "unreachable",
+        retryable: true,
+        message: "No route found to the goal!",
+      });
+    // As on a live cliff ledge, no walk that may not dig leaves the pocket.
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          policy.allowMining === true ? Effect.never : Effect.fail(noRoute("pathfind")),
+        ),
+      );
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          policy.allowMining === true ? Effect.never : Effect.fail(noRoute("pathfindXZ")),
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.paths.some(({ policy }) => policy.allowMining === true)) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The bot never tried to dig out of the pocket")),
+          }),
+        ),
+      ),
+    );
+
+    const escape = driver.paths.find(({ policy }) => policy.allowMining === true);
+    expect(escape).toMatchObject({ position: { y: 64 }, policy: { allowPlacing: true } });
+    expect(escape?.position.x).toBeGreaterThanOrEqual(7.5);
+    expect(escape?.position.x).toBeLessThanOrEqual(9.5);
+  });
+
   it("leaves a night shelter when the night outlasts its maximum length", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
