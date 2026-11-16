@@ -1132,9 +1132,10 @@ describe("beat-game run lifecycle", () => {
         waitUntilPossible: false,
       }),
     );
-    expect(driver.actions).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "dig-block" })]),
-    );
+    // The bed replaces a dug shelter, and the bot takes it along after waking.
+    expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
+      expect.objectContaining({ position: expect.objectContaining({ x: 0, y: 64, z: 1 }) }),
+    ]);
   });
 
   it("crafts bed planks from a carried log before sheltering", async () => {
@@ -1314,9 +1315,10 @@ describe("beat-game run lifecycle", () => {
         expect.objectContaining({ type: "sleep" }),
       ]),
     );
-    expect(driver.actions).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "dig-block" })]),
-    );
+    const sleep = driver.tasks.find((task) => task.type === "sleep");
+    expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
+      expect.objectContaining({ position: sleep?.type === "sleep" ? sleep.bed : undefined }),
+    ]);
   });
 
   it("keeps a night shelter sealed until daylight is confirmed", async () => {
@@ -1576,6 +1578,165 @@ describe("beat-game run lifecycle", () => {
             z: 0,
             dimension: "minecraft:overworld",
           },
+        }),
+      ]),
+    );
+  }, 10_000);
+
+  it("hunts sheep for three wool of one color and then crafts a bed", async () => {
+    const driver = new FakeBeatGameDriver();
+    const preparedCounts = {
+      "minecraft:oak_log": 8,
+      "minecraft:wooden_sword": 1,
+      "minecraft:cooked_beef": 5,
+      "minecraft:cobblestone": 20,
+    };
+    let wool = 0;
+    const sheep = [301, 302, 303].map(
+      (networkId) =>
+        ({
+          connectionEpoch: "epoch-1",
+          networkId,
+          entityType: "minecraft:sheep",
+          position: { x: 3, y: 64, z: networkId - 300, dimension: "minecraft:overworld" },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 8,
+          observedAt: "2026-01-01T00:00:00.000Z",
+        }) as const,
+    );
+    const killed = new Set<number>();
+    driver.currentObservation = observation({ counts: preparedCounts });
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:sheep") === true
+        ? sheep.filter(({ networkId }) => !killed.has(networkId))
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity") {
+          killed.add(task.target.networkId);
+          wool += 1;
+          driver.currentObservation = observation({
+            counts: { ...preparedCounts, "minecraft:white_wool": wool, "minecraft:mutton": wool },
+          });
+        }
+      });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 2, y: 64, z: 0, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    const requestedRecipes: string[] = [];
+    driver.recipeResolver = (resultItemId) => {
+      requestedRecipes.push(resultItemId);
+      return [];
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!requestedRecipes.includes("minecraft:white_bed")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(
+      driver.tasks.filter((task) => task.type === "attack-entity").map((task) => task.target),
+    ).toEqual(sheep.map(({ networkId }) => expect.objectContaining({ networkId })));
+    expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
+  });
+
+  it("leaves a night shelter when the night outlasts its maximum length", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 60, z: 0.5, dimension: "minecraft:overworld" },
+      counts: {
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:wooden_sword": 1,
+      },
+    });
+    driver.surfaceColumns = [
+      {
+        x: 0,
+        z: 0,
+        loaded: true,
+        surfaceY: 62,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y === 62
+            ? { blockId: "minecraft:oak_log" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    const diagnostics = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          const messages: string[] = [];
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              Effect.sync(() => {
+                if (event.type === "diagnostic") messages.push(event.message);
+              }),
+            ),
+            Effect.forkScoped,
+          );
+          for (let elapsedSeconds = 0; driver.paths.length === 0; elapsedSeconds += 10) {
+            // The night never ends, so only the maximum wait can release the bot.
+            expect(elapsedSeconds).toBeLessThan(15 * 60);
+            yield* TestClock.adjust("10 seconds");
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+          return messages;
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+
+    expect(diagnostics).toContain(
+      "Leaving the night shelter because the night outlasted its maximum length",
+    );
+    expect(driver.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "dig-block",
+          position: { x: 0, y: 62, z: 0, dimension: "minecraft:overworld" },
         }),
       ]),
     );
@@ -3396,6 +3557,67 @@ describe("beat-game run lifecycle", () => {
         }),
       }),
     );
+  });
+
+  it("keeps recording deaths after the driver event stream fails", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const deathObservedAt = new Date().toISOString();
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const driverEvents = yield* PubSub.unbounded<BeatGameDriverEvent>();
+          let subscriptions = 0;
+          driver.events = Stream.suspend(() => {
+            subscriptions += 1;
+            return subscriptions === 1
+              ? Stream.fail(
+                  new BeatGameDriverError({
+                    operation: "events",
+                    retryable: true,
+                    message: "The event stream was cancelled",
+                  }),
+                )
+              : Stream.fromPubSub(driverEvents);
+          });
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "death-after-event-failure-run",
+            team: { teamId: "death-after-event-failure-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (subscriptions < 2) {
+              yield* Effect.sleep(10);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* Effect.sleep(10);
+          yield* PubSub.publish(driverEvents, {
+            type: "bot-died",
+            observedAt: deathObservedAt,
+            message: "Bot was slain",
+          });
+          yield* Effect.gen(function* () {
+            while (
+              (yield* store.load("death-after-event-failure-run"))?.memory.deathPositions.length !==
+              1
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load("death-after-event-failure-run"));
+    expect(saved?.memory.deathPositions).toHaveLength(1);
   });
 
   it("does not copy a previous corpse inventory into a later death", async () => {
@@ -21436,6 +21658,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: { x: 0.5, y: 82, z: 0.5 },
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:bucket": 1,
         "minecraft:cobblestone": 20,
         "minecraft:cooked_beef": 8,
@@ -21530,6 +21753,7 @@ describe("beat-game run lifecycle", () => {
     );
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:bucket": 1,
         "minecraft:cobblestone": 20,
         "minecraft:cooked_beef": 8,
@@ -21618,6 +21842,7 @@ describe("beat-game run lifecycle", () => {
     );
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:bucket": 1,
         "minecraft:cobblestone": 20,
         "minecraft:cooked_beef": 8,
@@ -21718,6 +21943,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: playerPosition,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 8,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 20,
@@ -21805,6 +22031,7 @@ describe("beat-game run lifecycle", () => {
           driver.currentObservation = observation({
             position: playerPosition,
             counts: {
+              "minecraft:white_bed": 1,
               ...driver.currentObservation.inventory.counts,
               "minecraft:stone_pickaxe": 1,
             },
@@ -25662,6 +25889,7 @@ describe("beat-game run lifecycle", () => {
     let digs = 0;
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 8,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 20,
@@ -25749,6 +25977,7 @@ describe("beat-game run lifecycle", () => {
               z: placedTarget.z + 0.5,
             },
             counts: {
+              "minecraft:white_bed": 1,
               ...driver.currentObservation.inventory.counts,
               "minecraft:gravel": digs === 1 ? 1 : 0,
               ...(digs === 1 ? {} : { "minecraft:flint": 1 }),
@@ -25820,6 +26049,7 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 8,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 20,
@@ -25868,6 +26098,7 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 8,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 20,
@@ -30047,6 +30278,7 @@ describe("beat-game run lifecycle", () => {
   it("picks up a nearby required resource before gathering more", async () => {
     const driver = new FakeBeatGameDriver();
     const preparedCounts = {
+      "minecraft:white_bed": 1,
       "minecraft:oak_log": 8,
       "minecraft:cobblestone": 20,
       "minecraft:cooked_beef": 8,
@@ -30854,6 +31086,7 @@ describe("beat-game run lifecycle", () => {
   it("replans when a queued hunting target is no longer observable", async () => {
     const driver = new FakeBeatGameDriver();
     const allRequiredItems = {
+      "minecraft:white_bed": 1,
       "minecraft:cooked_beef": 16,
       "minecraft:oak_log": 8,
       "minecraft:cobblestone": 20,
@@ -33524,6 +33757,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: { y: 24 },
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33561,6 +33795,7 @@ describe("beat-game run lifecycle", () => {
           yield* Effect.promise(() => ironCollectionStarted).pipe(Effect.timeout("5 seconds"));
           driver.currentObservation = observation({
             counts: {
+              "minecraft:white_bed": 1,
               ...driver.currentObservation.inventory.counts,
               "minecraft:raw_iron": 10,
             },
@@ -33593,6 +33828,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: surfacePosition,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33676,6 +33912,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: surfacePosition,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33763,6 +34000,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 5,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33831,6 +34069,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: surfacePosition,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33946,6 +34185,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       position: miningPosition,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -33998,6 +34238,7 @@ describe("beat-game run lifecycle", () => {
           driver.currentObservation = observation({
             position: miningPosition,
             counts: {
+              "minecraft:white_bed": 1,
               ...driver.currentObservation.inventory.counts,
               "minecraft:stone_pickaxe": 2,
             },
@@ -34113,6 +34354,7 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_beef": 12,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 30,
@@ -34171,6 +34413,7 @@ describe("beat-game run lifecycle", () => {
       if (task.type === "craft" && task.recipeId === "minecraft:stone_pickaxe") {
         driver.currentObservation = observation({
           counts: {
+            "minecraft:white_bed": 1,
             ...driver.currentObservation.inventory.counts,
             "minecraft:stone_pickaxe": 1,
           },
@@ -34407,6 +34650,7 @@ describe("beat-game run lifecycle", () => {
       air: 300,
       position: { x: 0.5, y: 64, z: 0.5 },
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:bucket": 1,
         "minecraft:cobblestone": 20,
         "minecraft:cooked_beef": 8,
@@ -34543,6 +34787,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       food: defaultBeatGameStrategy.eatBelowFood + 1,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_mutton": 4,
         "minecraft:beef": 6,
         "minecraft:coal": 1,
@@ -35313,6 +35558,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       food: defaultBeatGameStrategy.eatBelowFood + 1,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:cooked_mutton": 4,
         "minecraft:fishing_rod": 1,
         "minecraft:oak_log": 8,
@@ -35401,6 +35647,7 @@ describe("beat-game run lifecycle", () => {
       if (task.type === "fish") {
         driver.currentObservation = observation({
           counts: {
+            "minecraft:white_bed": 1,
             ...driver.currentObservation.inventory.counts,
             "minecraft:pufferfish": 1,
           },
@@ -36693,6 +36940,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       food: 15,
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:oak_log": 4,
         "minecraft:cobblestone": 20,
         "minecraft:stone_sword": 1,
@@ -36729,6 +36977,7 @@ describe("beat-game run lifecycle", () => {
       driver.currentObservation = observation({
         food: 14,
         counts: {
+          "minecraft:white_bed": 1,
           "minecraft:oak_log": 4,
           "minecraft:cobblestone": 20,
           "minecraft:stone_sword": 1,
@@ -36866,6 +37115,7 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:oak_log": 4,
         "minecraft:oak_planks": 3,
         "minecraft:cobblestone": 20,
@@ -36952,6 +37202,7 @@ describe("beat-game run lifecycle", () => {
   it("gathers distinct starter fuel before turning the last log into charcoal", async () => {
     const driver = new FakeBeatGameDriver();
     const initialCounts = {
+      "minecraft:white_bed": 1,
       "minecraft:oak_log": 2,
       "minecraft:cobblestone": 20,
       "minecraft:stone_sword": 1,
@@ -37048,6 +37299,7 @@ describe("beat-game run lifecycle", () => {
   it("moves a furnace batch after fuel gathering changes elevation", async () => {
     const driver = new FakeBeatGameDriver();
     const initialCounts = {
+      "minecraft:white_bed": 1,
       "minecraft:oak_log": 2,
       "minecraft:cobblestone": 20,
       "minecraft:stone_sword": 1,
@@ -37142,6 +37394,7 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       counts: {
+        "minecraft:white_bed": 1,
         "minecraft:oak_log": 4,
         "minecraft:oak_planks": 3,
         "minecraft:cobblestone": 20,

@@ -58,6 +58,7 @@ describe("beat-game requirements", () => {
       "basic-melee-weapon",
       "food-supply",
       "cobblestone",
+      "bed",
       "melee-weapon",
       "food",
       "iron",
@@ -66,6 +67,19 @@ describe("beat-game requirements", () => {
       "water-bucket",
       "ignition",
     ]);
+  });
+
+  it("drops the bed once the sheep search is exhausted", () => {
+    const keys = (bedUnavailable: boolean) =>
+      requirementsForPhase(
+        BeatGamePhase.PREPARE_OVERWORLD,
+        observation().inventory,
+        defaultBeatGameStrategy,
+        { bedUnavailable },
+      ).map(({ key }) => key);
+
+    expect(keys(false)).toContain("bed");
+    expect(keys(true)).not.toContain("bed");
   });
 
   it("secures an edible supply before spending time on stone", () => {

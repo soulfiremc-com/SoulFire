@@ -1,5 +1,5 @@
 import type { SoulFireBot } from "@soulfiremc/sdk";
-import { Deferred, Effect, Fiber, Ref, Semaphore, Stream, type Scope } from "effect";
+import { Clock, Deferred, Effect, Fiber, Ref, Semaphore, Stream, type Scope } from "effect";
 
 import {
   acquire,
@@ -97,6 +97,9 @@ import {
 } from "./planner.js";
 import type { BeatGamePolicyContext, BeatGameStrategyHooks } from "./policy.js";
 import {
+  BED_COLORS,
+  BED_ITEM_IDS,
+  BED_SHEEP_SEARCH_PURPOSE,
   COOKED_FOOD_ITEM_IDS,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
@@ -105,6 +108,7 @@ import {
   PLANK_ITEM_IDS,
   RAW_FOOD_TO_COOKED,
   URGENT_HUNGER_FOOD_LEVEL,
+  WOOL_ITEM_IDS,
   requirementCount,
 } from "./requirements.js";
 import {
@@ -770,6 +774,7 @@ const CHARGED_CREEPER_BLAST_SAFE_DISTANCE = 12;
 const CREEPER_SHIELD_POLL_MS = 50;
 const CREEPER_SHIELD_MAXIMUM_POLLS = 40;
 const EMERGENCY_ESCAPE_LAVA_CHECK_RADIUS = 4;
+const DRIVER_EVENTS_RESUBSCRIBE_DELAY_MS = 1_000;
 const NIGHT_SHELTER_START_TICK = 13_000n;
 const NIGHT_SHELTER_END_TICK = 1_000n;
 const NIGHT_SHELTER_DEPTH = 3;
@@ -778,28 +783,13 @@ const NIGHT_SHELTER_DEEP_SURFACE_COVER = 32;
 const NIGHT_SHELTER_POLL_MS = 1_000;
 const NIGHT_SHELTER_DESCENT_ATTEMPTS = 30;
 const NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS = 3;
+// A hostile night lasts 12,000 ticks, which is 10 minutes at 20 ticks per second.
+// Waiting longer means the reported time is stale or the server stopped its daylight cycle.
+const NIGHT_SHELTER_MAXIMUM_WAIT_MS = 12 * 60_000;
 const NIGHT_SHELTER_RELOCATION_SCAN_RADIUS = 32;
 const NIGHT_SHELTER_RELOCATION_MINIMUM_DISTANCE = 4;
 const NIGHT_SHELTER_ACTION = "survive:night-shelter";
-const BED_COLORS = [
-  "white",
-  "orange",
-  "magenta",
-  "light_blue",
-  "yellow",
-  "lime",
-  "pink",
-  "gray",
-  "light_gray",
-  "cyan",
-  "purple",
-  "blue",
-  "brown",
-  "green",
-  "red",
-  "black",
-] as const;
-const BED_ITEM_IDS = BED_COLORS.map((color) => `minecraft:${color}_bed`);
+const BED_WOOL_COUNT = 3;
 const NIGHT_BED_SEARCH_RADIUS = 32;
 const NIGHT_BED_PLACEMENT_SEARCH_RADIUS = 5;
 const NIGHT_BED_PLACEMENT_CONFIRMATION_ATTEMPTS = 20;
@@ -1601,11 +1591,39 @@ function trySleepThroughNight(
           message: "Slept through the hostile night in a bed",
           data: { position: bed.position },
         });
+        yield* pickUpBed(state, bed);
         return true;
       }
     }
     return false;
   });
+}
+
+/// Takes the bed along, so the next night does not need new wool.
+function pickUpBed(
+  state: RunState,
+  bed: BeatGameBlockObservation,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
+  return Effect.gen(function* () {
+    yield* state.driver.withControl(
+      state.driver.act({ type: "dig-block", position: bed.position }),
+    );
+    yield* collectNearbyDrops(state.driver, {
+      itemIds: BED_ITEM_IDS,
+      radius: 8,
+      maximumDrops: 1,
+      settleDelayMs: 250,
+      path: { ...state.strategy.path, allowPlacing: false, avoidFluids: true },
+    });
+  }).pipe(
+    Effect.catchTag("BeatGameDriverError", (error) =>
+      emit(state, {
+        type: "diagnostic",
+        message: "Could not pick up the bed after sleeping",
+        data: { position: bed.position, error: error.message },
+      }),
+    ),
+  );
 }
 
 function findNearbyNightBeds(
@@ -1649,7 +1667,8 @@ function craftableBedItemId(observation: BeatGameObservation): string | undefine
     return undefined;
   }
   const color = BED_COLORS.find(
-    (candidate) => (observation.inventory.counts[`minecraft:${candidate}_wool`] ?? 0) >= 3,
+    (candidate) =>
+      (observation.inventory.counts[`minecraft:${candidate}_wool`] ?? 0) >= BED_WOOL_COUNT,
   );
   return color === undefined ? undefined : `minecraft:${color}_bed`;
 }
@@ -2013,7 +2032,16 @@ function shelterUntilMorning(
         : rememberWorldPlace(checkpoint, "SHELTER", surfaceOrigin, 1),
     );
     let daylightConfirmations = 0;
+    const waitDeadline = (yield* Clock.currentTimeMillis) + NIGHT_SHELTER_MAXIMUM_WAIT_MS;
     while (daylightConfirmations < NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS) {
+      if ((yield* Clock.currentTimeMillis) >= waitDeadline) {
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Leaving the night shelter because the night outlasted its maximum length",
+          data: { position: surfaceOrigin, maximumWaitMs: NIGHT_SHELTER_MAXIMUM_WAIT_MS },
+        });
+        break;
+      }
       const environment = yield* state.driver.environment!;
       daylightConfirmations =
         environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
@@ -8279,6 +8307,34 @@ function recoverNearbyRequirementDrops(
     );
 }
 
+function satisfyBedRequirement(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
+  const craftableBed = craftableBedItemId(observation);
+  if (craftableBed !== undefined) {
+    return craftWithTable(state, observation, craftableBed, 1);
+  }
+  // A bed needs three wool of one color. Each sheep drops one wool of its own color.
+  const mostWoolOfOneColor = Math.max(
+    ...WOOL_ITEM_IDS.map((itemId) => observation.inventory.counts[itemId] ?? 0),
+  );
+  return huntOrExplore(
+    state,
+    observation,
+    { entityTypes: ["minecraft:sheep"], alive: true },
+    Math.max(1, BED_WOOL_COUNT - mostWoolOfOneColor),
+    BED_SHEEP_SEARCH_PURPOSE,
+    {
+      preferredEntityTypes: new Set(["minecraft:sheep"]),
+      preferredRadius: state.strategy.entitySearchRadius,
+      maximumExplorationHops: 1,
+      dropItemIds: WOOL_ITEM_IDS,
+      path: state.strategy.path,
+    },
+  );
+}
+
 function satisfyRequirementFromWorld(
   state: RunState,
   requirement: BeatGameItemRequirement,
@@ -8311,6 +8367,8 @@ function satisfyRequirementFromWorld(
         prepareAttempt: (current) =>
           ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
       });
+    case "bed":
+      return satisfyBedRequirement(state, observation);
     case "basic-melee-weapon":
       return craftWithTable(state, observation, "minecraft:wooden_sword", 1);
     case "melee-weapon":
@@ -11009,6 +11067,8 @@ interface HuntTargetPreference {
   readonly maximumExplorationHops?: number;
   readonly path?: BeatGameStrategy["path"];
   readonly explorationTarget?: BeatGamePosition;
+  /// The drops that count toward the hunt, when they differ from the target's usual drops.
+  readonly dropItemIds?: readonly string[];
   readonly allowFluidFallback?: boolean;
   readonly fallbackToLocalExploration?: boolean;
   readonly structureSearch?: Readonly<{
@@ -11031,9 +11091,11 @@ function huntOrExplore(
   return Effect.gen(function* () {
     const expectedDropItemIds = [
       ...new Set(
-        selector.entityTypes?.flatMap(
-          (entityType) => HUNT_DROP_ITEM_IDS_BY_ENTITY_TYPE[entityType] ?? [],
-        ) ?? [],
+        targetPreference?.dropItemIds ??
+          selector.entityTypes?.flatMap(
+            (entityType) => HUNT_DROP_ITEM_IDS_BY_ENTITY_TYPE[entityType] ?? [],
+          ) ??
+          [],
       ),
     ];
     const expectedDropCount = (value: BeatGameObservation): number =>
@@ -15804,6 +15866,7 @@ function observeDriverFresh(state: RunState): Effect.Effect<BeatGameObservation,
 }
 
 function monitorDriverEvents(state: RunState): Effect.Effect<void, never> {
+  // A failed or finished subscription must not end death tracking for the rest of the run.
   return state.driver.events.pipe(
     Stream.runForEach((event) => {
       if (event.type !== "bot-died") {
@@ -15834,7 +15897,9 @@ function monitorDriverEvents(state: RunState): Effect.Effect<void, never> {
         ),
       );
     }),
-    Effect.catch(() => Effect.void),
+    Effect.ignore,
+    Effect.andThen(Effect.sleep(DRIVER_EVENTS_RESUBSCRIBE_DELAY_MS)),
+    Effect.forever,
   );
 }
 

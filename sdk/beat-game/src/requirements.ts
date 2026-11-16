@@ -16,7 +16,38 @@ export interface BeatGameRequirementDefinition {
 
 export interface BeatGameRequirementContext {
   readonly reusablePortalAvailable?: boolean;
+  /// True once the bot searched long enough for sheep without finding enough wool for a bed.
+  readonly bedUnavailable?: boolean;
 }
+
+export const BED_COLORS = [
+  "white",
+  "orange",
+  "magenta",
+  "light_blue",
+  "yellow",
+  "lime",
+  "pink",
+  "gray",
+  "light_gray",
+  "cyan",
+  "purple",
+  "blue",
+  "brown",
+  "green",
+  "red",
+  "black",
+] as const;
+
+export const BED_ITEM_IDS = BED_COLORS.map((color) => `minecraft:${color}_bed`);
+
+export const WOOL_ITEM_IDS = BED_COLORS.map((color) => `minecraft:${color}_wool`);
+
+/// Exploration legs spent looking for sheep before the run gives up on a bed.
+export const BED_SHEEP_SEARCH_LEGS = 6;
+
+/// Exploration purpose for the sheep search, which keys its saved progress.
+export const BED_SHEEP_SEARCH_PURPOSE = "find-sheep";
 
 export const COOKED_FOOD_ITEM_IDS = [
   "minecraft:cooked_beef",
@@ -123,6 +154,8 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
       ({ targetCobblestoneCount }) => targetCobblestoneCount,
       110,
     ),
+    // A bed skips each night in seconds. Without one, the bot hides for 10 minutes.
+    itemRequirement("bed", BED_ITEM_IDS, () => 1, 106),
     itemRequirement(
       "melee-weapon",
       [
@@ -220,7 +253,7 @@ export function requirementsForPhase(
     phase === BeatGamePhase.ENTER_NETHER
       ? portalRequirements(inventory, strategy, context.reusablePortalAvailable === true)
       : phase === BeatGamePhase.PREPARE_OVERWORLD
-        ? prepareOverworldRequirements(inventory)
+        ? prepareOverworldRequirements(inventory, context)
         : REQUIREMENTS[phase];
   return definitions
     .map((definition) => materializeRequirement(definition, inventory, strategy))
@@ -229,8 +262,11 @@ export function requirementsForPhase(
 
 function prepareOverworldRequirements(
   inventory: BeatGameInventory,
+  context: BeatGameRequirementContext,
 ): readonly BeatGameRequirementDefinition[] {
-  const definitions = REQUIREMENTS[BeatGamePhase.PREPARE_OVERWORLD];
+  const definitions = REQUIREMENTS[BeatGamePhase.PREPARE_OVERWORLD].filter(
+    ({ key }) => key !== "bed" || context.bedUnavailable !== true,
+  );
   const logTarget = overworldLogTarget(inventory);
   const investedIron = preparedEquipmentIronInvestment(inventory);
   return definitions.map((definition) => {
@@ -303,7 +339,9 @@ function portalRequirements(
   reusablePortalAvailable: boolean,
 ): readonly BeatGameRequirementDefinition[] {
   const survivalRequirements = REQUIREMENTS[BeatGamePhase.PREPARE_OVERWORLD]
-    .filter(({ key }) => key !== "iron" && key !== "water-bucket" && key !== "ignition")
+    .filter(
+      ({ key }) => key !== "iron" && key !== "water-bucket" && key !== "ignition" && key !== "bed",
+    )
     .map((definition) => {
       if (definition.key === "logs") {
         return {

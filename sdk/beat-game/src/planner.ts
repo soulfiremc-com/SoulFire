@@ -7,6 +7,8 @@ import {
   type BeatGameStrategy,
 } from "./model.js";
 import {
+  BED_SHEEP_SEARCH_LEGS,
+  BED_SHEEP_SEARCH_PURPOSE,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
   EMERGENCY_FOOD_ITEM_IDS,
@@ -103,6 +105,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
   const reusablePortalAvailable = hasReusablePortalCandidate(checkpoint, observation);
   const requirements = requirementsForPhase(phase, observation.inventory, strategy, {
     reusablePortalAvailable,
+    bedUnavailable: bedSearchExhausted(checkpoint),
   });
   if (observation.player.food <= strategy.eatBelowFood && hasCookableRawFood(observation)) {
     const food =
@@ -347,9 +350,16 @@ export function plannerWithObservation(
     requirements: requirementsForPhase(planner.phase, observation.inventory, strategy, {
       reusablePortalAvailable:
         checkpoint !== undefined && hasReusablePortalCandidate(checkpoint, observation),
+      bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint),
     }),
     updatedAt: now,
   };
+}
+
+function bedSearchExhausted(checkpoint: BeatGameCheckpoint): boolean {
+  const frontier =
+    checkpoint.memory.explorationFrontiers?.[`minecraft:overworld:${BED_SHEEP_SEARCH_PURPOSE}`];
+  return frontier?.progressVersion === 2 && (frontier.totalAdvances ?? 0) >= BED_SHEEP_SEARCH_LEGS;
 }
 
 function hasReusablePortalCandidate(

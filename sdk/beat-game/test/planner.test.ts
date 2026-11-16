@@ -258,6 +258,7 @@ describe("beat-game planner", () => {
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
       observation: observation({
         counts: {
+          "minecraft:white_bed": 1,
           "minecraft:cooked_beef": 5,
           "minecraft:spruce_log": 8,
           "minecraft:cobblestone": 20,
@@ -275,6 +276,50 @@ describe("beat-game planner", () => {
       action: "satisfy:iron",
       requirement: { key: "iron" },
     });
+  });
+
+  it("prepares a bed before iron until the sheep search is exhausted", () => {
+    const prepared = observation({
+      counts: {
+        "minecraft:cooked_beef": 5,
+        "minecraft:spruce_log": 8,
+        "minecraft:cobblestone": 20,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+      },
+      food: 20,
+      position: { y: 76 },
+    });
+    const base = checkpoint(BeatGamePhase.PREPARE_OVERWORLD);
+    const exhausted = {
+      ...base,
+      memory: {
+        ...base.memory,
+        explorationFrontiers: {
+          "minecraft:overworld:find-sheep": {
+            progressVersion: 2 as const,
+            origin: prepared.player.position,
+            nextIndex: 7,
+            totalAdvances: 6,
+          },
+        },
+      },
+    };
+
+    expect(
+      decideBeatGameAction({
+        checkpoint: base,
+        observation: prepared,
+        strategy: defaultBeatGameStrategy,
+      }),
+    ).toMatchObject({ action: "satisfy:bed" });
+    expect(
+      decideBeatGameAction({
+        checkpoint: exhausted,
+        observation: prepared,
+        strategy: defaultBeatGameStrategy,
+      }),
+    ).toMatchObject({ action: "satisfy:iron" });
   });
 
   it("does not abandon portal travel after consuming one reserve meal", () => {
@@ -453,6 +498,7 @@ describe("beat-game planner", () => {
       },
       observation: observation({
         counts: {
+          "minecraft:white_bed": 1,
           "minecraft:cooked_beef": 16,
           "minecraft:oak_log": 8,
           "minecraft:cobblestone": 20,
@@ -476,6 +522,7 @@ describe("beat-game planner", () => {
 
   it("handles hunger, low health, and equipment preparation explicitly", () => {
     const counts = {
+      "minecraft:white_bed": 1,
       "minecraft:cooked_beef": 16,
       "minecraft:oak_log": 8,
       "minecraft:cobblestone": 20,
