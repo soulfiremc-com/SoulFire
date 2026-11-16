@@ -37762,6 +37762,93 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("keeps walking back to a portal with only raw food at the meal threshold", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "raw-food-portal-trip-run";
+    const teamId = "raw-food-portal-trip-team";
+    const netherPortal = blockObservation(
+      { x: 55, y: 91, z: -6, dimension: "minecraft:the_nether" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    const counts = {
+      "minecraft:beef": 1,
+      "minecraft:dark_oak_log": 12,
+      "minecraft:shield": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:wooden_sword": 1,
+    };
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { x: 0.5, y: 64, z: 0.5 },
+      food: 15,
+      counts,
+    });
+    let interruptedTrips = 0;
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_nether",
+          position: { x: 0.5, y: 64, z: 0.5 },
+          food: 14,
+          counts,
+        });
+      }).pipe(
+        Effect.andThen(Effect.never),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            interruptedTrips += 1;
+          }),
+        ),
+      );
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:nether",
+                value: netherPortal,
+                observedAt: netherPortal.observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.xzPaths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(200);
+          expect(interruptedTrips).toBe(0);
+          expect(driver.xzPaths).toHaveLength(1);
+          yield* run.stop;
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The bot never walked toward the portal")),
+          }),
+        ),
+      ),
+    );
+  });
+
   it("keeps gathering wood with raw food above the emergency threshold", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

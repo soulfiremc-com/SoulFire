@@ -6024,6 +6024,11 @@ function shouldInterruptForMeal(
   if (hasReadyFood || observation.player.food <= CRITICAL_HUNGER_FOOD_LEVEL) {
     return true;
   }
+  // Raw food needs a furnace, and the planner does not cook on the way back
+  // to the Overworld, so interrupting the trip would only restart it.
+  if (decision.type === "return-through-portal") {
+    return false;
+  }
   return (
     decision.type !== "satisfy-requirement" ||
     (decision.requirement.key !== "food" &&
