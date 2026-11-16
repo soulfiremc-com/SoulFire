@@ -1955,18 +1955,31 @@ function shelterUntilMorning(
       ...initialPlayerBlock,
       y: initialPlayerBlock.y + 2,
     });
-    const stableShelterObservation =
+    let stableShelterObservation =
       initialOverhead !== undefined && !initialOverhead.replaceable
         ? shelterObservation
         : yield* prepareStableNightShelterSite(state, shelterObservation);
+    let enclosure: NightShelterEnclosure | undefined;
     if (stableShelterObservation === undefined) {
+      const current = yield* state.driver.observe;
+      enclosure = current.player.dead
+        ? undefined
+        : yield* encloseNightShelterInPlace(state, current);
+      if (enclosure === undefined) {
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Could not find a stable column for a night shelter",
+          data: { position: current.player.position },
+        });
+        yield* Effect.sleep(NIGHT_SHELTER_POLL_MS);
+        return false;
+      }
       yield* emit(state, {
         type: "diagnostic",
-        message: "Could not find a stable column for a night shelter",
-        data: { position: shelterObservation.player.position },
+        message: "Enclosed the bot in place because no shelter column could be dug",
+        data: { position: current.player.position, placed: enclosure.placed },
       });
-      yield* Effect.sleep(NIGHT_SHELTER_POLL_MS);
-      return false;
+      stableShelterObservation = yield* state.driver.observe;
     }
     shelterObservation = stableShelterObservation;
     const surfaceOrigin = shelterObservation.player.position;
@@ -2069,7 +2082,9 @@ function shelterUntilMorning(
         yield* Effect.sleep(NIGHT_SHELTER_POLL_MS);
       }
     }
-    if (sealPosition !== undefined) {
+    if (enclosure !== undefined && enclosure.exit.length > 0) {
+      yield* openNightShelterEnclosure(state, enclosure);
+    } else if (sealPosition !== undefined) {
       yield* state.driver.withControl(
         state.driver.act({
           type: "dig-block",
@@ -2495,6 +2510,157 @@ function digAndSealNightShelter(
       }
       return undefined;
     }),
+  );
+}
+
+interface NightShelterEnclosure {
+  readonly placed: readonly BeatGameBlockPosition[];
+  // Blocks placed on one side, dug in the morning. Empty when only the roof
+  // was placed, so the bot leaves through it.
+  readonly exit: readonly BeatGameBlockPosition[];
+}
+
+const ENCLOSURE_SIDES = [
+  { x: 1, z: 0 },
+  { x: -1, z: 0 },
+  { x: 0, z: 1 },
+  { x: 0, z: -1 },
+] as const;
+
+// Places blocks around the bot's feet, head and roof where it stands. This
+// works on open ground and in shafts whose floor cannot be dug.
+function encloseNightShelterInPlace(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<NightShelterEnclosure | undefined, BeatGameDriverError> {
+  const feet = {
+    x: Math.floor(observation.player.position.x),
+    y: Math.floor(observation.player.position.y),
+    z: Math.floor(observation.player.position.z),
+    dimension: observation.player.position.dimension,
+  };
+  const head = { ...feet, y: feet.y + 1 };
+  const body = [feet, head];
+  const roof = { ...head, y: head.y + 1 };
+  const roofRing = ENCLOSURE_SIDES.map((side) => ({
+    ...roof,
+    x: roof.x + side.x,
+    z: roof.z + side.z,
+  }));
+  const roofCorner = { ...roof, x: roof.x + 1 };
+  const isSolid = (block: BeatGameBlockObservation | undefined): boolean =>
+    block !== undefined && !block.replaceable && !isPlayerFluidBlock(block.blockId);
+  return Effect.gen(function* () {
+    if (!isSolid(yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 1 }))) {
+      return undefined;
+    }
+    // The roof can only be placed against a neighbor, so open ground needs
+    // one block beside it first.
+    let roofSupported = false;
+    for (const position of roofRing) {
+      roofSupported ||= isSolid(yield* queryExactBlock(state.driver, position));
+    }
+    const targets = [
+      ...ENCLOSURE_SIDES.map((side) => ({ ...feet, x: feet.x + side.x, z: feet.z + side.z })),
+      ...ENCLOSURE_SIDES.map((side) => ({ ...head, x: head.x + side.x, z: head.z + side.z })),
+      ...(roofSupported ? [] : [roofCorner]),
+      roof,
+    ];
+    const open: BeatGameBlockPosition[] = [];
+    for (const target of targets) {
+      const block = yield* queryExactBlock(state.driver, target);
+      if (block === undefined) {
+        return undefined;
+      }
+      if (!isSolid(block)) {
+        open.push(target);
+      }
+    }
+    if (countNightShelterItems(observation, NIGHT_SHELTER_BLOCK_ITEM_IDS) < open.length) {
+      return undefined;
+    }
+    const placed: BeatGameBlockPosition[] = [];
+    const placedAll = yield* state.driver.withControl(
+      Effect.gen(function* () {
+        for (const target of open) {
+          const supports = [
+            { against: { ...target, y: target.y - 1 }, face: "up" },
+            { against: { ...target, x: target.x + 1 }, face: "west" },
+            { against: { ...target, x: target.x - 1 }, face: "east" },
+            { against: { ...target, z: target.z + 1 }, face: "north" },
+            { against: { ...target, z: target.z - 1 }, face: "south" },
+            { against: { ...target, y: target.y + 1 }, face: "down" },
+          ] as const;
+          let support: (typeof supports)[number] | undefined;
+          for (const candidate of supports) {
+            if (body.some((cell) => samePosition(cell, candidate.against))) {
+              continue;
+            }
+            if (isSolid(yield* queryExactBlock(state.driver, candidate.against))) {
+              support = candidate;
+              break;
+            }
+          }
+          if (support === undefined) {
+            return false;
+          }
+          yield* state.driver.act({
+            type: "select-item",
+            selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
+          });
+          yield* state.driver.act({
+            type: "place-block",
+            against: support.against,
+            face: support.face,
+            hand: "main",
+          });
+          let confirmed = false;
+          for (let attempt = 0; attempt < 20 && !confirmed; attempt += 1) {
+            confirmed = isSolid(yield* queryExactBlock(state.driver, target));
+            if (!confirmed) {
+              yield* Effect.sleep(100);
+            }
+          }
+          if (!confirmed) {
+            return false;
+          }
+          placed.push(target);
+        }
+        return true;
+      }),
+    );
+    if (!placedAll) {
+      return undefined;
+    }
+    const onSide = (position: BeatGameBlockPosition, side: (typeof ENCLOSURE_SIDES)[number]) =>
+      position.x === feet.x + side.x && position.z === feet.z + side.z && position.y <= head.y;
+    const exitSide = ENCLOSURE_SIDES.find((side) =>
+      placed.some((position) => onSide(position, side)),
+    );
+    return {
+      placed,
+      exit: exitSide === undefined ? [] : placed.filter((position) => onSide(position, exitSide)),
+    };
+  });
+}
+
+function openNightShelterEnclosure(
+  state: RunState,
+  enclosure: NightShelterEnclosure,
+): Effect.Effect<void, BeatGameDriverError> {
+  return state.driver.withControl(
+    Effect.forEach(
+      enclosure.exit,
+      (position) =>
+        queryExactBlock(state.driver, position).pipe(
+          Effect.flatMap((block) =>
+            block !== undefined && !block.replaceable && block.diggable
+              ? state.driver.act({ type: "dig-block", position })
+              : Effect.void,
+          ),
+        ),
+      { discard: true },
+    ),
   );
 }
 

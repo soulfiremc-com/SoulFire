@@ -2062,6 +2062,111 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("encloses the bot in place when no shelter column can be dug", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:dirt": 16,
+        "minecraft:wooden_sword": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (position.y === 63) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:bedrock",
+            diggable: false,
+          }),
+        ];
+      }
+      if (placed.has(key(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          key({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+        if (placed.size === 10) {
+          driver.currentEnvironment = { gameTime: 1_000n };
+        }
+      }
+      if (action.type === "dig-block") {
+        placed.delete(key(action.position));
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.actions.some((action) => action.type === "dig-block")) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(50);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "8 seconds",
+            orElse: () => Effect.fail(new Error("Timed out waiting for the enclosure to open")),
+          }),
+        ),
+      ),
+    );
+
+    const placements = driver.actions.filter((action) => action.type === "place-block");
+    expect(placements).toHaveLength(10);
+    expect(placed).toEqual(
+      new Set(["-1:64:0", "0:64:1", "0:64:-1", "-1:65:0", "0:65:1", "0:65:-1", "1:66:0", "0:66:0"]),
+    );
+    expect(
+      driver.actions
+        .filter((action) => action.type === "dig-block")
+        .map(({ position }) => position),
+    ).toEqual([
+      { x: 1, y: 64, z: 0, dimension: "minecraft:overworld" },
+      { x: 1, y: 65, z: 0, dimension: "minecraft:overworld" },
+    ]);
+  }, 10_000);
+
   it("interrupts night shelter relocation to defend against a hostile", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
