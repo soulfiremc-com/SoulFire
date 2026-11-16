@@ -24688,15 +24688,14 @@ describe("beat-game run lifecycle", () => {
       { x: 1.5, y: 40.5, z: 2.5 },
     ]);
     const saved = await Effect.runPromise(store.load("portal-beside-lava-run"));
-    expect(saved?.activeSkill).toMatchObject({
-      kind: "PORTAL_CONSTRUCTION",
-      status: "SUSPENDED",
-      portalWorkspace: {
+    // The fake world never finishes the frame, so the site may already be
+    // abandoned once its retries run out.
+    expect(saved?.memory.portalWorkspaces).toContainEqual(
+      expect.objectContaining({
         method: "CAST",
-        status: "BUILDING",
         candidateLavaSources: expect.arrayContaining([source.position]),
-      },
-    });
+      }),
+    );
   });
 
   it("requests only the remaining lava when resuming a partial cast portal", async () => {
@@ -24833,6 +24832,151 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(maximumResults).toBe(1);
+  });
+
+  it("abandons a cast portal site after its retries run out and searches for new lava", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "abandon-cast-portal-run";
+    const teamId = "abandon-cast-portal-team";
+    const origin = {
+      x: 0,
+      y: -52,
+      z: 0,
+      dimension: "minecraft:overworld",
+    } as const;
+    const frame = createNetherPortalFrame(origin, "x");
+    const observedFrame = frame.blocks.slice(0, 8);
+    const now = "2026-01-01T00:00:00.000Z";
+    const source = blockObservation(
+      { x: 4, y: -54, z: 4, dimension: origin.dimension },
+      {
+        blockId: "minecraft:lava",
+        properties: { level: "0" },
+        replaceable: true,
+      },
+    );
+    const workspace = {
+      workspaceId: "unreachable-lava-workspace",
+      origin,
+      axis: "x" as const,
+      method: "CAST" as const,
+      status: "BUILDING" as const,
+      targetFrame: frame.blocks,
+      observedFrame,
+      interior: frame.interior,
+      protectedBlocks: frame.blocks,
+      candidateLavaSources: [source.position],
+      rejectedLavaSources: [],
+      waterFlow: [],
+      bucketState: "LAVA" as const,
+      ignitionState: "NOT_ATTEMPTED" as const,
+      interiorState: "CLEAR" as const,
+      entryAttempts: 0,
+      observedAt: now,
+      updatedAt: now,
+    };
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.ENTER_NETHER, {
+          runId,
+          teamId,
+          activeSkill: {
+            skillId: "unreachable-lava-skill",
+            kind: BeatGameDurableSkillKind.PORTAL_CONSTRUCTION,
+            phase: BeatGamePhase.ENTER_NETHER,
+            action: "build-and-enter-nether",
+            status: BeatGameDurableSkillStatus.SUSPENDED,
+            substep: "repair-frame",
+            targets: [origin],
+            protectedBlocks: frame.blocks,
+            protectedItemIds: [],
+            completedWorldChanges: observedFrame,
+            requiredResources: {},
+            retries: {},
+            portalWorkspace: workspace,
+            startedAt: now,
+            updatedAt: now,
+          },
+          memory: {
+            ...checkpoint(BeatGamePhase.ENTER_NETHER).memory,
+            portalWorkspaces: [workspace],
+          },
+        }),
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      position: { ...origin, x: 0.5, z: -2.5 },
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:cooked_beef": 8,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:lava_bucket": 1,
+        "minecraft:oak_log": 4,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    // The pool holds enough lava for a whole portal, but no stand beside it
+    // is reachable, so every approach fails.
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:lava") === true && selector.properties?.level === "0"
+        ? Array.from({ length: 12 }, () => source)
+        : [];
+
+    const events = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: {
+              maximumActionRetries: 0,
+              observationPollMs: 1,
+              portalStrategy: "CAST",
+            },
+          });
+          const events = yield* run.events.pipe(
+            Stream.takeUntilEffect(() =>
+              store
+                .load(runId)
+                .pipe(
+                  Effect.map(
+                    (saved) =>
+                      saved?.memory.explorationFrontiers?.[
+                        "minecraft:overworld:find-portal-lava-pool"
+                      ] !== undefined,
+                  ),
+                ),
+            ),
+            Stream.runCollect,
+            Effect.timeout("5 seconds"),
+          );
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+          return events;
+        }),
+      ),
+    );
+
+    const abandonments = events.filter(
+      (event) =>
+        event.type === "action-failed" &&
+        event.detail?.startsWith("Abandoned after exhausting retries") === true,
+    );
+    expect(abandonments).toHaveLength(1);
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.planner.status).not.toBe("FAILED");
+    expect(saved?.memory.portalWorkspaces).toContainEqual(
+      expect.objectContaining({
+        workspaceId: "unreachable-lava-workspace",
+        status: "ABANDONED",
+      }),
+    );
   });
 
   it("approaches a distant remembered portal through bounded local regions", async () => {

@@ -208,10 +208,14 @@ export function completeDurableSkill(
   };
 }
 
+// Ends the active skill. Its portal workspace stays resumable unless
+// `abandonPortalWorkspace` is set, because a restart can still finish a
+// half-built frame, but a site that failed every attempt must not be reused.
 export function abandonActiveDurableSkill(
   checkpoint: BeatGameCheckpoint,
   evidence: string,
   now: string,
+  options: Readonly<{ abandonPortalWorkspace?: boolean }> = {},
 ): BeatGameCheckpoint {
   const skill = checkpoint.activeSkill;
   if (skill === undefined) {
@@ -222,6 +226,16 @@ export function abandonActiveDurableSkill(
     status: BeatGameDurableSkillStatus.ABANDONED,
     completionEvidence: evidence,
     updatedAt: now,
+    ...(options.abandonPortalWorkspace === true && skill.portalWorkspace !== undefined
+      ? {
+          portalWorkspace: {
+            ...skill.portalWorkspace,
+            status: "ABANDONED" as const,
+            abandonedReason: evidence,
+            updatedAt: now,
+          },
+        }
+      : {}),
   } satisfies BeatGameDurableSkillState;
   const { activeSkill: _, ...withoutActiveSkill } = checkpoint;
   return {

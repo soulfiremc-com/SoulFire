@@ -177,6 +177,7 @@ export {
   type EyeTriangulation,
 } from "./model.js";
 export {
+  abandonActiveDurableSkill,
   advanceDurableSkill,
   completeDurableSkill,
   durableSkillKindForDecision,

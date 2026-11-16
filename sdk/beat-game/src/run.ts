@@ -59,6 +59,7 @@ import { approachLiquidSourceFromSide, LIQUID_INTERACTION_REACH } from "./liquid
 import {
   BEAT_GAME_CHECKPOINT_SCHEMA_VERSION,
   BeatGameDurableSkillKind,
+  BeatGameDurableSkillStatus,
   BeatGamePathSearchMode,
   BeatGamePhase,
   BeatGameRunStatus,
@@ -2514,6 +2515,65 @@ function countNightShelterItems(
   return itemIds.reduce((total, itemId) => total + (observation.inventory.counts[itemId] ?? 0), 0);
 }
 
+// Abandons an action whose retries all failed so the planner can try it
+// again from a clean start, such as a new portal site. The run fails only
+// after the same action exhausts its retries this many times.
+const MAXIMUM_EXHAUSTED_ACTION_ROUNDS = 3;
+const EXHAUSTED_ACTION_EVIDENCE_PREFIX = "exhausted retries: ";
+
+function exhaustedActionRounds(checkpoint: BeatGameCheckpoint, action: string): number {
+  return checkpoint.memory.skillHistory.filter(
+    (skill) =>
+      skill.action === action &&
+      skill.status === BeatGameDurableSkillStatus.ABANDONED &&
+      skill.completionEvidence?.startsWith(EXHAUSTED_ACTION_EVIDENCE_PREFIX) === true,
+  ).length;
+}
+
+function abandonExhaustedAction(
+  state: RunState,
+  action: string,
+  attempt: number,
+  error: BeatGameError,
+): Effect.Effect<undefined, BeatGameError> {
+  return Effect.gen(function* () {
+    const checkpoint = yield* Ref.get(state.checkpoint);
+    if (
+      checkpoint.activeSkill?.action !== action ||
+      exhaustedActionRounds(checkpoint, action) + 1 >= MAXIMUM_EXHAUSTED_ACTION_ROUNDS
+    ) {
+      yield* persist(state, (current) =>
+        suspendDurableSkill(current, `failed:${error.message}`, new Date().toISOString()),
+      );
+      return yield* Effect.fail(error);
+    }
+    yield* persist(state, (current) => {
+      const now = new Date().toISOString();
+      const abandoned = abandonActiveDurableSkill(
+        current,
+        `${EXHAUSTED_ACTION_EVIDENCE_PREFIX}${error.message}`,
+        now,
+        { abandonPortalWorkspace: true },
+      );
+      return {
+        ...abandoned,
+        planner: withoutCurrentAction({
+          ...abandoned.planner,
+          retryCount: 0,
+          updatedAt: now,
+        }),
+      };
+    });
+    yield* emit(state, {
+      type: "action-failed",
+      action,
+      attempt,
+      detail: `Abandoned after exhausting retries, replanning: ${error.message}`,
+    });
+    return undefined;
+  });
+}
+
 function runDecisionWithRetry(
   state: RunState,
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
@@ -2618,13 +2678,15 @@ function runDecisionWithRetry(
                 }
                 return yield* attempt(number + 1, fresh);
               })
-            : persist(state, (checkpoint) =>
-                suspendDurableSkill(
-                  checkpoint,
-                  `failed:${error.message}`,
-                  new Date().toISOString(),
-                ),
-              ).pipe(Effect.andThen(Effect.fail(error))),
+            : retryable(error)
+              ? abandonExhaustedAction(state, action, number, error)
+              : persist(state, (checkpoint) =>
+                  suspendDurableSkill(
+                    checkpoint,
+                    `failed:${error.message}`,
+                    new Date().toISOString(),
+                  ),
+                ).pipe(Effect.andThen(Effect.fail(error))),
         ),
       );
       if (result === undefined) {
@@ -10353,6 +10415,21 @@ function satisfyIronRequirement(
   });
 }
 
+// A casting site is abandoned when its lava could not be reached, so the
+// rest of that pool is likely just as unreachable.
+const ABANDONED_PORTAL_LAVA_RADIUS = 12;
+const ABANDONED_PORTAL_LAVA_EXTRA_RESULTS = 32;
+
+function abandonedPortalLavaSites(
+  checkpoint: BeatGameCheckpoint,
+): readonly BeatGameBlockPosition[] {
+  return checkpoint.memory.portalWorkspaces.flatMap((workspace) =>
+    workspace.status === "ABANDONED" && workspace.method === "CAST"
+      ? [workspace.origin, ...workspace.candidateLavaSources]
+      : [],
+  );
+}
+
 interface PortalLavaPoolPreparation {
   readonly ready: boolean;
   readonly candidateLavaSources: readonly BeatGameBlockPosition[];
@@ -10364,15 +10441,27 @@ function preparePortalCastingLavaPool(
   requiredLavaSources = PORTAL_CASTING_ADDITIONAL_LAVA_SOURCE_COUNT,
 ): Effect.Effect<PortalLavaPoolPreparation, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const sources = yield* state.driver.queryBlocks({
+    const abandonedLava = abandonedPortalLavaSites(yield* Ref.get(state.checkpoint));
+    const sources = (yield* state.driver.queryBlocks({
       center: observation.player.position,
       radius: state.strategy.blockSearchRadius,
       selector: {
         blockIds: ["minecraft:lava"],
         properties: { level: "0" },
       },
-      maximumResults: Math.max(1, requiredLavaSources),
-    });
+      maximumResults:
+        Math.max(1, requiredLavaSources) +
+        (abandonedLava.length === 0 ? 0 : ABANDONED_PORTAL_LAVA_EXTRA_RESULTS),
+    }))
+      .filter(
+        ({ position }) =>
+          !abandonedLava.some(
+            (site) =>
+              site.dimension === position.dimension &&
+              distanceSquared(site, position) <= ABANDONED_PORTAL_LAVA_RADIUS ** 2,
+          ),
+      )
+      .slice(0, Math.max(1, requiredLavaSources));
     if (requiredLavaSources === 0) {
       return {
         ready: true,

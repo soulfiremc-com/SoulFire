@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
+  abandonActiveDurableSkill,
   advanceDurableSkill,
   BeatGameDurableSkillKind,
   BeatGameDurableSkillStatus,
@@ -81,6 +82,35 @@ describe("durable beat-game skills", () => {
     );
     expect(resumed.activeSkill?.skillId).toBe("portal-skill");
     expect(resumed.activeSkill?.status).toBe(BeatGameDurableSkillStatus.ACTIVE);
+  });
+
+  it("keeps an abandoned skill's portal site resumable unless the site is abandoned too", () => {
+    const decision = {
+      type: "build-and-enter-nether",
+      action: "build-and-enter-nether",
+    } as const;
+    const started = startOrResumeDurableSkill(
+      checkpoint(BeatGamePhase.ENTER_NETHER),
+      decision,
+      now,
+      () => "portal-skill",
+    );
+    const workspace = portalWorkspace();
+    const building = advanceDurableSkill(started, "construct-frame", now, {
+      portalWorkspace: workspace,
+    });
+
+    const kept = abandonActiveDurableSkill(building, "inventory lost", now);
+    expect(latestResumablePortalWorkspace(kept)).toEqual(workspace);
+
+    const abandoned = abandonActiveDurableSkill(building, "lava unreachable", now, {
+      abandonPortalWorkspace: true,
+    });
+    expect(abandoned.activeSkill).toBeUndefined();
+    expect(latestResumablePortalWorkspace(abandoned)).toBeUndefined();
+    expect(abandoned.memory.portalWorkspaces).toEqual([
+      { ...workspace, status: "ABANDONED", abandonedReason: "lava unreachable", updatedAt: now },
+    ]);
   });
 
   it("archives completion evidence and clears only the active handle", () => {
