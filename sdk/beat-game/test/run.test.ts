@@ -699,6 +699,125 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("remembers the portal it arrives through", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "arrival-portal-run";
+    const teamId = "arrival-portal-team";
+    const portal = blockObservation(
+      { x: 2, y: 64, z: 1, dimension: "minecraft:the_nether" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { x: 1.5, y: 64, z: 1.5 },
+      counts: { "minecraft:cooked_beef": 16, "minecraft:stone_sword": 1 },
+    });
+    driver.blockQueryResolver = ({ selector, radius }) =>
+      selector.blockIds?.includes("minecraft:nether_portal") === true && radius <= 4
+        ? [portal]
+        : [];
+    driver.taskResolver = () => Effect.never;
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (((yield* store.load(runId))?.memory.portals.length ?? 0) === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The arrival portal was never remembered")),
+          }),
+        ),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.memory.portals.map(({ value }) => value.position)).toEqual([portal.position]);
+  });
+
+  it("walks to the Nether position linked to a remembered Overworld portal", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "linked-portal-run";
+    const teamId = "linked-portal-team";
+    const overworldPortal = blockObservation(
+      { x: 446, y: 130, z: 3, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { x: -33.5, y: 37, z: 93.5 },
+      counts: { "minecraft:cooked_beef": 16, "minecraft:stone_sword": 1 },
+    });
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+    const initial = checkpoint(BeatGamePhase.RETURN_TO_OVERWORLD, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:overworld",
+                value: overworldPortal,
+                observedAt: overworldPortal.observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.xzPaths.length === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The bot never walked toward the linked portal")),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.xzPaths[0]).toMatchObject({ x: 55, z: 0, dimension: "minecraft:the_nether" });
+  });
+
   it("ignores one transient under-equipped observation at night", async () => {
     const driver = new FakeBeatGameDriver();
     const protectedObservation = observation({

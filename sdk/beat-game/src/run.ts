@@ -874,6 +874,7 @@ interface RunState {
   readonly checkpoint: Ref.Ref<BeatGameCheckpoint>;
   readonly observation: Ref.Ref<BeatGameObservation>;
   readonly lastLivingObservation: Ref.Ref<BeatGameObservation>;
+  readonly portalScanDimension: Ref.Ref<string | undefined>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1014,6 +1015,7 @@ export function beatGameWithDriver(
       checkpoint: checkpointRef,
       observation: observationRef,
       lastLivingObservation,
+      portalScanDimension: yield* Ref.make<string | undefined>(undefined),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -1249,6 +1251,7 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
         playerRevision: observation.player.revision.toString(),
         inventoryRevision: observation.inventory.revision.toString(),
       });
+      yield* rememberArrivalPortal(state, observation);
       if (checkpoint.planner.phase !== previousPhase) {
         yield* state.coordinator.updateMember(
           checkpoint.teamId,
@@ -3489,6 +3492,21 @@ function executeDecision(
             .pipe(Effect.as({} satisfies ActionResult));
         }
         return enterKnownPortal(state, actionCheckpoint, observation).pipe(
+          Effect.flatMap((entered) =>
+            entered
+              ? Effect.succeed(true)
+              : approachLinkedNetherPortal(state, actionCheckpoint, observation).pipe(
+                  Effect.flatMap((approached) =>
+                    approached
+                      ? state.driver.observe.pipe(
+                          Effect.flatMap((current) =>
+                            enterKnownPortal(state, actionCheckpoint, current),
+                          ),
+                        )
+                      : Effect.succeed(false),
+                  ),
+                ),
+          ),
           Effect.flatMap((entered) =>
             entered
               ? Effect.void
@@ -15199,6 +15217,114 @@ function rememberPortal(checkpoint: BeatGameCheckpoint, frame: PortalFrame): Bea
       ].slice(-32),
     },
   };
+}
+
+const LINKED_NETHER_PORTAL_ARRIVAL_RADIUS = 8;
+
+// Minecraft links an Overworld portal to a Nether portal near its X and Z
+// divided by 8. When the bot is in the Nether without a remembered portal
+// there, it walks to the spot linked to a remembered Overworld portal so the
+// next portal search can see it.
+function approachLinkedNetherPortal(
+  state: RunState,
+  checkpoint: BeatGameCheckpoint,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  const player = observation.player.position;
+  if (!isNether(player.dimension)) {
+    return Effect.succeed(false);
+  }
+  const target = [
+    ...checkpoint.memory.portals
+      .filter(({ confidence }) => confidence > 0)
+      .map(({ value }) => value.position),
+    ...checkpoint.memory.portalWorkspaces
+      .filter((workspace) => workspace.status === "ENTERED")
+      .map(({ origin }) => origin),
+  ]
+    .filter(({ dimension }) => dimension === "minecraft:overworld")
+    .map(({ x, z }) => ({ x: Math.floor(x / 8), z: Math.floor(z / 8) }))
+    .sort(
+      (left, right) =>
+        (left.x - player.x) ** 2 +
+        (left.z - player.z) ** 2 -
+        ((right.x - player.x) ** 2 + (right.z - player.z) ** 2),
+    )[0];
+  if (
+    target === undefined ||
+    (target.x - player.x) ** 2 + (target.z - player.z) ** 2 <=
+      LINKED_NETHER_PORTAL_ARRIVAL_RADIUS ** 2
+  ) {
+    return Effect.succeed(false);
+  }
+  return emit(state, {
+    type: "diagnostic",
+    message: "Walking to the Nether position linked to a remembered Overworld portal",
+    data: { position: player, target },
+  }).pipe(
+    Effect.andThen(
+      state.driver.pathfindXZ(
+        target.x,
+        target.z,
+        player.dimension,
+        LINKED_NETHER_PORTAL_ARRIVAL_RADIUS,
+        state.strategy.path,
+      ),
+    ),
+    Effect.as(true),
+  );
+}
+
+const ARRIVAL_PORTAL_SCAN_RADIUS = 4;
+
+// The bot otherwise remembers only portals it builds, so after walking
+// through one it had no way back from the other side. It stands in the
+// portal right after a dimension change, so one scan per arrival finds it.
+function rememberArrivalPortal(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameError> {
+  return Effect.gen(function* () {
+    const position = observation.player.position;
+    if (
+      observation.player.dead ||
+      (yield* Ref.getAndSet(state.portalScanDimension, position.dimension)) === position.dimension
+    ) {
+      return;
+    }
+    const portal = (yield* state.driver
+      .queryBlocks({
+        center: position,
+        radius: ARRIVAL_PORTAL_SCAN_RADIUS,
+        selector: { blockIds: ["minecraft:nether_portal"] },
+        maximumResults: 1,
+      })
+      .pipe(Effect.orElseSucceed(() => [])))[0];
+    if (portal === undefined) {
+      return;
+    }
+    yield* persist(state, (checkpoint) => {
+      const key = `portal:${positionKey(portal.position)}`;
+      const known = checkpoint.memory.portals.some(
+        ({ confidence, value }) =>
+          confidence > 0 &&
+          value.position.dimension === portal.position.dimension &&
+          distanceSquared(value.position, portal.position) <= 8 ** 2,
+      );
+      return known
+        ? checkpoint
+        : {
+            ...checkpoint,
+            memory: {
+              ...checkpoint.memory,
+              portals: [
+                ...checkpoint.memory.portals.filter((entry) => entry.key !== key),
+                { key, value: portal, observedAt: portal.observedAt, confidence: 1 },
+              ].slice(-32),
+            },
+          };
+    });
+  });
 }
 
 function portalCarefulPathPolicy(path: BeatGameStrategy["path"]): BeatGameStrategy["path"] {
