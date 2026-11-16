@@ -129,7 +129,10 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
       return requirementDecision(food);
     }
   }
-  if (observation.player.food <= URGENT_HUNGER_FOOD_LEVEL) {
+  if (
+    observation.player.food <= URGENT_HUNGER_FOOD_LEVEL &&
+    !needsOverworldForPreparation(phase, observation)
+  ) {
     const foodSupply = requirementsForPhase(
       BeatGamePhase.PREPARE_OVERWORLD,
       observation.inventory,
@@ -172,6 +175,9 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
       }
     }
     return { type: "retreat", action: "retreat" };
+  }
+  if (needsOverworldForPreparation(phase, observation)) {
+    return { type: "return-through-portal", action: "return-through-portal" };
   }
   if (phase === BeatGamePhase.PREPARE_OVERWORLD) {
     const basicWeapon = requirements.find(({ key }) => key === "basic-melee-weapon");
@@ -278,6 +284,18 @@ function canCraftWoodenSword(observation: BeatGameObservation): boolean {
   const craftingTableCost = (counts["minecraft:crafting_table"] ?? 0) > 0 ? 0 : 4;
   const stickCost = (counts["minecraft:stick"] ?? 0) > 0 ? 0 : 2;
   return availablePlanks >= craftingTableCost + stickCost + 2;
+}
+
+// A death can reset the run to Overworld preparation while the bot is still
+// in the Nether, for example after it goes back for its items. Its trees,
+// animals and stone are only in the Overworld.
+function needsOverworldForPreparation(
+  phase: BeatGamePhase,
+  observation: BeatGameObservation,
+): boolean {
+  return (
+    phase === BeatGamePhase.PREPARE_OVERWORLD && isNether(observation.player.position.dimension)
+  );
 }
 
 function shouldDeferReserveRefill(

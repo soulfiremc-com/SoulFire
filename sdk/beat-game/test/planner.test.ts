@@ -17,6 +17,32 @@ describe("beat-game planner", () => {
     });
   });
 
+  it.each([20, 4])(
+    "returns to the Overworld to prepare gear after a reset in the Nether at food %i",
+    (food) => {
+      // A death reset the run to Overworld preparation while the bot went back
+      // into the Nether for its items, as in a live run.
+      const inventory = {
+        "minecraft:shield": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:wooden_sword": 1,
+      };
+      const nether = decideBeatGameAction({
+        checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
+        observation: observation({ dimension: "minecraft:the_nether", food, counts: inventory }),
+        strategy: defaultBeatGameStrategy,
+      });
+      const overworld = decideBeatGameAction({
+        checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
+        observation: observation({ food, counts: inventory }),
+        strategy: defaultBeatGameStrategy,
+      });
+
+      expect(nether).toEqual({ type: "return-through-portal", action: "return-through-portal" });
+      expect(overworld.type).toBe("satisfy-requirement");
+    },
+  );
+
   it("acquires emergency food instead of retreating without regeneration", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
