@@ -876,6 +876,9 @@ interface RunState {
   readonly observation: Ref.Ref<BeatGameObservation>;
   readonly lastLivingObservation: Ref.Ref<BeatGameObservation>;
   readonly portalScanDimension: Ref.Ref<string | undefined>;
+  // Abandoned rounds of actions that have no durable skill to record them,
+  // reset when the action succeeds.
+  readonly abandonedActionRounds: Ref.Ref<ReadonlyMap<string, number>>;
   readonly lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
@@ -1018,6 +1021,7 @@ export function beatGameWithDriver(
       observation: observationRef,
       lastLivingObservation,
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
+      abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       lastDamage: yield* Ref.make<
         Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
       >(undefined),
@@ -2689,9 +2693,10 @@ function countNightShelterItems(
   return itemIds.reduce((total, itemId) => total + (observation.inventory.counts[itemId] ?? 0), 0);
 }
 
-// Abandons an action whose retries all failed so the planner can try it
-// again from a clean start, such as a new portal site. The run fails only
-// after the same action exhausts its retries this many times.
+// Abandons an action whose retries all failed, or that the world refused,
+// so the planner can try it again from a clean start, such as a new portal
+// site. The run fails only after the same action is abandoned this many
+// times.
 const MAXIMUM_EXHAUSTED_ACTION_ROUNDS = 3;
 const EXHAUSTED_ACTION_EVIDENCE_PREFIX = "exhausted retries: ";
 
@@ -2712,23 +2717,31 @@ function abandonExhaustedAction(
 ): Effect.Effect<undefined, BeatGameError> {
   return Effect.gen(function* () {
     const checkpoint = yield* Ref.get(state.checkpoint);
-    if (
-      checkpoint.activeSkill?.action !== action ||
-      exhaustedActionRounds(checkpoint, action) + 1 >= MAXIMUM_EXHAUSTED_ACTION_ROUNDS
-    ) {
+    const durable = checkpoint.activeSkill?.action === action;
+    const rounds = durable
+      ? exhaustedActionRounds(checkpoint, action)
+      : ((yield* Ref.get(state.abandonedActionRounds)).get(action) ?? 0);
+    if (rounds + 1 >= MAXIMUM_EXHAUSTED_ACTION_ROUNDS) {
       yield* persist(state, (current) =>
         suspendDurableSkill(current, `failed:${error.message}`, new Date().toISOString()),
       );
       return yield* Effect.fail(error);
     }
+    if (!durable) {
+      yield* Ref.update(state.abandonedActionRounds, (current) =>
+        new Map(current).set(action, rounds + 1),
+      );
+    }
     yield* persist(state, (current) => {
       const now = new Date().toISOString();
-      const abandoned = abandonActiveDurableSkill(
-        current,
-        `${EXHAUSTED_ACTION_EVIDENCE_PREFIX}${error.message}`,
-        now,
-        { abandonPortalWorkspace: true },
-      );
+      const abandoned = durable
+        ? abandonActiveDurableSkill(
+            current,
+            `${EXHAUSTED_ACTION_EVIDENCE_PREFIX}${error.message}`,
+            now,
+            { abandonPortalWorkspace: true },
+          )
+        : current;
       return {
         ...abandoned,
         planner: withoutCurrentAction({
@@ -2744,8 +2757,37 @@ function abandonExhaustedAction(
       attempt,
       detail: `Abandoned after exhausting retries, replanning: ${error.message}`,
     });
+    // The world rarely changes within a moment, so give it time before the
+    // planner picks the same action again.
+    yield* Effect.sleep(backoffDuration(rounds + 1));
     return undefined;
   });
+}
+
+// Codes the server uses when the world did not allow a step, such as a hidden
+// placement face or a missing item. They are final for that request, but a new
+// plan can avoid them.
+const WORLD_STATE_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "failed_precondition",
+  "not_found",
+]);
+
+function isWorldStateFailure(error: unknown): boolean {
+  for (
+    let current = error, depth = 0;
+    depth < 8 && typeof current === "object" && current !== null;
+    depth += 1
+  ) {
+    if (
+      current instanceof BeatGameDriverError &&
+      current.code !== undefined &&
+      WORLD_STATE_FAILURE_CODES.has(current.code)
+    ) {
+      return true;
+    }
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return false;
 }
 
 function runDecisionWithRetry(
@@ -2852,7 +2894,7 @@ function runDecisionWithRetry(
                 }
                 return yield* attempt(number + 1, fresh);
               })
-            : retryable(error)
+            : retryable(error) || isWorldStateFailure(error)
               ? abandonExhaustedAction(state, action, number, error)
               : persist(state, (checkpoint) =>
                   suspendDurableSkill(
@@ -2952,6 +2994,14 @@ function runDecisionWithRetry(
             updatedAt: new Date().toISOString(),
           }),
         };
+      });
+      yield* Ref.update(state.abandonedActionRounds, (current) => {
+        if (!current.has(action)) {
+          return current;
+        }
+        const next = new Map(current);
+        next.delete(action);
+        return next;
       });
       yield* emit(state, {
         type: "action-succeeded",
