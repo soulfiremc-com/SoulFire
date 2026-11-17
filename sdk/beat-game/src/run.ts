@@ -774,6 +774,10 @@ const FAST_PURSUER_ADDITIONAL_DIRECT_ESCAPE_ATTEMPTS = 2;
 const EMERGENCY_ESCAPE_FLUID_PROJECTION_DISTANCE = 2;
 const EMERGENCY_ESCAPE_SURFACE_PROJECTION_DISTANCE = 10;
 const RANGED_ESCAPE_SURFACE_PROJECTION_DISTANCE = 18;
+// A sprint-jump drifts sideways on a slope. A live run escaping a zombie
+// along a ledge slid down the side and fell nine blocks, so even a melee
+// escape needs safe ground one block to each side.
+export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // Long enough for a skeleton without line of sight to lose interest and for
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
@@ -5546,7 +5550,7 @@ function knockBackAndSprintAway(
       preferredDirection,
       escapeThreats,
       directSprintDistance,
-      rangedThreat ? 2 : 0,
+      rangedThreat ? 2 : DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
       {
         minimumPreferredAlignment:
           threat.entityType === "minecraft:creeper"
@@ -5582,7 +5586,7 @@ function knockBackAndSprintAway(
             preferredDirection,
             escapeThreats,
             directSprintDistance,
-            rangedThreat ? 2 : 0,
+            rangedThreat ? 2 : DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
           )
         : undefined;
     const groupSafeSwimmableDirection =
@@ -5922,7 +5926,7 @@ function sharesGroupAggroFamily(
   return leftIsZombified === rightIsZombified;
 }
 
-function selectSafeDirectEscapeDirection(
+export function selectSafeDirectEscapeDirection(
   columns: readonly BeatGameSurfaceColumn[],
   player: BeatGamePosition,
   preferredDirection: Readonly<{ x: number; z: number }>,

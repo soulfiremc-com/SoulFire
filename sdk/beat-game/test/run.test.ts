@@ -22,7 +22,9 @@ import {
   type BeatGameEntityObservation,
 } from "../src/index.js";
 import {
+  DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
   hasNonRegressingThreatEscapeCorridor,
+  selectSafeDirectEscapeDirection,
   selectInventoryDiscard,
   selectRedundantEquipmentDiscard,
 } from "../src/run.js";
@@ -34,6 +36,47 @@ import {
   observation,
   postDragonHooks,
 } from "./fixtures.js";
+
+describe("direct escape sprint directions", () => {
+  it("does not sprint along a ledge with a drop beside it", () => {
+    const player = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" } as const;
+    // A one-block-wide ledge heading east, three blocks above the ground
+    // on both sides.
+    const columns = Array.from({ length: 21 }, (_, x) =>
+      [-1, 0, 1].map((z) => ({
+        x: x - 2,
+        z,
+        loaded: true,
+        surfaceY: z === 0 ? 63 : 60,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      })),
+    ).flat();
+
+    expect(
+      selectSafeDirectEscapeDirection(
+        columns,
+        player,
+        { x: 1, z: 0 },
+        [],
+        8,
+        DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
+      ),
+    ).toBeUndefined();
+    expect(
+      selectSafeDirectEscapeDirection(
+        columns.map((column) => ({ ...column, surfaceY: 63 })),
+        player,
+        { x: 1, z: 0 },
+        [],
+        8,
+        DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
+      ),
+    ).toEqual({ x: 1, z: 0 });
+  });
+});
 
 describe("direct threat escape corridors", () => {
   const player = {
@@ -18311,16 +18354,18 @@ describe("beat-game run lifecycle", () => {
         ? driver.entityResults
         : [];
     driver.surfaceQueryResolver = (center, radius) =>
-      Array.from({ length: Math.ceil(radius) * 2 + 1 }, (_, offset) => ({
-        x: Math.floor(center.x) - Math.ceil(radius) + offset,
-        z: 0,
-        dimension: center.dimension,
-        loaded: true,
-        surfaceY: 63,
-        blockId: "minecraft:stone",
-        skyLight: 15,
-        blockLight: 0,
-      }));
+      Array.from({ length: Math.ceil(radius) * 2 + 1 }, (_, offset) =>
+        [-1, 0, 1].map((z) => ({
+          x: Math.floor(center.x) - Math.ceil(radius) + offset,
+          z,
+          dimension: center.dimension,
+          loaded: true,
+          surfaceY: 63,
+          blockId: "minecraft:stone",
+          skyLight: 15,
+          blockLight: 0,
+        })),
+      ).flat();
     let directSprints = 0;
     driver.actionObserver = (action) => {
       if (action.type !== "set-movement" || action.forward !== true || action.sprint !== true) {
@@ -20810,15 +20855,17 @@ describe("beat-game run lifecycle", () => {
       position,
       counts: { "minecraft:wooden_sword": 1 },
     });
-    driver.surfaceColumns = Array.from({ length: 10 }, (_, index) => ({
-      x: -(index + 1),
-      z: 0,
-      loaded: true,
-      surfaceY: 60,
-      blockId: "minecraft:grass_block",
-      skyLight: 15,
-      blockLight: 0,
-    }));
+    driver.surfaceColumns = Array.from({ length: 10 }, (_, index) =>
+      [-1, 0, 1].map((z) => ({
+        x: -(index + 1),
+        z,
+        loaded: true,
+        surfaceY: 60,
+        blockId: "minecraft:grass_block",
+        skyLight: 15,
+        blockLight: 0,
+      })),
+    ).flat();
     driver.entityResults = [drowned];
     driver.entityQueryResolver = (query) =>
       query.selector.categories?.includes(2) ? driver.entityResults : [];
