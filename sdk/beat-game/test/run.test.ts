@@ -31146,6 +31146,54 @@ describe("beat-game run lifecycle", () => {
     ).toBe(7);
   }, 10_000);
 
+  it("starts exploration over after moving to a new region", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "new-region-exploration-run";
+    const teamId = "new-region-exploration-team";
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId,
+      teamId,
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            explorationFrontiers: {
+              "minecraft:overworld:find-logs": {
+                progressVersion: 2,
+                origin: driver.currentObservation.player.position,
+                nextIndex: 2,
+                totalAdvances: 7,
+                lastPosition: {
+                  x: 300,
+                  y: 64,
+                  z: 0,
+                  dimension: "minecraft:overworld",
+                },
+              },
+            },
+          },
+        },
+        undefined,
+      ),
+    );
+    const path = await runUntilExplorationStarts({
+      driver,
+      store,
+      runId,
+      teamId,
+    });
+
+    expect(path).toMatchObject({ x: 24, z: 0 });
+    const stored = await Effect.runPromise(store.load(runId));
+    expect(
+      stored?.memory.explorationFrontiers?.["minecraft:overworld:find-logs"]?.totalAdvances,
+    ).toBe(0);
+  }, 10_000);
+
   it("reanchors resource exploration without resetting it after a defensive escape", async () => {
     const driver = new FakeBeatGameDriver();
     const creeper = {

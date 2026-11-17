@@ -50,6 +50,10 @@ export const BED_SHEEP_SEARCH_LEGS = 6;
 /// Exploration purpose for the sheep search, which keys its saved progress.
 export const BED_SHEEP_SEARCH_PURPOSE = "find-sheep";
 
+/// Moving this far from where a search left off reaches new terrain, so an
+/// exhausted search there no longer says anything about the new area.
+export const EXPLORATION_REGION_RESET_DISTANCE = 128;
+
 export const COOKED_FOOD_ITEM_IDS = [
   "minecraft:cooked_beef",
   "minecraft:cooked_porkchop",

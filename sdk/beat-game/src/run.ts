@@ -103,6 +103,7 @@ import {
   BED_COLORS,
   BED_ITEM_IDS,
   BED_SHEEP_SEARCH_PURPOSE,
+  EXPLORATION_REGION_RESET_DISTANCE,
   COOKED_FOOD_ITEM_IDS,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
@@ -13909,7 +13910,12 @@ function advanceExplorationFrontier(
                 nextIndex: 1,
                 targetAttempts: 0,
                 lastPosition: position,
-                totalAdvances: current.totalAdvances ?? 0,
+                totalAdvances:
+                  current.lastPosition !== undefined &&
+                  horizontalDistanceSquared(current.lastPosition, position) >
+                    EXPLORATION_REGION_RESET_DISTANCE ** 2
+                    ? 0
+                    : (current.totalAdvances ?? 0),
               }
             : current;
       const offset = rotateExplorationOffset(

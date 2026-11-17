@@ -8,6 +8,7 @@ import {
 } from "./model.js";
 import {
   BED_SHEEP_SEARCH_LEGS,
+  EXPLORATION_REGION_RESET_DISTANCE,
   BED_SHEEP_SEARCH_PURPOSE,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
@@ -105,7 +106,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
   const reusablePortalAvailable = hasReusablePortalCandidate(checkpoint, observation);
   const requirements = requirementsForPhase(phase, observation.inventory, strategy, {
     reusablePortalAvailable,
-    bedUnavailable: bedSearchExhausted(checkpoint),
+    bedUnavailable: bedSearchExhausted(checkpoint, observation),
   });
   if (
     observation.player.food <= strategy.eatBelowFood &&
@@ -378,16 +379,29 @@ export function plannerWithObservation(
     requirements: requirementsForPhase(planner.phase, observation.inventory, strategy, {
       reusablePortalAvailable:
         checkpoint !== undefined && hasReusablePortalCandidate(checkpoint, observation),
-      bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint),
+      bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint, observation),
     }),
     updatedAt: now,
   };
 }
 
-function bedSearchExhausted(checkpoint: BeatGameCheckpoint): boolean {
+// A live run found no sheep near spawn and then went without a bed for hours
+// of play far away. The search only rules out the area it covered.
+function bedSearchExhausted(
+  checkpoint: BeatGameCheckpoint,
+  observation: BeatGameObservation,
+): boolean {
   const frontier =
     checkpoint.memory.explorationFrontiers?.[`minecraft:overworld:${BED_SHEEP_SEARCH_PURPOSE}`];
-  return frontier?.progressVersion === 2 && (frontier.totalAdvances ?? 0) >= BED_SHEEP_SEARCH_LEGS;
+  if (frontier?.progressVersion !== 2 || (frontier.totalAdvances ?? 0) < BED_SHEEP_SEARCH_LEGS) {
+    return false;
+  }
+  const searched = frontier.lastPosition ?? frontier.origin;
+  const player = observation.player.position;
+  return (
+    player.dimension !== searched.dimension ||
+    Math.hypot(player.x - searched.x, player.z - searched.z) < EXPLORATION_REGION_RESET_DISTANCE
+  );
 }
 
 function hasReusablePortalCandidate(

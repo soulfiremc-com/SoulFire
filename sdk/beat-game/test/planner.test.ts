@@ -367,6 +367,20 @@ describe("beat-game planner", () => {
         strategy: defaultBeatGameStrategy,
       }),
     ).toMatchObject({ action: "satisfy:iron" });
+    // The search only ruled out the area it covered.
+    expect(
+      decideBeatGameAction({
+        checkpoint: exhausted,
+        observation: {
+          ...prepared,
+          player: {
+            ...prepared.player,
+            position: { ...prepared.player.position, x: prepared.player.position.x + 200 },
+          },
+        },
+        strategy: defaultBeatGameStrategy,
+      }),
+    ).toMatchObject({ action: "satisfy:bed" });
   });
 
   it("does not abandon portal travel after consuming one reserve meal", () => {
