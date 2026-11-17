@@ -8781,6 +8781,7 @@ function satisfyRequirementFromWorld(
           ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
       });
     case "bed":
+    case "dragon-beds":
       return satisfyBedRequirement(state, observation);
     case "basic-melee-weapon":
       return craftWithTable(state, observation, "minecraft:wooden_sword", 1);

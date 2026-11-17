@@ -264,6 +264,7 @@ export interface BeatGameEntityObservation {
   readonly aggressive?: boolean;
   readonly creeper?: BeatGameCreeperObservation;
   readonly sheep?: BeatGameSheepObservation;
+  readonly rotation?: Readonly<{ yaw: number; pitch: number }>;
   readonly observedAt: string;
 }
 

@@ -100,6 +100,7 @@ export const CRITICAL_HUNGER_FOOD_LEVEL = 6;
 export const URGENT_HUNGER_FOOD_LEVEL = 10;
 const PORTAL_LOG_RESERVE = 4;
 const FAST_BED_PRIORITY = 114;
+const DRAGON_BED_COUNT = 4;
 
 export const LOG_ITEM_IDS = [
   "minecraft:oak_log",
@@ -256,7 +257,13 @@ export function requirementsForPhase(
       ? portalRequirements(inventory, strategy, context.reusablePortalAvailable === true)
       : phase === BeatGamePhase.PREPARE_OVERWORLD
         ? prepareOverworldRequirements(inventory, context)
-        : REQUIREMENTS[phase];
+        : phase === BeatGamePhase.LOCATE_STRONGHOLD &&
+            strategy.riskProfile === BeatGameRiskProfile.FAST &&
+            context.bedUnavailable !== true
+          ? // Beds set off under the perched dragon kill it in about four
+            // explosions, far faster than arrows. They must be carried in.
+            [...REQUIREMENTS[phase], DRAGON_BEDS_REQUIREMENT]
+          : REQUIREMENTS[phase];
   return definitions
     .map((definition) =>
       // A fast run takes its bed right after wood and a weapon: every night
@@ -483,3 +490,10 @@ function nonNegativeInteger(value: number, name: string): number {
   }
   return Math.floor(value);
 }
+
+const DRAGON_BEDS_REQUIREMENT = itemRequirement(
+  "dragon-beds",
+  BED_ITEM_IDS,
+  () => DRAGON_BED_COUNT,
+  60,
+);

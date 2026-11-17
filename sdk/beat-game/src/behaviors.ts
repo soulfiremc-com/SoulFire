@@ -22,6 +22,7 @@ import {
   type BeatGamePosition,
 } from "./model.js";
 import { approachLiquidSourceFromSide, LIQUID_INTERACTION_REACH } from "./liquids.js";
+import { BED_ITEM_IDS } from "./requirements.js";
 import type {
   BeatGameBlockFace,
   BeatGameBuildBlock,
@@ -2501,6 +2502,8 @@ function nearestEndPortalRim(
 
 export interface FightEnderDragonOptions extends BeatGameBehaviorOptions {
   readonly searchRadius?: number;
+  // How long to wait for the dragon to perch before giving up on beds.
+  readonly bedPerchTimeoutMs?: number;
   readonly maximumCrystalPasses?: number;
   readonly crystalRangedShotsPerPass?: number;
   readonly dragonRangedShotsPerPass?: number;
@@ -2594,7 +2597,23 @@ export function fightEnderDragon(
       searchRadius,
       1,
     );
-    const dragon = dragons[0];
+    if (dragons[0] !== undefined) {
+      yield* bedBombDragon(driver, {
+        searchRadius,
+        perchTimeoutMs: nonNegativeInteger(
+          options.bedPerchTimeoutMs ?? BED_BOMB_PERCH_TIMEOUT_MS,
+          "bedPerchTimeoutMs",
+        ),
+        ...(options.path === undefined ? {} : { path: options.path }),
+      });
+    }
+    const dragon = (yield* queryEndEntities(
+      driver,
+      afterCrystals.player.position,
+      "minecraft:ender_dragon",
+      searchRadius,
+      1,
+    ))[0];
     if (dragon === undefined) {
       yield* waitForDragonDefeatResult(
         driver,
@@ -2647,6 +2666,207 @@ export function fightEnderDragon(
       confirmationDelayMs,
     );
   });
+}
+
+// A perched dragon faces the nearest player, with its head 6.5 blocks
+// toward them and one block below its body. A bed set off under the head
+// deals full damage there; anywhere else the body takes a quarter. Measured
+// in a real game, one bed took 55 of the dragon's 200 health while a one-block
+// wall at the bot's feet kept the bot unhurt.
+const DRAGON_HEAD_REACH = 6.5;
+const DRAGON_HEAD_DROP = 1;
+const BED_BOMB_STAND_DISTANCE = 3;
+const DRAGON_PERCH_RADIUS = 2;
+const DRAGON_PERCH_SETTLE_MS = 500;
+const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.3;
+const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
+const BED_BOMB_GROUND_SCAN_DEPTH = 8;
+const BED_BOMB_MAXIMUM_FAILURES = 3;
+const BED_BOMB_WALL_ITEM_IDS = [
+  "minecraft:end_stone",
+  "minecraft:cobblestone",
+  "minecraft:cobbled_deepslate",
+  "minecraft:blackstone",
+  "minecraft:netherrack",
+  "minecraft:dirt",
+] as const;
+
+interface BedBombOptions extends BeatGameBehaviorOptions {
+  readonly searchRadius: number;
+  readonly perchTimeoutMs: number;
+}
+
+// Sets off carried beds under the perched dragon's head until the beds run
+// out, the dragon dies, or it does not perch in time.
+function bedBombDragon(
+  driver: BeatGameDriver,
+  options: BedBombOptions,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const path = mergePathPolicy(options.path);
+    let waitedMs = 0;
+    let failures = 0;
+    while (waitedMs < options.perchTimeoutMs && failures < BED_BOMB_MAXIMUM_FAILURES) {
+      const observation = yield* driver.observe;
+      if (countItems(observation, BED_ITEM_IDS) === 0) {
+        return;
+      }
+      const first = (yield* queryEndEntities(
+        driver,
+        observation.player.position,
+        "minecraft:ender_dragon",
+        options.searchRadius,
+        1,
+      ))[0];
+      if (first === undefined) {
+        return;
+      }
+      yield* Effect.sleep(DRAGON_PERCH_SETTLE_MS);
+      const dragon = (yield* queryEndEntities(
+        driver,
+        observation.player.position,
+        "minecraft:ender_dragon",
+        options.searchRadius,
+        1,
+      ))[0];
+      if (dragon === undefined) {
+        return;
+      }
+      if (!isPerchedDragon(first, dragon)) {
+        waitedMs += DRAGON_PERCH_SETTLE_MS;
+        continue;
+      }
+      const exploded = yield* explodeBedUnderDragonHead(driver, dragon, path).pipe(
+        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+      );
+      failures = exploded ? 0 : failures + 1;
+    }
+  });
+}
+
+function isPerchedDragon(
+  earlier: BeatGameEntityObservation,
+  later: BeatGameEntityObservation,
+): boolean {
+  return (
+    Math.hypot(later.position.x, later.position.z) <= DRAGON_PERCH_RADIUS &&
+    Math.abs(later.position.y - earlier.position.y) <= DRAGON_PERCH_HEIGHT_TOLERANCE &&
+    Math.hypot(later.position.x - earlier.position.x, later.position.z - earlier.position.z) <=
+      DRAGON_PERCH_HEIGHT_TOLERANCE
+  );
+}
+
+function explodeBedUnderDragonHead(
+  driver: BeatGameDriver,
+  dragon: BeatGameEntityObservation,
+  path: BeatGamePathPolicy,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const observation = yield* driver.observe;
+    const player = observation.player.position;
+    const offsetX = player.x - dragon.position.x;
+    const offsetZ = player.z - dragon.position.z;
+    const length = Math.hypot(offsetX, offsetZ);
+    // A sitting dragon does not always turn to the bot before it takes off,
+    // so the bot walks onto the line its head already points along.
+    const direction =
+      dragon.rotation !== undefined
+        ? dragonHeadDirection(dragon)
+        : length < 1
+          ? { x: 0, z: 1 }
+          : { x: offsetX / length, z: offsetZ / length };
+    const along = (distance: number) => ({
+      x: Math.floor(dragon.position.x + direction.x * distance),
+      z: Math.floor(dragon.position.z + direction.z * distance),
+    });
+    const headY = Math.floor(dragon.position.y - DRAGON_HEAD_DROP);
+    const standColumn = along(DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE);
+    const wallColumn = along(DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE - 1);
+    const dimension = player.dimension;
+    const standGround = yield* groundBelow(driver, standColumn, headY, dimension);
+    if (standGround === undefined) {
+      return false;
+    }
+    yield* driver.pathfind(
+      {
+        x: standColumn.x + 0.5,
+        y: standGround + 1,
+        z: standColumn.z + 0.5,
+        dimension,
+      },
+      0.5,
+      path,
+    );
+    const wallFeet = { ...wallColumn, y: standGround + 1, dimension };
+    const wallBlock = yield* queryExactBlock(driver, wallFeet);
+    const current = yield* driver.observe;
+    if (
+      wallBlock !== undefined &&
+      wallBlock.replaceable &&
+      countItems(current, BED_BOMB_WALL_ITEM_IDS) > 0
+    ) {
+      yield* driver.act({ type: "select-item", selector: { itemIds: BED_BOMB_WALL_ITEM_IDS } });
+      yield* driver
+        .act({
+          type: "place-block",
+          against: { ...wallFeet, y: wallFeet.y - 1 },
+          face: "up",
+          hand: "main",
+        })
+        .pipe(Effect.ignore);
+    }
+    // The head may have turned while the bot walked, so aim at where it is now.
+    const anchor =
+      (yield* queryEndEntities(driver, dragon.position, "minecraft:ender_dragon", 16, 1))[0] ??
+      dragon;
+    const headDirection = anchor.rotation === undefined ? direction : dragonHeadDirection(anchor);
+    const bedColumn = {
+      x: Math.floor(anchor.position.x + headDirection.x * DRAGON_HEAD_REACH),
+      z: Math.floor(anchor.position.z + headDirection.z * DRAGON_HEAD_REACH),
+    };
+    const bedGround = yield* groundBelow(driver, bedColumn, headY, dimension);
+    if (bedGround === undefined) {
+      return false;
+    }
+    const bed = { ...bedColumn, y: bedGround + 1, dimension };
+    yield* driver.act({ type: "select-item", selector: { itemIds: BED_ITEM_IDS } });
+    yield* driver.act({
+      type: "place-block",
+      against: { ...bed, y: bedGround },
+      face: "up",
+      hand: "main",
+    });
+    yield* driver.act({ type: "interact-block", position: bed, face: "up", hand: "main" });
+    return true;
+  });
+}
+
+// The dragon's head points along its yaw the opposite way to other mobs:
+// toward (sin yaw, -cos yaw).
+function dragonHeadDirection(dragon: BeatGameEntityObservation): { x: number; z: number } {
+  const yaw = ((dragon.rotation?.yaw ?? 0) * Math.PI) / 180;
+  return { x: Math.sin(yaw), z: -Math.cos(yaw) };
+}
+
+function groundBelow(
+  driver: BeatGameDriver,
+  column: Readonly<{ x: number; z: number }>,
+  fromY: number,
+  dimension: string,
+): Effect.Effect<number | undefined, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    for (let y = fromY; y > fromY - BED_BOMB_GROUND_SCAN_DEPTH; y--) {
+      const block = yield* queryExactBlock(driver, { ...column, y, dimension });
+      if (block !== undefined && !block.replaceable && block.solid !== false) {
+        return y;
+      }
+    }
+    return undefined;
+  });
+}
+
+function countItems(observation: BeatGameObservation, itemIds: readonly string[]): number {
+  return itemIds.reduce((total, itemId) => total + (observation.inventory.counts[itemId] ?? 0), 0);
 }
 
 interface DragonEncounterObservation {

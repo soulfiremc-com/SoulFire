@@ -10,6 +10,24 @@ import {
 import { observation } from "./fixtures.js";
 
 describe("beat-game requirements", () => {
+  it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
+    const keys = (strategy: typeof defaultBeatGameStrategy, bedUnavailable = false) =>
+      requirementsForPhase(
+        BeatGamePhase.LOCATE_STRONGHOLD,
+        observation({ counts: { "minecraft:white_bed": 1 } }).inventory,
+        strategy,
+        { bedUnavailable },
+      ).map(({ key, targetCount, currentCount }) => ({ key, targetCount, currentCount }));
+
+    expect(keys(fastBeatGameStrategy)).toContainEqual({
+      key: "dragon-beds",
+      targetCount: 4,
+      currentCount: 1,
+    });
+    expect(keys(fastBeatGameStrategy, true).map(({ key }) => key)).not.toContain("dragon-beds");
+    expect(keys(defaultBeatGameStrategy).map(({ key }) => key)).not.toContain("dragon-beds");
+  });
+
   it("takes the bed right after wood and a weapon in a fast run", () => {
     const order = (strategy: typeof defaultBeatGameStrategy) =>
       requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(

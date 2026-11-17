@@ -1110,6 +1110,9 @@ export function makeSoulFireBeatGameDriver(
                 ...(entity.aggressive === undefined ? {} : { aggressive: entity.aggressive }),
                 ...(creeper === undefined ? {} : { creeper }),
                 ...(sheep === undefined ? {} : { sheep }),
+                ...(entity.rotation === undefined
+                  ? {}
+                  : { rotation: { yaw: entity.rotation.yaw, pitch: entity.rotation.pitch } }),
                 observedAt: new Date().toISOString(),
               };
             }),
