@@ -35,6 +35,13 @@ describe("beat-game requirements", () => {
       );
 
     expect(order(fastBeatGameStrategy).slice(0, 3)).toEqual(["logs", "basic-melee-weapon", "bed"]);
+    // The full cooked food stock waits for the iron and the shield.
+    expect(order(fastBeatGameStrategy).indexOf("food")).toBeGreaterThan(
+      order(fastBeatGameStrategy).indexOf("shield"),
+    );
+    expect(order(defaultBeatGameStrategy).indexOf("food")).toBeLessThan(
+      order(defaultBeatGameStrategy).indexOf("iron"),
+    );
     expect(order(defaultBeatGameStrategy).indexOf("bed")).toBeGreaterThan(
       order(defaultBeatGameStrategy).indexOf("cobblestone"),
     );

@@ -104,6 +104,8 @@ export const CRITICAL_HUNGER_FOOD_LEVEL = 6;
 export const URGENT_HUNGER_FOOD_LEVEL = 10;
 const PORTAL_LOG_RESERVE = 4;
 const FAST_BED_PRIORITY = 114;
+// Below iron (103) and the shield (102).
+const FAST_COOKED_FOOD_PRIORITY = 101;
 const DRAGON_BED_COUNT = 4;
 
 export const LOG_ITEM_IDS = [
@@ -268,15 +270,20 @@ export function requirementsForPhase(
             // explosions, far faster than arrows. They must be carried in.
             [...REQUIREMENTS[phase], DRAGON_BEDS_REQUIREMENT]
           : REQUIREMENTS[phase];
+  const fastPreparation =
+    phase === BeatGamePhase.PREPARE_OVERWORLD && strategy.riskProfile === BeatGameRiskProfile.FAST;
   return definitions
     .map((definition) =>
       // A fast run takes its bed right after wood and a weapon: every night
       // without one costs ten minutes in a shelter.
-      phase === BeatGamePhase.PREPARE_OVERWORLD &&
-      strategy.riskProfile === BeatGameRiskProfile.FAST &&
-      definition.key === "bed"
+      fastPreparation && definition.key === "bed"
         ? { ...definition, priority: FAST_BED_PRIORITY }
-        : definition,
+        : // A live fast run spent whole days stocking cooked food at full
+          // hunger before it had any iron. The small food supply still
+          // comes first; the full stock waits for the iron and the shield.
+          fastPreparation && definition.key === "food"
+          ? { ...definition, priority: FAST_COOKED_FOOD_PRIORITY }
+          : definition,
     )
     .map((definition) => materializeRequirement(definition, inventory, strategy))
     .sort((left, right) => right.priority - left.priority || left.key.localeCompare(right.key));
