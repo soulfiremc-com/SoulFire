@@ -101,6 +101,23 @@ public final class SFBlockHelpers {
     return blockState.getBlock().getFriction() > Blocks.STONE.getFriction();
   }
 
+  /// Whether a step off any side of `feet` could drop the player into lava within `maximumDrop` blocks.
+  public static boolean isNextToLavaDrop(BlockGetter level, BlockPos feet, int maximumDrop) {
+    for (var direction : Direction.Plane.HORIZONTAL) {
+      var column = feet.relative(direction);
+      for (var depth = 0; depth <= maximumDrop; depth++) {
+        var state = level.getBlockState(column.below(depth));
+        if (isHurtOnTouchFluid(state.getFluidState().getType())) {
+          return true;
+        }
+        if (!isCollisionShapeEmpty(state)) {
+          break;
+        }
+      }
+    }
+    return false;
+  }
+
   public static boolean isHurtOnTouchFluid(Fluid fluidType) {
     return fluidType == Fluids.LAVA
       || fluidType == Fluids.FLOWING_LAVA;

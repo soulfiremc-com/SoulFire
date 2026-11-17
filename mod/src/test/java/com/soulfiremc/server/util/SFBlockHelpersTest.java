@@ -144,6 +144,20 @@ final class SFBlockHelpersTest {
   }
 
   @Test
+  void detectsALavaDropBesideTheFeet() {
+    var accessor = new TestBlockAccessorBuilder();
+    accessor.setBlockAt(0, 0, 0, Blocks.STONE);
+    accessor.setBlockAt(1, -2, 0, Blocks.LAVA);
+    var level = accessor.build();
+
+    assertTrue(SFBlockHelpers.isNextToLavaDrop(level, new BlockPos(0, 1, 0), 3));
+    assertFalse(SFBlockHelpers.isNextToLavaDrop(level, new BlockPos(0, 1, 0), 2));
+    // A solid block above the lava catches the fall
+    accessor.setBlockAt(1, 0, 0, Blocks.STONE);
+    assertFalse(SFBlockHelpers.isNextToLavaDrop(accessor.build(), new BlockPos(0, 1, 0), 3));
+  }
+
+  @Test
   void iceIsSlipperyAndStoneIsNot() {
     assertTrue(SFBlockHelpers.isSlippery(Blocks.ICE.defaultBlockState()));
     assertTrue(SFBlockHelpers.isSlippery(Blocks.PACKED_ICE.defaultBlockState()));

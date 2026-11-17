@@ -356,6 +356,13 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
     }
 
     var absoluteTargetFeetBlock = node.add(targetFeetBlock);
+    if (SFBlockHelpers.isNextToLavaDrop(
+      graph.snapshot().blockAccessor(),
+      absoluteTargetFeetBlock.toBlockPos(),
+      Costs.LAVA_EDGE_DROP
+    )) {
+      cost += Costs.LAVA_EDGE;
+    }
 
     if (interactablePassage != null) {
       cost += Costs.INTERACT_OPENABLE * 2;
