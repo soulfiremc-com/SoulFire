@@ -1336,7 +1336,9 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
         isRecentDeathObservation(observation.observedAt);
       const nightShelterNeeded = urgentCorpseRecovery
         ? false
-        : yield* shouldTakeNightShelter(state, liveObservation).pipe(
+        : yield* shouldTakeNightShelter(state, liveObservation, {
+            leavesCover: decision.type === "recover-death",
+          }).pipe(
             Effect.catch((error) =>
               emit(state, {
                 type: "diagnostic",
@@ -1448,6 +1450,7 @@ function runNightShelterAction(
 function shouldTakeNightShelter(
   state: RunState,
   observation: BeatGameObservation,
+  options: { readonly leavesCover?: boolean } = {},
 ): Effect.Effect<boolean, BeatGameDriverError> {
   if (
     state.driver.environment === undefined ||
@@ -1464,10 +1467,14 @@ function shouldTakeNightShelter(
     if (yield* hasVisibleValuableCorpseDrops(state, observation)) {
       return false;
     }
-    if (yield* hasSolidNightTravelCover(state.driver, observation)) {
-      return false;
-    }
-    if (yield* isSafelyBelowOverworldSurface(state.driver, observation)) {
+    // Cover only protects work that stays under it. A restarted run sat in
+    // its own sealed shelter, took the roof as cover, and walked out to an
+    // old corpse at night with no weapon.
+    if (
+      options.leavesCover !== true &&
+      ((yield* hasSolidNightTravelCover(state.driver, observation)) ||
+        (yield* isSafelyBelowOverworldSurface(state.driver, observation)))
+    ) {
       return false;
     }
     // A fast run keeps working through the night once it can fight back and
@@ -4169,8 +4176,12 @@ function monitorObservedSafety(
     (decision.type !== "recover-death" || !isRecentDeathObservation(actionObservedAt))
   ) {
     return Effect.all([
-      shouldTakeNightShelter(state, previousObservation),
-      shouldTakeNightShelter(state, observation),
+      shouldTakeNightShelter(state, previousObservation, {
+        leavesCover: decision.type === "recover-death",
+      }),
+      shouldTakeNightShelter(state, observation, {
+        leavesCover: decision.type === "recover-death",
+      }),
     ]).pipe(
       Effect.flatMap(([previousShelterNeeded, shelterNeeded]) =>
         previousShelterNeeded && shelterNeeded

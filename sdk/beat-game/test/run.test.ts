@@ -3995,6 +3995,101 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("stays in a sealed shelter instead of walking to a stale corpse at night", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const observedAt = new Date(Date.now() - 15 * 60 * 1_000).toISOString();
+    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, {
+      runId: "sealed-recovery-run",
+      teamId: "sealed-recovery-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            deathPositions: [
+              {
+                key: `death:${observedAt}`,
+                value: {
+                  x: 128,
+                  y: -24,
+                  z: -64,
+                  dimension: "minecraft:overworld",
+                  inventoryCounts: { "minecraft:iron_pickaxe": 1 },
+                },
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentEnvironment = { gameTime: 16_000n };
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y === 64 || position.y === 65
+            ? {
+                blockId: "minecraft:air",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              }
+            : { blockId: "minecraft:stone" },
+        ),
+      ];
+    };
+    let recoveryAttempts = 0;
+
+    const firstAction = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "sealed-recovery-run",
+          team: { teamId: "sealed-recovery-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            recoverDeath: () =>
+              Effect.sync(() => {
+                recoveryAttempts += 1;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            run.events.pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === "action-started" &&
+                  (event.action === "recover-death" || event.action === "survive:night-shelter"),
+              ),
+              Stream.runHead,
+              Effect.timeout("5 seconds"),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(Option.getOrUndefined(firstAction)).toMatchObject({
+      action: "survive:night-shelter",
+    });
+    expect(recoveryAttempts).toBe(0);
+  });
+
   it("recovers visible valuable corpse drops before sheltering", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
