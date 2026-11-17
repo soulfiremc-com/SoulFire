@@ -1478,10 +1478,13 @@ function shouldTakeNightShelter(
       return false;
     }
     // A fast run keeps working through the night once it can fight back and
-    // eat, instead of losing ten minutes in a shelter.
+    // eat, instead of losing ten minutes in a shelter. A sword alone was not
+    // enough: a live run died to a night mob group, which cost far more time
+    // than the shelter would have.
     const protectedForNightTravel =
       state.strategy.riskProfile === BeatGameRiskProfile.FAST
-        ? hasMeleeWeapon(observation) &&
+        ? hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
+          hasMeleeWeapon(observation) &&
           observation.player.health >= state.strategy.minimumHealth &&
           observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
           countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 1

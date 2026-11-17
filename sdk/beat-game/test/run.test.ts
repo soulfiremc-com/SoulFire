@@ -9,6 +9,7 @@ import {
   BeatGameDurableSkillKind,
   BeatGameDurableSkillStatus,
   BeatGamePathSearchMode,
+  BeatGameRiskProfile,
   BeatGameRunStatus,
   InMemoryBeatGameCheckpointStore,
   beatGameTeamWithDrivers,
@@ -1137,7 +1138,7 @@ describe("beat-game run lifecycle", () => {
   });
 
   it.each([
-    ["FAST", false],
+    ["FAST", true],
     ["SAFE", true],
   ] as const)(
     "with the %s profile, an armed and fed bot without a shield shelters at night: %s",
@@ -1176,6 +1177,58 @@ describe("beat-game run lifecycle", () => {
       );
 
       expect(startedActions[0] === "survive:night-shelter").toBe(shelters);
+    },
+  );
+
+  it.each([
+    { shield: true, expected: "satisfy:" },
+    { shield: false, expected: "survive:night-shelter" },
+  ])(
+    "lets a fast run work through the night only with a shield ($shield)",
+    async ({ shield, expected }) => {
+      const driver = new FakeBeatGameDriver();
+      driver.currentEnvironment = { gameTime: 14_000n };
+      driver.currentObservation = observation({
+        position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:stone_sword": 1,
+          "minecraft:cooked_beef": 2,
+          ...(shield ? { "minecraft:shield": 1 } : {}),
+        },
+      });
+      driver.surfaceColumns = [
+        {
+          x: 0,
+          z: 0,
+          loaded: true,
+          surfaceY: 63,
+          blockId: "minecraft:grass_block",
+          biomeId: "minecraft:plains",
+          skyLight: 15,
+          blockLight: 0,
+        },
+      ];
+
+      const firstAction = await Effect.runPromise(
+        Effect.scoped(
+          beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1, riskProfile: BeatGameRiskProfile.FAST },
+            hooks: { satisfyRequirement: () => Effect.never },
+          }).pipe(
+            Effect.flatMap((run) =>
+              run.events.pipe(
+                Stream.filter((event) => event.type === "action-started"),
+                Stream.runHead,
+                Effect.timeout("5 seconds"),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(Option.getOrUndefined(firstAction)).toMatchObject({
+        action: expect.stringMatching(new RegExp(`^${expected}`)),
+      });
     },
   );
 
