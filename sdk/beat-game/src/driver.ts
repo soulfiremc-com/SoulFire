@@ -1516,6 +1516,21 @@ function taskFailureCode(cause: unknown): string | undefined {
       return code;
     }
   }
+  // A failed bot action carries its status only in its message, which starts
+  // with the status name, such as "OUT_OF_RANGE: Target block is outside the
+  // bot's interaction reach".
+  if (
+    "result" in cause &&
+    typeof cause.result === "object" &&
+    cause.result !== null &&
+    "error" in cause.result &&
+    typeof cause.result.error === "string"
+  ) {
+    const status = /^([A-Z][A-Z_]*):/u.exec(cause.result.error)?.[1];
+    if (status !== undefined) {
+      return status.toLowerCase();
+    }
+  }
   return "cause" in cause && cause.cause !== cause ? taskFailureCode(cause.cause) : undefined;
 }
 

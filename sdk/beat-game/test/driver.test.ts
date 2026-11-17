@@ -3,6 +3,7 @@ import {
   BotTaskReconnectPolicy,
   InventoryArea,
   PathfindSearchMode,
+  SoulFireActionError,
   SoulFireRpcError,
   SoulFireTaskError,
   SoulFireTaskFailed,
@@ -630,6 +631,28 @@ describe("production SoulFire beat-game driver", () => {
       code: "not_found",
       retryable: false,
     });
+  });
+
+  it("reads the status of a failed bot action from its message", async () => {
+    // As in a live run whose dig target was out of reach.
+    const cause = new SoulFireActionError({
+      actionId: "action-1",
+      status: 2,
+      error: "OUT_OF_RANGE: Target block is outside the bot's interaction reach",
+    } as ConstructorParameters<typeof SoulFireActionError>[0]);
+    const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:iron_pickaxe"] },
+        }),
+      ),
+    );
+
+    expect(error).toMatchObject({ code: "out_of_range", retryable: false });
   });
 
   it("forwards the observation epoch with direct entity actions", async () => {
