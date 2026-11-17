@@ -5035,7 +5035,11 @@ describe("beat-game run lifecycle", () => {
         return driver.currentObservation;
       });
     driver.blockQueryResolver = (query) =>
-      obstructed && query.center.x === 0.5 && query.center.y === 65.5 && query.center.z === 0.5
+      obstructed &&
+      query.selector.blockIds === undefined &&
+      query.center.x === 0.5 &&
+      query.center.y === 65.5 &&
+      query.center.z === 0.5
         ? [
             blockObservation(headPosition, {
               blockId: "minecraft:gravel",
@@ -5090,6 +5094,91 @@ describe("beat-game run lifecycle", () => {
       position: headPosition,
     });
     expect(health).toBeGreaterThan(0);
+  });
+
+  it("puts out fire before any other environmental escape", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:water_bucket": 1 };
+    let actionStarted = false;
+    let burning = false;
+    let health = 20;
+    let pitch = 0;
+    driver.currentObservation = observation({ counts, health });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && !burning && health === 20) {
+          burning = true;
+        }
+        if (burning) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          counts,
+          health,
+          fireTicks: burning ? 80 : 0,
+          rotation: { pitch },
+        });
+        return driver.currentObservation;
+      });
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "look") {
+          pitch = action.pitch;
+        }
+        if (action.type === "use-item") {
+          burning = false;
+        }
+        return {};
+      });
+    // The live climb to the surface took twelve seconds while the bot burned.
+    driver.surfaceColumns = [
+      {
+        x: 0,
+        z: 0,
+        loaded: true,
+        surfaceY: 96,
+        blockId: "minecraft:stone",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.pathResolver = () => Effect.never;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted = true;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.actions.some((action) => action.type === "use-item")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "2 seconds",
+                orElse: () => Effect.fail(new Error("Timed out waiting for the fire escape")),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({
+      type: "select-item",
+      selector: { itemIds: ["minecraft:water_bucket"] },
+    });
+    expect(health).toBeGreaterThan(10);
   });
 
   it("names the damage type when environmental damage interrupts an action", async () => {

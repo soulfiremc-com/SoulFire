@@ -10232,7 +10232,8 @@ function fillLiquidBucket(
   return Effect.gen(function* () {
     let current = observation;
     if (liquid === "lava" && (yield* isPlayerInLava(state.driver, current.player.position))) {
-      yield* emergencyAirAscent(state, current.player.position);
+      yield* escapeLava(state, current);
+      yield* extinguishFire(state, yield* state.driver.observe);
       return;
     }
     if ((observation.inventory.counts["minecraft:bucket"] ?? 0) === 0) {
@@ -12835,6 +12836,18 @@ function escapeEnvironmentalDamage(
   };
   const occupiedPositions = [{ ...playerBlock, y: playerBlock.y + 1 }, playerBlock];
   return Effect.gen(function* () {
+    // A live run burned to death for twelve seconds while this escape walked
+    // toward the surface. Lava and fire need their own response first.
+    const burning = yield* state.driver.observe;
+    if (
+      !burning.player.dead &&
+      (burning.player.fireTicks > 0 ||
+        (yield* isPlayerInLava(state.driver, burning.player.position)))
+    ) {
+      yield* escapeLava(state, burning);
+      yield* extinguishFire(state, yield* state.driver.observe);
+      return;
+    }
     const occupiedBlocks = yield* Effect.all(
       occupiedPositions.map((occupiedPosition) => queryExactBlock(state.driver, occupiedPosition)),
       { concurrency: "unbounded" },
