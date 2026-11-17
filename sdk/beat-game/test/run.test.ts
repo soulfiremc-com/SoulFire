@@ -30697,6 +30697,57 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("spaces a healthy hunt's frontier one full search radius apart", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "wide-hunt-frontier-run";
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:oak_log": 8,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.xzPaths.length === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeoutOrElse({
+            duration: "5 seconds",
+            orElse: () => Effect.fail(new Error("The food hunt never explored")),
+          }),
+        ),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    const targets = Object.values(saved?.memory.explorationFrontiers ?? {}).flatMap((frontier) =>
+      frontier.target === undefined ? [] : [frontier.target],
+    );
+    expect(targets).toHaveLength(1);
+    expect(Math.hypot(targets[0]?.x ?? 0, targets[0]?.z ?? 0)).toBeCloseTo(
+      defaultBeatGameStrategy.entitySearchRadius,
+      0,
+    );
+  });
+
   it("keeps rotating resource exploration after blocked frontiers", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
@@ -30755,7 +30806,8 @@ describe("beat-game run lifecycle", () => {
       z,
     }));
     expect(new Set(attemptedTargets.map(({ x, z }) => `${x}:${z}`)).size).toBeGreaterThanOrEqual(2);
-    expect(attemptedTargets.every(({ x, z }) => Math.hypot(x, z) <= 24.01)).toBe(true);
+    // A healthy food hunt hops one entity search radius per frontier leg.
+    expect(attemptedTargets.every(({ x, z }) => Math.hypot(x, z) <= 48.01)).toBe(true);
   });
 
   it("segments a distant pending frontier into observed 32-block legs", async () => {

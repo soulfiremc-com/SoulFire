@@ -11890,10 +11890,14 @@ function huntOrExplore(
         } else if (yield* climbToHigherOverworldGround(state, current.player.position)) {
           continue;
         } else {
+          // Exploration hops half the scan radius it is given. Animals are
+          // seen from the full search radius on each side, so a healthy hunt
+          // hops a whole radius: no ground is missed, and a live food search
+          // no longer spent an hour within 150 blocks of spawn.
           const frontierScanRadius =
             current.player.health < state.strategy.minimumHealth
               ? Math.min(32, state.strategy.entitySearchRadius)
-              : state.strategy.entitySearchRadius;
+              : 2 * state.strategy.entitySearchRadius;
           const directedExplorationTarget =
             targetPreference?.explorationTarget?.dimension === current.player.position.dimension &&
             horizontalDistanceSquared(targetPreference.explorationTarget, current.player.position) >
