@@ -14540,21 +14540,8 @@ function ensureInventorySpace(
         });
         break;
       }
-      const priorityDiscardItemId = INVENTORY_DISCARD_PRIORITY.find(
-        (itemId) => (current.inventory.counts[itemId] ?? 0) > 0,
-      );
-      const redundantEquipment = selectRedundantEquipmentDiscard(current.inventory.counts);
-      const cobbledDeepslateCount = current.inventory.counts["minecraft:cobbled_deepslate"] ?? 0;
-      const excessCobbledDeepslate = cobbledDeepslateCount - INVENTORY_BUILDING_BLOCK_RESERVE;
-      const cobblestoneCount = current.inventory.counts["minecraft:cobblestone"] ?? 0;
-      const itemId =
-        priorityDiscardItemId ??
-        (excessCobbledDeepslate >= 64
-          ? "minecraft:cobbled_deepslate"
-          : cobblestoneCount > 0
-            ? "minecraft:cobblestone"
-            : redundantEquipment?.itemId);
-      if (itemId === undefined) {
+      const discard = selectInventoryDiscard(current.inventory.counts);
+      if (discard === undefined) {
         if (current.inventory.emptyPlayerSlots >= minimumEmptySlots) {
           break;
         }
@@ -14566,14 +14553,7 @@ function ensureInventorySpace(
         });
         break;
       }
-      const count =
-        priorityDiscardItemId !== undefined
-          ? (current.inventory.counts[priorityDiscardItemId] ?? 0)
-          : itemId === "minecraft:cobbled_deepslate"
-            ? excessCobbledDeepslate
-            : itemId === "minecraft:cobblestone"
-              ? Math.min(64, cobblestoneCount)
-              : (redundantEquipment?.count ?? 0);
+      const { itemId, count } = discard;
       const itemCountBefore = current.inventory.counts[itemId] ?? 0;
       const emptySlotsBefore = current.inventory.emptyPlayerSlots;
       if (!discardViewConfirmed) {
@@ -14656,6 +14636,33 @@ function ensureInventorySpace(
       return yield* Effect.fail(cleanupFailure);
     }
   });
+}
+
+// Chooses what to drop when the inventory is full: junk first, then building
+// blocks beyond the reserve, then redundant equipment.
+export function selectInventoryDiscard(
+  counts: Readonly<Record<string, number>>,
+): { readonly itemId: string; readonly count: number } | undefined {
+  const priorityItemId = INVENTORY_DISCARD_PRIORITY.find((itemId) => (counts[itemId] ?? 0) > 0);
+  if (priorityItemId !== undefined) {
+    return { itemId: priorityItemId, count: counts[priorityItemId] ?? 0 };
+  }
+  const excessCobbledDeepslate =
+    (counts["minecraft:cobbled_deepslate"] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
+  if (excessCobbledDeepslate >= 64) {
+    return { itemId: "minecraft:cobbled_deepslate", count: excessCobbledDeepslate };
+  }
+  // Nether tunnels fill the inventory with netherrack. A live run held 726 of
+  // it and could not free the slots to craft a new pickaxe.
+  const excessNetherrack = (counts["minecraft:netherrack"] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
+  if (excessNetherrack > 0) {
+    return { itemId: "minecraft:netherrack", count: Math.min(64, excessNetherrack) };
+  }
+  const cobblestoneCount = counts["minecraft:cobblestone"] ?? 0;
+  if (cobblestoneCount > 0) {
+    return { itemId: "minecraft:cobblestone", count: Math.min(64, cobblestoneCount) };
+  }
+  return selectRedundantEquipmentDiscard(counts);
 }
 
 export function selectRedundantEquipmentDiscard(

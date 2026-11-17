@@ -22,6 +22,7 @@ import {
 } from "../src/index.js";
 import {
   hasNonRegressingThreatEscapeCorridor,
+  selectInventoryDiscard,
   selectRedundantEquipmentDiscard,
 } from "../src/run.js";
 import {
@@ -74,6 +75,33 @@ describe("direct threat escape corridors", () => {
         18,
       ),
     ).toBe(true);
+  });
+});
+
+describe("inventory discards", () => {
+  it("drops netherrack beyond the building reserve a stack at a time", () => {
+    // As in a live run whose full inventory blocked a pickaxe craft.
+    expect(
+      selectInventoryDiscard({
+        "minecraft:netherrack": 726,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_porkchop": 6,
+      }),
+    ).toEqual({ itemId: "minecraft:netherrack", count: 64 });
+    expect(selectInventoryDiscard({ "minecraft:netherrack": 100 })).toEqual({
+      itemId: "minecraft:netherrack",
+      count: 36,
+    });
+  });
+
+  it("keeps the netherrack building reserve", () => {
+    expect(selectInventoryDiscard({ "minecraft:netherrack": 64 })).toBeUndefined();
+  });
+
+  it("drops junk before building blocks", () => {
+    expect(selectInventoryDiscard({ "minecraft:netherrack": 726, "minecraft:gravel": 15 })).toEqual(
+      { itemId: "minecraft:gravel", count: 15 },
+    );
   });
 });
 
