@@ -9,6 +9,7 @@ classtransform = "1.15.1"
 kyori = "5.2.0"
 jooq = "3.21.9"
 flyway = "13.12.2"
+stackanvil = "0.4.34"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.1"
@@ -99,7 +100,14 @@ bom = ["netty-bom", "armeria-bom", "protobuf-bom", "kotlin-bom"]
 log4j = ["log4j-api", "log4j-core", "log4j-slf4j2-impl", "log4j-iostreams", "log4j-jul"]
 grpc = ["grpc-proto", "grpc-services", "grpc-stub", "grpc-netty", "grpc-inprocess", "protobuf-util"]
 ansi4j = ["ansi4j-core-api", "ansi4j-core-impl"]
-armeria = ["armeria", "armeria-grpc", "armeria-grpc-protocol", "armeria-prometheus1", "armeria-tomcat10", "armeria-ai-mcp"]
+armeria = [
+  "armeria",
+  "armeria-grpc",
+  "armeria-grpc-protocol",
+  "armeria-prometheus1",
+  "armeria-tomcat10",
+  "armeria-ai-mcp",
+]
 reactor-netty = ["reactor-netty-core", "reactor-netty-http"]
 jooq = ["jooq-lib"]
 classtransform = ["classtransform-mixinstranslator", "classtransform-additionalclassprovider"]

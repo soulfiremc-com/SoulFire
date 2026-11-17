@@ -86,4 +86,12 @@ allprojects {
     }
     mavenCentral()
   }
+
+  // StackAnvil POMs since 0.4.33 reference CubeConverter by its unpublished upstream coordinate.
+  configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+      substitute(module("org.oryxel.cube:vv-json"))
+        .using(module("io.github.stackanvil:cubeconverter-stackanvil:${rootProject.libs.versions.stackanvil.get()}"))
+    }
+  }
 }
