@@ -829,6 +829,7 @@ const LETHAL_MELEE_DISENGAGE_HEALTH = 7;
 const SHIELDED_RANGED_FIGHT_MINIMUM_HEALTH = MELEE_DISENGAGE_HEALTH;
 const UNSHIELDED_RANGED_FIGHT_MINIMUM_HEALTH = 14;
 const CAUGHT_MELEE_COMMIT_MINIMUM_HEALTH = MELEE_DISENGAGE_HEALTH;
+const MAXIMUM_KNOCKBACK_ESCAPES = 2;
 const THREAT_ESCAPE_SAFE_DISTANCE = 24;
 const SINGLE_THREAT_MAXIMUM_ESCAPES = 4;
 const DURABLE_DEATH_RECOVERY_WINDOW_MS = 8 * 60 * 60 * 1_000;
@@ -4734,6 +4735,7 @@ function escapeFromTarget(
   target: BeatGameEntityObservation,
   options: {
     readonly continueEscapingWhenHit?: boolean;
+    readonly knockbackStrikes?: number;
   } = {},
 ): Effect.Effect<void, BeatGameDriverError> {
   const escapePath = {
@@ -4964,10 +4966,31 @@ function escapeFromTarget(
     }
     if (outcome.type === "knockback") {
       const current = yield* state.driver.observe;
-      if (!current.player.dead) {
-        yield* state.driver.withControl(performKnockbackStrike(state, current, outcome.target));
-        yield* escapeFromTarget(state, target, options);
+      if (current.player.dead) {
+        return;
       }
+      // A zombie keeps pace with a fleeing player. A live run struck and
+      // fled from one about every half second while it and a second zombie
+      // kept hitting. Once running has failed twice, an armed bot fights.
+      const knockbackStrikes = options.knockbackStrikes ?? 0;
+      if (knockbackStrikes >= MAXIMUM_KNOCKBACK_ESCAPES && hasMeleeWeapon(current)) {
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Fighting a melee attacker that kept pace with the escape",
+          data: {
+            attackerNetworkId: outcome.target.networkId,
+            attackerType: outcome.target.entityType,
+            health: current.player.health,
+          },
+        });
+        yield* defendAndRecover(state, outcome.target);
+        return;
+      }
+      yield* state.driver.withControl(performKnockbackStrike(state, current, outcome.target));
+      yield* escapeFromTarget(state, target, {
+        ...options,
+        knockbackStrikes: knockbackStrikes + 1,
+      });
       return;
     }
     if (outcome.type === "escape") {
