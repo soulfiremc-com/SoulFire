@@ -2789,11 +2789,12 @@ function abandonExhaustedAction(
 }
 
 // Codes the server uses when the world did not allow a step, such as a hidden
-// placement face or a missing item. They are final for that request, but a new
-// plan can avoid them.
+// placement face, a missing item or a block out of reach. They are final for
+// that request, but a new plan can avoid them.
 const WORLD_STATE_FAILURE_CODES: ReadonlySet<string> = new Set([
   "failed_precondition",
   "not_found",
+  "out_of_range",
 ]);
 
 function isWorldStateFailure(error: unknown): boolean {

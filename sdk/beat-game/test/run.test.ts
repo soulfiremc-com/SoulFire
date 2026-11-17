@@ -5010,58 +5010,64 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
-  it("replans an action the world refuses before failing the run", async () => {
-    const driver = new FakeBeatGameDriver();
-    let attempts = 0;
-    const refusal = () =>
-      new BeatGameDriverError({
-        operation: "act.place-block",
-        code: "failed_precondition",
-        retryable: false,
-        message: "Block placement is not ready (FACE_OCCLUDED)",
-      });
+  it.each([
+    ["failed_precondition", "Block placement is not ready (FACE_OCCLUDED)"],
+    ["out_of_range", "Target block is outside the bot's interaction reach"],
+  ])(
+    "replans an action the world refuses with %s before failing the run",
+    async (code, message) => {
+      const driver = new FakeBeatGameDriver();
+      let attempts = 0;
+      const refusal = () =>
+        new BeatGameDriverError({
+          operation: "act.place-block",
+          code,
+          retryable: false,
+          message,
+        });
 
-    const outcome = await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const run = yield* beatGameWithDriver(driver, {
-            strategy: { observationPollMs: 1 },
-            hooks: {
-              satisfyRequirement: () =>
-                Effect.suspend(() => {
-                  attempts += 1;
-                  return Effect.fail(refusal());
+      const outcome = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const run = yield* beatGameWithDriver(driver, {
+              strategy: { observationPollMs: 1 },
+              hooks: {
+                satisfyRequirement: () =>
+                  Effect.suspend(() => {
+                    attempts += 1;
+                    return Effect.fail(refusal());
+                  }),
+              },
+            });
+            const abandoned: string[] = [];
+            yield* run.events.pipe(
+              Stream.runForEach((event) =>
+                Effect.sync(() => {
+                  if (
+                    event.type === "action-failed" &&
+                    event.detail?.startsWith("Abandoned after exhausting retries") === true
+                  ) {
+                    abandoned.push(event.action);
+                  }
                 }),
-            },
-          });
-          const abandoned: string[] = [];
-          yield* run.events.pipe(
-            Stream.runForEach((event) =>
-              Effect.sync(() => {
-                if (
-                  event.type === "action-failed" &&
-                  event.detail?.startsWith("Abandoned after exhausting retries") === true
-                ) {
-                  abandoned.push(event.action);
-                }
-              }),
-            ),
-            Effect.forkScoped,
-          );
-          const completion = yield* run.awaitCompletion.pipe(
-            Effect.result,
-            Effect.timeout("5 seconds"),
-          );
-          return { completion, abandoned };
-        }),
-      ),
-    );
+              ),
+              Effect.forkScoped,
+            );
+            const completion = yield* run.awaitCompletion.pipe(
+              Effect.result,
+              Effect.timeout("5 seconds"),
+            );
+            return { completion, abandoned };
+          }),
+        ),
+      );
 
-    // Two refusals replan; the third ends the run.
-    expect(attempts).toBe(3);
-    expect(outcome.abandoned).toHaveLength(2);
-    expect(outcome.completion._tag).toBe("Failure");
-  });
+      // Two refusals replan; the third ends the run.
+      expect(attempts).toBe(3);
+      expect(outcome.abandoned).toHaveLength(2);
+      expect(outcome.completion._tag).toBe("Failure");
+    },
+  );
 
   it("does not restart an in-progress corpse recovery meal", async () => {
     const driver = new FakeBeatGameDriver();
