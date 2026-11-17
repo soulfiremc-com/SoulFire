@@ -5181,6 +5181,77 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(10);
   });
 
+  it("escapes lava that only touches the edge of the hitbox", async () => {
+    const driver = new FakeBeatGameDriver();
+    // The live bot stood on dry ground here while lava in the next block
+    // reached into its hitbox.
+    const position = {
+      x: 81.3,
+      y: 22,
+      z: 62.25,
+      dimension: "minecraft:overworld",
+    } as const;
+    const lava = { x: 81, y: 22, z: 61, dimension: "minecraft:overworld" } as const;
+    let actionStarted = false;
+    let escaped = false;
+    let health = 20;
+    driver.currentObservation = observation({ position, health });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && !escaped) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          position,
+          health,
+          fireTicks: actionStarted && !escaped ? 80 : 0,
+        });
+        return driver.currentObservation;
+      });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:lava") === true
+        ? [blockObservation(lava, { blockId: "minecraft:lava", replaceable: true })]
+        : [];
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "set-movement" && action.sprint === true) {
+          escaped = true;
+        }
+        return {};
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted = true;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!escaped) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "2 seconds",
+                orElse: () => Effect.fail(new Error("Timed out waiting for the lava escape")),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(health).toBeGreaterThan(12);
+  });
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;

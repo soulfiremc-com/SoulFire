@@ -7602,11 +7602,48 @@ function isPlayerInFluid(
   return isPlayerInBlocks(driver, position, PLAYER_FLUID_BLOCK_IDS);
 }
 
+// A live run stood on dry ground with lava touching the edge of its hitbox
+// and burned to death while a feet and head check saw no lava. Lava hurts on
+// any overlap, so check every block the player's box reaches into.
+const PLAYER_HALF_WIDTH = 0.3;
+const PLAYER_HEIGHT = 1.8;
+const HITBOX_EPSILON = 0.001;
+
 function isPlayerInLava(
   driver: BeatGameDriver,
   position: BeatGamePosition,
 ): Effect.Effect<boolean, BeatGameDriverError> {
-  return isPlayerInBlocks(driver, position, ["minecraft:lava"]);
+  const minimum = {
+    x: Math.floor(position.x - PLAYER_HALF_WIDTH + HITBOX_EPSILON),
+    y: Math.floor(position.y + HITBOX_EPSILON),
+    z: Math.floor(position.z - PLAYER_HALF_WIDTH + HITBOX_EPSILON),
+  };
+  const maximum = {
+    x: Math.floor(position.x + PLAYER_HALF_WIDTH - HITBOX_EPSILON),
+    y: Math.floor(position.y + PLAYER_HEIGHT - HITBOX_EPSILON),
+    z: Math.floor(position.z + PLAYER_HALF_WIDTH - HITBOX_EPSILON),
+  };
+  return driver
+    .queryBlocks({
+      center: { ...position, y: position.y + PLAYER_HEIGHT / 2 },
+      radius: 2,
+      selector: { blockIds: ["minecraft:lava"] },
+      maximumResults: 32,
+    })
+    .pipe(
+      Effect.map((blocks) =>
+        blocks.some(
+          ({ position: block }) =>
+            block.dimension === position.dimension &&
+            block.x >= minimum.x &&
+            block.x <= maximum.x &&
+            block.y >= minimum.y &&
+            block.y <= maximum.y &&
+            block.z >= minimum.z &&
+            block.z <= maximum.z,
+        ),
+      ),
+    );
 }
 
 function isPlayerInBlocks(
