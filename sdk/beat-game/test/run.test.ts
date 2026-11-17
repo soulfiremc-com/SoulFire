@@ -2603,6 +2603,112 @@ describe("beat-game run lifecycle", () => {
     ]);
   }, 10_000);
 
+  it("fills water under an enclosure wall before building it", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:dirt": 16,
+        "minecraft:wooden_sword": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      // As at a live shoreline, the west wall would stand over water.
+      if (key(position) === "-1:63:0" && !placed.has(key(position))) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:water",
+            diggable: false,
+            replaceable: true,
+            solid: false,
+          }),
+        ];
+      }
+      if (position.y === 63) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:bedrock",
+            diggable: false,
+          }),
+        ];
+      }
+      if (placed.has(key(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          key({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+        if (placed.size === 11) {
+          driver.currentEnvironment = { gameTime: 1_000n };
+        }
+      }
+      if (action.type === "dig-block") {
+        placed.delete(key(action.position));
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.actions.some((action) => action.type === "dig-block")) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(50);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "8 seconds",
+            orElse: () => Effect.fail(new Error("Timed out waiting for the enclosure to open")),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.actions.filter((action) => action.type === "place-block")).toHaveLength(11);
+    expect(placed.has("-1:63:0")).toBe(true);
+    expect(placed.has("-1:64:0")).toBe(true);
+  }, 10_000);
+
   it("does not build the shelter roof against powder snow", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

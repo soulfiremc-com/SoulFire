@@ -2597,52 +2597,68 @@ function encloseNightShelterInPlace(
       return undefined;
     }
     const placed: BeatGameBlockPosition[] = [];
+    const placeAt = (target: BeatGameBlockPosition) =>
+      Effect.gen(function* () {
+        const supports = [
+          { against: { ...target, y: target.y - 1 }, face: "up" },
+          { against: { ...target, x: target.x + 1 }, face: "west" },
+          { against: { ...target, x: target.x - 1 }, face: "east" },
+          { against: { ...target, z: target.z + 1 }, face: "north" },
+          { against: { ...target, z: target.z - 1 }, face: "south" },
+          { against: { ...target, y: target.y + 1 }, face: "down" },
+        ] as const;
+        // The server can still refuse a support it cannot see, so each solid
+        // neighbor is tried in turn.
+        for (const support of supports) {
+          if (
+            body.some((cell) => samePosition(cell, support.against)) ||
+            !isSolid(yield* queryExactBlock(state.driver, support.against))
+          ) {
+            continue;
+          }
+          const placement = yield* state.driver
+            .act({
+              type: "select-item",
+              selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
+            })
+            .pipe(
+              Effect.andThen(
+                state.driver.act({
+                  type: "place-block",
+                  against: support.against,
+                  face: support.face,
+                  hand: "main",
+                }),
+              ),
+              Effect.result,
+            );
+          if (placement._tag === "Failure") {
+            continue;
+          }
+          for (let attempt = 0; attempt < 20; attempt += 1) {
+            if (isSolid(yield* queryExactBlock(state.driver, target))) {
+              return true;
+            }
+            yield* Effect.sleep(100);
+          }
+        }
+        return false;
+      });
     const placedAll = yield* state.driver.withControl(
       Effect.gen(function* () {
         for (const target of open) {
-          const supports = [
-            { against: { ...target, y: target.y - 1 }, face: "up" },
-            { against: { ...target, x: target.x + 1 }, face: "west" },
-            { against: { ...target, x: target.x - 1 }, face: "east" },
-            { against: { ...target, z: target.z + 1 }, face: "north" },
-            { against: { ...target, z: target.z - 1 }, face: "south" },
-            { against: { ...target, y: target.y + 1 }, face: "down" },
-          ] as const;
-          // The server can still refuse a support it cannot see, so each
-          // solid neighbor is tried in turn.
-          let confirmed = false;
-          for (const support of supports) {
+          if (!(yield* placeAt(target))) {
+            // A wall over water or a drop has nothing to hold it, so the bot
+            // first fills the open space below it.
+            const below = { ...target, y: target.y - 1 };
             if (
-              confirmed ||
-              body.some((cell) => samePosition(cell, support.against)) ||
-              !isSolid(yield* queryExactBlock(state.driver, support.against))
+              body.some((cell) => samePosition(cell, below)) ||
+              isSolid(yield* queryExactBlock(state.driver, below)) ||
+              !(yield* placeAt(below)) ||
+              !(yield* placeAt(target))
             ) {
-              continue;
+              return false;
             }
-            yield* state.driver.act({
-              type: "select-item",
-              selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
-            });
-            const placement = yield* state.driver
-              .act({
-                type: "place-block",
-                against: support.against,
-                face: support.face,
-                hand: "main",
-              })
-              .pipe(Effect.result);
-            if (placement._tag === "Failure") {
-              continue;
-            }
-            for (let attempt = 0; attempt < 20 && !confirmed; attempt += 1) {
-              confirmed = isSolid(yield* queryExactBlock(state.driver, target));
-              if (!confirmed) {
-                yield* Effect.sleep(100);
-              }
-            }
-          }
-          if (!confirmed) {
-            return false;
           }
           placed.push(target);
         }
