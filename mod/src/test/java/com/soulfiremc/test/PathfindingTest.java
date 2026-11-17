@@ -1147,6 +1147,44 @@ final class PathfindingTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void pathfindingOnlyStepsIntoClimbablesThatSlideDownSafely(boolean reachesTheGround) {
+    // Two ladder columns hang on a wall, like the vines a live run fell from.
+    // The bot climbs the first from the ground and steps across into the
+    // second. A player slides down a climbable, so the second column is only
+    // safe if its slide ends near the ground. Block tags are unbound in unit
+    // tests, so vines would not count as climbable here.
+    var ladder = Blocks.LADDER.defaultBlockState();
+    var accessor = new TestBlockAccessorBuilder();
+    accessor.setBlockAt(0, -12, 0, Blocks.STONE);
+    accessor.setBlockAt(0, 0, 0, Blocks.STONE);
+    for (var y = 1; y <= 8; y++) {
+      accessor.setBlockAt(0, y, -1, Blocks.STONE);
+      accessor.setBlockAt(1, y, -1, Blocks.STONE);
+      accessor.setBlockStateAt(0, y, 0, ladder);
+    }
+    for (var y = reachesTheGround ? 1 : 6; y <= 8; y++) {
+      accessor.setBlockStateAt(1, y, 0, ladder);
+    }
+    if (reachesTheGround) {
+      accessor.setBlockAt(1, 0, 0, Blocks.STONE);
+    }
+
+    var constraint = new NoBlockActionsConstraint(TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(), TestMiningCostCalculator.INSTANCE, constraint);
+    var routeFinder = new RouteFinder(
+      new MinecraftGraph(accessor.build(), inventory, constraint),
+      new PosGoal(1, 8, 0)
+    );
+
+    var result = routeFinder.findRouteFuture(
+      NodeState.forInfo(new SFVec3i(0, 1, 0), inventory)
+    ).join();
+
+    assertEquals(reachesTheGround, result instanceof RouteFinder.FoundRouteResult, result.toString());
+  }
+
   @Test
   void pathfindingRejectsDiagonalJumpAscents() {
     var height = 1;

@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 @Slf4j
 public final class SimpleMovement extends GraphAction implements Cloneable {
   private static final SFVec3i FEET_POSITION_RELATIVE_BLOCK = SFVec3i.ZERO;
+  private static final int CLIMBABLE_SLIDE_SCAN_LIMIT = 64;
   private final MovementDirection direction;
   private final MovementModifier modifier;
   private final SFVec3i targetFeetBlock;
@@ -65,6 +66,8 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
   private boolean floorCanBePlaced;
   // Mutable
   private boolean supportInTargetBlock;
+  // Mutable
+  private boolean climbableTarget;
   // Mutable
   private boolean targetFeetInSwimmableWater;
   // Mutable
@@ -305,6 +308,7 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
     var hasMovementSupport =
       floorHasSupport
         || supportInTargetBlock
+        || climbableTarget && climbableColumnLandsSafely(graph, node.add(targetFeetBlock))
         || targetFeetInSwimmableWater;
     var requiresAgainstBlock = !hasMovementSupport && floorCanBePlaced;
     if (!hasMovementSupport && !requiresAgainstBlock) {
@@ -402,6 +406,35 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
     ));
   }
 
+  /// A player slides down a vine or ladder unless they keep climbing. Each
+  /// climbable block they pass catches them again, so only the open drop
+  /// below the last one decides whether the slide is safe.
+  private static boolean climbableColumnLandsSafely(MinecraftGraph graph, SFVec3i target) {
+    var maximumFall = graph.pathConstraint().maximumFallDistance();
+    var openDrop = 0;
+    var position = target.sub(0, 1, 0);
+    for (var scanned = 0; scanned < CLIMBABLE_SLIDE_SCAN_LIMIT; scanned++) {
+      var state = graph.snapshot().blockState(position);
+      if (isClimbable(state)) {
+        openDrop = 0;
+      } else if (SFBlockHelpers.isStableWalkableFloorBlock(
+        graph.snapshot().blockAccessor(),
+        position.toBlockPos(),
+        state
+      ) || SFBlockHelpers.isSwimmableWaterBlock(state)) {
+        return true;
+      } else if (!SFBlockHelpers.isBodyPassableBlock(state) || ++openDrop > maximumFall) {
+        return false;
+      }
+      position = position.sub(0, 1, 0);
+    }
+    return false;
+  }
+
+  private static boolean isClimbable(BlockState state) {
+    return state.is(BlockTags.CLIMBABLE) || state.is(Blocks.LADDER);
+  }
+
   @Override
   public SimpleMovement copy() {
     return this.clone();
@@ -453,8 +486,7 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
             && simpleMovement.modifier != MovementModifier.JUMP_UP_BLOCK
             && (blockState.is(BlockTags.CLIMBABLE) || blockState.is(Blocks.LADDER))
         ) {
-          // The player holds on to a ladder or vine instead of falling through it
-          simpleMovement.supportInTargetBlock = true;
+          simpleMovement.climbableTarget = true;
         }
 
         return MinecraftGraph.SubscriptionSingleResult.CONTINUE;
