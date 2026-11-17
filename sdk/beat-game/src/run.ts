@@ -8692,12 +8692,12 @@ function satisfyBedRequirement(
   }
   return Effect.gen(function* () {
     // Villages have beds, and taking one is far faster than shearing sheep.
-    const placedBeds = yield* state.driver.queryBlocks({
+    const placedBeds = (yield* state.driver.queryBlocks({
       center: observation.player.position,
       radius: state.strategy.blockSearchRadius,
       selector: { blockIds: BED_ITEM_IDS },
       maximumResults: 1,
-    });
+    })).filter(({ blockId }) => BED_ITEM_IDS.includes(blockId));
     if (placedBeds.length > 0) {
       const taken = yield* collectBlocks(state.driver, {
         blockIds: BED_ITEM_IDS,
@@ -9032,7 +9032,10 @@ function satisfyFoodSupplyRequirement(
       if (missing === 0) {
         return Effect.void;
       }
-      return tryForageNearbyFood(state, current).pipe(
+      return tryVillageBread(state, current).pipe(
+        Effect.flatMap((baked) =>
+          baked ? Effect.succeed(true) : tryForageNearbyFood(state, current),
+        ),
         Effect.flatMap((foraged) =>
           foraged
             ? Effect.void
@@ -9051,6 +9054,42 @@ function satisfyFoodSupplyRequirement(
       );
     }),
   );
+}
+
+// Village hay bales give the fastest food: each one bakes into three bread.
+const VILLAGE_HAY_BALE_LIMIT = 3;
+
+function tryVillageBread(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const counts = observation.inventory.counts;
+    const bread =
+      3 * (counts["minecraft:hay_block"] ?? 0) + Math.floor((counts["minecraft:wheat"] ?? 0) / 3);
+    if (bread > 0) {
+      const baked = yield* craftWithTable(state, observation, "minecraft:bread", bread).pipe(
+        Effect.result,
+      );
+      return baked._tag === "Success";
+    }
+    const bales = (yield* state.driver.queryBlocks({
+      center: observation.player.position,
+      radius: state.strategy.blockSearchRadius,
+      selector: { blockIds: ["minecraft:hay_block"], requireLineOfSight: true },
+      maximumResults: VILLAGE_HAY_BALE_LIMIT,
+    })).filter(({ blockId }) => blockId === "minecraft:hay_block");
+    if (bales.length === 0) {
+      return false;
+    }
+    const collected = yield* collectBlocks(state.driver, {
+      blockIds: ["minecraft:hay_block"],
+      count: bales.length,
+      searchRadius: state.strategy.blockSearchRadius,
+      path: { ...state.strategy.path, avoidFluids: true },
+    }).pipe(Effect.result);
+    return collected._tag === "Success";
+  });
 }
 
 const FORAGEABLE_FOOD_BLOCK_IDS = [

@@ -2011,6 +2011,86 @@ describe("beat-game run lifecycle", () => {
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
   });
 
+  it("collects a village hay bale for food instead of hunting", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:oak_log": 8, "minecraft:wooden_sword": 1 },
+    });
+    const bale = blockObservation(
+      { x: 5, y: 64, z: 1, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:hay_block" },
+    );
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:hay_block") === true ? [bale] : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.tasks.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(driver.tasks[0]).toMatchObject({
+      type: "collect-blocks",
+      blockIds: ["minecraft:hay_block"],
+      count: 1,
+    });
+  });
+
+  it("bakes carried hay into bread", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_sword": 1,
+        "minecraft:hay_block": 2,
+      },
+    });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 2, y: 64, z: 0, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    const requestedRecipes: string[] = [];
+    driver.recipeResolver = (resultItemId) => {
+      requestedRecipes.push(resultItemId);
+      return [];
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!requestedRecipes.includes("minecraft:bread")) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(requestedRecipes).toContain("minecraft:bread");
+  });
+
   it("takes a nearby village bed instead of hunting sheep", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
