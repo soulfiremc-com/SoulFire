@@ -13307,15 +13307,71 @@ function ensureDryShaftRecoverySupport(
     if (!step.placeSupport) {
       return;
     }
-    if (step.placeLowerAnchor) {
+    if (!step.placeLowerAnchor) {
+      yield* placeDryShaftRecoveryBlock(state.driver, step.lowerAnchor, "up", step.support);
+      return;
+    }
+    // The lower anchor goes against the side of the block the bot stands on.
+    // The server only accepts a face the eyes can see, so the bot sneaks to
+    // the edge first, like a player bridging, and keeps sneaking so it does
+    // not walk off.
+    yield* Effect.gen(function* () {
+      yield* sneakPastSupportEdge(state, step.previousSupport, step.lowerAnchor);
       yield* placeDryShaftRecoveryBlock(
         state.driver,
         step.previousSupport,
         horizontalPlacementFace(step.previousSupport, step.lowerAnchor),
         step.lowerAnchor,
       );
+      yield* placeDryShaftRecoveryBlock(state.driver, step.lowerAnchor, "up", step.support);
+    }).pipe(Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)));
+  });
+}
+
+// Sneaking stops a player at the edge with the hitbox still on the block,
+// up to 0.3 blocks past the face, so 0.55 from the centre puts the eyes in
+// front of it.
+const SUPPORT_EDGE_EYE_OFFSET = 0.55;
+const SUPPORT_EDGE_POLL_MS = 50;
+const SUPPORT_EDGE_MAXIMUM_POLLS = 30;
+const SUPPORT_EDGE_STALL_POLLS = 6;
+
+function sneakPastSupportEdge(
+  state: RunState,
+  standing: BeatGameBlockPosition,
+  toward: BeatGameBlockPosition,
+): Effect.Effect<void, BeatGameDriverError> {
+  const direction = { x: toward.x - standing.x, z: toward.z - standing.z };
+  const offset = (position: BeatGamePosition) =>
+    (position.x - (standing.x + 0.5)) * direction.x +
+    (position.z - (standing.z + 0.5)) * direction.z;
+  return Effect.gen(function* () {
+    const start = yield* state.driver.observe;
+    if (offset(start.player.position) >= SUPPORT_EDGE_EYE_OFFSET) {
+      return;
     }
-    yield* placeDryShaftRecoveryBlock(state.driver, step.lowerAnchor, "up", step.support);
+    const rotation = rotationToward(start.player.position, {
+      ...start.player.position,
+      x: standing.x + 0.5 + direction.x,
+      z: standing.z + 0.5 + direction.z,
+    });
+    yield* state.driver.act({ type: "look", yaw: rotation.yaw, pitch: 70 });
+    yield* state.driver.act({ type: "set-movement", forward: true, sneak: true });
+    let best = offset(start.player.position);
+    let stalled = 0;
+    for (let poll = 0; poll < SUPPORT_EDGE_MAXIMUM_POLLS; poll += 1) {
+      yield* Effect.sleep(SUPPORT_EDGE_POLL_MS);
+      const current = offset((yield* state.driver.observe).player.position);
+      if (current >= SUPPORT_EDGE_EYE_OFFSET) {
+        break;
+      }
+      stalled = current > best + 0.01 ? 0 : stalled + 1;
+      best = Math.max(best, current);
+      if (stalled >= SUPPORT_EDGE_STALL_POLLS) {
+        break;
+      }
+    }
+    yield* state.driver.act({ type: "set-movement", sneak: true });
   });
 }
 

@@ -35261,6 +35261,194 @@ describe("beat-game run lifecycle", () => {
     expect(placedBlocks).toEqual(new Set(["1:-1:0", "1:0:0", "2:0:0", "2:1:0", "3:1:0", "3:2:0"]));
   });
 
+  it("sneaks to the edge before placing a stair anchor against its own block", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: {
+        x: 0.5,
+        y: 0,
+        z: 0.5,
+        dimension: "minecraft:overworld",
+      },
+      counts: {
+        "minecraft:cobblestone": 8,
+        "minecraft:oak_log": 3,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:wooden_sword": 1,
+      },
+    });
+    driver.surfaceColumns = [
+      {
+        x: 4,
+        z: 0,
+        loaded: true,
+        surfaceY: 3,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    const key = (position: BeatGameBlockPosition) => `${position.x}:${position.y}:${position.z}`;
+    const replaceableSupports = new Set<string>();
+    for (let rise = 1; rise <= 3; rise += 1) {
+      replaceableSupports.add(`${rise}:${rise - 1}:0`);
+      replaceableSupports.add(`${rise}:${rise - 2}:0`);
+    }
+    const rejectedFirstSteps = new Set(["-1:1:0", "0:1:1", "0:1:-1"]);
+    const placedBlocks = new Set<string>();
+    const clearedBlocks = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (Object.keys(selector).length > 0) {
+        return [];
+      }
+      const position: BeatGameBlockPosition = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      const positionKey = key(position);
+      if (placedBlocks.has(positionKey)) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:cobblestone",
+          }),
+        ];
+      }
+      if (clearedBlocks.has(positionKey)) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:air",
+            diggable: false,
+            replaceable: true,
+            solid: false,
+          }),
+        ];
+      }
+      if (replaceableSupports.has(positionKey) || rejectedFirstSteps.has(positionKey)) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:water",
+            replaceable: true,
+            solid: false,
+          }),
+        ];
+      }
+      return [blockObservation(position)];
+    };
+    driver.actionObserver = (action) => {
+      const player = driver.currentObservation.player;
+      if (action.type === "set-movement" && action.forward === true && action.sneak === true) {
+        // Sneaking stops at the edge with the hitbox still on the block.
+        driver.currentObservation = {
+          ...driver.currentObservation,
+          player: {
+            ...player,
+            position: { ...player.position, x: Math.floor(player.position.x) + 1.25 },
+          },
+        };
+        return;
+      }
+      if (action.type === "dig-block") {
+        clearedBlocks.add(key(action.position));
+        return;
+      }
+      if (action.type !== "place-block") {
+        return;
+      }
+      // Like the server, refuse a side face the eyes are behind.
+      if (action.face === "east" && player.position.x <= action.against.x + 1) {
+        return;
+      }
+      const expected = { ...action.against };
+      switch (action.face) {
+        case "up":
+          expected.y += 1;
+          break;
+        case "down":
+          expected.y -= 1;
+          break;
+        case "east":
+          expected.x += 1;
+          break;
+        case "west":
+          expected.x -= 1;
+          break;
+        case "south":
+          expected.z += 1;
+          break;
+        case "north":
+          expected.z -= 1;
+          break;
+      }
+      placedBlocks.add(key(expected));
+    };
+    driver.pathResolver = (position, radius, policy) => {
+      const record = Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        if (radius === 0.35) {
+          driver.currentObservation = {
+            ...driver.currentObservation,
+            player: {
+              ...driver.currentObservation.player,
+              position,
+            },
+          };
+        }
+      });
+      return radius === 0.35
+        ? record
+        : record.pipe(
+            Effect.andThen(
+              Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "The pathfinder cannot leave the aquifer pocket",
+                }),
+              ),
+            ),
+          );
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.currentObservation.player.position.y < 4) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths.filter(({ radius }) => radius === 0.35)).toHaveLength(4);
+    expect(driver.paths[0]).toMatchObject({
+      position: {
+        x: 4.5,
+        y: 4,
+        z: 0.5,
+        dimension: "minecraft:overworld",
+      },
+      radius: 1.5,
+      policy: {
+        allowMining: true,
+        allowPlacing: true,
+        avoidFluids: true,
+        maxSearchTimeMs: 2_000,
+      },
+    });
+    expect(placedBlocks).toEqual(new Set(["1:-1:0", "1:0:0", "2:0:0", "2:1:0", "3:1:0", "3:2:0"]));
+  });
+
   it("turns a recovery stair when the current corridor becomes unsafe", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
