@@ -6,6 +6,7 @@ import {
   BeatGameRunStatus,
   decideBeatGameAction,
   defaultBeatGameStrategy,
+  fastBeatGameStrategy,
   makeSoulFireBeatGameDriver,
   type BeatGameBlockSelector,
   type BeatGameDriver,
@@ -107,6 +108,12 @@ const debugApiTimelineEntries = positiveIntegerEnvironment(
 const debugBlockQueryResultLimit = 32;
 const verboseOutput = booleanEnvironment("SOULFIRE_E2E_VERBOSE", false);
 const longTravelGate = booleanEnvironment("SOULFIRE_E2E_LONG_TRAVEL", smokeMode === "controlled");
+const riskProfile = environment("SOULFIRE_E2E_RISK_PROFILE", "SAFE");
+if (riskProfile !== "SAFE" && riskProfile !== "FAST") {
+  throw new Error(`SOULFIRE_E2E_RISK_PROFILE must be SAFE or FAST, got ${riskProfile}`);
+}
+const baseBeatGameStrategy =
+  riskProfile === "FAST" ? fastBeatGameStrategy : defaultBeatGameStrategy;
 const minecraftPort = 25_565;
 const attachedMinecraftContainer = optionalEnvironment("SOULFIRE_E2E_MINECRAFT_CONTAINER");
 const timeoutMs = positiveIntegerEnvironment(
@@ -231,6 +238,7 @@ const program = Effect.scoped(
       debugApiTimelineEntries,
       verboseOutput,
       longTravelGate,
+      riskProfile,
       fixtureConfiguration,
     });
 
@@ -1082,7 +1090,7 @@ const program = Effect.scoped(
       });
     }
     const beatGameStrategy = {
-      ...defaultBeatGameStrategy,
+      ...baseBeatGameStrategy,
       actionTimeoutMs: 600_000,
       observationPollMs: 250,
       entitySearchRadius: 320,

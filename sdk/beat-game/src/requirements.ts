@@ -1,5 +1,6 @@
 import {
   BeatGamePhase,
+  BeatGameRiskProfile,
   PortalStrategy,
   type BeatGameInventory,
   type BeatGameItemRequirement,
@@ -98,6 +99,7 @@ export const EMERGENCY_FOOD_ITEM_IDS = ["minecraft:rotten_flesh"] as const;
 export const CRITICAL_HUNGER_FOOD_LEVEL = 6;
 export const URGENT_HUNGER_FOOD_LEVEL = 10;
 const PORTAL_LOG_RESERVE = 4;
+const FAST_BED_PRIORITY = 114;
 
 export const LOG_ITEM_IDS = [
   "minecraft:oak_log",
@@ -256,6 +258,15 @@ export function requirementsForPhase(
         ? prepareOverworldRequirements(inventory, context)
         : REQUIREMENTS[phase];
   return definitions
+    .map((definition) =>
+      // A fast run takes its bed right after wood and a weapon: every night
+      // without one costs ten minutes in a shelter.
+      phase === BeatGamePhase.PREPARE_OVERWORLD &&
+      strategy.riskProfile === BeatGameRiskProfile.FAST &&
+      definition.key === "bed"
+        ? { ...definition, priority: FAST_BED_PRIORITY }
+        : definition,
+    )
     .map((definition) => materializeRequirement(definition, inventory, strategy))
     .sort((left, right) => right.priority - left.priority || left.key.localeCompare(right.key));
 }

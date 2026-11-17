@@ -1136,6 +1136,49 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it.each([
+    ["FAST", false],
+    ["SAFE", true],
+  ] as const)(
+    "with the %s profile, an armed and fed bot without a shield shelters at night: %s",
+    async (riskProfile, shelters) => {
+      const driver = new FakeBeatGameDriver();
+      driver.currentEnvironment = { gameTime: 14_000n };
+      driver.currentObservation = observation({
+        counts: { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 1 },
+      });
+      const startedActions: string[] = [];
+
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const run = yield* beatGameWithDriver(driver, {
+              strategy: { observationPollMs: 1, riskProfile },
+              hooks: { satisfyRequirement: () => Effect.never },
+            });
+            yield* run.events.pipe(
+              Stream.runForEach((event) =>
+                event.type === "action-started"
+                  ? Effect.sync(() => {
+                      startedActions.push(event.action);
+                    })
+                  : Effect.void,
+              ),
+              Effect.forkScoped,
+            );
+            while (startedActions.length === 0) {
+              yield* Effect.sleep(1);
+            }
+            yield* run.stop;
+            yield* run.awaitCompletion.pipe(Effect.result);
+          }).pipe(Effect.timeout("5 seconds")),
+        ),
+      );
+
+      expect(startedActions[0] === "survive:night-shelter").toBe(shelters);
+    },
+  );
+
   it("keeps traveling at night beneath a shallow solid roof", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
@@ -1966,6 +2009,49 @@ describe("beat-game run lifecycle", () => {
       driver.tasks.filter((task) => task.type === "attack-entity").map((task) => task.target),
     ).toEqual(sheep.map(({ networkId }) => expect.objectContaining({ networkId })));
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
+  });
+
+  it("takes a nearby village bed instead of hunting sheep", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_sword": 1,
+        "minecraft:cooked_beef": 5,
+        "minecraft:cobblestone": 20,
+      },
+    });
+    const villageBed = blockObservation(
+      { x: 6, y: 64, z: 2, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:red_bed" },
+    );
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:red_bed") === true ? [villageBed] : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.tasks.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(driver.tasks[0]).toMatchObject({
+      type: "collect-blocks",
+      blockIds: expect.arrayContaining(["minecraft:red_bed", "minecraft:white_bed"]),
+      count: 1,
+    });
   });
 
   it("hunts only unsheared sheep of the wool color it already holds", async () => {

@@ -3,12 +3,25 @@ import { describe, expect, it } from "vitest";
 import {
   BeatGamePhase,
   defaultBeatGameStrategy,
+  fastBeatGameStrategy,
   PortalStrategy,
   requirementsForPhase,
 } from "../src/index.js";
 import { observation } from "./fixtures.js";
 
 describe("beat-game requirements", () => {
+  it("takes the bed right after wood and a weapon in a fast run", () => {
+    const order = (strategy: typeof defaultBeatGameStrategy) =>
+      requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(
+        ({ key }) => key,
+      );
+
+    expect(order(fastBeatGameStrategy).slice(0, 3)).toEqual(["logs", "basic-melee-weapon", "bed"]);
+    expect(order(defaultBeatGameStrategy).indexOf("bed")).toBeGreaterThan(
+      order(defaultBeatGameStrategy).indexOf("cobblestone"),
+    );
+  });
+
   it("counts interchangeable item choices without double counting tags", () => {
     const inventory = observation({
       counts: {

@@ -63,6 +63,7 @@ import {
   BeatGameDurableSkillStatus,
   BeatGamePathSearchMode,
   BeatGamePhase,
+  BeatGameRiskProfile,
   BeatGameRunStatus,
   BeatGameTeamRole,
   PortalStrategy,
@@ -190,6 +191,15 @@ const REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES = 100_000;
 const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 const REMEMBERED_PORTAL_REPLAN_DELAY_MS = 1_000;
 const MAX_SAFE_DEATH_RECOVERY_FAILURES = 3;
+// A fast run gives up on a corpse after one failed preparation: rebuilding
+// the kit is faster than the hours a distant recovery can take.
+const MAX_FAST_DEATH_RECOVERY_FAILURES = 1;
+
+function deathRecoveryFailureLimit(strategy: BeatGameStrategy): number {
+  return strategy.riskProfile === BeatGameRiskProfile.FAST
+    ? MAX_FAST_DEATH_RECOVERY_FAILURES
+    : MAX_SAFE_DEATH_RECOVERY_FAILURES;
+}
 const MAXIMUM_DEATH_RECOVERY_SAFETY_INTERRUPTS = 6;
 const DEATH_RECOVERY_PREPARATION_PROGRESS_DISTANCE = 8;
 const DISTANT_DEATH_RECOVERY_BOOTSTRAP_DISTANCE = 128;
@@ -1460,12 +1470,19 @@ function shouldTakeNightShelter(
     if (yield* isSafelyBelowOverworldSurface(state.driver, observation)) {
       return false;
     }
+    // A fast run keeps working through the night once it can fight back and
+    // eat, instead of losing ten minutes in a shelter.
     const protectedForNightTravel =
-      hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
-      hasMeleeWeapon(observation) &&
-      observation.player.health >= state.strategy.minimumHealth &&
-      observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
-      countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 4;
+      state.strategy.riskProfile === BeatGameRiskProfile.FAST
+        ? hasMeleeWeapon(observation) &&
+          observation.player.health >= state.strategy.minimumHealth &&
+          observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
+          countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 1
+        : hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
+          hasMeleeWeapon(observation) &&
+          observation.player.health >= state.strategy.minimumHealth &&
+          observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
+          countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 4;
     if (protectedForNightTravel) {
       return false;
     }
@@ -3142,7 +3159,7 @@ function executeDecision(
             }
             const exhaustedPreparationAttempts =
               deathRecoveryFailureCount(actionCheckpoint, pendingDeath.observedAt, "preparation") >=
-              MAX_SAFE_DEATH_RECOVERY_FAILURES;
+              deathRecoveryFailureLimit(state.strategy);
             if (pendingDeath.recoverItems && exhaustedPreparationAttempts) {
               return yield* abandonPendingDeath(
                 state,
@@ -3153,7 +3170,7 @@ function executeDecision(
             }
             const exhaustedPickupAttempts =
               deathRecoveryFailureCount(actionCheckpoint, pendingDeath.observedAt, "pickup") >=
-              MAX_SAFE_DEATH_RECOVERY_FAILURES;
+              deathRecoveryFailureLimit(state.strategy);
             if (pendingDeath.recoverItems && exhaustedPickupAttempts) {
               return yield* abandonPendingDeath(
                 state,
@@ -3214,7 +3231,7 @@ function executeDecision(
                       pendingDeath.observedAt,
                       "preparation",
                     );
-                if (preparationFailures >= MAX_SAFE_DEATH_RECOVERY_FAILURES) {
+                if (preparationFailures >= deathRecoveryFailureLimit(state.strategy)) {
                   return yield* abandonPendingDeath(
                     state,
                     pendingDeath,
@@ -3327,7 +3344,7 @@ function executeDecision(
                         "preparation",
                       );
                 const recoveryClass = classifyDeathRecoveryInventory(pendingDeath.inventoryCounts);
-                if (preparationFailures >= MAX_SAFE_DEATH_RECOVERY_FAILURES) {
+                if (preparationFailures >= deathRecoveryFailureLimit(state.strategy)) {
                   return yield* abandonPendingDeath(
                     state,
                     pendingDeath,
@@ -3432,7 +3449,7 @@ function executeDecision(
                   Effect.as(0),
                 )
               : yield* recordDeathRecoveryFailure(state, pendingDeath.observedAt, "pickup");
-            if (recoveryFailures >= MAX_SAFE_DEATH_RECOVERY_FAILURES) {
+            if (recoveryFailures >= deathRecoveryFailureLimit(state.strategy)) {
               return yield* abandonPendingDeath(
                 state,
                 pendingDeath,
@@ -8673,6 +8690,33 @@ function satisfyBedRequirement(
   if (craftableBed !== undefined) {
     return craftWithTable(state, observation, craftableBed, 1);
   }
+  return Effect.gen(function* () {
+    // Villages have beds, and taking one is far faster than shearing sheep.
+    const placedBeds = yield* state.driver.queryBlocks({
+      center: observation.player.position,
+      radius: state.strategy.blockSearchRadius,
+      selector: { blockIds: BED_ITEM_IDS },
+      maximumResults: 1,
+    });
+    if (placedBeds.length > 0) {
+      const taken = yield* collectBlocks(state.driver, {
+        blockIds: BED_ITEM_IDS,
+        count: 1,
+        searchRadius: state.strategy.blockSearchRadius,
+        path: state.strategy.path,
+      }).pipe(Effect.result);
+      if (taken._tag === "Success") {
+        return;
+      }
+    }
+    yield* huntSheepForBed(state, observation);
+  });
+}
+
+function huntSheepForBed(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   // A bed needs three wool of one color. Each sheep drops one wool of its own
   // color, so the bot hunts the color it already holds most of, and only
   // unsheared sheep, which still drop wool.

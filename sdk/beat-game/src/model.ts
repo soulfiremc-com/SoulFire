@@ -55,6 +55,17 @@ export const PortalStrategy = {
 
 export type PortalStrategy = (typeof PortalStrategy)[keyof typeof PortalStrategy];
 
+// How much risk the runner accepts to save time. SAFE hides through every
+// night it is not fully equipped for and walks back for every corpse. FAST
+// travels at night when armed and fed, retreats only when badly hurt, and
+// gives up on a distant corpse after one failed preparation.
+export const BeatGameRiskProfile = {
+  SAFE: "SAFE",
+  FAST: "FAST",
+} as const;
+
+export type BeatGameRiskProfile = (typeof BeatGameRiskProfile)[keyof typeof BeatGameRiskProfile];
+
 export const BeatGamePathSearchMode = {
   PRECISION: "PRECISION",
   NORMAL: "NORMAL",
@@ -130,6 +141,7 @@ export interface BeatGamePathPolicy {
 
 export interface BeatGameStrategy {
   readonly portalStrategy: PortalStrategy;
+  readonly riskProfile: BeatGameRiskProfile;
   readonly targetFoodCount: number;
   readonly targetLogCount: number;
   readonly targetCobblestoneCount: number;
@@ -158,6 +170,7 @@ export type BeatGameStrategyOptions = Partial<Omit<BeatGameStrategy, "path">> & 
 
 export const defaultBeatGameStrategy: BeatGameStrategy = {
   portalStrategy: PortalStrategy.AUTO,
+  riskProfile: BeatGameRiskProfile.SAFE,
   targetFoodCount: 16,
   targetLogCount: 8,
   targetCobblestoneCount: 20,
@@ -186,6 +199,16 @@ export const defaultBeatGameStrategy: BeatGameStrategy = {
     maximumExpandedStates: 50_000,
     maxParkourGap: 0,
   },
+};
+
+// Trades safety margins for speed. Food targets cover the trip with a little
+// spare, and the bot retreats only when it is badly hurt.
+export const fastBeatGameStrategy: BeatGameStrategy = {
+  ...defaultBeatGameStrategy,
+  riskProfile: BeatGameRiskProfile.FAST,
+  targetFoodCount: 8,
+  targetEnderPearlCount: 12,
+  minimumHealth: 12,
 };
 
 export interface BeatGameItemRequirement {
