@@ -106,6 +106,8 @@ const PORTAL_LOG_RESERVE = 4;
 const FAST_BED_PRIORITY = 114;
 // Below iron (103) and the shield (102).
 const FAST_COOKED_FOOD_PRIORITY = 101;
+// Above the small food supply (112).
+const FAST_READY_SHIELD_PRIORITY = 113;
 const DRAGON_BED_COUNT = 4;
 
 export const LOG_ITEM_IDS = [
@@ -283,7 +285,14 @@ export function requirementsForPhase(
           // comes first; the full stock waits for the iron and the shield.
           fastPreparation && definition.key === "food"
           ? { ...definition, priority: FAST_COOKED_FOOD_PRIORITY }
-          : definition,
+          : // Once the iron is in hand the shield is a few seconds of
+            // crafting, and every night without it costs a shelter. A live
+            // run held four iron for a whole day while it searched for food.
+            fastPreparation &&
+              definition.key === "shield" &&
+              (inventory.counts["minecraft:iron_ingot"] ?? 0) > 0
+            ? { ...definition, priority: FAST_READY_SHIELD_PRIORITY }
+            : definition,
     )
     .map((definition) => materializeRequirement(definition, inventory, strategy))
     .sort((left, right) => right.priority - left.priority || left.key.localeCompare(right.key));

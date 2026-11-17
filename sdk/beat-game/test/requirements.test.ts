@@ -47,6 +47,25 @@ describe("beat-game requirements", () => {
     );
   });
 
+  it("crafts the shield before the food supply once a fast run holds iron", () => {
+    const order = (strategy: typeof defaultBeatGameStrategy, iron: number) =>
+      requirementsForPhase(
+        BeatGamePhase.PREPARE_OVERWORLD,
+        observation({ counts: { "minecraft:iron_ingot": iron } }).inventory,
+        strategy,
+      ).map(({ key }) => key);
+
+    expect(order(fastBeatGameStrategy, 1).indexOf("shield")).toBeLessThan(
+      order(fastBeatGameStrategy, 1).indexOf("food-supply"),
+    );
+    expect(order(fastBeatGameStrategy, 0).indexOf("shield")).toBeGreaterThan(
+      order(fastBeatGameStrategy, 0).indexOf("food-supply"),
+    );
+    expect(order(defaultBeatGameStrategy, 1).indexOf("shield")).toBeGreaterThan(
+      order(defaultBeatGameStrategy, 1).indexOf("food-supply"),
+    );
+  });
+
   it("counts interchangeable item choices without double counting tags", () => {
     const inventory = observation({
       counts: {
