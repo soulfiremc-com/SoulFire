@@ -1,0 +1,61 @@
+name: SDK Reference
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/sdk-reference.yml"
+      - "bun.lock"
+      - "proto/**"
+      - "sdk/python/**"
+      - "sdk/reference/**"
+      - "sdk/typescript/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-reference-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.site }} reference
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - site: typescript
+            mode: production
+          - site: python
+            mode: python
+    defaults:
+      run:
+        working-directory: sdk/reference
+    env:
+      CF_SEND_TELEMETRY: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.4"
+      - name: Set up Python
+        if: matrix.site == 'python'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bun run build:${{ matrix.site }}
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bunx cf deploy --prebuilt --mode ${{ matrix.mode }}

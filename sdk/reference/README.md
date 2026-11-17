@@ -46,16 +46,9 @@ bun run deploy:python
 The default configuration publishes TypeScript. The `python` mode publishes Python.
 Each deploy command builds its site before it uploads the output.
 
-Cloudflare Workers Builds watches `main` for changes to SDK source and reference tooling.
-The build triggers use `sdk/reference` as the root directory:
-
-| Site       | Build command              | Deploy command                            |
-| ---------- | -------------------------- | ----------------------------------------- |
-| TypeScript | `bun run build:typescript` | `bunx cf deploy --prebuilt`               |
-| Python     | `bun run build:python`     | `bunx cf deploy --prebuilt --mode python` |
-
-Both triggers use `BUN_VERSION=1.4.2`. Python also uses `PYTHON_VERSION=3.14`.
-These triggers publish documentation. They add no GitHub Actions validation jobs.
+The SDK Reference workflow deploys both sites from `main` when SDK source, protocol definitions, or reference tooling change.
+You can also start it by hand from the Actions tab.
+It needs the `CLOUDFLARE_API_TOKEN` secret, an account API token that can edit Workers scripts and the routes in the `soulfiremc.com` zone.
 
 ## Update
 
