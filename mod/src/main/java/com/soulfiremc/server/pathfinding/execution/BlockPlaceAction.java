@@ -113,6 +113,11 @@ public final class BlockPlaceAction implements WorldAction {
     var clientEntity = connection.minecraft().player;
 
     connection.controlState().resetAll();
+    // Waiting for an item or a server confirmation takes several ticks, and
+    // a player on a vine slides down the whole time unless it sneaks.
+    if (clientEntity.onClimbable()) {
+      connection.controlState().shift(true);
+    }
 
     if (placementItem == null) {
       placementItem = ItemPlaceHelper.placeBestBlockInHand(

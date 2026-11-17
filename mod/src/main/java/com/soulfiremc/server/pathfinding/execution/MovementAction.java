@@ -37,6 +37,7 @@ import net.minecraft.world.phys.Vec3;
 @Slf4j
 @RequiredArgsConstructor
 public final class MovementAction implements WorldAction {
+  private static final double CLIMBABLE_HOLD_MAXIMUM_DROP = 0.5;
   private static final double STEP_HEIGHT = 0.6;
   private static final double TARGET_HEIGHT_TOLERANCE = 0.25;
   @Getter
@@ -252,6 +253,18 @@ public final class MovementAction implements WorldAction {
       // instead of walking whenever the player can sprint.
       controlState.sprint(pathConstraint.sprint() && movementInput.forward());
     }
+
+    if (!needsJump && holdsClimbableHeight(climbing, botPosition.y, targetMiddleBlock.y)) {
+      connection.controlState().shift(true);
+    }
+  }
+
+  /// A player on a vine or ladder slides down unless it climbs or sneaks. A
+  /// live bot slid down a vine wall while stepping across it and dropped
+  /// eighteen blocks off the edge of the vines, so it sneaks to hold its
+  /// height unless the target is a full block below.
+  static boolean holdsClimbableHeight(boolean climbing, double currentY, double targetY) {
+    return climbing && currentY - targetY < CLIMBABLE_HOLD_MAXIMUM_DROP;
   }
 
   static MovementInput movementInputFor(

@@ -178,6 +178,16 @@ final class MovementActionTest {
   }
 
   @Test
+  void sneaksToHoldItsHeightOnAClimbableUnlessHeadingDown() {
+    // Stepping across a vine wall at the same height
+    assertTrue(MovementAction.holdsClimbableHeight(true, 98.0, 98.0));
+    assertTrue(MovementAction.holdsClimbableHeight(true, 98.2, 98.0));
+    // Climbing down to a block below
+    assertFalse(MovementAction.holdsClimbableHeight(true, 99.0, 98.0));
+    assertFalse(MovementAction.holdsClimbableHeight(false, 98.0, 98.0));
+  }
+
+  @Test
   void acceptsWaterWithoutASolidFloorAsASwimmingTarget() {
     assertTrue(MovementAction.hasValidTargetStates(
       Blocks.WATER.defaultBlockState(),
