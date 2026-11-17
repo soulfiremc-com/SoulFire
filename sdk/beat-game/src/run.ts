@@ -774,6 +774,9 @@ const FAST_PURSUER_ADDITIONAL_DIRECT_ESCAPE_ATTEMPTS = 2;
 const EMERGENCY_ESCAPE_FLUID_PROJECTION_DISTANCE = 2;
 const EMERGENCY_ESCAPE_SURFACE_PROJECTION_DISTANCE = 10;
 const RANGED_ESCAPE_SURFACE_PROJECTION_DISTANCE = 18;
+// Long enough for a skeleton without line of sight to lose interest and for
+// the bot to regain a few hearts.
+const RANGED_COVER_WAIT_MS = 15_000;
 const CREEPER_ESCAPE_SPRINT_MS = 2_500;
 const CREEPER_ESCAPE_SPRINT_SEGMENT_MS = 350;
 const CREEPER_ESCAPE_MINIMUM_SEGMENT_DISTANCE = 0.5;
@@ -4886,7 +4889,8 @@ function escapeFromTarget(
                 : dynamicEscape;
     type EscapeNavigationFallback =
       | { readonly type: "escape-route-failed" }
-      | { readonly type: "defended" };
+      | { readonly type: "defended" }
+      | { readonly type: "covered" };
     const mustContinueEscaping =
       ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) ||
       groupAggroRisk ||
@@ -4920,6 +4924,11 @@ function escapeFromTarget(
             return {
               type: "escape-route-failed",
             } satisfies EscapeNavigationFallback;
+          }
+          // Fighting one of several archers only trades the failed escape for
+          // another escape once the ambush check sees the rest.
+          if (yield* takeCoverFromRangedFire(state, current, target)) {
+            return { type: "covered" } satisfies EscapeNavigationFallback;
           }
           yield* defendAgainstTarget(state, target);
           return { type: "defended" } satisfies EscapeNavigationFallback;
@@ -4963,6 +4972,39 @@ function escapeFromTarget(
   });
 }
 
+// Two skeletons shot a live run to death on a mountain top while it had no
+// escape route and 66 cobblestone. Walls stop arrows, so a bot that cannot
+// run walls itself in and waits behind them.
+function takeCoverFromRangedFire(
+  state: RunState,
+  observation: BeatGameObservation,
+  threat: BeatGameEntityObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  if (!PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType)) {
+    return Effect.succeed(false);
+  }
+  return Effect.gen(function* () {
+    const enclosure = yield* encloseNightShelterInPlace(state, observation).pipe(
+      Effect.catchTag("BeatGameDriverError", () => Effect.succeed(undefined)),
+    );
+    if (enclosure === undefined) {
+      return false;
+    }
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Walled in against a ranged attacker after the escape route failed",
+      data: {
+        threatNetworkId: threat.networkId,
+        threatType: threat.entityType,
+        position: observation.player.position,
+        placedBlocks: enclosure.placed.length,
+      },
+    });
+    yield* Effect.sleep(RANGED_COVER_WAIT_MS);
+    return true;
+  });
+}
+
 function recoverAfterFailedEscape(
   state: RunState,
   escapedTarget: BeatGameEntityObservation,
@@ -4970,6 +5012,9 @@ function recoverAfterFailedEscape(
   return Effect.gen(function* () {
     const observation = yield* state.driver.observe;
     if (observation.player.dead) {
+      return;
+    }
+    if (yield* takeCoverFromRangedFire(state, observation, escapedTarget)) {
       return;
     }
     const nearbyThreat = yield* findNearbyAttackThreat(state, observation);
@@ -13372,7 +13417,7 @@ function sneakPastSupportEdge(
         break;
       }
     }
-    yield* state.driver.act({ type: "set-movement", sneak: true });
+    yield* state.driver.act({ type: "set-movement", forward: false, sneak: true });
   });
 }
 
