@@ -5007,10 +5007,20 @@ function takeCoverFromRangedFire(
   observation: BeatGameObservation,
   threat: BeatGameEntityObservation,
 ): Effect.Effect<boolean, BeatGameDriverError> {
-  if (!PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType)) {
-    return Effect.succeed(false);
-  }
   return Effect.gen(function* () {
+    // A live run fled a zombie with two skeletons behind it and died to
+    // their arrows, so any archer nearby counts, not only the one escaped.
+    const archerNearby =
+      PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType) ||
+      (yield* state.driver.queryEntities({
+        origin: observation.player.position,
+        radius: RANGED_THREAT_ESCAPE_TRIGGER_RADIUS,
+        selector: { entityTypes: [...PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES], alive: true },
+        maximumResults: 1,
+      })).length > 0;
+    if (!archerNearby) {
+      return false;
+    }
     const enclosure = yield* encloseNightShelterInPlace(state, observation).pipe(
       Effect.catchTag("BeatGameDriverError", () => Effect.succeed(undefined)),
     );
