@@ -3377,6 +3377,111 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("keeps swimming toward dry ground while air is still above the critical level", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:dirt": 1,
+        "minecraft:wooden_sword": 1,
+      },
+      onGround: false,
+      position: { x: 0.5, y: 62, z: 0.5 },
+    });
+    driver.surfaceColumns = [-1, 0, 1].flatMap((deltaX) =>
+      [-1, 0, 1].map((deltaZ) => ({
+        x: 4 + deltaX,
+        z: deltaZ,
+        loaded: true,
+        surfaceY: 63,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      })),
+    );
+    driver.blockQueryResolver = ({ center, selector }) => {
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return position.x === 0 && position.z === 0
+          ? [
+              blockObservation(position, {
+                blockId: "minecraft:water",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              }),
+            ]
+          : [];
+      }
+      if (
+        position.x >= 3 &&
+        position.x <= 5 &&
+        position.z >= -1 &&
+        position.z <= 1 &&
+        position.y === 63
+      ) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:grass_block",
+          }),
+        ];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    // As in a live run, the swim takes a few seconds underwater, so air falls
+    // below the usual safety margin while plenty is left.
+    let interruptedSwims = 0;
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          counts: driver.currentObservation.inventory.counts,
+          onGround: false,
+          position: { x: 0.5, y: 62, z: 0.5 },
+          air: 200,
+        });
+      }).pipe(
+        Effect.andThen(Effect.never),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            interruptedSwims += 1;
+          }),
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.paths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(500);
+          expect(interruptedSwims).toBe(0);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths).toHaveLength(1);
+  }, 10_000);
+
   it("recovers to the water surface when no dry shelter ground is loaded", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

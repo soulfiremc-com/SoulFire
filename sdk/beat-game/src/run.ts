@@ -6190,6 +6190,7 @@ function isUrgentCorpseRecoveryFoodSearch(
 
 function waitForUnsafeAir(
   state: RunState,
+  minimumAirTicks = MINIMUM_SAFE_AIR_TICKS,
 ): Effect.Effect<"dead" | "unsafe-air", BeatGameDriverError> {
   const poll = (): Effect.Effect<"dead" | "unsafe-air", BeatGameDriverError> =>
     Effect.sleep(Math.max(100, state.strategy.observationPollMs)).pipe(
@@ -6197,7 +6198,8 @@ function waitForUnsafeAir(
       Effect.flatMap((observation) =>
         observation.player.dead
           ? Effect.succeed("dead" as const)
-          : hasUnsafeAir(observation)
+          : observation.player.maxAir > 0 &&
+              observation.player.air <= Math.min(minimumAirTicks, observation.player.maxAir)
             ? Effect.succeed("unsafe-air" as const)
             : Effect.suspend(poll),
       ),
@@ -6807,7 +6809,10 @@ function pathfindTowardDrySurface(
           }),
           Effect.catchTag("BeatGameDriverError", () => Effect.void),
         ),
-      waitForUnsafeAir(state).pipe(Effect.asVoid),
+      // The swim starts with enough air for its path, and the route search
+      // alone can take seconds underwater. Stopping at the usual safety margin
+      // cancelled every swim in a live run before the bot moved.
+      waitForUnsafeAir(state, AIR_ESCAPE_CRITICAL_AIR_TICKS).pipe(Effect.asVoid),
     );
     const current = yield* state.driver.observe;
     if (current.player.dead) {
