@@ -191,6 +191,10 @@ const REMEMBERED_PORTAL_FALLBACK_QUALITY_BOUND = 3;
 const PORTAL_CAREFUL_QUALITY_BOUND = 1.2;
 const REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES = 100_000;
 const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
+// A failed route that still brought the bot this much closer counts as
+// progress. Each failure without it costs half the route's confidence.
+const REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS = 16;
+const REMEMBERED_PORTAL_ROUTE_STALL_PENALTY = 0.5;
 const REMEMBERED_PORTAL_REPLAN_DELAY_MS = 1_000;
 const MAX_SAFE_DEATH_RECOVERY_FAILURES = 3;
 // A fast run gives up on a corpse after one failed preparation: rebuilding
@@ -16389,7 +16393,9 @@ function invalidatePortalEvidence(
         ),
         portalWorkspaces: checkpoint.memory.portalWorkspaces.map(downgradeWorkspace),
         unreachable: checkpoint.memory.unreachable.filter(
-          ({ key, value }) => !key.startsWith("portal-route:") || !matchesPortal(value),
+          ({ key, value }) =>
+            key !== `portal-route-progress:${positionKey(portal)}` &&
+            (!key.startsWith("portal-route:") || !matchesPortal(value)),
         ),
       },
     };
@@ -16413,41 +16419,71 @@ function markPortalRouteUnavailable(
   portal: BeatGamePosition,
   reason: string,
 ): Effect.Effect<void, BeatGameError> {
-  return persist(state, (checkpoint) => {
-    const observedAt = new Date().toISOString();
-    const matchesPortal = (position: BeatGamePosition) =>
-      position.dimension === portal.dimension && distanceSquared(position, portal) <= 8 ** 2;
-    return {
-      ...checkpoint,
-      memory: {
-        ...checkpoint.memory,
-        unreachable: [
-          ...checkpoint.memory.unreachable.filter(
-            ({ key, value }) => !key.startsWith("portal-route:") || !matchesPortal(value),
-          ),
-          {
-            key: `portal-route:${positionKey(portal)}`,
-            value: portal,
-            observedAt,
-            expiresAt: new Date(Date.now() + REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS).toISOString(),
-            confidence: 1,
-          },
-        ].slice(-64),
-      },
-    };
-  }).pipe(
-    Effect.andThen(
-      emit(state, {
-        type: "diagnostic",
-        message: "Remembered portal route is temporarily unavailable",
-        data: {
-          portal: positionKey(portal),
-          reason,
+  return Effect.gen(function* () {
+    // A live run spent an hour retrying a remembered portal it could not
+    // reach, mining cobblestone for bridges between tries, and never planned
+    // a portal of its own. Routes that keep failing without bringing the bot
+    // closer lose their portal.
+    const current = (yield* Ref.get(state.observation)).player.position;
+    const progressKey = `portal-route-progress:${positionKey(portal)}`;
+    let routeConfidence = 1;
+    yield* persist(state, (checkpoint) => {
+      const observedAt = new Date().toISOString();
+      const matchesPortal = (position: BeatGamePosition) =>
+        position.dimension === portal.dimension && distanceSquared(position, portal) <= 8 ** 2;
+      const previous = checkpoint.memory.unreachable.find(({ key }) => key === progressKey);
+      const madeProgress =
+        previous === undefined ||
+        current.dimension !== previous.value.dimension ||
+        Math.sqrt(distanceSquared(current, portal)) <=
+          Math.sqrt(distanceSquared(previous.value, portal)) -
+            REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS;
+      routeConfidence = madeProgress
+        ? 1
+        : Math.max(0, previous.confidence - REMEMBERED_PORTAL_ROUTE_STALL_PENALTY);
+      return {
+        ...checkpoint,
+        memory: {
+          ...checkpoint.memory,
+          unreachable: [
+            ...checkpoint.memory.unreachable.filter(
+              ({ key, value }) =>
+                key !== progressKey && (!key.startsWith("portal-route:") || !matchesPortal(value)),
+            ),
+            {
+              key: `portal-route:${positionKey(portal)}`,
+              value: portal,
+              observedAt,
+              expiresAt: new Date(Date.now() + REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS).toISOString(),
+              confidence: 1,
+            },
+            {
+              key: progressKey,
+              value: madeProgress ? current : previous.value,
+              observedAt,
+              confidence: routeConfidence,
+            },
+          ].slice(-64),
         },
-      }),
-    ),
-    Effect.asVoid,
-  );
+      };
+    });
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Remembered portal route is temporarily unavailable",
+      data: {
+        portal: positionKey(portal),
+        reason,
+        routeConfidence,
+      },
+    });
+    if (routeConfidence <= 0) {
+      yield* invalidatePortalEvidence(
+        state,
+        portal,
+        "remembered portal route kept failing without progress",
+      );
+    }
+  });
 }
 
 function isPortalRouteOnCooldown(

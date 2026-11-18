@@ -29034,6 +29034,119 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it.each([
+    { label: "forgets", previousX: 0, expectedConfidence: 0 },
+    { label: "keeps", previousX: -100, expectedConfidence: 1 },
+  ])(
+    "$label a remembered portal when its failed route did not bring the bot closer",
+    async ({ previousX, expectedConfidence }) => {
+      const driver = new FakeBeatGameDriver();
+      const store = new InMemoryBeatGameCheckpointStore();
+      const runId = `stalled-portal-route-${previousX}`;
+      const teamId = `stalled-portal-route-team-${previousX}`;
+      const observedAt = "2026-01-01T00:00:00.000Z";
+      const portalPosition = { x: 64, y: 64, z: 0, dimension: "minecraft:overworld" };
+      const portal = blockObservation(portalPosition, {
+        blockId: "minecraft:nether_portal",
+        diggable: false,
+        solid: false,
+        observedAt,
+      });
+      const initial = checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId });
+      await Effect.runPromise(
+        store.save(
+          {
+            ...initial,
+            memory: {
+              ...initial.memory,
+              portals: [
+                {
+                  key: "portal:minecraft:overworld:64:64:0",
+                  value: portal,
+                  observedAt,
+                  confidence: 1,
+                },
+              ],
+              // An earlier route already failed once without progress.
+              unreachable: [
+                {
+                  key: "portal-route-progress:minecraft:overworld:64:64:0",
+                  value: { x: previousX, y: 64, z: 0, dimension: "minecraft:overworld" },
+                  observedAt,
+                  confidence: 0.5,
+                },
+              ],
+            },
+          },
+          undefined,
+        ),
+      );
+      driver.currentObservation = observation({
+        position: { x: 0, y: 64, z: 0, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:cooked_beef": 8,
+          "minecraft:oak_log": 4,
+          "minecraft:cobblestone": 20,
+          "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:shield": 1,
+        },
+      });
+      driver.blockQueryResolver = () => [];
+      driver.pathResolver = (position, radius, policy) =>
+        Effect.sync(() => {
+          driver.paths.push({ position, radius, policy });
+        }).pipe(Effect.andThen(Effect.fail(noRoute("pathfind"))));
+      const routeFailures: unknown[] = [];
+
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const run = yield* beatGameWithDriver(driver, {
+              runId,
+              team: { teamId },
+              checkpointStore: store,
+              strategy: { observationPollMs: 1 },
+            });
+            yield* run.events.pipe(
+              Stream.runForEach((event) =>
+                event.type === "diagnostic" &&
+                event.message === "Remembered portal route is temporarily unavailable"
+                  ? Effect.sync(() => {
+                      routeFailures.push(event.data);
+                    })
+                  : Effect.void,
+              ),
+              Effect.forkScoped,
+            );
+            yield* sleepWhile(() => routeFailures.length === 0);
+            for (let polls = 0; polls < 200; polls += 1) {
+              const saved = yield* store.load(runId);
+              if (
+                expectedConfidence === 1 ||
+                saved?.planner.requirements.some(({ key }) => key === "lava-bucket") === true
+              ) {
+                break;
+              }
+              yield* Effect.sleep(5);
+            }
+            yield* run.stop;
+            yield* run.awaitCompletion.pipe(Effect.result);
+          }).pipe(Effect.timeout("5 seconds")),
+        ),
+      );
+
+      const saved = await Effect.runPromise(store.load(runId));
+      expect(saved?.memory.portals[0]?.confidence).toBe(expectedConfidence);
+      // Forgetting the portal restores the requirements for building one.
+      expect(
+        saved?.planner.requirements.some(
+          ({ key, satisfied }) => key === "lava-bucket" && !satisfied,
+        ),
+      ).toBe(expectedConfidence === 0);
+    },
+  );
+
   it("does not resume construction while a confirmed portal route cools down", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
