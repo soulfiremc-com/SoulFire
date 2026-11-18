@@ -163,7 +163,7 @@ export function inferNetherPortalFrames(
         .length,
     }))
     .filter(({ matchingBlocks }) => matchingBlocks > 0)
-    .sort(
+    .toSorted(
       (left, right) =>
         right.matchingBlocks - left.matchingBlocks ||
         distanceSquared(left.frame.origin, reference) -

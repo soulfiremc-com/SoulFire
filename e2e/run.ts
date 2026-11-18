@@ -35,7 +35,7 @@ const { values: flags, positionals: names } = parseArgs({
 const tests: E2ETest[] = [];
 for (const file of readdirSync(path.join(E2E_DIR, "tests"))
   .filter((f) => f.endsWith(".ts"))
-  .sort()) {
+  .toSorted()) {
   tests.push((await import(path.join(E2E_DIR, "tests", file))).default);
 }
 if (!tests.length) throw new Error("no tests in tests/");

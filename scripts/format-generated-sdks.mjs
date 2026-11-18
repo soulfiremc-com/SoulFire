@@ -75,5 +75,5 @@ async function generatedTypeScriptModules(directory, relative = "") {
       modules.push(entryRelative);
     }
   }
-  return modules.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return modules.toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }

@@ -131,7 +131,7 @@ export function buildSmokeSpatialDiagnostics(input: SmokeSpatialDiagnosticsInput
       offset: offset(input.origin, block.position),
       distance: distance(input.origin, block.position),
     }))
-    .sort(compareDistance);
+    .toSorted(compareDistance);
   const entities = input.entities
     .map((entity) => {
       const relativePosition = offset(input.origin, entity.position);
@@ -158,7 +158,7 @@ export function buildSmokeSpatialDiagnostics(input: SmokeSpatialDiagnosticsInput
         closingSpeed: Math.max(0, -radialVelocity),
       } as const;
     })
-    .sort(compareDistance);
+    .toSorted(compareDistance);
   const loadedSurface = input.surface.filter((column) => column.loaded);
   const surfaceHeights = loadedSurface.flatMap((column) =>
     column.surfaceY === undefined ? [] : [column.surfaceY],
@@ -253,7 +253,7 @@ export function buildSmokeDecisionDiagnostics(input: SmokeDecisionDiagnosticsInp
       missingCount: Math.max(0, requirement.targetCount - requirement.currentCount),
     }));
   const rememberedDeaths = [...checkpoint.memory.deathPositions]
-    .sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt))
+    .toSorted((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt))
     .map((entry) => ({
       key: entry.key,
       observedAt: entry.observedAt,
@@ -395,7 +395,7 @@ export function buildSmokeStuckDiagnostics(input: SmokeStuckDiagnosticsInput) {
   const activity = input.activity
     .flatMap(parseSmokeProgressActivity)
     .filter((entry) => entry.observedAtMs <= capturedAtMs)
-    .sort((left, right) => left.observedAtMs - right.observedAtMs);
+    .toSorted((left, right) => left.observedAtMs - right.observedAtMs);
   const findings: SmokeStuckFinding[] = [];
   const actionStarted = activity.findLast(
     (entry) => entry.kind === "action-started" && entry.action === input.currentAction,
@@ -1053,8 +1053,8 @@ function summarizeCollectionTaskAttempts(
   return [...attempts].map(([taskId, attempt]) => ({
     taskId,
     observedAt: attempt.latest.observedAt,
-    targets: [...attempt.targets].sort(),
-    failedApproachPositions: [...attempt.failedApproachPositions].sort(),
+    targets: [...attempt.targets].toSorted(),
+    failedApproachPositions: [...attempt.failedApproachPositions].toSorted(),
     completedBreaks: attempt.completedBreaks,
     current: attempt.current,
     consecutiveStalledPaths: attempt.consecutiveStalledPaths,
@@ -1081,7 +1081,7 @@ function mostRepeatedCollectionTarget(attempts: readonly SmokeCollectionTaskAtte
   return [...attemptsByTarget]
     .filter(([, matching]) => matching.length >= 3)
     .map(([target, matching]) => ({ target, attempts: matching }))
-    .sort(
+    .toSorted(
       (left, right) =>
         right.attempts.length - left.attempts.length || left.target.localeCompare(right.target),
     )
@@ -1099,7 +1099,7 @@ function mostRepeatedDetail(
   }
   return [...counts]
     .map(([detail, count]) => ({ detail, count }))
-    .sort((left, right) => right.count - left.count || left.detail.localeCompare(right.detail))
+    .toSorted((left, right) => right.count - left.count || left.detail.localeCompare(right.detail))
     .at(0);
 }
 
@@ -1118,7 +1118,7 @@ function countsBy<T>(
   }
   return [...counts]
     .map(([id, count]) => ({ id, count }))
-    .sort((left, right) => right.count - left.count || left.id.localeCompare(right.id));
+    .toSorted((left, right) => right.count - left.count || left.id.localeCompare(right.id));
 }
 
 function offset(

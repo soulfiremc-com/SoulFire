@@ -144,7 +144,7 @@ export default {
           const blocked = yield* bot.world.player();
           const serverHealth = yield* rcon(`data get entity ${BOT_NAME} Health`);
           yield* check(
-            blocked.health === 20 && /: 20\.0f$/.test(serverHealth),
+            blocked.health === 20 && serverHealth.endsWith(": 20.0f"),
             `${mode} failed to block the incoming arrow: ${serverHealth}`,
           );
           yield* eventually(

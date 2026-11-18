@@ -295,7 +295,7 @@ export function requirementsForPhase(
             : definition,
     )
     .map((definition) => materializeRequirement(definition, inventory, strategy))
-    .sort((left, right) => right.priority - left.priority || left.key.localeCompare(right.key));
+    .toSorted((left, right) => right.priority - left.priority || left.key.localeCompare(right.key));
 }
 
 function prepareOverworldRequirements(

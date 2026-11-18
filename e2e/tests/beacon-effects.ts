@@ -118,7 +118,7 @@ export default {
               state.layout?.buttons
                 .filter((button) => button.selected)
                 .map((button) => button.buttonId)
-                .sort((a, b) => a - b)
+                .toSorted((a, b) => a - b)
                 .join() === "-2,0",
               "The reopened beacon lost its primary and secondary selection",
             ),

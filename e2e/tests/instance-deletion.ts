@@ -94,12 +94,11 @@ async function deleteInstanceWithScripts(client: SoulFireClient, instance: SoulF
   });
   if (!active.script || !paused.script) throw new Error("Deletion scripts were not created");
   const abort = new AbortController();
-  const events = scripts
-    .activateScript(
-      { instanceId: instance.id, scriptId: active.script.id },
-      { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
-    )
-    [Symbol.asyncIterator]();
+  const stream = scripts.activateScript(
+    { instanceId: instance.id, scriptId: active.script.id },
+    { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
+  );
+  const events = stream[Symbol.asyncIterator]();
   try {
     if ((await events.next()).value?.event.case !== "scriptStarted")
       throw new Error("The deletion script did not start");

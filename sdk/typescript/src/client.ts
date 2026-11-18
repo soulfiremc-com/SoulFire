@@ -2846,10 +2846,10 @@ function normalizeCount(count: number): number {
   return Math.max(0, Math.floor(count));
 }
 
-function shuffle<T>(values: T[]): void {
+function shuffle(values: unknown[]): void {
   for (let index = values.length - 1; index > 0; index -= 1) {
     const selectedIndex = Math.floor(Math.random() * (index + 1));
-    [values[index], values[selectedIndex]] = [values[selectedIndex] as T, values[index] as T];
+    [values[index], values[selectedIndex]] = [values[selectedIndex], values[index]];
   }
 }
 

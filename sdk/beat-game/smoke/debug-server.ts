@@ -98,7 +98,7 @@ export function startSmokeDebugServer(
     });
     const address = yield* Effect.acquireRelease(listen(server, options.port), () => close(server));
     const operations = [...options.operations]
-      .sort(
+      .toSorted(
         (left, right) =>
           left.path.localeCompare(right.path) || left.method.localeCompare(right.method),
       )
@@ -200,7 +200,7 @@ async function handleRequest(
         ok: true,
         result: {
           operations: [...operations.values()]
-            .sort(
+            .toSorted(
               (left, right) =>
                 left.path.localeCompare(right.path) || left.method.localeCompare(right.method),
             )

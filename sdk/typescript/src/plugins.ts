@@ -10,7 +10,6 @@ import {
   type DescService,
   type JsonValue,
   type Message,
-  type MessageInitShape,
   type MessageShape,
   type Registry,
 } from "@bufbuild/protobuf";
@@ -253,12 +252,7 @@ export class ReflectivePlugin {
         },
         catch: (cause) => operationError("ReflectivePlugin.startTask", cause),
       });
-      return yield* tasks.start(
-        inputSchema,
-        value as MessageInitShape<typeof inputSchema>,
-        resultSchema,
-        options,
-      );
+      return yield* tasks.start(inputSchema, value, resultSchema, options);
     });
   }
 

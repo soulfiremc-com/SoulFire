@@ -888,7 +888,7 @@ const program = Effect.scoped(
           Effect.tap((entities) => {
             const selectorKey = json(query.selector);
             const fingerprint = [...entities]
-              .sort((left, right) => left.networkId - right.networkId)
+              .toSorted((left, right) => left.networkId - right.networkId)
               .map((entity) =>
                 [
                   entity.connectionEpoch,
@@ -2287,6 +2287,8 @@ const findDedicatedJar = fromPromise("find dedicated SoulFire JAR", async () => 
       }`,
     );
   }
+  // tsgolint checks smoke files without tsconfig.smoke.json, which enables noUncheckedIndexedAccess.
+  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
   return path.join(directory, candidates[0]!);
 });
 
@@ -2720,7 +2722,7 @@ function compactDecisionActivityEntry(entry: unknown): unknown {
       count: entities.length,
       byEntityType: [...byEntityType]
         .map(([entityType, count]) => ({ entityType, count }))
-        .sort(
+        .toSorted(
           (left, right) =>
             right.count - left.count || left.entityType.localeCompare(right.entityType),
         ),
@@ -2752,7 +2754,7 @@ function compactBlockQueryActivity(entry: Readonly<Record<string, unknown>>): un
       sampleTruncated: entry.resultsTruncated === true,
       byBlockId: [...byBlockId]
         .map(([blockId, count]) => ({ blockId, count }))
-        .sort(
+        .toSorted(
           (left, right) => right.count - left.count || left.blockId.localeCompare(right.blockId),
         ),
       sample: blocks.slice(0, 16).map((block) => ({
@@ -2822,7 +2824,7 @@ function parseDebugBlockRequest(input: unknown): Readonly<{
 function inspectDebugWorldVolume(
   bot: SoulFireBot,
   input: unknown,
-): Effect.Effect<unknown, unknown, never> {
+): Effect.Effect<unknown, unknown> {
   return Effect.gen(function* () {
     const parsed = yield* debugRequest(() => {
       const request = debugRecord(input, "nearby world request");

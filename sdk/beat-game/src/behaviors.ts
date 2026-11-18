@@ -246,7 +246,7 @@ export function collectNearbyDrops(
                   maximumVerticalDistance &&
                 (requestedItemIds === undefined || requestedItemIds.has(candidate.itemId)),
             )
-            .sort(
+            .toSorted(
               (left, right) =>
                 distanceSquared(observation.player.position, left.position) -
                 distanceSquared(observation.player.position, right.position),
@@ -3662,7 +3662,7 @@ function rankedPortalRetreatTargets(
             index,
             safety: portalExitSafety(observed, candidate.exit),
           }))
-          .sort((left, right) => right.safety - left.safety || left.index - right.index)
+          .toSorted((left, right) => right.safety - left.safety || left.index - right.index)
           .map(({ target }) => target);
       }),
     );
@@ -3807,7 +3807,7 @@ function canRecoverPortalApproachWithStaircase(
   approach: BeatGamePosition,
   path: Partial<BeatGamePathPolicy> | undefined,
 ): boolean {
-  if (current.dimension !== approach.dimension || mergePathPolicy(path).allowMining === false) {
+  if (current.dimension !== approach.dimension || !mergePathPolicy(path).allowMining) {
     return false;
   }
   if (!isPortalStaircaseDepthSupported(floorFeetPosition(current), floorFeetPosition(approach))) {
@@ -4817,7 +4817,7 @@ function clearPortalInterior(
   path?: Partial<BeatGamePathPolicy>,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.forEach(
-    [...frame.interior].sort((left, right) => right.y - left.y),
+    [...frame.interior].toSorted((left, right) => right.y - left.y),
     (position) =>
       driver
         .queryBlocks({
@@ -4883,7 +4883,7 @@ function castNetherPortalFromLavaPool(
     const existingKeys = new Set(existingObsidian.map(({ position }) => positionKey(position)));
     const targets = [...frame.blocks]
       .filter((position) => !existingKeys.has(positionKey(position)))
-      .sort((left, right) => left.y - right.y || left.x - right.x || left.z - right.z);
+      .toSorted((left, right) => left.y - right.y || left.x - right.x || left.z - right.z);
     if (targets.length === 0) {
       if (options.ignite ?? true) {
         yield* ignitePortal(driver, frame, true, options.path);
@@ -5304,7 +5304,7 @@ function recoverPortalCastingWaterBucket(
             (block.blockId === "minecraft:water" && block.properties.level === "0") ||
             block.properties.waterlogged === "true",
         )
-        .sort(
+        .toSorted(
           (left, right) =>
             distanceSquared(left.position, expectedWater) -
             distanceSquared(right.position, expectedWater),
@@ -5578,7 +5578,7 @@ function leavePortalCastingScaffoldCells(
         z: position.z + 0.5,
         dimension: position.dimension,
       }))
-      .sort(
+      .toSorted(
         (left, right) =>
           distanceSquared(left, observation.player.position) -
           distanceSquared(right, observation.player.position),

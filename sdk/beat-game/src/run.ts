@@ -1690,7 +1690,7 @@ function findNearbyNightBeds(
       Effect.map((beds) =>
         beds
           .filter(({ blockId }) => BED_ITEM_IDS.includes(blockId))
-          .sort(
+          .toSorted(
             (left, right) =>
               distanceSquared(observation.player.position, left.position) -
               distanceSquared(observation.player.position, right.position),
@@ -4386,7 +4386,7 @@ function findImmediateThreat(
           target,
           distanceSquared: distanceSquared(observation.player.position, target.position),
         }))
-        .sort(
+        .toSorted(
           (left, right) =>
             threatPriorityScore(left.target, left.distanceSquared) -
             threatPriorityScore(right.target, right.distanceSquared),
@@ -5181,7 +5181,7 @@ function findEndermanWaterEscapeTarget(
                 block.position.dimension === position.dimension &&
                 Math.abs(block.position.y - position.y) <= 4,
             )
-            .sort(
+            .toSorted(
               (left, right) =>
                 distanceSquared(left.position, position) -
                 distanceSquared(right.position, position),
@@ -6629,7 +6629,7 @@ function escapeNearbyBreathingPocket(
               target.dimension === origin.dimension &&
               target.y <= origin.y + AIR_ESCAPE_MAXIMUM_SWIMMABLE_RISE,
           )
-          .sort(
+          .toSorted(
             (left, right) =>
               distanceSquared(left.target, origin) - distanceSquared(right.target, origin),
           )
@@ -7052,7 +7052,7 @@ function findNearbyDryEscapeLedges(
             }),
           ).values(),
         ]
-          .sort(
+          .toSorted(
             (left, right) =>
               distanceSquared(blockCenter({ ...left.position, y: left.position.y + 1 }), position) -
               distanceSquared(
@@ -8029,7 +8029,7 @@ function findNearbyAttackThreat(
           ...dangerousNeutralMobs.filter(isAggressiveNeutralMob),
         ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
       );
-      const candidates = [...threats.values()].sort((left, right) => {
+      const candidates = [...threats.values()].toSorted((left, right) => {
         const leftDistanceSquared = distanceSquared(observation.player.position, left.position);
         const rightDistanceSquared = distanceSquared(observation.player.position, right.position);
         return (
@@ -8308,7 +8308,7 @@ function extinguishFire(
         selector: { blockIds: ["minecraft:water"] },
         maximumResults: 32,
       })),
-    ].sort(
+    ].toSorted(
       (left, right) =>
         distanceSquared(left.position, current.player.position) -
         distanceSquared(right.position, current.player.position),
@@ -8409,7 +8409,7 @@ function escapeLava(
       selector: { blockIds: ["minecraft:lava"] },
       maximumResults: 16,
     });
-    const nearest = [...lava].sort(
+    const nearest = [...lava].toSorted(
       (left, right) =>
         distanceSquared(left.position, latest.player.position) -
         distanceSquared(right.position, latest.player.position),
@@ -9262,7 +9262,7 @@ function tryForageNearbyFood(
         (blocks) =>
           blocks
             .filter(isReadyForageBlock)
-            .sort(
+            .toSorted(
               (left, right) =>
                 distanceSquared(left.position, observation.player.position) -
                 distanceSquared(right.position, observation.player.position),
@@ -9544,7 +9544,7 @@ function tryFishForFood(
           position.y >= current.player.position.y - 4 &&
           position.y <= current.player.position.y + 4,
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           distanceSquared(left.position, current.player.position) -
           distanceSquared(right.position, current.player.position),
@@ -9593,7 +9593,7 @@ function tryFishForFood(
             distanceSquared(position, waterTarget) <= LIQUID_INTERACTION_REACH ** 2;
           return withinCastingRange ? [{ position, horizontalDistance }] : [];
         })
-        .sort(
+        .toSorted(
           (left, right) =>
             Math.abs(left.horizontalDistance - FISHING_PREFERRED_CAST_HORIZONTAL_DISTANCE) -
               Math.abs(right.horizontalDistance - FISHING_PREFERRED_CAST_HORIZONTAL_DISTANCE) ||
@@ -9720,7 +9720,7 @@ function recoverNearbyFurnaceContents(
                       FURNACE_RECOVERY_RADIUS ** 2 &&
                     !checked.has(positionKey(furnace.position)),
                 )
-                .sort(
+                .toSorted(
                   (left, right) =>
                     distanceSquared(left.position, observation.player.position) -
                     distanceSquared(right.position, observation.player.position),
@@ -10296,7 +10296,7 @@ function collectBlocksOrExplore(
           return;
         }
         const frontierPath = preferSurfaceExploration ? explorationPath : baseCollectionPath;
-        if (frontierPath.allowMining !== false && options.prepareAttempt !== undefined) {
+        if (frontierPath.allowMining && options.prepareAttempt !== undefined) {
           yield* options.prepareAttempt(current);
           current = yield* state.driver.observe;
         }
@@ -10346,7 +10346,12 @@ function collectBlocksOrExplore(
               ? // A walk that may not dig finds no route out of a small pocket,
                 // such as a ledge on a cliff, so every later search fails the
                 // same way. Digging out to nearby solid ground breaks the loop.
-                frontierPath.allowMining === false && /No route found/iu.test(error.message)
+                !(
+                  // A walk that may not dig finds no route out of a small pocket,
+                  // such as a ledge on a cliff, so every later search fails the
+                  // same way. Digging out to nearby solid ground breaks the loop.
+                  frontierPath.allowMining
+                ) && /No route found/iu.test(error.message)
                 ? recoverLocalNavigationTrap(state, current.player.position).pipe(Effect.asVoid)
                 : Effect.void
               : Effect.fail(error),
@@ -10795,7 +10800,7 @@ function pathfindToReachableWaterSource(
           candidate.position.dimension === observation.player.position.dimension &&
           !rememberedUnreachable.has(liquidSourceUnreachableKey("water", candidate.position)),
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           Math.abs(left.position.y - observation.player.position.y) -
             Math.abs(right.position.y - observation.player.position.y) ||
@@ -11199,7 +11204,7 @@ function findStableResourceSearchStaircaseOrigin(
           isStableStaircaseAnchor(block) &&
           Math.abs(block.position.y + 1 - position.y) <= 4,
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           distanceSquared({ ...left.position, y: left.position.y + 1 }, position) -
           distanceSquared({ ...right.position, y: right.position.y + 1 }, position),
@@ -12492,7 +12497,7 @@ function representativeStructureTargets(
       representatives.set(cell, block);
     }
   }
-  return [...representatives.values()].sort(
+  return [...representatives.values()].toSorted(
     (left, right) =>
       horizontalDistanceSquared(right.position, origin) -
         horizontalDistanceSquared(left.position, origin) ||
@@ -13186,7 +13191,7 @@ function excavateDryShaftRecoveryStaircase(
     const startingY = Math.floor(position.y);
     const surfaceY = [...candidateSurfaceY]
       .filter((y) => y - startingY >= 2)
-      .sort((left, right) => left - right)[0];
+      .toSorted((left, right) => left - right)[0];
     if (surfaceY === undefined) {
       return false;
     }
@@ -13691,7 +13696,7 @@ function selectSurfaceEscapeColumns(
         ? [{ x: column.x, z: column.z, surfaceY: column.surfaceY }]
         : [],
     )
-    .sort(
+    .toSorted(
       (left, right) =>
         surfaceHorizontalDistanceSquared(left, position) -
         surfaceHorizontalDistanceSquared(right, position),
@@ -13720,7 +13725,7 @@ function selectSwimmableSurfaceEscapeColumns(
         ? [{ x: column.x, z: column.z, surfaceY: column.surfaceY }]
         : [],
     )
-    .sort(
+    .toSorted(
       (left, right) =>
         surfaceHorizontalDistanceSquared(left, position) -
         surfaceHorizontalDistanceSquared(right, position),
@@ -13819,7 +13824,7 @@ function selectStableThreatEscapeColumn(
           ]
         : [];
     })
-    .sort(
+    .toSorted(
       (left, right) =>
         right.threatDistanceSquared - left.threatDistanceSquared ||
         right.alignment - left.alignment ||
@@ -13889,7 +13894,7 @@ function selectElevatedSurfaceColumns(
             Math.abs(neighbor.surfaceY - candidate.surfaceY) <= SURFACE_NEIGHBOR_MAX_HEIGHT_DELTA,
         ).length >= MINIMUM_STABLE_SURFACE_NEIGHBORS,
     )
-    .sort(
+    .toSorted(
       (left, right) =>
         right.surfaceY - left.surfaceY ||
         surfaceHorizontalDistanceSquared(left, position) -
@@ -14056,7 +14061,7 @@ function persistExplorationAttempt(
     nextIndex: number;
   }>,
   hop: number,
-): Effect.Effect<void, never> {
+): Effect.Effect<void> {
   return state.driver.observe.pipe(
     Effect.flatMap((observation) =>
       Ref.modify(state.explorationFrontiers, (frontiers) => {
@@ -14700,7 +14705,7 @@ function findReusableWorkstations(
               Math.abs(position.y - observation.player.position.y) <=
                 WORKSTATION_REUSE_MAX_VERTICAL_DISTANCE,
           )
-          .sort(
+          .toSorted(
             (left, right) =>
               distanceSquared(left.position, observation.player.position) -
               distanceSquared(right.position, observation.player.position),
@@ -15125,7 +15130,7 @@ function findWorkstationTargets(
           candidate.dimension === position.dimension &&
           !placementIntersectsPlayer(candidate, position),
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           workstationDistanceSquared(left, position) - workstationDistanceSquared(right, position),
       )
@@ -15682,7 +15687,7 @@ function approachLinkedNetherPortal(
   ]
     .filter(({ dimension }) => dimension === "minecraft:overworld")
     .map(({ x, z }) => ({ x: Math.floor(x / 8), z: Math.floor(z / 8) }))
-    .sort(
+    .toSorted(
       (left, right) =>
         (left.x - player.x) ** 2 +
         (left.z - player.z) ** 2 -
@@ -15708,7 +15713,7 @@ function approachLinkedNetherPortal(
         (portals) =>
           portals
             .filter(({ position }) => !isPortalRouteOnCooldown(checkpoint, position))
-            .sort(
+            .toSorted(
               (left, right) =>
                 (left.position.x - target.x) ** 2 +
                 (left.position.z - target.z) ** 2 -
@@ -15912,7 +15917,7 @@ function enterKnownPortal(
           !isPortalRouteOnCooldown(checkpoint, value.position) &&
           value.position.dimension === observation.player.position.dimension,
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           right.confidence - left.confidence ||
           Date.parse(right.observedAt) - Date.parse(left.observedAt),
@@ -16763,7 +16768,7 @@ function observeDriverFresh(state: RunState): Effect.Effect<BeatGameObservation,
   });
 }
 
-function monitorDriverEvents(state: RunState): Effect.Effect<void, never> {
+function monitorDriverEvents(state: RunState): Effect.Effect<void> {
   // A failed or finished subscription must not end death tracking for the rest of the run.
   return state.driver.events.pipe(
     Stream.runForEach((event) => {
@@ -17389,7 +17394,7 @@ function findDeathRecoveryPortalTarget(
           position.dimension === observation.player.position.dimension &&
           !isPortalRouteOnCooldown(checkpoint, position),
       )
-      .sort(
+      .toSorted(
         (left, right) =>
           distanceSquared(left.position, observation.player.position) -
           distanceSquared(right.position, observation.player.position),
@@ -17420,7 +17425,7 @@ function findDeathRecoveryPortalTarget(
     const unique = [
       ...new Map(candidates.map((position) => [positionKey(position), position])).values(),
     ];
-    return unique.sort(
+    return unique.toSorted(
       (left, right) =>
         distanceSquared(left, observation.player.position) -
         distanceSquared(right, observation.player.position),
@@ -18018,7 +18023,7 @@ function mergeSharedDiscoveries(
     });
     const stronghold = team.discoveries
       .filter(({ kind }) => kind === "stronghold")
-      .sort(
+      .toSorted(
         (left, right) =>
           right.confidence - left.confidence ||
           Date.parse(right.observedAt) - Date.parse(left.observedAt),
@@ -18048,7 +18053,7 @@ function publishSnapshot(state: RunState): Effect.Effect<void, BeatGameError> {
   );
 }
 
-function emit(state: RunState, input: EventInput): Effect.Effect<void, never> {
+function emit(state: RunState, input: EventInput): Effect.Effect<void> {
   return state.eventMutex.withPermits(1)(
     Effect.gen(function* () {
       const checkpoint = yield* Ref.get(state.checkpoint);
@@ -18142,7 +18147,7 @@ function claimAction(
   });
 }
 
-function releaseActionClaim(state: RunState, claim: BeatGameClaim): Effect.Effect<void, never> {
+function releaseActionClaim(state: RunState, claim: BeatGameClaim): Effect.Effect<void> {
   return Effect.gen(function* () {
     const checkpoint = yield* Ref.get(state.checkpoint);
     const released = yield* state.coordinator
@@ -18158,7 +18163,7 @@ function releaseActionClaim(state: RunState, claim: BeatGameClaim): Effect.Effec
   });
 }
 
-function markFailed(state: RunState, error: BeatGameError): Effect.Effect<void, never> {
+function markFailed(state: RunState, error: BeatGameError): Effect.Effect<void> {
   return persist(state, (checkpoint) => ({
     ...checkpoint,
     planner: {
@@ -18267,7 +18272,7 @@ function mergeStrategy(override: BeatGameStrategyOptions | undefined): BeatGameS
     ...override,
     path: {
       ...defaultBeatGameStrategy.path,
-      ...(override?.path ?? {}),
+      ...override?.path,
     },
   };
   validateStrategy(strategy);
@@ -18615,7 +18620,7 @@ function portalBuildSearchOffsets(radius: number): readonly Readonly<{ x: number
       offsets.push({ x, z });
     }
   }
-  return offsets.sort(
+  return offsets.toSorted(
     (left, right) =>
       left.x * left.x + left.z * left.z - (right.x * right.x + right.z * right.z) ||
       Math.abs(left.x) + Math.abs(left.z) - (Math.abs(right.x) + Math.abs(right.z)) ||

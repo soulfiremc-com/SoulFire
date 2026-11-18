@@ -2346,18 +2346,12 @@ describe("beat-game run lifecycle", () => {
     driver.pathResolver = (position, radius, policy) =>
       Effect.sync(() => {
         driver.paths.push({ position, radius, policy });
-      }).pipe(
-        Effect.andThen(
-          policy.allowMining === true ? Effect.never : Effect.fail(noRoute("pathfind")),
-        ),
-      );
+      }).pipe(Effect.andThen(policy.allowMining ? Effect.never : Effect.fail(noRoute("pathfind"))));
     driver.xzPathResolver = (x, z, dimension, radius, policy) =>
       Effect.sync(() => {
         driver.xzPaths.push({ x, z, dimension, radius, policy });
       }).pipe(
-        Effect.andThen(
-          policy.allowMining === true ? Effect.never : Effect.fail(noRoute("pathfindXZ")),
-        ),
+        Effect.andThen(policy.allowMining ? Effect.never : Effect.fail(noRoute("pathfindXZ"))),
       );
 
     await Effect.runPromise(
@@ -2366,7 +2360,7 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          while (!driver.paths.some(({ policy }) => policy.allowMining === true)) {
+          while (!driver.paths.some(({ policy }) => policy.allowMining)) {
             yield* Effect.sleep(1);
           }
           yield* run.stop;
@@ -2380,7 +2374,7 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    const escape = driver.paths.find(({ policy }) => policy.allowMining === true);
+    const escape = driver.paths.find(({ policy }) => policy.allowMining);
     expect(escape).toMatchObject({ position: { y: 64 }, policy: { allowPlacing: true } });
     expect(escape?.position.x).toBeGreaterThanOrEqual(7.5);
     expect(escape?.position.x).toBeLessThanOrEqual(9.5);
@@ -12797,11 +12791,7 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          while (
-            !driver.paths.some(
-              ({ policy }) => policy.allowMining === true && policy.allowPlacing === true,
-            )
-          ) {
+          while (!driver.paths.some(({ policy }) => policy.allowMining && policy.allowPlacing)) {
             yield* Effect.sleep(1);
           }
           yield* run.stop;
@@ -13785,9 +13775,7 @@ describe("beat-game run lifecycle", () => {
             !driver.tasks.some((task) => task.type === "flee") ||
             !driver.paths.some(
               ({ policy }) =>
-                policy.allowMining === true &&
-                policy.allowPlacing === true &&
-                policy.maxSearchTimeMs === 5_000,
+                policy.allowMining && policy.allowPlacing && policy.maxSearchTimeMs === 5_000,
             )
           ) {
             yield* Effect.sleep(1);
@@ -13806,9 +13794,7 @@ describe("beat-game run lifecycle", () => {
     expect(
       driver.paths.find(
         ({ policy }) =>
-          policy.allowMining === true &&
-          policy.allowPlacing === true &&
-          policy.maxSearchTimeMs === 5_000,
+          policy.allowMining && policy.allowPlacing && policy.maxSearchTimeMs === 5_000,
       ),
     ).toMatchObject({
       position: {
@@ -20429,9 +20415,7 @@ describe("beat-game run lifecycle", () => {
     expect(
       fleePolicies.every(
         (policy) =>
-          policy?.allowMining === false &&
-          policy.allowPlacing === true &&
-          policy.maxFallDistance <= 3,
+          policy?.allowMining === false && policy.allowPlacing && policy.maxFallDistance <= 3,
       ),
     ).toBe(true);
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
@@ -25691,12 +25675,12 @@ describe("beat-game run lifecycle", () => {
     driver.pathResolver = (position, radius, policy) =>
       Effect.sync(() => {
         driver.paths.push({ position, radius, policy });
-        if (policy.allowMining === true) {
+        if (policy.allowMining) {
           resolveExcavationAttempted();
         }
       }).pipe(
         Effect.andThen(
-          policy.allowMining === true
+          policy.allowMining
             ? Effect.never
             : Effect.fail(
                 new BeatGameDriverError({
@@ -25737,11 +25721,11 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(driver.paths.filter(({ policy }) => policy.allowMining === false)).toEqual([
+    expect(driver.paths.filter(({ policy }) => !policy.allowMining)).toEqual([
       expect.objectContaining({ position: stand, radius: 0.75 }),
       expect.objectContaining({ position: stand, radius: 1.1 }),
     ]);
-    expect(driver.paths.filter(({ policy }) => policy.allowMining === true)).toEqual([
+    expect(driver.paths.filter(({ policy }) => policy.allowMining)).toEqual([
       expect.objectContaining({ position: stand }),
     ]);
   });
@@ -27040,18 +27024,16 @@ describe("beat-game run lifecycle", () => {
             {
               ...position,
             },
-            {
-              ...(position.x === 2 && position.y === 42 && position.z === 2
-                ? {
-                    blockId: "minecraft:bedrock",
-                    diggable: false,
-                    replaceable: false,
-                  }
-                : {
-                    blockId: "minecraft:air",
-                    replaceable: true,
-                  }),
-            },
+            position.x === 2 && position.y === 42 && position.z === 2
+              ? {
+                  blockId: "minecraft:bedrock",
+                  diggable: false,
+                  replaceable: false,
+                }
+              : {
+                  blockId: "minecraft:air",
+                  replaceable: true,
+                },
           ),
         ];
       }
@@ -36442,7 +36424,7 @@ describe("beat-game run lifecycle", () => {
           }),
         ),
         Effect.flatMap(() =>
-          radius === 0.75 && policy.allowMining === false
+          radius === 0.75 && !policy.allowMining
             ? Effect.fail(
                 new BeatGameDriverError({
                   operation: "pathfind",
@@ -36603,8 +36585,8 @@ describe("beat-game run lifecycle", () => {
           radius === 0.75 &&
           Math.abs(position.x + 6) < 0.001 &&
           Math.abs(position.z) < 0.001 &&
-          policy.allowMining === true &&
-          policy.allowPlacing === false &&
+          policy.allowMining &&
+          !policy.allowPlacing &&
           policy.avoidFluids === true,
       ),
     ).toHaveLength(1);
@@ -36614,8 +36596,8 @@ describe("beat-game run lifecycle", () => {
           radius === 0.75 &&
           Math.abs(position.x) < 0.001 &&
           Math.abs(position.z) < 0.001 &&
-          policy.allowMining === false &&
-          policy.allowPlacing === false &&
+          !policy.allowMining &&
+          !policy.allowPlacing &&
           policy.avoidFluids === true,
       ),
     ).toHaveLength(1);
@@ -37122,9 +37104,7 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          while (
-            !driver.paths.some(({ radius, policy }) => radius === 2 && policy.allowMining === true)
-          ) {
+          while (!driver.paths.some(({ radius, policy }) => radius === 2 && policy.allowMining)) {
             yield* Effect.sleep(1);
           }
           yield* run.stop;
@@ -37133,9 +37113,7 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(
-      driver.paths.find(({ radius, policy }) => radius === 2 && policy.allowMining === true),
-    ).toEqual({
+    expect(driver.paths.find(({ radius, policy }) => radius === 2 && policy.allowMining)).toEqual({
       position: expect.objectContaining({ y: miningPosition.y }),
       radius: 2,
       policy: expect.objectContaining({
@@ -40829,7 +40807,7 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(results.map(({ botId }) => botId).sort()).toEqual(["bot-a", "bot-b"]);
+    expect(results.map(({ botId }) => botId).toSorted()).toEqual(["bot-a", "bot-b"]);
     expect(
       results.every(
         ({ finalCheckpoint }) => finalCheckpoint.planner.status === BeatGameRunStatus.COMPLETED,

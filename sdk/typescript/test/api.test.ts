@@ -794,7 +794,7 @@ describe("release resolution", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const fetch = vi.fn(async () =>
+          const fetch = vi.fn<() => Promise<Response>>(async () =>
             Response.json({
               assets: [],
               tag_name: "2.9.1",
@@ -818,7 +818,7 @@ describe("release resolution", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const fetch = vi.fn(async () =>
+          const fetch = vi.fn<() => Promise<Response>>(async () =>
             Response.json({
               assets: [],
               tag_name: "release/candidate",

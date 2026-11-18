@@ -158,7 +158,7 @@ export class JsonFileBeatGameCheckpointStore implements BeatGameCheckpointStore 
           continue;
         }
         if (Date.now() >= deadline) {
-          throw new Error(`Timed out waiting for checkpoint lock ${lockPath}`);
+          throw new Error(`Timed out waiting for checkpoint lock ${lockPath}`, { cause: error });
         }
         await delay(50);
       }

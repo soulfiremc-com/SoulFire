@@ -59,7 +59,7 @@ export function approachLiquidSourceFromSide(
   options: ApproachLiquidSourceOptions,
 ): Effect.Effect<BeatGameBlockObservation, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const nearbySources = [...sources].sort(
+    const nearbySources = [...sources].toSorted(
       (left, right) =>
         Math.min(PREFERRED_LIQUID_SOURCE_CLUSTER_SIZE, liquidSourceClusterSize(right, sources)) -
           Math.min(PREFERRED_LIQUID_SOURCE_CLUSTER_SIZE, liquidSourceClusterSize(left, sources)) ||
@@ -92,7 +92,7 @@ export function approachLiquidSourceFromSide(
                   source.position,
                 ),
               }))
-              .sort(
+              .toSorted(
                 (left, right) =>
                   left.sightlineObstructions.length - right.sightlineObstructions.length ||
                   distanceSquared(observation.player.position, left.position) -
@@ -102,7 +102,7 @@ export function approachLiquidSourceFromSide(
           }),
         ),
       { concurrency: 1 },
-    )).sort(
+    )).toSorted(
       (left, right) =>
         liquidSourceExposureCount(right.blocks, right.source.position) -
         liquidSourceExposureCount(left.blocks, left.source.position),

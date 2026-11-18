@@ -140,7 +140,7 @@ export default {
         `data get entity @e[type=minecraft:villager,tag=${TAG},limit=1] Offers.Recipes[1].uses`,
       );
       yield* check(
-        /data: 1$/.test(uses),
+        uses.endsWith("data: 1"),
         "Vanilla did not count exactly one use of the selected offer",
       );
 

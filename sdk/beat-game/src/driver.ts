@@ -1405,7 +1405,7 @@ function blockSelector(selector: BeatGameBlockSelector) {
   return {
     blockIds: [...(selector.blockIds ?? [])],
     tags: [...(selector.tags ?? [])],
-    properties: { ...(selector.properties ?? {}) },
+    properties: { ...selector.properties },
     ...(selector.solid === undefined ? {} : { solid: selector.solid }),
     ...(selector.replaceable === undefined ? {} : { replaceable: selector.replaceable }),
     ...(selector.interactive === undefined ? {} : { interactive: selector.interactive }),

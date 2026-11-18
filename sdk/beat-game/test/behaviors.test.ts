@@ -4377,7 +4377,7 @@ describe("beat-game behavior programs", () => {
       dimension: "minecraft:overworld",
     };
     const frame = createNetherPortalFrame(origin);
-    const target = [...frame.blocks].sort(
+    const target = [...frame.blocks].toSorted(
       (left, right) => left.y - right.y || left.x - right.x || left.z - right.z,
     )[0];
     if (target === undefined) {
@@ -4846,7 +4846,7 @@ describe("beat-game behavior programs", () => {
     };
     const frame = createNetherPortalFrame(origin);
     const targets = [...frame.blocks]
-      .sort((left, right) => left.y - right.y || left.x - right.x || left.z - right.z)
+      .toSorted((left, right) => left.y - right.y || left.x - right.x || left.z - right.z)
       .slice(0, 2);
     const [firstTarget, secondTarget] = targets;
     if (firstTarget === undefined || secondTarget === undefined) {
@@ -5156,7 +5156,7 @@ describe("beat-game behavior programs", () => {
       dimension: "minecraft:overworld",
     };
     const frame = createNetherPortalFrame(origin);
-    const target = [...frame.blocks].sort(
+    const target = [...frame.blocks].toSorted(
       (left, right) => right.y - left.y || left.x - right.x || left.z - right.z,
     )[0];
     if (target === undefined) {
@@ -5228,7 +5228,7 @@ describe("beat-game behavior programs", () => {
         position.y === castingStand.y &&
         position.z === castingStand.z &&
         radius === 0 &&
-        policy.allowMining === false
+        !policy.allowMining
         ? record.pipe(
             Effect.andThen(
               Effect.fail(
@@ -5396,7 +5396,7 @@ describe("beat-game behavior programs", () => {
       dimension: "minecraft:overworld",
     };
     const frame = createNetherPortalFrame(origin);
-    const target = [...frame.blocks].sort(
+    const target = [...frame.blocks].toSorted(
       (left, right) => left.y - right.y || left.x - right.x || left.z - right.z,
     )[0];
     const obstruction = frame.blocks.find(
@@ -5515,7 +5515,7 @@ describe("beat-game behavior programs", () => {
       dimension: "minecraft:overworld",
     };
     const frame = createNetherPortalFrame(origin);
-    const target = [...frame.blocks].sort(
+    const target = [...frame.blocks].toSorted(
       (left, right) => left.y - right.y || left.x - right.x || left.z - right.z,
     )[0];
     if (target === undefined) {
@@ -5744,7 +5744,7 @@ describe("beat-game behavior programs", () => {
       dimension: "minecraft:overworld",
     };
     const frame = createNetherPortalFrame(origin);
-    const firstTarget = [...frame.blocks].sort(
+    const firstTarget = [...frame.blocks].toSorted(
       (left, right) => left.y - right.y || left.x - right.x || left.z - right.z,
     )[0];
     const nextLayerTarget = frame.blocks.find(({ y }) => y === origin.y + 1);

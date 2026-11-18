@@ -134,7 +134,7 @@ async function writeReport(results: readonly QualificationRunResult[]) {
   );
   const durations = completed
     .map(({ durationMs }) => durationMs)
-    .sort((left, right) => left - right);
+    .toSorted((left, right) => left - right);
   const report = {
     qualificationId,
     generatedAt: new Date().toISOString(),

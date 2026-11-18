@@ -575,8 +575,8 @@ function confidence(value: unknown, name: string): void {
   }
 }
 
-function enumValue<T>(value: unknown, values: readonly T[], name: string): void {
-  if (!values.includes(value as T)) {
+function enumValue(value: unknown, values: readonly unknown[], name: string): void {
+  if (!values.includes(value)) {
     throw new TypeError(`${name} is not a supported value`);
   }
 }

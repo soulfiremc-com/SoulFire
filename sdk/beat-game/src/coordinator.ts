@@ -285,7 +285,7 @@ export class InMemoryBeatGameCoordinator implements BeatGameCoordinator {
       const roles = assignedRoles(team);
       this.#electLeader(team);
       const members = [...team.members.values()]
-        .sort((left, right) => left.botId.localeCompare(right.botId))
+        .toSorted((left, right) => left.botId.localeCompare(right.botId))
         .map((member): BeatGameTeamMember => ({
           instanceId: member.instanceId,
           botId: member.botId,
@@ -301,12 +301,14 @@ export class InMemoryBeatGameCoordinator implements BeatGameCoordinator {
         ...(team.leaderBotId === undefined ? {} : { leaderBotId: team.leaderBotId }),
         leaderFencingToken: team.leaderFencingToken,
         members,
-        claims: [...team.claims.values()].sort((left, right) => left.key.localeCompare(right.key)),
+        claims: [...team.claims.values()].toSorted((left, right) =>
+          left.key.localeCompare(right.key),
+        ),
         discoveries: [...team.discoveries.values()]
-          .sort((left, right) => left.key.localeCompare(right.key))
+          .toSorted((left, right) => left.key.localeCompare(right.key))
           .map((discovery) => structuredClone(discovery)),
         sharedRequirements: Object.fromEntries(
-          [...aggregateRequirements(team)].sort(([left], [right]) => left.localeCompare(right)),
+          [...aggregateRequirements(team)].toSorted(([left], [right]) => left.localeCompare(right)),
         ),
         updatedAt: new Date().toISOString(),
       };
@@ -396,7 +398,7 @@ export class InMemoryBeatGameCoordinator implements BeatGameCoordinator {
           status !== BeatGameRunStatus.STOPPED,
       )
       .map(({ botId }) => botId)
-      .sort((left, right) => left.localeCompare(right))[0];
+      .toSorted((left, right) => left.localeCompare(right))[0];
     if (team.leaderBotId === elected) {
       return;
     }
@@ -418,7 +420,7 @@ function aggregateRequirements(team: InternalTeam): Map<string, number> {
 
 function assignedRoles(team: InternalTeam): Map<string, BeatGameTeamRole> {
   const result = new Map<string, BeatGameTeamRole>();
-  const members = [...team.members.values()].sort((left, right) =>
+  const members = [...team.members.values()].toSorted((left, right) =>
     left.botId.localeCompare(right.botId),
   );
   const reserved = new Set<BeatGameTeamRole>();

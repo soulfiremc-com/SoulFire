@@ -279,7 +279,7 @@ export function collectBlocks(options: CollectBlocksOptions): BotBehavior<number
   );
 }
 
-export function followEntity(entityId: number, radius = 3): BotBehavior<void> {
+export function followEntity(entityId: number, radius = 3): BotBehavior {
   return defineBehavior((bot) =>
     completeTask(
       bot.tasks.runFollowEntity(entityId, radius, {
@@ -337,7 +337,7 @@ export interface AutoEatOptions {
   readonly restoreSelectedSlot?: boolean;
 }
 
-export function autoEat(options: AutoEatOptions): BotBehavior<void> {
+export function autoEat(options: AutoEatOptions): BotBehavior {
   return defineBehavior((bot) =>
     completeTask(
       bot.tasks.runAutoEat(options.foodItemIds, {
@@ -357,7 +357,7 @@ export interface AutoRespawnOptions {
   readonly maximumRespawns?: number;
 }
 
-export function autoRespawn(options: AutoRespawnOptions = {}): BotBehavior<void> {
+export function autoRespawn(options: AutoRespawnOptions = {}): BotBehavior {
   return defineBehavior((bot) =>
     completeTask(
       bot.tasks.runAutoRespawn({
@@ -376,7 +376,7 @@ export interface AutoTotemOptions {
   readonly replaceOccupiedOffhand?: boolean;
 }
 
-export function autoTotem(options: AutoTotemOptions = {}): BotBehavior<void> {
+export function autoTotem(options: AutoTotemOptions = {}): BotBehavior {
   return defineBehavior((bot) =>
     completeTask(
       bot.tasks.runAutoTotem({
@@ -396,7 +396,7 @@ export interface AutoArmorOptions {
   readonly completeWhenNoUpgrade?: boolean;
 }
 
-export function autoArmor(options: AutoArmorOptions = {}): BotBehavior<void> {
+export function autoArmor(options: AutoArmorOptions = {}): BotBehavior {
   return defineBehavior((bot) =>
     completeTask(
       bot.tasks.runAutoArmor({

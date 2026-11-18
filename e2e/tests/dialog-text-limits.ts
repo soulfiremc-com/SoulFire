@@ -141,12 +141,11 @@ export default {
           const abort = new AbortController();
           const sessionId = randomUUID();
           const pov = client.service(PovService);
-          const frames = pov
-            .watch(
-              { ...scope, sessionId, width: 640, height: 480, maxFps: 15 },
-              { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30000)]) },
-            )
-            [Symbol.asyncIterator]();
+          const stream = pov.watch(
+            { ...scope, sessionId, width: 640, height: 480, maxFps: 15 },
+            { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30000)]) },
+          );
+          const frames = stream[Symbol.asyncIterator]();
           let sequence = 0n;
           try {
             const first = await frames.next();

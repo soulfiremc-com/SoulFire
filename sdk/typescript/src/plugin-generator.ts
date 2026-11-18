@@ -465,7 +465,7 @@ function sourceClosure(
     included.add(name);
     pending.push(...file.dependency);
   }
-  return [...included].sort();
+  return [...included].toSorted();
 }
 
 async function generateTypeScript(outputDirectory: string, model: GenerationModel): Promise<void> {
@@ -787,10 +787,10 @@ function typeScriptImports(model: GenerationModel): string {
     }
   }
   return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(
       ([fileName, names]) =>
-        `import { ${[...names].sort().join(", ")} } from "./generated/${protoTypeScriptModule(fileName)}";`,
+        `import { ${[...names].toSorted().join(", ")} } from "./generated/${protoTypeScriptModule(fileName)}";`,
     )
     .join("\n");
 }
@@ -1085,9 +1085,9 @@ function pythonImports(model: GenerationModel): string {
     }
   }
   return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([module, names]) => {
-      const sorted = [...names].sort();
+      const sorted = [...names].toSorted();
       return sorted.length === 1
         ? `from ${module} import ${sorted[0]}`
         : `from ${module} import (\n${sorted.map((name) => `    ${name},`).join("\n")}\n)`;
@@ -1172,7 +1172,7 @@ function pythonInitSource(model: GenerationModel): string {
     `${pascalCase(model.metadata.pluginId)}PluginClient`,
     "plugin",
     ...model.services.map((service) => `${service.name}Effects`),
-  ].sort();
+  ].toSorted();
   return `from .sdk import (
 ${exports.map((name) => `    ${name},`).join("\n")}
 )
