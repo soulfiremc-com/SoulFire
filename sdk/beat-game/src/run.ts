@@ -14718,7 +14718,17 @@ function ensureWorkstation(
   blockId: "minecraft:crafting_table" | "minecraft:furnace",
 ): Effect.Effect<PreparedWorkstation, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const preparedObservation = yield* prepareDryWorkstationSite(state, observation, blockId);
+    // A live bot sat in a clifftop pool where every route to dry ground
+    // ended back in the water, and abandoned its iron again and again
+    // without ever placing a furnace. A workstation can still be placed from
+    // shallow water, so the bot tries from where it is.
+    const preparedObservation = yield* prepareDryWorkstationSite(state, observation, blockId).pipe(
+      Effect.catchTag("BeatGameDriverError", (error) =>
+        error.operation === "ensure-workstation" && error.code === "unreachable"
+          ? state.driver.observe
+          : Effect.fail(error),
+      ),
+    );
     const existing = yield* findReusableWorkstations(state.driver, preparedObservation, blockId);
     for (const candidate of existing) {
       const approached = yield* state.driver
