@@ -66,6 +66,18 @@ describe("beat-game requirements", () => {
     );
   });
 
+  it("gets armor right after cobblestone in a fast run", () => {
+    const order = (strategy: typeof defaultBeatGameStrategy) =>
+      requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(
+        ({ key }) => key,
+      );
+
+    expect(order(fastBeatGameStrategy).indexOf("chestplate")).toBe(
+      order(fastBeatGameStrategy).indexOf("cobblestone") + 1,
+    );
+    expect(order(defaultBeatGameStrategy).slice(-2)).toEqual(["chestplate", "helmet"]);
+  });
+
   it("counts interchangeable item choices without double counting tags", () => {
     const inventory = observation({
       counts: {

@@ -108,6 +108,10 @@ const FAST_BED_PRIORITY = 114;
 const FAST_COOKED_FOOD_PRIORITY = 101;
 // Above the small food supply (112).
 const FAST_READY_SHIELD_PRIORITY = 113;
+// Right after cobblestone (110): a live fast run kept dying in fights
+// before it reached armor at the end of preparation.
+const FAST_CHESTPLATE_PRIORITY = 109;
+const FAST_HELMET_PRIORITY = 108;
 const DRAGON_BED_COUNT = 4;
 
 export const CHESTPLATE_ITEM_IDS = [
@@ -310,7 +314,11 @@ export function requirementsForPhase(
                 definition.key === "shield" &&
                 (inventory.counts["minecraft:iron_ingot"] ?? 0) > 0
               ? { ...definition, priority: FAST_READY_SHIELD_PRIORITY }
-              : definition,
+              : fastPreparation && definition.key === "chestplate"
+                ? { ...definition, priority: FAST_CHESTPLATE_PRIORITY }
+                : fastPreparation && definition.key === "helmet"
+                  ? { ...definition, priority: FAST_HELMET_PRIORITY }
+                  : definition,
       )
       .map((definition) => materializeRequirement(definition, inventory, strategy))
       .toSorted(
