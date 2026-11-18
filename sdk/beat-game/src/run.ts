@@ -2525,6 +2525,12 @@ function digAndSealNightShelter(
             if (floorBlock === undefined || !floorBlock.diggable || floorBlock.replaceable) {
               return undefined;
             }
+            // A live bot taking cover dug into a cave ceiling and died to the
+            // fall. Stop above any floor with nothing solid under it.
+            const support = yield* queryExactBlock(state.driver, { ...floor, y: floor.y - 1 });
+            if (!isSolid(support)) {
+              return undefined;
+            }
             yield* state.driver.act({ type: "dig-block", position: floor });
             const expectedY = startingY - depth;
             let descended = false;

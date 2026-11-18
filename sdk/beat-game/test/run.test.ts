@@ -1892,7 +1892,7 @@ describe("beat-game run lifecycle", () => {
       const positionKey = coordinateKey(position.x, position.y, position.z);
       const isShaft = position.x === 0 && position.z === 0;
       const isSeal = isShaft && position.y === 63;
-      const isShaftFloor = isShaft && position.y >= 61 && position.y <= 63;
+      const isShaftFloor = isShaft && position.y >= 60 && position.y <= 63;
       const isSealSupport = position.x === 1 && position.y === 63 && position.z === 0;
       if (
         (isSeal && sealPlaced) ||
@@ -2577,9 +2577,9 @@ describe("beat-game run lifecycle", () => {
       const stableShaft = position.x === 4 && position.z === 0;
       const stableSeal = stableShaft && position.y === 63;
       const stableSealSupport = position.x === 5 && position.y === 63 && position.z === 0;
-      const solidUnstableFloor = unstableShaft && position.y >= 61 && position.y <= 63;
+      const solidUnstableFloor = unstableShaft && position.y >= 60 && position.y <= 63;
       const solidStableFloor =
-        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(positionKey);
+        stableShaft && position.y >= 60 && position.y <= 63 && !removedBlocks.has(positionKey);
       if (floodingShaftNeighbor) {
         return [
           blockObservation(position, {
@@ -2762,7 +2762,7 @@ describe("beat-game run lifecycle", () => {
       const stableSeal = stableShaft && position.y === 63;
       const stableSupport = position.x === 17 && position.y === 63 && position.z === 0;
       const stableFloor =
-        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(positionKey);
+        stableShaft && position.y >= 60 && position.y <= 63 && !removedBlocks.has(positionKey);
       if ((stableSeal && sealPlaced) || stableSupport || stableFloor) {
         return [
           blockObservation(position, {
@@ -2967,6 +2967,122 @@ describe("beat-game run lifecycle", () => {
     expect(dug).toEqual(new Set(["0:63:0", "0:62:0", "0:61:0"]));
     // The seal sits right above the head, placed against a shaft wall.
     expect(placed).toEqual(new Set(["0:63:0"]));
+  });
+
+  it("walls in instead of digging into a cave under skeleton fire", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:cobblestone": 16, "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({
+      counts,
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 16,
+    });
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const dug = new Set<string>();
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
+      }
+      // A cave opens two blocks under the bot's feet.
+      const cave = position.x === 0 && position.z === 0 && position.y <= 61 && position.y >= 50;
+      if (position.y < 64 && !cave && !dug.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+        // The bot drops into the hole it dug.
+        driver.currentObservation = observation({
+          counts,
+          health: 16,
+          position: { x: 0.5, y: action.position.y, z: 0.5 },
+        });
+      }
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          blockKey({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () => Effect.fail(new ScenarioFailure({ message: "Never took cover" })),
+          }),
+        ),
+      ),
+    );
+
+    // Digging 0:62:0 would drop the bot into the cave.
+    expect(dug).toEqual(new Set(["0:63:0"]));
+    expect(placed.size).toBeGreaterThan(0);
   });
 
   it("centers on its block before digging in under skeleton fire", async () => {
