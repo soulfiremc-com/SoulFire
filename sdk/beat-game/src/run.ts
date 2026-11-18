@@ -8114,7 +8114,67 @@ function findNearbyAttackThreat(
   );
 }
 
+// A live run fought a skeleton while a zombie beside it hit it every second
+// and killed it in seven seconds without taking a hit back. While fighting
+// an archer, a melee attacker that comes closer takes over as the target.
 function defendAgainstTarget(
+  state: RunState,
+  target: BeatGameEntityObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  if (!PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)) {
+    return defendAgainstSingleTarget(state, target);
+  }
+  return Effect.raceFirst(
+    defendAgainstSingleTarget(state, target).pipe(Effect.as(undefined)),
+    waitForCloserMeleeAttacker(state, target),
+  ).pipe(
+    Effect.flatMap((closer) =>
+      closer === undefined ? Effect.void : defendAgainstTarget(state, closer),
+    ),
+  );
+}
+
+function waitForCloserMeleeAttacker(
+  state: RunState,
+  target: BeatGameEntityObservation,
+): Effect.Effect<BeatGameEntityObservation, BeatGameDriverError> {
+  const poll = (): Effect.Effect<BeatGameEntityObservation, BeatGameDriverError> =>
+    Effect.sleep(Math.max(100, state.strategy.observationPollMs)).pipe(
+      Effect.andThen(state.driver.observe),
+      Effect.flatMap((observation) =>
+        state.driver
+          .queryEntities({
+            origin: observation.player.position,
+            radius: EMERGENCY_KNOCKBACK_RANGE,
+            selector: { categories: [2], alive: true },
+            maximumResults: 8,
+          })
+          .pipe(
+            Effect.flatMap((entities) => {
+              const [currentTarget] = entities.filter((entity) =>
+                isSameEntityTarget(entity, target),
+              );
+              const targetDistanceSquared = distanceSquared(
+                observation.player.position,
+                (currentTarget ?? target).position,
+              );
+              const closer = entities.find(
+                (entity) =>
+                  !isSameEntityTarget(entity, target) &&
+                  PROACTIVE_MELEE_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+                  !PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+                  distanceSquared(observation.player.position, entity.position) <
+                    targetDistanceSquared,
+              );
+              return closer === undefined ? Effect.suspend(poll) : Effect.succeed(closer);
+            }),
+          ),
+      ),
+    );
+  return poll();
+}
+
+function defendAgainstSingleTarget(
   state: RunState,
   target: BeatGameEntityObservation,
 ): Effect.Effect<void, BeatGameDriverError> {

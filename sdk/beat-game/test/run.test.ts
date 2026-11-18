@@ -18984,6 +18984,78 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
   }, 10_000);
 
+  it("turns from a skeleton to a zombie that closes in during the fight", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({ counts });
+    const mob = (networkId: number, entityType: string, x: number) =>
+      ({
+        connectionEpoch: "epoch-1",
+        networkId,
+        entityType,
+        position: { x, y: 64, z: 0, dimension: "minecraft:overworld" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      }) as const;
+    const skeleton = mob(61, "minecraft:skeleton", 3);
+    const zombie = mob(62, "minecraft:zombie", 1.5);
+    driver.entityResults = [skeleton];
+    driver.entityQueryResolver = (query) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (query.selector.networkId === undefined ||
+            query.selector.networkId === entity.networkId) &&
+          (query.selector.entityTypes === undefined ||
+            query.selector.entityTypes.includes(entity.entityType)),
+      );
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "attack-entity" || task.type === "flee" ? Effect.never : Effect.void,
+        ),
+      );
+    const attackTargets = () =>
+      driver.tasks.flatMap((task) =>
+        task.type === "attack-entity" ? [task.target.networkId] : [],
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!attackTargets().includes(skeleton.networkId)) {
+                yield* Effect.sleep(1);
+              }
+              driver.entityResults = [skeleton, zombie];
+              while (!attackTargets().includes(zombie.networkId)) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "5 seconds",
+                orElse: () =>
+                  Effect.fail(
+                    new Error(`Never turned on the zombie: ${JSON.stringify(attackTargets())}`),
+                  ),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(attackTargets()).toContain(zombie.networkId);
+  }, 10_000);
+
   it("fights a zombie that keeps pace after two knockback escapes", async () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:stone_sword": 1 };
