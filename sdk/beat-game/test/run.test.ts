@@ -6768,6 +6768,94 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(10);
   });
 
+  it("steps out of a fire block in the Nether", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "nether-fire-run",
+          teamId: "nether-fire-team",
+        }),
+        undefined,
+      ),
+    );
+    const nether = "minecraft:the_nether";
+    let health = 20;
+    let position = { x: 0.5, y: 64, z: 0.5, dimension: nether };
+    const inFire = () => Math.floor(position.x) === 0 && Math.floor(position.z) === 0;
+    driver.currentObservation = observation({ health, position });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const burning = inFire();
+        if (burning) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          health,
+          position,
+          fireTicks: burning ? 80 : 0,
+        });
+        return driver.currentObservation;
+      });
+    // Ghast fire burns on the netherrack under the bot; the ground around
+    // it is clear.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const block = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (block.y === 63) {
+        return [blockObservation(block, { blockId: "minecraft:netherrack" })];
+      }
+      return [
+        blockObservation(block, {
+          blockId:
+            block.y === 64 && block.x === 0 && block.z === 0 ? "minecraft:fire" : "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    driver.pathResolver = (target, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position: target, radius, policy });
+        position = { ...target };
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "nether-fire-run",
+          team: { teamId: "nether-fire-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+          hooks: { satisfyRequirement: () => Effect.never },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (inFire() && driver.currentObservation.player.health > 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeout("3 seconds"),
+        ),
+      ),
+    );
+
+    expect(inFire()).toBe(false);
+    expect(health).toBeGreaterThan(10);
+  });
+
   it("escapes lava that only touches the edge of the hitbox", async () => {
     const driver = new FakeBeatGameDriver();
     // The live bot stood on dry ground here while lava in the next block

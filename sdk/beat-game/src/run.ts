@@ -8581,6 +8581,83 @@ function extinguishFire(
   });
 }
 
+const FIRE_BLOCK_IDS: ReadonlySet<string> = new Set(["minecraft:fire", "minecraft:soul_fire"]);
+const FIRE_STEP_OFFSETS = [
+  { x: 1, z: 0 },
+  { x: -1, z: 0 },
+  { x: 0, z: 1 },
+  { x: 0, z: -1 },
+  { x: 1, z: 1 },
+  { x: 1, z: -1 },
+  { x: -1, z: 1 },
+  { x: -1, z: -1 },
+] as const;
+
+function isFireFreeOpenBlock(block: BeatGameBlockObservation | undefined): boolean {
+  return (
+    block === undefined ||
+    (block.replaceable && !FIRE_BLOCK_IDS.has(block.blockId) && !isPlayerFluidBlock(block.blockId))
+  );
+}
+
+// Standing in a fire block keeps setting the bot alight, and in the Nether
+// there is no water to put it out. A live bot stood in fire left by ghast
+// fireballs for nine seconds and burned to death.
+function stepOutOfFire(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const position = observation.player.position;
+    const feet = {
+      x: Math.floor(position.x),
+      y: Math.floor(position.y),
+      z: Math.floor(position.z),
+      dimension: position.dimension,
+    };
+    const occupied = yield* Effect.forEach([feet, { ...feet, y: feet.y + 1 }], (cell) =>
+      queryExactBlock(state.driver, cell),
+    );
+    if (!occupied.some((block) => block !== undefined && FIRE_BLOCK_IDS.has(block.blockId))) {
+      return;
+    }
+    const candidates = FIRE_STEP_OFFSETS.map((offset) => ({
+      x: feet.x + offset.x,
+      y: feet.y,
+      z: feet.z + offset.z,
+      dimension: feet.dimension,
+    })).toSorted(
+      (left, right) =>
+        horizontalDistanceSquared(blockCenter(left), position) -
+        horizontalDistanceSquared(blockCenter(right), position),
+    );
+    for (const cell of candidates) {
+      const [floor, body, head] = yield* Effect.forEach(
+        [{ ...cell, y: cell.y - 1 }, cell, { ...cell, y: cell.y + 1 }],
+        (block) => queryExactBlock(state.driver, block),
+      );
+      if (!isSolid(floor) || !isFireFreeOpenBlock(body) || !isFireFreeOpenBlock(head)) {
+        continue;
+      }
+      const stepped = yield* state.driver
+        .pathfind({ x: cell.x + 0.5, y: cell.y, z: cell.z + 0.5, dimension: cell.dimension }, 0.3, {
+          ...state.strategy.path,
+          allowMining: false,
+          allowPlacing: false,
+          maxFallDistance: 1,
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1_000),
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        );
+      if (stepped) {
+        return;
+      }
+    }
+  });
+}
+
 function escapeLava(
   state: RunState,
   observation: BeatGameObservation,
@@ -13247,7 +13324,8 @@ function escapeEnvironmentalDamage(
       (burning.player.fireTicks > 0 ||
         (yield* isPlayerInLava(state.driver, burning.player.position)))
     ) {
-      yield* escapeLava(state, burning);
+      yield* stepOutOfFire(state, burning);
+      yield* escapeLava(state, yield* state.driver.observe);
       yield* extinguishFire(state, yield* state.driver.observe);
       return;
     }
