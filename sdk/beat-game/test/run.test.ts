@@ -2707,6 +2707,169 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("moves away from a night shelter shaft over a cave", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:dirt": 1,
+        "minecraft:wooden_sword": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    driver.surfaceColumns = [
+      { x: 4, z: 0 },
+      { x: 4, z: 1 },
+      { x: 5, z: 0 },
+    ].map(({ x, z }) => ({
+      x,
+      z,
+      loaded: true,
+      surfaceY: 63,
+      blockId: "minecraft:grass_block",
+      biomeId: "minecraft:plains",
+      skyLight: 15,
+      blockLight: 0,
+    }));
+    const removedBlocks = new Set<string>();
+    let sealPlaced = false;
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      const positionKey = coordinateKey(position.x, position.y, position.z);
+      const unstableShaft = position.x === 0 && position.z === 0;
+      const unstableShaftSupport = position.x === -1 && position.y === 63 && position.z === 0;
+      const stableShaft = position.x === 4 && position.z === 0;
+      const stableSeal = stableShaft && position.y === 63;
+      const stableSealSupport = position.x === 5 && position.y === 63 && position.z === 0;
+      // A cave opens under the nearest shaft.
+      const solidUnstableFloor = unstableShaft && position.y >= 61 && position.y <= 63;
+      const solidStableFloor =
+        stableShaft && position.y >= 60 && position.y <= 63 && !removedBlocks.has(positionKey);
+      if (
+        (stableSeal && sealPlaced) ||
+        stableSealSupport ||
+        unstableShaftSupport ||
+        solidUnstableFloor ||
+        solidStableFloor
+      ) {
+        return [
+          blockObservation(position, {
+            blockId: stableSeal && sealPlaced ? "minecraft:dirt" : "minecraft:stone",
+          }),
+        ];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          counts: driver.currentObservation.inventory.counts,
+          position,
+        });
+      });
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        removedBlocks.add(coordinateKey(action.position.x, action.position.y, action.position.z));
+        if (
+          action.position.x === 4 &&
+          action.position.z === 0 &&
+          action.position.y === Math.floor(driver.currentObservation.player.position.y) - 1
+        ) {
+          driver.currentObservation = observation({
+            counts: driver.currentObservation.inventory.counts,
+            position: {
+              ...driver.currentObservation.player.position,
+              y: driver.currentObservation.player.position.y - 1,
+            },
+          });
+        }
+        if (action.position.x === 4 && action.position.y === 63) {
+          sealPlaced = false;
+        }
+      }
+      if (action.type === "place-block") {
+        sealPlaced = true;
+        removedBlocks.delete(coordinateKey(4, 63, 0));
+        driver.currentEnvironment = { gameTime: 1_000n };
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (
+            !driver.actions.some(({ type }) => type === "place-block") ||
+            driver.paths.length < 2
+          ) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths[0]).toEqual(
+      expect.objectContaining({
+        position: {
+          x: 4.5,
+          y: 64,
+          z: 0.5,
+          dimension: "minecraft:overworld",
+        },
+        radius: 0.25,
+        policy: expect.objectContaining({
+          allowMining: false,
+          allowPlacing: false,
+          avoidFluids: true,
+        }),
+      }),
+    );
+    expect(driver.actions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "dig-block",
+          position: expect.objectContaining({ x: 0, z: 0 }),
+        }),
+      ]),
+    );
+    expect(driver.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "dig-block",
+          position: expect.objectContaining({ x: 4, y: 63, z: 0 }),
+        }),
+        expect.objectContaining({
+          type: "dig-block",
+          position: expect.objectContaining({ x: 4, y: 62, z: 0 }),
+        }),
+        expect.objectContaining({
+          type: "dig-block",
+          position: expect.objectContaining({ x: 4, y: 61, z: 0 }),
+        }),
+      ]),
+    );
+  }, 10_000);
+
   it("advances to a new shelter frontier when every nearby shaft is rejected", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
@@ -4424,7 +4587,7 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const shaft = position.x === 0 && position.z === 0 && position.y >= 61 && position.y <= 63;
+      const shaft = position.x === 0 && position.z === 0 && position.y >= 60 && position.y <= 63;
       const support = position.x === 1 && position.z === 0 && position.y === 63;
       return [
         blockObservation(

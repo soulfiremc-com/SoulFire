@@ -2466,6 +2466,16 @@ function isViableNightShelterColumn(
         }
       }
     }
+    // The dig stops above a floor with nothing solid under it, so a column
+    // over a cave or through a tree canopy never becomes a shelter. A live
+    // run respawned on a dark oak canopy and retried such a column all night.
+    const shaftBottom = yield* queryExactBlock(driver, {
+      ...shaft,
+      y: startingY - NIGHT_SHELTER_DEPTH - 1,
+    });
+    if (!isSolid(shaftBottom)) {
+      return false;
+    }
     const sealY = startingY - 1;
     for (const support of [
       { ...shaft, x: shaft.x + 1, y: sealY },
