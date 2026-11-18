@@ -31517,11 +31517,11 @@ describe("beat-game run lifecycle", () => {
     ).toBe(7);
   }, 10_000);
 
-  it("starts exploration over after moving to a new region", async () => {
+  it("keeps exploration progress after a long displacement so searches stay bounded", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
-    const runId = "new-region-exploration-run";
-    const teamId = "new-region-exploration-team";
+    const runId = "far-displaced-exploration-run";
+    const teamId = "far-displaced-exploration-team";
     const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
       runId,
       teamId,
@@ -31562,7 +31562,7 @@ describe("beat-game run lifecycle", () => {
     const stored = await Effect.runPromise(store.load(runId));
     expect(
       stored?.memory.explorationFrontiers?.["minecraft:overworld:find-logs"]?.totalAdvances,
-    ).toBe(0);
+    ).toBe(7);
   }, 10_000);
 
   it("reanchors resource exploration without resetting it after a defensive escape", async () => {
