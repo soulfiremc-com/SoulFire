@@ -29407,13 +29407,19 @@ describe("beat-game run lifecycle", () => {
   it.each([
     { label: "forgets", previousX: 0, expectedConfidence: 0 },
     { label: "keeps", previousX: -100, expectedConfidence: 1 },
+    {
+      label: "forgets after repeated failures",
+      previousX: -100,
+      expectedConfidence: 0,
+      previousConfidence: 0.25,
+    },
   ])(
     "$label a remembered portal when its failed route did not bring the bot closer",
-    async ({ previousX, expectedConfidence }) => {
+    async ({ previousX, expectedConfidence, previousConfidence = 0.5 }) => {
       const driver = new FakeBeatGameDriver();
       const store = new InMemoryBeatGameCheckpointStore();
-      const runId = `stalled-portal-route-${previousX}`;
-      const teamId = `stalled-portal-route-team-${previousX}`;
+      const runId = `stalled-portal-route-${previousX}-${previousConfidence}`;
+      const teamId = `stalled-portal-route-team-${previousX}-${previousConfidence}`;
       const observedAt = "2026-01-01T00:00:00.000Z";
       const portalPosition = { x: 64, y: 64, z: 0, dimension: "minecraft:overworld" };
       const portal = blockObservation(portalPosition, {
@@ -29443,7 +29449,7 @@ describe("beat-game run lifecycle", () => {
                   key: "portal-route-progress:minecraft:overworld:64:64:0",
                   value: { x: previousX, y: 64, z: 0, dimension: "minecraft:overworld" },
                   observedAt,
-                  confidence: 0.5,
+                  confidence: previousConfidence,
                 },
               ],
             },

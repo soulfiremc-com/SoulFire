@@ -192,8 +192,10 @@ const PORTAL_CAREFUL_QUALITY_BOUND = 1.2;
 const REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES = 100_000;
 const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 // A failed route that still brought the bot this much closer counts as
-// progress. Each failure without it costs half the route's confidence.
+// progress. Every failure costs confidence, and one without progress costs
+// more, so a portal the bot keeps failing to reach is eventually forgotten.
 const REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS = 16;
+const REMEMBERED_PORTAL_ROUTE_FAILURE_PENALTY = 0.25;
 const REMEMBERED_PORTAL_ROUTE_STALL_PENALTY = 0.5;
 const REMEMBERED_PORTAL_REPLAN_DELAY_MS = 1_000;
 const MAX_SAFE_DEATH_RECOVERY_FAILURES = 3;
@@ -16487,8 +16489,8 @@ function markPortalRouteUnavailable(
   return Effect.gen(function* () {
     // A live run spent an hour retrying a remembered portal it could not
     // reach, mining cobblestone for bridges between tries, and never planned
-    // a portal of its own. Routes that keep failing without bringing the bot
-    // closer lose their portal.
+    // a portal of its own. Each try still crept closer, so progress alone
+    // does not keep a portal that keeps failing.
     const current = (yield* Ref.get(state.observation)).player.position;
     const progressKey = `portal-route-progress:${positionKey(portal)}`;
     let routeConfidence = 1;
@@ -16503,9 +16505,13 @@ function markPortalRouteUnavailable(
         Math.sqrt(distanceSquared(current, portal)) <=
           Math.sqrt(distanceSquared(previous.value, portal)) -
             REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS;
-      routeConfidence = madeProgress
-        ? 1
-        : Math.max(0, previous.confidence - REMEMBERED_PORTAL_ROUTE_STALL_PENALTY);
+      routeConfidence = Math.max(
+        0,
+        (previous?.confidence ?? 1) -
+          (madeProgress
+            ? REMEMBERED_PORTAL_ROUTE_FAILURE_PENALTY
+            : REMEMBERED_PORTAL_ROUTE_STALL_PENALTY),
+      );
       return {
         ...checkpoint,
         memory: {
