@@ -663,6 +663,31 @@ describe("production SoulFire beat-game driver", () => {
     expect(error).toMatchObject({ code: "out_of_range", retryable: false });
   });
 
+  it("retries a placement whose face the bot cannot see yet", async () => {
+    // As in two live runs that exited on an occluded placement face.
+    const cause = new SoulFireActionError(
+      create(BotActionResultSchema, {
+        actionId: "action-1",
+        status: BotActionStatus.CANCELLED,
+        error:
+          "FAILED_PRECONDITION: Block placement is not ready (FACE_OCCLUDED): No placement face is visible from the player's eye position",
+      }),
+    );
+    const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:cobblestone"] },
+        }),
+      ),
+    );
+
+    expect(error).toMatchObject({ code: "failed_precondition", retryable: true });
+  });
+
   it("forwards the observation epoch with direct entity actions", async () => {
     const { bot, calls } = effectBot();
     const driver = makeSoulFireBeatGameDriver(bot);

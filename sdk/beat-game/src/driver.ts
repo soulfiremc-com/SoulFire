@@ -1552,11 +1552,19 @@ function failureCode(value: unknown): string | undefined {
   return RPC_STATUS_CODE_NAMES[Number(value)];
 }
 
+// A placement that is not ready depends on where the bot stands and what it
+// can see, both of which change as it moves. Two live runs exited when a
+// placement face was occluded from the bot's eye.
+const PLACEMENT_NOT_READY_PREFIX = "FAILED_PRECONDITION: Block placement is not ready";
+
 function isRetryable(cause: unknown): boolean {
   if (typeof cause !== "object" || cause === null) {
     return false;
   }
   if ("retryable" in cause && cause.retryable === true) {
+    return true;
+  }
+  if (cause instanceof Error && cause.message.startsWith(PLACEMENT_NOT_READY_PREFIX)) {
     return true;
   }
   if (
