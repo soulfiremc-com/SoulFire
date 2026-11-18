@@ -2,7 +2,7 @@ import { Effect, Stream } from "effect";
 
 import {
   BEAT_GAME_CHECKPOINT_SCHEMA_VERSION,
-  BeatGamePhase,
+  type BeatGamePhase,
   BeatGameRunStatus,
   BeatGameTeamRole,
   emptyBeatGameWorldMemory,

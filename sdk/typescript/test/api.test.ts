@@ -440,7 +440,7 @@ describe("SoulFire", () => {
                     },
                   },
                 });
-                await new Promise(() => undefined);
+                await new Promise(() => {});
               },
             });
           });
@@ -482,12 +482,14 @@ describe("SoulFire", () => {
               service(BotLiveService, {
                 async *watchBotEvents(_request, context) {
                   deadlines.push(context.timeoutMs());
-                  await new Promise((resolve) => setTimeout(resolve, 100));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 100);
+                  });
                   yield create(BotEventSchema, {
                     envelope: { botId: "bot-id", sequence: 1n, streamEpoch: "epoch" },
                     event: { case: "heartbeat", value: {} },
                   });
-                  await new Promise(() => undefined);
+                  await new Promise(() => {});
                 },
               });
             },
@@ -590,7 +592,7 @@ describe("SoulFire", () => {
                     },
                   },
                 });
-                await new Promise(() => undefined);
+                await new Promise(() => {});
               },
             });
           });

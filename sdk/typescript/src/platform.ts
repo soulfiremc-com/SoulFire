@@ -59,7 +59,7 @@ export function makeEffectHttpClientFetch(client: HttpClient.HttpClient): typeof
       })
         .catch((cause) => {
           if (!responseResolved) {
-            reject(cause);
+            reject(cause instanceof Error ? cause : new Error(String(cause)));
             return;
           }
           try {

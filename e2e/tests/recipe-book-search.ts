@@ -68,6 +68,7 @@ export default {
           const sessionId = randomUUID();
           const abort = new AbortController();
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let phase = 0;
           try {
             for await (const frame of pov.watch(
@@ -90,7 +91,7 @@ export default {
               ) =>
                 pov.input({
                   sessionId,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width,
                   height,

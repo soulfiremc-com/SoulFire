@@ -14,6 +14,7 @@ export default {
       yield* Effect.gen(function* () {
         let previous = originalName;
         for (const name of [`NameQA_${suffix}`, `Renamed_${suffix}`]) {
+          const previousName = previous;
           yield* instance.updateMetadata({
             meta: { case: "friendlyName", value: ` \u00a0${name}\ufeff ` },
           });
@@ -29,7 +30,7 @@ export default {
           });
           yield* check(
             result.suggestions.some((entry) => entry.suggestion === name) &&
-              !result.suggestions.some((entry) => entry.suggestion === previous),
+              !result.suggestions.some((entry) => entry.suggestion === previousName),
             "Command completion did not immediately adopt the committed instance name",
           );
           yield* check(

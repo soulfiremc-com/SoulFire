@@ -5,7 +5,7 @@ import { operationError, SoulFireTimeoutError, type SoulFireOperationError } fro
 
 import {
   BossBarEventKind,
-  BotEventFilterSchema,
+  type BotEventFilterSchema,
   EntityEventKind,
   PlayerListEntrySnapshotSchema,
   PlayerListEventKind,
@@ -275,6 +275,7 @@ export class BotSession {
           },
           {},
         ).pipe(
+          // oxlint-disable-next-line eslint/no-loop-func -- the stream finishes inside this iteration, and the flags it sets drive the reconnect below
           Stream.runForEach((event) =>
             Effect.gen({ self: this }, function* () {
               this.#state = reduceBotSessionState(this.#state, event);
@@ -420,6 +421,16 @@ export function reduceBotSessionState(state: BotSessionState, event: BotEvent): 
     case "resourcePack":
       reduceResourcePackState(resourcePacks, event.event.value);
       break;
+    case "chat":
+    case "chunk":
+    case "damage":
+    case "heartbeat":
+    case "lifecycle":
+    case "particle":
+    case "resyncRequired":
+    case "sound":
+    case "title":
+    case undefined:
     default:
       break;
   }
@@ -465,6 +476,7 @@ function reduceResourcePackState(
     case ResourcePackEventKind.RESOURCE_PACK_EVENT_CLEARED:
       resourcePacks.clear();
       break;
+    case ResourcePackEventKind.RESOURCE_PACK_EVENT_UNSPECIFIED:
     default:
       break;
   }
@@ -500,11 +512,13 @@ function reduceEnvironmentState(
           return event.change.value.level === undefined
             ? state
             : { ...state, thunderLevel: event.change.value.level };
+        case WeatherEventKind.WEATHER_EVENT_UNSPECIFIED:
         default:
           return state;
       }
     case "gameEvent":
       return { ...state, lastGameEvent: event.change.value };
+    case undefined:
     default:
       return state;
   }
@@ -644,6 +658,7 @@ function reduceScoreboardState(
     case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_PLAYERS_REMOVE:
       reduceScoreboardTeam(teams, event);
       break;
+    case ScoreboardEventKind.SCOREBOARD_EVENT_UNSPECIFIED:
     default:
       break;
   }

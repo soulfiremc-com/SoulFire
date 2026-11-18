@@ -52,7 +52,7 @@ if (!existsSync(jar))
     `no SoulFire jar at ${jar}: run ./gradlew :dedicated-launcher:uberJar, or set SOULFIRE_E2E_JAR`,
   );
 
-const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replace(/[:.]/g, "-"));
+const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replaceAll(/[:.]/g, "-"));
 mkdirSync(runDir, { recursive: true });
 
 const program = Effect.gen(function* () {
@@ -84,7 +84,7 @@ const program = Effect.gen(function* () {
           ? result.failure.message
           : Cause.pretty(Cause.fail(result.failure));
       yield* Console.log(
-        `  FAIL  ${test.name} (${seconds(took)})\n        ${message.replace(/\n/g, "\n        ")}`,
+        `  FAIL  ${test.name} (${seconds(took)})\n        ${message.replaceAll("\n", "\n        ")}`,
       );
     }
   }

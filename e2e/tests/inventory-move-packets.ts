@@ -70,7 +70,7 @@ export default {
           try: async () => {
             const events: RawPacketEvent[] = [];
             const abort = new AbortController();
-            let streamError: unknown;
+            let streamError: Error | undefined;
             let markerSlot = 44;
             const stream = (async () => {
               try {
@@ -86,19 +86,22 @@ export default {
                 ))
                   events.push(event);
               } catch (cause) {
-                if (!abort.signal.aborted) streamError = cause;
+                if (!abort.signal.aborted)
+                  streamError = cause instanceof Error ? cause : new Error(String(cause));
               }
             })();
-            const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+            const pause = (ms: number) =>
+              new Promise<void>((resolve) => {
+                setTimeout(resolve, ms);
+              });
             const marker = async () => {
               const start = events.length;
-              await run(bot.clickInventory(markerSlot));
+              const slot = markerSlot;
+              await run(bot.clickInventory(slot));
               const until = Date.now() + 3000;
               while (Date.now() < until) {
                 if (streamError) throw streamError;
-                const event = events
-                  .slice(start)
-                  .find((entry) => clickedSlot(entry) === markerSlot);
+                const event = events.slice(start).find((entry) => clickedSlot(entry) === slot);
                 if (event) return event.sequence;
                 await pause(20);
               }

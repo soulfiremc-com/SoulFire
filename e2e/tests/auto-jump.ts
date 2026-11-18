@@ -112,7 +112,9 @@ export default {
                   throw new Error(
                     `Automatic jumping moved a captured bot to Y=${info.liveState?.y}`,
                   );
-                await new Promise((resolve) => setTimeout(resolve, 25));
+                await new Promise((resolve) => {
+                  setTimeout(resolve, 25);
+                });
               }
               const native = await Effect.runPromise(serverPosition);
               if (Math.abs(native.y - 64) >= 0.01)

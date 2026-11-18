@@ -20,6 +20,7 @@ describe("RPC interruption", () => {
                   "abort",
                   () => {
                     aborted = true;
+                    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- AbortSignal.reason is typed any; it holds the abort error
                     reject(signal.reason);
                   },
                   { once: true },
@@ -52,6 +53,7 @@ describe("RPC interruption", () => {
                     "abort",
                     () => {
                       cleanup.push("abort");
+                      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- AbortSignal.reason is typed any; it holds the abort error
                       reject(signal.reason);
                     },
                     { once: true },

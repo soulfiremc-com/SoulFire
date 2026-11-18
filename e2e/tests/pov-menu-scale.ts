@@ -62,6 +62,7 @@ export default {
           const pov = client.service(PovService);
           const service = client.service(BotService);
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let selectedFirst = false;
           try {
             for await (const frame of pov.watch(
@@ -72,7 +73,7 @@ export default {
               const input = (events: ReturnType<typeof click>) =>
                 pov.input({
                   sessionId,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width: 1280,
                   height: 720,

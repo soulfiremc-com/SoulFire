@@ -1,4 +1,4 @@
-import { Cause, Effect, Queue, Semaphore, Stream } from "effect";
+import { type Cause, Effect, Queue, Semaphore, Stream } from "effect";
 
 export class ReplayBroadcast<A> {
   readonly #history: A[] = [];

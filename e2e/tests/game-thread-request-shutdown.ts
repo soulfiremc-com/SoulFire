@@ -17,7 +17,9 @@ export default {
             await Effect.runPromise(bot.world.player({ timeoutMs: 15_000 }).pipe(Effect.result));
             slowestRequestMs = Math.max(slowestRequestMs, performance.now() - started);
             requests++;
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await new Promise((resolve) => {
+              setTimeout(resolve, 10);
+            });
           }
         };
         const readers = [poll(), poll(), poll(), poll()];

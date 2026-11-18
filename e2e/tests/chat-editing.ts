@@ -24,6 +24,7 @@ export default {
           const sessionId = randomUUID();
           const pov = client.service(PovService);
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let phase = 0;
           try {
             for await (const frame of pov.watch(
@@ -40,7 +41,7 @@ export default {
               const input = (events: ReturnType<typeof text>, width = 640, height = 480) =>
                 pov.input({
                   sessionId,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width,
                   height,

@@ -1,11 +1,11 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import type { CallOptions, Client } from "@connectrpc/connect";
-import { Effect } from "effect";
+import type { Effect } from "effect";
 import { type SoulFireOperationError } from "./errors.js";
 import { rpc, withSignal } from "./transport.js";
 
 import {
-  RegistryService,
+  type RegistryService,
   type GetRegistryEntryRequestSchema,
   type GetRegistryEntryResponse,
   type GetRegistryIdentityResponse,

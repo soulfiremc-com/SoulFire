@@ -271,6 +271,7 @@ export class SoulFireFleet {
         (info.config?.accounts ?? []).map((account) => [account.profileId, account]),
       );
       let bots = entries
+        // oxlint-disable-next-line oxc/no-map-spread -- the spread only adds account when it is defined
         .map((entry): FleetBot => {
           const account = accounts.get(entry.profileId);
           return {
@@ -568,6 +569,7 @@ function orderBots(bots: FleetBot[], selector: FleetSelector): void {
           distanceSquared(right.entry.liveState, selector.near)
         );
     }
+    return 0;
   });
 }
 

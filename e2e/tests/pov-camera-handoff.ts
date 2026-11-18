@@ -95,6 +95,7 @@ export default {
               const sessionId = randomUUID();
               const abort = new AbortController();
               let sequence = 0n;
+              const nextSequence = () => ++sequence;
               const rotation = async () => {
                 const text = await Effect.runPromise(rcon(`data get entity ${BOT_NAME} Rotation`));
                 const match = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/);
@@ -121,20 +122,26 @@ export default {
                     pov.input({
                       sessionId,
                       inputToken: frame.inputToken,
-                      sequence: ++sequence,
+                      sequence: nextSequence(),
                       captured,
                       width: 320,
                       height: 180,
                       events,
                     });
                   await input();
-                  await new Promise((resolve) => setTimeout(resolve, 150));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 150);
+                  });
                   const before = await rotation();
                   await input([{ kind: Kind.MOVE, relative: true, x: 240, y: 0 }]);
-                  await new Promise((resolve) => setTimeout(resolve, 400));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 400);
+                  });
                   const moved = await rotation();
                   await input();
-                  await new Promise((resolve) => setTimeout(resolve, 350));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 350);
+                  });
                   const retained = await rotation();
                   if (
                     Math.abs(yawDelta(moved, before)) < 10 ||
@@ -146,7 +153,9 @@ export default {
                   await input([], false);
                   await input();
                   await input([{ kind: Kind.MOVE, relative: true, x: -120, y: 0 }]);
-                  await new Promise((resolve) => setTimeout(resolve, 400));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 400);
+                  });
                   const recaptured = await rotation();
                   if (yawDelta(recaptured, retained) > -5)
                     throw new Error(`${mode} restored old aiming after recapture`);

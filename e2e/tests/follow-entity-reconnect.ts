@@ -99,13 +99,14 @@ export default {
           // Keep the target genuinely outside tracking range while login completes.
           yield* rcon(`tp @e[tag=${TAG}] 4500.5 64 8.5`);
           yield* bot.start();
+          const previousEpoch = epoch;
           const player = yield* eventually(
             bot.world
               .player()
               .pipe(
                 Effect.tap((player) =>
                   check(
-                    player.connectionEpoch !== epoch,
+                    player.connectionEpoch !== previousEpoch,
                     "The follower still has its old connection",
                   ),
                 ),

@@ -133,7 +133,9 @@ export default {
                         captured: true,
                       });
                       tookControl = true;
-                      await new Promise((resolve) => setTimeout(resolve, 300));
+                      await new Promise((resolve) => {
+                        setTimeout(resolve, 300);
+                      });
                       await pov.input({
                         sessionId,
                         inputToken: frame.inputToken,

@@ -46,6 +46,7 @@ export default {
           const inventory = client.service(BotService);
           const pov = client.service(PovService);
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           try {
             for await (const frame of pov.watch(
               {
@@ -67,7 +68,7 @@ export default {
                 pov.input({
                   sessionId,
                   inputToken: frame.inputToken,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   width: 640,
                   height: 480,
                   captured,

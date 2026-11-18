@@ -48,6 +48,7 @@ export default {
           const sessionId = randomUUID();
           const abort = new AbortController();
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let phase = 0;
           let beforeHover = 0n;
           const key = (code: number) => [
@@ -65,7 +66,9 @@ export default {
                 )
               )
                 return;
-              await new Promise((resolve) => setTimeout(resolve, 50));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 50);
+              });
             } while (Date.now() < deadline);
             throw new Error(label);
           };
@@ -86,7 +89,7 @@ export default {
                 pov.input({
                   sessionId,
                   inputToken: frame.inputToken,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width: 1280,
                   height: 720,

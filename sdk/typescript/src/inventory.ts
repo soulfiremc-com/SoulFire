@@ -9,7 +9,7 @@ import { type BlockPositionSchema } from "./generated/soulfire/common_pb.js";
 import {
   InventoryArea,
   InventoryRecommendationKind,
-  InventoryService,
+  type InventoryService,
   type ContainerSnapshot,
   type CountItemsRequestSchema,
   type EquipItemRequestSchema,

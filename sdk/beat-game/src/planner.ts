@@ -424,8 +424,7 @@ function hasReusablePortalCandidate(
   }
   const activeWorkspace = checkpoint.activeSkill?.portalWorkspace;
   if (
-    activeWorkspace !== undefined &&
-    activeWorkspace.origin.dimension === dimension &&
+    activeWorkspace?.origin.dimension === dimension &&
     activeWorkspace.status !== "ABANDONED" &&
     activeWorkspace.interiorState === "PORTAL"
   ) {

@@ -236,7 +236,7 @@ async function sha256File(filePath: string): Promise<string> {
 
 export async function findAvailablePort(): Promise<number> {
   const server = net.createServer();
-  return await new Promise<number>((resolve, reject) => {
+  return new Promise<number>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
@@ -281,6 +281,9 @@ function detectArchitecture(): string {
       return "s390x";
     case "x64":
       return "x64";
+    case "loong64":
+    case "mips":
+    case "mipsel":
     default:
       throw new Error(`Unsupported architecture: ${process.arch}`);
   }
@@ -294,6 +297,14 @@ function detectOs(): string {
       return "linux";
     case "win32":
       return "windows";
+    case "aix":
+    case "android":
+    case "cygwin":
+    case "freebsd":
+    case "haiku":
+    case "netbsd":
+    case "openbsd":
+    case "sunos":
     default:
       throw new Error(`Unsupported operating system: ${process.platform}`);
   }

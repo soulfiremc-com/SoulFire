@@ -5391,8 +5391,7 @@ function monitorEscapeSafety(
                 } as const);
               }
               if (
-                immediateThreat !== undefined &&
-                immediateThreat.response === "flee" &&
+                immediateThreat?.response === "flee" &&
                 shouldPreemptEscapeTarget(target, immediateThreat.target)
               ) {
                 return Effect.succeed({
@@ -6914,9 +6913,11 @@ function swimToNearbyDrySurface(
     if (surfaces.length === 0) {
       return false;
     }
-    const directlyReachableSurfaces = surfaces.filter(
-      (surface) =>
-        surface.surfaceY - observation.player.position.y <= AIR_ESCAPE_MAXIMUM_SWIMMABLE_RISE,
+    const directlyReachableSurfaces = new Set(
+      surfaces.filter(
+        (surface) =>
+          surface.surfaceY - observation.player.position.y <= AIR_ESCAPE_MAXIMUM_SWIMMABLE_RISE,
+      ),
     );
     const usableSurfaces: Array<Readonly<{ x: number; z: number; surfaceY: number }>> = [];
     for (const surface of surfaces) {
@@ -6932,7 +6933,7 @@ function swimToNearbyDrySurface(
       usableSurfaces.push(surface);
     }
     const directlyUsableSurfaces = usableSurfaces.filter((surface) =>
-      directlyReachableSurfaces.includes(surface),
+      directlyReachableSurfaces.has(surface),
     );
     if (swimDirectly) {
       const reachedDirectly = yield* swimDirectlyToDrySurfaceCandidates(
@@ -8221,9 +8222,7 @@ function waitForCloserMeleeAttacker(
           })
           .pipe(
             Effect.flatMap((entities) => {
-              const [currentTarget] = entities.filter((entity) =>
-                isSameEntityTarget(entity, target),
-              );
+              const currentTarget = entities.find((entity) => isSameEntityTarget(entity, target));
               const targetDistanceSquared = distanceSquared(
                 observation.player.position,
                 (currentTarget ?? target).position,
@@ -9738,6 +9737,7 @@ function tryFishForFood(
         FISHING_SHORE_SEARCH_RADIUS,
         1,
       );
+      const playerPosition = current.player.position;
       const castingPositions = stableSurfaceColumns(surfaceColumns)
         .flatMap((surface) => {
           const position = {
@@ -9759,8 +9759,8 @@ function tryFishForFood(
           (left, right) =>
             Math.abs(left.horizontalDistance - FISHING_PREFERRED_CAST_HORIZONTAL_DISTANCE) -
               Math.abs(right.horizontalDistance - FISHING_PREFERRED_CAST_HORIZONTAL_DISTANCE) ||
-            distanceSquared(left.position, current.player.position) -
-              distanceSquared(right.position, current.player.position),
+            distanceSquared(left.position, playerPosition) -
+              distanceSquared(right.position, playerPosition),
         )
         .map(({ position }) => position);
       for (const castingPosition of castingPositions) {
@@ -10462,9 +10462,10 @@ function collectBlocksOrExplore(
           yield* options.prepareAttempt(current);
           current = yield* state.driver.observe;
         }
+        const playerPosition = current.player.position;
         const directedTarget =
-          options.explorationTarget?.dimension === current.player.position.dimension &&
-          horizontalDistanceSquared(options.explorationTarget, current.player.position) >
+          options.explorationTarget?.dimension === playerPosition.dimension &&
+          horizontalDistanceSquared(options.explorationTarget, playerPosition) >
             DIRECTED_HUNT_DESTINATION_REACHED_RADIUS ** 2
             ? options.explorationTarget
             : undefined;
@@ -10472,7 +10473,7 @@ function collectBlocksOrExplore(
           directedTarget === undefined
             ? advanceExplorationFrontier(
                 state,
-                current.player.position,
+                playerPosition,
                 options.purpose,
                 state.strategy.blockSearchRadius,
                 frontierPath,
@@ -10480,7 +10481,7 @@ function collectBlocksOrExplore(
               )
             : pathfindExplorationTarget(
                 state,
-                current.player.position,
+                playerPosition,
                 directedTarget,
                 2,
                 frontierPath,
@@ -10491,13 +10492,13 @@ function collectBlocksOrExplore(
                   error.operation === "pathfind" || error.operation === "pathfindXZ"
                     ? advanceExplorationFrontier(
                         state,
-                        current.player.position,
+                        playerPosition,
                         `${options.purpose}-detour`,
                         state.strategy.blockSearchRadius,
                         frontierPath,
                         preferSurfaceExploration,
                         false,
-                        explorationDetourRotation(current.player.position, directedTarget),
+                        explorationDetourRotation(playerPosition, directedTarget),
                       )
                     : Effect.fail(error),
                 ),
@@ -10514,7 +10515,7 @@ function collectBlocksOrExplore(
                   // same way. Digging out to nearby solid ground breaks the loop.
                   frontierPath.allowMining
                 ) && /No route found/iu.test(error.message)
-                ? recoverLocalNavigationTrap(state, current.player.position).pipe(Effect.asVoid)
+                ? recoverLocalNavigationTrap(state, playerPosition).pipe(Effect.asVoid)
                 : Effect.void
               : Effect.fail(error),
           ),
@@ -11497,12 +11498,7 @@ function selectResourceSearchStaircaseDestination(
 function isStableStaircaseAnchor(
   block: BeatGameBlockObservation | undefined,
 ): block is BeatGameBlockObservation {
-  return (
-    block !== undefined &&
-    block.solid === true &&
-    !block.replaceable &&
-    !isGravityAffectedBlockId(block.blockId)
-  );
+  return block?.solid === true && !block.replaceable && !isGravityAffectedBlockId(block.blockId);
 }
 
 function isGravityAffectedBlockId(blockId: string): boolean {
@@ -12122,15 +12118,16 @@ function huntOrExplore(
           rememberWorldPlace(currentCheckpoint, "FORTRESS", observedBlaze.position, 0.8),
         );
       }
+      const confirmedTarget = confirmedVisibleTarget;
       const targets =
-        confirmedVisibleTarget === undefined
+        confirmedTarget === undefined
           ? observedTargets
           : [
-              confirmedVisibleTarget,
+              confirmedTarget,
               ...observedTargets.filter(
                 (target) =>
-                  target.connectionEpoch !== confirmedVisibleTarget?.connectionEpoch ||
-                  target.networkId !== confirmedVisibleTarget.networkId,
+                  target.connectionEpoch !== confirmedTarget.connectionEpoch ||
+                  target.networkId !== confirmedTarget.networkId,
               ),
             ];
       confirmedVisibleTarget = undefined;
@@ -12168,12 +12165,13 @@ function huntOrExplore(
         : safePreferredCandidates.length > 0
           ? safePreferredCandidates
           : safeCandidates;
+      const retryTargetId = aquaticRetryTargetId;
       const retryTarget =
-        aquaticRetryTargetId === undefined
+        retryTargetId === undefined
           ? undefined
           : rankedCandidates.find(
               (candidate) =>
-                `${candidate.connectionEpoch}:${candidate.networkId}` === aquaticRetryTargetId,
+                `${candidate.connectionEpoch}:${candidate.networkId}` === retryTargetId,
             );
       aquaticRetryTargetId = undefined;
       const target =
@@ -12542,6 +12540,7 @@ function huntOrExplore(
               })).pipe(Effect.ignore),
         ),
         Effect.as(true),
+        // oxlint-disable-next-line eslint/no-loop-func -- the attack finishes inside this iteration and records the retry target for the next one
         Effect.catchTag("BeatGameDriverError", (cause) => {
           if (cause.code === "aquatic_chase_timeout" || cause.code === "aquatic_air_low") {
             const attempts = (aquaticChaseAttempts.get(targetId) ?? 0) + 1;
@@ -16214,8 +16213,7 @@ function hasReusablePortalEvidence(checkpoint: BeatGameCheckpoint, dimension: st
   }
   const activeWorkspace = checkpoint.activeSkill?.portalWorkspace;
   if (
-    activeWorkspace !== undefined &&
-    activeWorkspace.origin.dimension === dimension &&
+    activeWorkspace?.origin.dimension === dimension &&
     activeWorkspace.status !== "ABANDONED" &&
     activeWorkspace.interiorState === "PORTAL"
   ) {
@@ -18185,6 +18183,7 @@ function mergeSharedDiscoveries(
     const knownPortals = new Set(checkpoint.memory.portals.map(({ key }) => key));
     const sharedPortals = team.discoveries
       .filter(({ kind, key }) => kind === "portal" && !knownPortals.has(key))
+      // oxlint-disable-next-line oxc/no-map-spread -- the spread only adds expiresAt when it is defined
       .map((discovery) => ({
         key: discovery.key,
         value: {

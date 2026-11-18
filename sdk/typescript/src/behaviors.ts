@@ -3,7 +3,7 @@ import { Data, Duration, Effect, Option, Schedule, Stream, type Cause } from "ef
 import type { SoulFireBot } from "./client.js";
 
 import type { SoulFireOperationError } from "./errors.js";
-import { BlockFace, Hand } from "./generated/soulfire/bot_live_pb.js";
+import { type BlockFace, Hand } from "./generated/soulfire/bot_live_pb.js";
 import type { BlockPosition } from "./generated/soulfire/common_pb.js";
 import { BotTaskStatus, type BotTaskEvent } from "./generated/soulfire/task_pb.js";
 

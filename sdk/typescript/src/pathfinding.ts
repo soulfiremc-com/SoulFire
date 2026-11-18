@@ -6,12 +6,12 @@ import { rpc, withSignal } from "./transport.js";
 
 import {
   PathfindGoalSchema,
-  PathfindOptionsSchema,
+  type PathfindOptionsSchema,
   type PathfindGoal,
 } from "./generated/soulfire/bot_live_pb.js";
 import { BlockPositionSchema, WorldPositionSchema } from "./generated/soulfire/common_pb.js";
 import type { EntityReference } from "./generated/soulfire/domain_pb.js";
-import { PathfinderService, type PathPlan } from "./generated/soulfire/pathfinding_pb.js";
+import type { PathfinderService, PathPlan } from "./generated/soulfire/pathfinding_pb.js";
 import type { FollowEntityTaskOptions, GoToTaskOptions, SoulFireTasks } from "./tasks.js";
 
 export type BlockTarget = MessageInitShape<typeof BlockPositionSchema>;

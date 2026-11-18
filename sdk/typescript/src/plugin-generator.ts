@@ -1270,8 +1270,8 @@ function lowerCamel(value: string): string {
 
 function snakeCase(value: string): string {
   return value
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
     .replaceAll("-", "_")
     .toLowerCase();
 }
@@ -1290,8 +1290,8 @@ function packageSegment(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9._-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 function nextMinorVersion(version: string): string {
@@ -1309,7 +1309,7 @@ function pythonMemberName(value: string): string {
 }
 
 function pythonIdentifier(value: string): string {
-  const normalized = value.replace(/[^a-zA-Z0-9_]+/g, "_");
+  const normalized = value.replaceAll(/[^a-zA-Z0-9_]+/g, "_");
   return /^\d/.test(normalized) ? `plugin_${normalized}` : normalized;
 }
 
@@ -1373,7 +1373,7 @@ async function rewriteTypeScriptSharedImports(outputDirectory: string): Promise<
   for (const file of files) {
     const source = await readFile(file, "utf8");
     let changed = false;
-    const rewritten = source.replace(/from "(\.[^"]+_pb\.js)"/g, (match, specifier: string) => {
+    const rewritten = source.replaceAll(/from "(\.[^"]+_pb\.js)"/g, (match, specifier: string) => {
       const target = resolve(dirname(file), specifier.replace(/\.js$/, ".ts"));
       if (existingFiles.has(target)) {
         return match;

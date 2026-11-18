@@ -1,3 +1,7 @@
+import type { BeatGameCoordinator } from "./coordinator.js";
+import type { BeatGameStrategyHooks } from "./policy.js";
+import type { BeatGameCheckpointStore } from "./stores.js";
+
 export const BEAT_GAME_CHECKPOINT_SCHEMA_VERSION = 3 as const;
 
 export const BeatGamePhase = {
@@ -612,18 +616,18 @@ export interface BeatGameTeamOptions {
 export interface BeatGameOptions {
   readonly runId?: string;
   readonly strategy?: BeatGameStrategyOptions;
-  readonly checkpointStore?: import("./stores.js").BeatGameCheckpointStore;
-  readonly coordinator?: import("./coordinator.js").BeatGameCoordinator;
+  readonly checkpointStore?: BeatGameCheckpointStore;
+  readonly coordinator?: BeatGameCoordinator;
   readonly team?: BeatGameTeamOptions;
-  readonly hooks?: import("./policy.js").BeatGameStrategyHooks;
+  readonly hooks?: BeatGameStrategyHooks;
 }
 
 export interface BeatGameTeamRunOptions {
   readonly teamId?: string;
   readonly strategy?: BeatGameStrategyOptions;
-  readonly checkpointStore?: import("./stores.js").BeatGameCheckpointStore;
-  readonly coordinator?: import("./coordinator.js").BeatGameCoordinator;
-  readonly hooks?: import("./policy.js").BeatGameStrategyHooks;
+  readonly checkpointStore?: BeatGameCheckpointStore;
+  readonly coordinator?: BeatGameCoordinator;
+  readonly hooks?: BeatGameStrategyHooks;
 }
 
 export interface EyeTriangulation {

@@ -67,6 +67,7 @@ describe("direct escape sprint directions", () => {
     ).toBeUndefined();
     expect(
       selectSafeDirectEscapeDirection(
+        // oxlint-disable-next-line oxc/no-map-spread -- the copy keeps the shared columns fixture unchanged
         columns.map((column) => ({ ...column, surfaceY: 63 })),
         player,
         { x: 1, z: 0 },

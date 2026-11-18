@@ -5,7 +5,7 @@ import { type SoulFireOperationError } from "./errors.js";
 import { rpc, rpcStream, withSignal } from "./transport.js";
 
 import {
-  BotService,
+  type BotService,
   type BotPovFrame,
   type BotRenderPovRequestSchema,
   type BotRenderPovResponse,

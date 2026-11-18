@@ -11,11 +11,10 @@ import { operationError, SoulFireTaskError, type SoulFireOperationError } from "
 import { rpc, rpcStream, withSignal, withWatchSignal } from "./transport.js";
 import { blockSelectors } from "./selectors.js";
 
-import type { PathfindGoal } from "./generated/soulfire/bot_live_pb.js";
-import { PathfindOptionsSchema } from "./generated/soulfire/bot_live_pb.js";
-import { BlockPositionSchema } from "./generated/soulfire/common_pb.js";
+import type { PathfindGoal, PathfindOptionsSchema } from "./generated/soulfire/bot_live_pb.js";
+import type { BlockPositionSchema } from "./generated/soulfire/common_pb.js";
 import type { EntityReference } from "./generated/soulfire/domain_pb.js";
-import { ItemSelectorSchema } from "./generated/soulfire/inventory_pb.js";
+import type { ItemSelectorSchema } from "./generated/soulfire/inventory_pb.js";
 import {
   BrewTaskResultSchema,
   BrewTaskSchema,
@@ -47,7 +46,7 @@ import {
   BotTaskDisconnectPolicy,
   BotTaskPriority,
   BotTaskReconnectPolicy,
-  BotTaskService,
+  type BotTaskService,
   BotTaskStatus,
   BreedTaskResultSchema,
   BreedTaskSchema,
@@ -108,7 +107,7 @@ import {
   type SleepTaskResult,
   type StartBotTaskRequestSchema,
 } from "./generated/soulfire/task_pb.js";
-import { EntitySelectorSchema } from "./generated/soulfire/world_pb.js";
+import type { EntitySelectorSchema } from "./generated/soulfire/world_pb.js";
 
 export type {
   AttackEntityTaskResult,
@@ -2658,16 +2657,14 @@ export class SoulFireTasks {
       const tasks: BotTask[] = [];
       let pageToken = request.pageToken ?? "";
       do {
+        const pageRequest = {
+          ...request,
+          instanceId: this.instanceId,
+          botId: this.botId,
+          pageToken,
+        };
         const response = yield* rpc("SoulFireTasks.list", (signal) =>
-          this.client.listBotTasks(
-            {
-              ...request,
-              instanceId: this.instanceId,
-              botId: this.botId,
-              pageToken,
-            },
-            withSignal(call, signal),
-          ),
+          this.client.listBotTasks(pageRequest, withSignal(call, signal)),
         );
         tasks.push(...response.tasks);
         pageToken = response.nextPageToken;

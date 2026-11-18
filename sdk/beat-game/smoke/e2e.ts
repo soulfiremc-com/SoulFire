@@ -2095,7 +2095,9 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
     if (!isProcessRunning(pid)) {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
   }
   return !isProcessRunning(pid);
 }
@@ -2726,6 +2728,7 @@ function compactDecisionActivityEntry(entry: unknown): unknown {
           (left, right) =>
             right.count - left.count || left.entityType.localeCompare(right.entityType),
         ),
+      // oxlint-disable-next-line oxc/no-map-spread -- the spreads only add optional properties when they are defined
       sample: entities.slice(0, 12).map((entity) => ({
         networkId: entity.networkId,
         entityType: entity.entityType,
@@ -3149,7 +3152,7 @@ function evaluateDebugSource(
             }),
           );
           return Effect.isEffect(result)
-            ? await Effect.runPromise(result as Effect.Effect<unknown, unknown>)
+            ? Effect.runPromise(result as Effect.Effect<unknown, unknown>)
             : result;
         },
         catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),

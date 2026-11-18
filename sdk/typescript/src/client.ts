@@ -34,7 +34,7 @@ import {
 } from "./connection.js";
 import { SoulFireFleet } from "./fleet.js";
 import {
-  BotEventFilterSchema,
+  type BotEventFilterSchema,
   BotLiveService,
   type AttackEntityRequestSchema,
   type BotActionResult,
@@ -91,7 +91,7 @@ import {
   type ProxyProto,
 } from "./generated/soulfire/common_pb.js";
 import {
-  InstanceEventFilterSchema,
+  type InstanceEventFilterSchema,
   InstanceLiveService,
   type InstanceEvent,
 } from "./generated/soulfire/instance_live_pb.js";
@@ -658,6 +658,7 @@ export class SoulFireClient {
             minimumApiVersion: SDK_API_VERSION,
             maximumApiVersion: SDK_API_VERSION,
             requiredCapabilities: [...(options.requiredCapabilities ?? [])],
+            // oxlint-disable-next-line oxc/no-map-spread -- the spread only adds versionRange when it is defined
             requiredPlugins: (options.requiredPlugins ?? []).map((plugin) => ({
               pluginId: plugin.pluginId,
               ...(plugin.versionRange === undefined ? {} : { versionRange: plugin.versionRange }),

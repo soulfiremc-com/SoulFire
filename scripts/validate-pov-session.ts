@@ -36,14 +36,17 @@ let latestKey: PovFrame | undefined;
 let frameCount = 0;
 let encodedBytes = 0;
 let keyFrames = 0;
-let streamError: unknown;
+let streamError: Error | undefined;
 let sequence = 0n;
 let captured = false;
 let width = 640,
   height = 360;
 let busy = false;
 let deliveryDelayMs = 0;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 async function until(check: () => boolean, message: string) {
   const deadline = performance.now() + 15000;
   while (!check()) {
@@ -52,6 +55,7 @@ async function until(check: () => boolean, message: string) {
     await sleep(50);
   }
 }
+// oxlint-disable-next-line unicorn/prefer-top-level-await -- the frame stream runs in the background while the checks below drive it
 const watching = (async () => {
   try {
     for await (const frame of pov.watch(
@@ -75,7 +79,8 @@ const watching = (async () => {
       }
     }
   } catch (error) {
-    if (!abort.signal.aborted) streamError = error;
+    if (!abort.signal.aborted)
+      streamError = error instanceof Error ? error : new Error(String(error));
   }
 })();
 async function input(
@@ -134,7 +139,7 @@ try {
   heartbeat = setInterval(() => {
     if (!busy)
       void input().catch((error) => {
-        streamError = error;
+        streamError = error instanceof Error ? error : new Error(String(error));
       });
   }, 500);
   if (mode === "transition") {
@@ -196,6 +201,7 @@ try {
     for (let y = 0.2; y <= 0.8 && latest?.cursorShape !== CursorShape.POINTER; y += 0.05) {
       const before = latest!.sequence;
       await input([{ kind: Kind.MOVE, x: 0.5, y }]);
+      // oxlint-disable-next-line eslint/no-loop-func -- the check polls the latest frame, which the stream updates
       await until(() => latest!.sequence > before + 2n, "Cursor hover must render");
     }
     assert.equal(

@@ -264,7 +264,7 @@ export function buildSmokeDecisionDiagnostics(input: SmokeDecisionDiagnosticsInp
         dimension: entry.value.dimension,
       },
       inventoryCounts: entry.value.inventoryCounts ?? {},
-      inventoryItemCount: Object.values(entry.value.inventoryCounts ?? {}).reduce(
+      inventoryItemCount: Object.values<number>(entry.value.inventoryCounts ?? {}).reduce(
         (total, count) => total + Math.max(0, count),
         0,
       ),

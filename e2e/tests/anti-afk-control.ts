@@ -76,13 +76,17 @@ export default {
               token = frame.inputToken;
               await input();
               captured = true;
-              await new Promise((resolve) => setTimeout(resolve, 500));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 500);
+              });
               const origin = await Effect.runPromise(serverPosition);
               for (const enabled of [false, true]) {
                 await Effect.runPromise(setting("enabled", enabled));
                 for (let sample = 0; sample < 30; sample++) {
                   await input();
-                  await new Promise((resolve) => setTimeout(resolve, 100));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 100);
+                  });
                   const info = await Effect.runPromise(bot.info());
                   if (!info.liveState) throw new Error("The controlled bot went offline");
                   const distance = Math.hypot(

@@ -10,14 +10,12 @@ import type {
   CraftTaskResultSchema,
   SmeltTaskResultSchema,
   VillagerTradeTaskResultSchema,
-} from "./generated/soulfire/recipe_pb.js";
-import {
   RecipeService,
-  type CanCraftRequestSchema,
-  type CanCraftResponse,
-  type ListRecipesRequestSchema,
-  type ListRecipesResponse,
-  type ListVillagerTradesResponse,
+  CanCraftRequestSchema,
+  CanCraftResponse,
+  ListRecipesRequestSchema,
+  ListRecipesResponse,
+  ListVillagerTradesResponse,
 } from "./generated/soulfire/recipe_pb.js";
 import type { BotTaskEvent } from "./generated/soulfire/task_pb.js";
 import type {

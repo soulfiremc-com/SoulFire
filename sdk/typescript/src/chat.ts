@@ -6,13 +6,13 @@ import { rpc, withSignal } from "./transport.js";
 
 import { requireCompletedAction } from "./actions.js";
 import {
-  BotEventFilterSchema,
+  type BotEventFilterSchema,
   type BotActionResult,
   type BotChatEvent,
   type BotEvent,
   type ChatSource,
 } from "./generated/soulfire/bot_live_pb.js";
-import { ChatService, type TabCompleteResponse } from "./generated/soulfire/chat_pb.js";
+import type { ChatService, TabCompleteResponse } from "./generated/soulfire/chat_pb.js";
 
 export interface ChatMutationOptions {
   call?: CallOptions;

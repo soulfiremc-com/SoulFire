@@ -193,7 +193,9 @@ async function isStale(path: string, staleLockMs: number): Promise<boolean> {
 }
 
 function delay(durationMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, durationMs));
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

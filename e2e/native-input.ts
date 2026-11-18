@@ -22,7 +22,7 @@ export const nativeInput = (
       const sessionId = randomUUID();
       const abort = new AbortController();
       let latest: PovFrame | undefined;
-      let streamError: unknown;
+      let streamError: Error | undefined;
       let sequence = 0n;
       let pending: Promise<unknown> = Promise.resolve();
       const watching = (async () => {
@@ -40,7 +40,8 @@ export const nativeInput = (
           ))
             latest = frame;
         } catch (error) {
-          if (!abort.signal.aborted) streamError = error;
+          if (!abort.signal.aborted)
+            streamError = error instanceof Error ? error : new Error(String(error));
         }
       })();
       const send = (
@@ -65,7 +66,7 @@ export const nativeInput = (
       const heartbeat = setInterval(() => {
         if (latest)
           void send().catch((error) => {
-            streamError = error;
+            streamError = error instanceof Error ? error : new Error(String(error));
           });
       }, 500);
       try {
@@ -73,7 +74,9 @@ export const nativeInput = (
         while (!latest?.screenOpen) {
           if (streamError) throw streamError;
           if (Date.now() > deadline) throw new Error("The native inventory did not render");
-          await new Promise((resolve) => setTimeout(resolve, 25));
+          await new Promise((resolve) => {
+            setTimeout(resolve, 25);
+          });
         }
         await action({
           click: (x, y) =>
@@ -95,7 +98,9 @@ export const nativeInput = (
             while (latest?.screenOpen !== false) {
               if (streamError) throw streamError;
               if (Date.now() > deadline) throw new Error("Escape did not return to the game view");
-              await new Promise((resolve) => setTimeout(resolve, 25));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 25);
+              });
             }
           },
         });

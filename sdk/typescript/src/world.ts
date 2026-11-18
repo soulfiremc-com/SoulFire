@@ -10,7 +10,7 @@ import type {
   PlayerSnapshot,
 } from "./generated/soulfire/domain_pb.js";
 import {
-  WorldService,
+  type WorldService,
   type CanSeeBlockRequestSchema,
   type CanSeeBlockResponse,
   type EstimateDigTimeRequestSchema,

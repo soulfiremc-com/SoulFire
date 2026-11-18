@@ -48,6 +48,7 @@ export default {
           const sessionId = randomUUID();
           const abort = new AbortController();
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let phase = 0;
           const expectQuery = async (query: string, item: string, label: string) => {
             const deadline = Date.now() + 3000;
@@ -60,7 +61,9 @@ export default {
                 state.slots.some((slot) => slot.slot === 0 && slot.itemId === item)
               )
                 return;
-              await new Promise((resolve) => setTimeout(resolve, 50));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 50);
+              });
             } while (Date.now() < deadline);
             throw new Error(label);
           };
@@ -89,7 +92,7 @@ export default {
                 pov.input({
                   sessionId,
                   inputToken: frame.inputToken,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width,
                   height,

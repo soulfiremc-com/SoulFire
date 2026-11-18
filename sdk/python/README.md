@@ -131,15 +131,15 @@ This is a breaking change. The separate high-level sync and async classes have
 been replaced with one effect-based API. Generated ConnectRPC clients still
 provide direct async and synchronous transport access.
 
-| Previous API | Effect API |
-| --- | --- |
-| `AsyncSoulFire`, `AsyncSoulFireBot` | `SoulFire`, `SoulFireBot` |
-| `async with AsyncSoulFire.connect(...)` | `yield from SoulFire.connect(...)` inside a scope |
-| `await bot.chat.send(...)` | `yield from bot.chat.send(...)` |
-| `async for event in bot.events()` | `bot.events().run_for_each(handler)` |
-| `async_example_plugin` | `example_plugin` |
-| Async behavior callbacks | Callbacks returning `Effect` |
-| Context managers for leases and containers | Scoped acquisition |
+| Previous API                               | Effect API                                        |
+| ------------------------------------------ | ------------------------------------------------- |
+| `AsyncSoulFire`, `AsyncSoulFireBot`        | `SoulFire`, `SoulFireBot`                         |
+| `async with AsyncSoulFire.connect(...)`    | `yield from SoulFire.connect(...)` inside a scope |
+| `await bot.chat.send(...)`                 | `yield from bot.chat.send(...)`                   |
+| `async for event in bot.events()`          | `bot.events().run_for_each(handler)`              |
+| `async_example_plugin`                     | `example_plugin`                                  |
+| Async behavior callbacks                   | Callbacks returning `Effect`                      |
+| Context managers for leases and containers | Scoped acquisition                                |
 
 Do not run each resource acquisition in a separate runtime call. Keep a
 connection, session, lease, or container and its consumers in the same scope.

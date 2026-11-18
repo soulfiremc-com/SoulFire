@@ -647,12 +647,7 @@ function isExcavatableLiquidInteractionStand(
 function isStableSupport(
   block: BeatGameBlockObservation | undefined,
 ): block is BeatGameBlockObservation {
-  return (
-    block !== undefined &&
-    block.solid === true &&
-    !block.replaceable &&
-    !isGravityAffectedBlockId(block.blockId)
-  );
+  return block?.solid === true && !block.replaceable && !isGravityAffectedBlockId(block.blockId);
 }
 
 function isGravityAffectedBlockId(blockId: string): boolean {

@@ -69,6 +69,7 @@ export default {
             const sessionId = randomUUID();
             const pov = client.service(PovService);
             let sequence = 0n;
+            const nextSequence = () => ++sequence;
             let signFrame: bigint | undefined;
             let signed = false;
             let closed = false;
@@ -88,7 +89,7 @@ export default {
                   pov.input({
                     sessionId,
                     inputToken: frame.inputToken,
-                    sequence: ++sequence,
+                    sequence: nextSequence(),
                     captured: true,
                     width: 640,
                     height: 480,

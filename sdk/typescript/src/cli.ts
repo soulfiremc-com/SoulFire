@@ -219,9 +219,11 @@ function isMain(moduleUrl: string): boolean {
 }
 
 if (isMain(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error: unknown) => {
+  try {
+    await main(process.argv.slice(2));
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`soulfire-sdk: ${message}\n`);
     process.exitCode = 1;
-  });
+  }
 }

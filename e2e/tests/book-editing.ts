@@ -40,6 +40,7 @@ export default {
           const sessionId = randomUUID();
           const pov = client.service(PovService);
           let sequence = 0n;
+          const nextSequence = () => ++sequence;
           let phase = 0;
           let signOpened = 0n;
           try {
@@ -62,7 +63,7 @@ export default {
               ) =>
                 pov.input({
                   sessionId,
-                  sequence: ++sequence,
+                  sequence: nextSequence(),
                   captured: true,
                   width,
                   height,

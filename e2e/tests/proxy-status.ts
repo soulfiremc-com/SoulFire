@@ -112,7 +112,8 @@ export default {
       }
       const port = (proxy.address() as net.AddressInfo).port;
       for (let attempt = 0; attempt < 4; attempt++) {
-        rejectConnection = attempt === 3;
+        const expectValid = attempt !== 3;
+        rejectConnection = !expectValid;
         const valid = yield* Effect.tryPromise({
           try: async () => {
             const results = [];
@@ -130,7 +131,7 @@ export default {
             )) {
               if (response.data.case === "single") results.push(response.data.value.valid);
             }
-            return results.length === 1 && results[0] === !rejectConnection;
+            return results.length === 1 && results[0] === expectValid;
           },
           catch: (cause) => new CheckFailed({ message: String(cause) }),
         });

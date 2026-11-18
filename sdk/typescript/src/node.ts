@@ -4,7 +4,7 @@ import { Effect, Layer, type Scope } from "effect";
 
 import { type SoulFireOptions } from "./client.js";
 import {
-  SoulFireClient,
+  type SoulFireClient,
   SoulFireConnectionError,
   SoulFireService,
   SoulFire as UniversalSoulFire,

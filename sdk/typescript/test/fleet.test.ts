@@ -80,7 +80,9 @@ describe("SoulFireFleet", () => {
             async onStartTask() {
               active++;
               maximumActive = Math.max(maximumActive, active);
-              await new Promise((resolve) => setTimeout(resolve, 5));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 5);
+              });
               active--;
             },
           });

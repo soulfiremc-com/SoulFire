@@ -93,8 +93,7 @@ export default {
           water.blocks.length === 64 &&
             water.blocks.every(
               ({ position }) =>
-                position &&
-                position.y === 65 &&
+                position?.y === 65 &&
                 position.x >= 4261 &&
                 position.x <= 4276 &&
                 position.z >= 6 &&
@@ -121,8 +120,7 @@ export default {
           waterAfter.blocks.length === 64 &&
             waterAfter.blocks.every(
               ({ position }) =>
-                position &&
-                position.y === 65 &&
+                position?.y === 65 &&
                 position.x >= 4261 &&
                 position.x <= 4276 &&
                 position.z >= 6 &&

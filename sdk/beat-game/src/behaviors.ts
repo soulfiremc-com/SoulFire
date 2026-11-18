@@ -3658,7 +3658,7 @@ function rankedPortalRetreatTargets(
         const observed = new Map(blocks.map((block) => [positionKey(block.position), block]));
         return candidates
           .map((candidate, index) => ({
-            ...candidate,
+            target: candidate.target,
             index,
             safety: portalExitSafety(observed, candidate.exit),
           }))
@@ -5972,7 +5972,18 @@ function primitiveActionPosition(
       return action.position;
     case "place-block":
       return action.against;
-    default:
+    case "attack-entity":
+    case "close-container":
+    case "equip-item":
+    case "interact-entity":
+    case "look":
+    case "release-item":
+    case "reset-movement":
+    case "respawn":
+    case "select-item":
+    case "set-movement":
+    case "toss-items":
+    case "use-item":
       return undefined;
   }
 }
