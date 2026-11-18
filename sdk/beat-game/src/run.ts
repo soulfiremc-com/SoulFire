@@ -5013,6 +5013,11 @@ function escapeFromTarget(
 // Two skeletons shot a live run to death on a mountain top while it had no
 // escape route and 66 cobblestone. Walls stop arrows, so a bot that cannot
 // run walls itself in and waits behind them.
+interface RangedCover {
+  readonly method: "sealed-shaft" | "walls";
+  readonly placedBlocks: number;
+}
+
 function takeCoverFromRangedFire(
   state: RunState,
   observation: BeatGameObservation,
@@ -5027,31 +5032,52 @@ function takeCoverFromRangedFire(
         origin: observation.player.position,
         radius: RANGED_THREAT_ESCAPE_TRIGGER_RADIUS,
         selector: { entityTypes: [...PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES], alive: true },
-        maximumResults: 1,
-      })).length > 0;
+        maximumResults: 4,
+      })).some((entity) => PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(entity.entityType));
     if (!archerNearby) {
       return false;
     }
     // The supervisors that started this escape cancelled a live wall-in
     // halfway when the next arrow hit. Stop moving first, and let the few
     // placements finish.
-    const enclosure = yield* state.driver.act({ type: "reset-movement" }).pipe(
+    //
+    // A wall-in on open ground needs a roof placed on top of the walls,
+    // which the eyes cannot see from below, and a live run died while every
+    // roof placement was refused. Digging down and sealing the shaft only
+    // places against a shaft wall the eyes face, so it goes first.
+    const cover = yield* state.driver.act({ type: "reset-movement" }).pipe(
       Effect.andThen(state.driver.observe),
-      Effect.flatMap((current) => encloseNightShelterInPlace(state, current)),
+      Effect.flatMap((current) =>
+        digAndSealNightShelter(state, current).pipe(
+          Effect.flatMap((seal): Effect.Effect<RangedCover | undefined, BeatGameDriverError> =>
+            seal !== undefined
+              ? Effect.succeed({ method: "sealed-shaft", placedBlocks: 1 } as const)
+              : state.driver.observe.pipe(
+                  Effect.flatMap((latest) => encloseNightShelterInPlace(state, latest)),
+                  Effect.map((enclosure) =>
+                    enclosure === undefined
+                      ? undefined
+                      : ({ method: "walls", placedBlocks: enclosure.placed.length } as const),
+                  ),
+                ),
+          ),
+        ),
+      ),
       Effect.uninterruptible,
       Effect.catchTag("BeatGameDriverError", () => Effect.succeed(undefined)),
     );
-    if (enclosure === undefined) {
+    if (cover === undefined) {
       return false;
     }
     yield* emit(state, {
       type: "diagnostic",
-      message: "Walled in against a ranged attacker after the escape route failed",
+      message: "Took cover from a ranged attacker after the escape route failed",
       data: {
         threatNetworkId: threat.networkId,
         threatType: threat.entityType,
         position: observation.player.position,
-        placedBlocks: enclosure.placed.length,
+        method: cover.method,
+        placedBlocks: cover.placedBlocks,
       },
     });
     yield* Effect.sleep(RANGED_COVER_WAIT_MS);
