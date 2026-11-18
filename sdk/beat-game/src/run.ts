@@ -798,6 +798,8 @@ const DRIVER_EVENTS_RESUBSCRIBE_DELAY_MS = 1_000;
 const NIGHT_SHELTER_START_TICK = 13_000n;
 const NIGHT_SHELTER_END_TICK = 1_000n;
 const NIGHT_SHELTER_DEPTH = 3;
+const SHAFT_CENTER_TOLERANCE = 0.2;
+const SHAFT_CENTER_TIMEOUT_MS = 2_000;
 const NIGHT_SHELTER_MINIMUM_SURFACE_COVER = 8;
 const NIGHT_SHELTER_DEEP_SURFACE_COVER = 32;
 const NIGHT_SHELTER_POLL_MS = 1_000;
@@ -2483,83 +2485,107 @@ function digAndSealNightShelter(
     z: Math.floor(observation.player.position.z),
     dimension: observation.player.position.dimension,
   };
-  return state.driver.withControl(
-    Effect.gen(function* () {
-      if (hasMiningPickaxe(observation)) {
-        yield* state.driver.act({
-          type: "select-item",
-          selector: { itemIds: MINING_PICKAXE_ITEM_IDS },
-        });
-      }
-      for (let depth = 1; depth <= NIGHT_SHELTER_DEPTH; depth += 1) {
-        const current = yield* state.driver.observe;
-        const floor = {
-          ...shaft,
-          y: Math.floor(current.player.position.y) - 1,
-        };
-        const floorBlock = yield* queryExactBlock(state.driver, floor);
-        if (floorBlock === undefined || !floorBlock.diggable || floorBlock.replaceable) {
-          return undefined;
-        }
-        yield* state.driver.act({ type: "dig-block", position: floor });
-        const expectedY = startingY - depth;
-        let descended = false;
-        for (let attempt = 0; attempt < NIGHT_SHELTER_DESCENT_ATTEMPTS; attempt += 1) {
-          const latest = yield* state.driver.observe;
-          if (latest.player.position.y <= expectedY + 0.35) {
-            descended = true;
-            break;
+  // A player whose hitbox still overlaps a neighboring block stands on it
+  // and does not drop into the hole. A live bot taking cover mid-escape dug
+  // its first block and stayed beside it under skeleton fire.
+  const center = { ...shaft, x: shaft.x + 0.5, y: observation.player.position.y, z: shaft.z + 0.5 };
+  const centered =
+    Math.abs(observation.player.position.x - center.x) <= SHAFT_CENTER_TOLERANCE &&
+    Math.abs(observation.player.position.z - center.z) <= SHAFT_CENTER_TOLERANCE;
+  const moveToCenter = centered
+    ? Effect.void
+    : state.driver
+        .pathfind(center, SHAFT_CENTER_TOLERANCE, {
+          ...state.strategy.path,
+          allowMining: false,
+          allowPlacing: false,
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1_000),
+        })
+        .pipe(
+          Effect.timeoutOrElse({ duration: SHAFT_CENTER_TIMEOUT_MS, orElse: () => Effect.void }),
+          Effect.catchTag("BeatGameDriverError", () => Effect.void),
+        );
+  return moveToCenter.pipe(
+    Effect.andThen(
+      state.driver.withControl(
+        Effect.gen(function* () {
+          if (hasMiningPickaxe(observation)) {
+            yield* state.driver.act({
+              type: "select-item",
+              selector: { itemIds: MINING_PICKAXE_ITEM_IDS },
+            });
           }
-          yield* Effect.sleep(100);
-        }
-        if (!descended) {
+          for (let depth = 1; depth <= NIGHT_SHELTER_DEPTH; depth += 1) {
+            const current = yield* state.driver.observe;
+            const floor = {
+              ...shaft,
+              y: Math.floor(current.player.position.y) - 1,
+            };
+            const floorBlock = yield* queryExactBlock(state.driver, floor);
+            if (floorBlock === undefined || !floorBlock.diggable || floorBlock.replaceable) {
+              return undefined;
+            }
+            yield* state.driver.act({ type: "dig-block", position: floor });
+            const expectedY = startingY - depth;
+            let descended = false;
+            for (let attempt = 0; attempt < NIGHT_SHELTER_DESCENT_ATTEMPTS; attempt += 1) {
+              const latest = yield* state.driver.observe;
+              if (latest.player.position.y <= expectedY + 0.35) {
+                descended = true;
+                break;
+              }
+              yield* Effect.sleep(100);
+            }
+            if (!descended) {
+              return undefined;
+            }
+          }
+          const sealPosition = {
+            ...shaft,
+            y: startingY - 1,
+          };
+          const placementFaces = [
+            { against: { ...sealPosition, x: sealPosition.x + 1 }, face: "west" },
+            { against: { ...sealPosition, x: sealPosition.x - 1 }, face: "east" },
+            { against: { ...sealPosition, z: sealPosition.z + 1 }, face: "north" },
+            { against: { ...sealPosition, z: sealPosition.z - 1 }, face: "south" },
+          ] as const;
+          let placement: (typeof placementFaces)[number] | undefined;
+          for (const candidate of placementFaces) {
+            const support = yield* queryExactBlock(state.driver, candidate.against);
+            if (support !== undefined && !support.replaceable && support.solid !== false) {
+              placement = candidate;
+              break;
+            }
+          }
+          if (placement === undefined) {
+            return undefined;
+          }
+          const current = yield* state.driver.observe;
+          if (countNightShelterItems(current, NIGHT_SHELTER_BLOCK_ITEM_IDS) === 0) {
+            return undefined;
+          }
+          yield* state.driver.act({
+            type: "select-item",
+            selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
+          });
+          yield* state.driver.act({
+            type: "place-block",
+            against: placement.against,
+            face: placement.face,
+            hand: "main",
+          });
+          for (let attempt = 0; attempt < 20; attempt += 1) {
+            const seal = yield* queryExactBlock(state.driver, sealPosition);
+            if (seal !== undefined && !seal.replaceable) {
+              return sealPosition;
+            }
+            yield* Effect.sleep(100);
+          }
           return undefined;
-        }
-      }
-      const sealPosition = {
-        ...shaft,
-        y: startingY - 1,
-      };
-      const placementFaces = [
-        { against: { ...sealPosition, x: sealPosition.x + 1 }, face: "west" },
-        { against: { ...sealPosition, x: sealPosition.x - 1 }, face: "east" },
-        { against: { ...sealPosition, z: sealPosition.z + 1 }, face: "north" },
-        { against: { ...sealPosition, z: sealPosition.z - 1 }, face: "south" },
-      ] as const;
-      let placement: (typeof placementFaces)[number] | undefined;
-      for (const candidate of placementFaces) {
-        const support = yield* queryExactBlock(state.driver, candidate.against);
-        if (support !== undefined && !support.replaceable && support.solid !== false) {
-          placement = candidate;
-          break;
-        }
-      }
-      if (placement === undefined) {
-        return undefined;
-      }
-      const current = yield* state.driver.observe;
-      if (countNightShelterItems(current, NIGHT_SHELTER_BLOCK_ITEM_IDS) === 0) {
-        return undefined;
-      }
-      yield* state.driver.act({
-        type: "select-item",
-        selector: { itemIds: NIGHT_SHELTER_BLOCK_ITEM_IDS },
-      });
-      yield* state.driver.act({
-        type: "place-block",
-        against: placement.against,
-        face: placement.face,
-        hand: "main",
-      });
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        const seal = yield* queryExactBlock(state.driver, sealPosition);
-        if (seal !== undefined && !seal.replaceable) {
-          return sealPosition;
-        }
-        yield* Effect.sleep(100);
-      }
-      return undefined;
-    }),
+        }),
+      ),
+    ),
   );
 }
 
@@ -13531,7 +13557,7 @@ function ensureDryShaftRecoverySupport(
 }
 
 // Sneaking stops a player at the edge with the hitbox still on the block,
-// up to 0.3 blocks past the face, so 0.55 from the centre puts the eyes in
+// up to 0.3 blocks past the face, so 0.55 from the center puts the eyes in
 // front of it.
 const SUPPORT_EDGE_EYE_OFFSET = 0.55;
 const SUPPORT_EDGE_POLL_MS = 50;

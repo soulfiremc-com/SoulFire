@@ -1870,7 +1870,7 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          while (driver.paths.length === 0) {
+          while (!driver.paths.some(({ radius }) => radius === 1)) {
             yield* Effect.sleep(1);
           }
           yield* run.stop;
@@ -1911,7 +1911,8 @@ describe("beat-game run lifecycle", () => {
       face: "west",
       hand: "main",
     });
-    expect(driver.paths[0]).toEqual(
+    // The bot first steps to the center of its block so it drops into the shaft.
+    expect(driver.paths).toContainEqual(
       expect.objectContaining({
         position: expect.objectContaining({
           x: 0,
@@ -2865,6 +2866,140 @@ describe("beat-game run lifecycle", () => {
         );
       }
     };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () => Effect.fail(new Error("Never sealed a shaft")),
+          }),
+        ),
+      ),
+    );
+
+    expect(dug).toEqual(new Set(["0:63:0", "0:62:0", "0:61:0"]));
+    // The seal sits right above the head, placed against a shaft wall.
+    expect(placed).toEqual(new Set(["0:63:0"]));
+  });
+
+  it("centers on its block before digging in under skeleton fire", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:cobblestone": 16, "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({
+      counts,
+      // Mid-escape, the hitbox still overlaps the next block.
+      position: { x: 0.9, y: 64, z: 0.3 },
+      health: 16,
+    });
+    const skeleton = (networkId: number, x: number, z: number) =>
+      ({
+        connectionEpoch: "epoch-1",
+        networkId,
+        entityType: "minecraft:skeleton",
+        position: { x, y: 64, z, dimension: "minecraft:overworld" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      }) as const;
+    driver.entityResults = [skeleton(31, 12, 0), skeleton(32, 0, 12)];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+    const dug = new Set<string>();
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (placed.has(key(position))) {
+        return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
+      }
+      if (position.y < 64 && !dug.has(key(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(key(action.position));
+        const { x, z } = driver.currentObservation.player.position;
+        // Off center, the bot keeps standing on the neighboring block.
+        if (Math.abs(x - 0.5) <= 0.2 && Math.abs(z - 0.5) <= 0.2) {
+          driver.currentObservation = observation({
+            counts,
+            health: 16,
+            position: { x, y: action.position.y, z },
+          });
+        }
+      }
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          key({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    driver.pathResolver = (position) =>
+      Effect.sync(() => {
+        driver.currentObservation = observation({ counts, health: 16, position });
+      });
     driver.taskResolver = (task) =>
       Effect.sync(() => {
         driver.tasks.push(task);
