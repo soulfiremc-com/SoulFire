@@ -305,6 +305,16 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
       return Collections.emptyList();
     }
 
+    // A climbable only holds a player whose feet are inside its block. A
+    // diagonal step cuts across a corner column first, and a live bot fell
+    // twelve blocks through one while crossing between vine columns.
+    if (
+      diagonal
+        && (climbableTarget && !floorHasSupport && !supportInTargetBlock || hangsOnClimbable(graph, node))
+    ) {
+      return Collections.emptyList();
+    }
+
     var hasMovementSupport =
       floorHasSupport
         || supportInTargetBlock
@@ -429,6 +439,18 @@ public final class SimpleMovement extends GraphAction implements Cloneable {
       position = position.sub(0, 1, 0);
     }
     return false;
+  }
+
+  private static boolean hangsOnClimbable(MinecraftGraph graph, SFVec3i node) {
+    if (!isClimbable(graph.snapshot().blockState(node))) {
+      return false;
+    }
+    var floor = node.sub(0, 1, 0);
+    return !SFBlockHelpers.isStableWalkableFloorBlock(
+      graph.snapshot().blockAccessor(),
+      floor.toBlockPos(),
+      graph.snapshot().blockState(floor)
+    );
   }
 
   private static boolean isClimbable(BlockState state) {

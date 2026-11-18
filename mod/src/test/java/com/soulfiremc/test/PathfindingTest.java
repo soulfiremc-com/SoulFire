@@ -1186,6 +1186,37 @@ final class PathfindingTest {
   }
 
   @Test
+  void pathfindingDoesNotStepDiagonallyOffAHangingClimbable() {
+    // A live bot hanging on vines stepped diagonally toward the next column
+    // and fell twelve blocks through the open corner column between them.
+    // The only way to the goal block here is that diagonal step from the
+    // ladder, and both corner columns drop far below the fall limit.
+    var ladder = Blocks.LADDER.defaultBlockState();
+    var accessor = new TestBlockAccessorBuilder();
+    accessor.setBlockAt(0, 0, 0, Blocks.STONE);
+    for (var y = 1; y <= 8; y++) {
+      accessor.setBlockAt(0, y, -1, Blocks.STONE);
+      accessor.setBlockStateAt(0, y, 0, ladder);
+    }
+    accessor.setBlockAt(1, 5, 1, Blocks.STONE);
+    accessor.setBlockAt(1, -12, 0, Blocks.STONE);
+    accessor.setBlockAt(0, -12, 1, Blocks.STONE);
+
+    var constraint = new NoBlockActionsConstraint(TestPathConstraint.INSTANCE);
+    var inventory = new ProjectedInventory(List.of(), TestMiningCostCalculator.INSTANCE, constraint);
+    var routeFinder = new RouteFinder(
+      new MinecraftGraph(accessor.build(), inventory, constraint),
+      new PosGoal(1, 6, 1)
+    );
+
+    var result = routeFinder.findRouteFuture(
+      NodeState.forInfo(new SFVec3i(0, 1, 0), inventory)
+    ).join();
+
+    assertFalse(result instanceof RouteFinder.FoundRouteResult, result.toString());
+  }
+
+  @Test
   void pathfindingRejectsDiagonalJumpAscents() {
     var height = 1;
     var accessor = new TestBlockAccessorBuilder();
