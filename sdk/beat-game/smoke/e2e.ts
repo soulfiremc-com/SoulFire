@@ -1730,7 +1730,14 @@ const startMinecraftFixture = Effect.suspend(() => {
       yield* waitForMinecraftServer(containerName);
       if (fixtureConfiguration.keepInventory) {
         yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1_000);
-        yield* rcon(containerName, "gamerule keep_inventory true");
+        // Paper keeps game rules per world, and the console sets them only in
+        // the Overworld. A run that died in the Nether lost its inventory.
+        for (const dimension of ["overworld", "the_nether", "the_end"]) {
+          yield* rcon(
+            containerName,
+            `execute in minecraft:${dimension} run gamerule keep_inventory true`,
+          );
+        }
       }
       const port = yield* publishedMinecraftPort(containerName);
       const fixture = {
