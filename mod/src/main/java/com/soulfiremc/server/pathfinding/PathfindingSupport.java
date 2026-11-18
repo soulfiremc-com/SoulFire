@@ -36,6 +36,7 @@ import com.soulfiremc.server.pathfinding.graph.constraint.AdditionalPlacementCon
 import com.soulfiremc.server.pathfinding.graph.constraint.AvoidFluidConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.BlockBreakBlacklistConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.ConfiguredPathConstraint;
+import com.soulfiremc.server.pathfinding.graph.constraint.FloodedPassageConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.NoBlockBreakingConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.NoBlockPlacingConstraint;
 import com.soulfiremc.server.pathfinding.graph.constraint.PathConstraint;
@@ -303,6 +304,11 @@ public final class PathfindingSupport {
     }
     if (options.getAvoidFluids()) {
       constraint = AvoidFluidConstraint.forPlayer(
+        constraint,
+        bot.minecraft().player
+      );
+    } else {
+      constraint = FloodedPassageConstraint.forPlayer(
         constraint,
         bot.minecraft().player
       );
