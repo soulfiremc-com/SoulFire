@@ -843,6 +843,8 @@ const POST_DEFENSE_RECOVERY_DURATION_MS = 90_000;
 const MAXIMUM_RECOVERY_POLL_MS = 500;
 const MINIMUM_RECOVERY_POLL_MS = 100;
 const MINIMUM_SAFE_AIR_TICKS = 260;
+// Above the breathing pocket escape's own reserve of 180.
+const REQUIREMENT_MINIMUM_SAFE_AIR_TICKS = 200;
 const AIR_ESCAPE_CRITICAL_AIR_TICKS = 100;
 const AIR_ESCAPE_DIG_AIR_RESERVE_TICKS = 60;
 const AIR_ESCAPE_DIG_SETTLE_ATTEMPTS = 20;
@@ -6304,11 +6306,22 @@ function hasUnsafeAir(observation: BeatGameObservation): boolean {
   );
 }
 
+// Swimming at the surface dips the head under now and then. A live run
+// crossing open water to hunt lost its search to the air check eight times
+// in ten minutes at about 250 air. Work on a requirement waits until about
+// ten seconds of air are left; everything else keeps the wider margin.
 function hasUnsafeAirDuringAction(
-  _decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
+  decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
   observation: BeatGameObservation,
 ): boolean {
-  return hasUnsafeAir(observation);
+  if (decision.type !== "satisfy-requirement") {
+    return hasUnsafeAir(observation);
+  }
+  return (
+    observation.player.maxAir > 0 &&
+    observation.player.air <=
+      Math.min(REQUIREMENT_MINIMUM_SAFE_AIR_TICKS, observation.player.maxAir)
+  );
 }
 
 function shouldResumeUrgentAquaticFoodHunt(

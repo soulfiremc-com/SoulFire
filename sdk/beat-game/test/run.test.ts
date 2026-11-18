@@ -21682,6 +21682,53 @@ describe("beat-game run lifecycle", () => {
     expect(eatIndex === -1 || eatIndex > ascentIndex).toBe(true);
   }, 10_000);
 
+  it("keeps working through the air dips of swimming at the surface", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:water") === true
+        ? [
+            blockObservation(
+              {
+                x: Math.floor(query.center.x),
+                y: Math.floor(query.center.y),
+                z: Math.floor(query.center.z),
+                dimension: query.center.dimension,
+              },
+              { blockId: "minecraft:water", diggable: false, replaceable: true },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.succeed({})));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+                yield* Effect.sleep(1);
+              }
+              // A live bot crossing open water bobbed down to about 250 air.
+              driver.currentObservation = observation({ air: 240 });
+              yield* Effect.sleep(200);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      driver.actions.some((action) => action.type === "set-movement" && action.jump === true),
+    ).toBe(false);
+  }, 10_000);
+
   it("interrupts work and swims upward before running out of air", async () => {
     const driver = new FakeBeatGameDriver();
     driver.blockQueryResolver = (query) =>
@@ -21722,7 +21769,7 @@ describe("beat-game run lifecycle", () => {
               while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
                 yield* Effect.sleep(1);
               }
-              driver.currentObservation = observation({ air: 259 });
+              driver.currentObservation = observation({ air: 199 });
               while (
                 !driver.actions.some(
                   (action) => action.type === "set-movement" && action.jump === true,
@@ -23538,7 +23585,7 @@ describe("beat-game run lifecycle", () => {
             yield* Effect.sleep(1);
           }
           driver.currentObservation = observation({
-            air: 260,
+            air: 200,
             food: 12,
             counts: preparedItems,
             position: { x: 0.5, y: 62.4, z: 0.5 },
