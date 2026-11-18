@@ -9,7 +9,7 @@
     "../typescript/src/plugin-generator.ts",
     "../typescript/src/generated/**/*.ts"
   ],
-  "tsconfig": "tsconfig.json",
+  "tsconfig": "tsconfig.typedoc.json",
   "name": "SoulFire TypeScript SDK",
   "readme": "typescript-docs/index.md",
   "navigationLinks": {

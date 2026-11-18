@@ -11,7 +11,7 @@
     "sdk:generate": "buf generate && node scripts/format-generated-sdks.mjs && oxfmt sdk/typescript/jsr.json",
     "sdk:lint-proto": "buf lint",
     "sdk:check": "bun run sdk:generate && bun run sdk:lint-proto && bun run --filter @soulfiremc/sdk check",
-    "lint": "bun run --filter @soulfiremc/sdk build && bun run --filter @soulfiremc/beat-game build && oxlint --deny-warnings e2e sdk/typescript sdk/beat-game sdk/reference scripts",
+    "lint": "bun run --filter @soulfiremc/sdk build && bun run --filter @soulfiremc/beat-game build && bun install --cwd sdk/reference --frozen-lockfile && oxlint e2e sdk/typescript sdk/beat-game sdk/reference scripts",
     "format": "oxfmt --write e2e sdk/typescript sdk/beat-game sdk/reference scripts package.json tsconfig.json .oxlintrc.json .oxfmtrc.json",
     "format:check": "oxfmt --check e2e sdk/typescript sdk/beat-game sdk/reference scripts package.json tsconfig.json .oxlintrc.json .oxfmtrc.json",
     "check": "bun run lint && bun run format:check",

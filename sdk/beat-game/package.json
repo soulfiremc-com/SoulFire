@@ -52,7 +52,7 @@
     "smoke:qualify:controlled": "SOULFIRE_QUALIFICATION_CONTROLLED=true node --experimental-strip-types smoke/qualify.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "typecheck:smoke": "tsc -p tsconfig.smoke.json --noEmit"
+    "typecheck:smoke": "tsc -p smoke/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@soulfiremc/sdk": "workspace:*"

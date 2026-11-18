@@ -9,6 +9,8 @@
   },
   "options": {
     "typeAware": true,
+    "typeCheck": true,
+    "denyWarnings": true,
     "reportUnusedDisableDirectives": "error"
   },
   "env": {
@@ -28,31 +30,9 @@
     "sdk/reference/.source/**"
   ],
   "rules": {
-    "effecttsgo/abort-controller-in-effect": "off",
-    "effecttsgo/all-of-map-to-for-each": "off",
     "effecttsgo/any-unknown-in-error-context": "off",
-    "effecttsgo/catch-conditional-refail-to-catch-if": "off",
-    "effecttsgo/catch-to-ignore": "off",
-    "effecttsgo/catch-to-or-else-succeed": "off",
-    "effecttsgo/effect-map-void": "off",
-    "effecttsgo/effect-succeed-with-undefined": "off",
-    "effecttsgo/flat-map-conditional-to-filter-or-fail": "off",
-    "effecttsgo/flat-map-to-tap": "off",
-    "effecttsgo/global-error-in-effect-catch": "off",
-    "effecttsgo/global-error-in-effect-failure": "off",
-    "effecttsgo/lazy-effect": "off",
-    "effecttsgo/on-exit-failure-to-on-error": "off",
-    "effecttsgo/option-match-to-from-option": "off",
-    "effecttsgo/race-first-with-sleep-to-timeout": "off",
-    "effecttsgo/run-effect-inside-effect": "off",
-    "effecttsgo/run-of-exit-to-run-exit": "off",
     "effecttsgo/strict-effect-provide": "off",
-    "effecttsgo/timeout-catch-tag-to-timeout-or-else": "off",
-    "effecttsgo/unnecessary-effect-gen": "off",
-    "effecttsgo/unnecessary-fail-yieldable-error": "off",
-    "effecttsgo/unnecessary-pipe-chain": "off",
     "effecttsgo/unsafe-effect-type-assertion": "off",
-    "effecttsgo/unstable-api-usage": "off",
     "eslint/array-callback-return": "error",
     "eslint/eqeqeq": [
       "error",
@@ -67,50 +47,75 @@
     "eslint/no-loop-func": "error",
     "eslint/no-promise-executor-return": "error",
     "eslint/no-self-compare": "error",
-    "eslint/no-shadow": "off",
+    "eslint/no-shadow": "error",
     "eslint/no-throw-literal": "error",
-    "eslint/no-underscore-dangle": "off",
-    "eslint/no-unmodified-loop-condition": "off",
+    "eslint/no-underscore-dangle": [
+      "error",
+      {
+        "allow": ["_tag"]
+      }
+    ],
+    "eslint/no-unmodified-loop-condition": "error",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
-    "promise/always-return": "off",
+    "promise/always-return": "error",
     "promise/catch-or-return": "error",
-    "typescript/consistent-return": "off",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-expect-error": "allow-with-description",
+        "ts-ignore": true,
+        "ts-nocheck": true,
+        "ts-check": false,
+        "minimumDescriptionLength": 10
+      }
+    ],
+    "typescript/consistent-return": "error",
     "typescript/consistent-type-exports": "error",
     "typescript/consistent-type-imports": "error",
     "typescript/no-deprecated": "error",
     "typescript/no-explicit-any": "error",
-    "typescript/no-generated-empty-object-type": "off",
+    "typescript/no-generated-empty-object-type": "error",
     "typescript/no-misused-promises": "error",
-    "typescript/no-unsafe-enum-assignment": "off",
-    "typescript/no-unsafe-enum-comparison": "off",
-    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-unsafe-enum-assignment": "error",
+    "typescript/no-unsafe-enum-comparison": "error",
+    "typescript/no-unsafe-type-assertion": "error",
     "typescript/only-throw-error": "error",
     "typescript/prefer-optional-chain": "error",
     "typescript/prefer-promise-reject-errors": "error",
+    "typescript/prefer-ts-expect-error": "error",
     "typescript/restrict-plus-operands": "error",
     "typescript/return-await": "error",
     "typescript/switch-exhaustiveness-check": "error",
-    "unicorn/consistent-function-scoping": "off",
+    "unicorn/consistent-function-scoping": "error",
+    "unicorn/no-abusive-eslint-disable": "error",
     "unicorn/prefer-at": "error",
     "unicorn/prefer-node-protocol": "error",
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-top-level-await": "error",
-    "vitest/no-conditional-expect": "off"
+    "vitest/no-conditional-expect": "error"
   },
   "overrides": [
     {
       "files": [
-        "scripts/**",
-        "**/scripts/**",
-        "e2e/**",
-        "**/smoke/**",
-        "**/test/**",
-        "**/*.test.ts",
-        "sdk/reference/build.ts"
+        "sdk/typescript/src/platform.ts",
+        "sdk/typescript/src/browser.ts",
+        "sdk/typescript/src/bun.ts",
+        "sdk/typescript/src/node.ts",
+        "sdk/typescript/src/client.ts",
+        "sdk/typescript/test/api.test.ts",
+        "sdk/typescript/examples/quickstart.ts",
+        "sdk/beat-game/smoke/e2e.ts",
+        "e2e/run.ts"
       ],
       "rules": {
-        "eslint/no-console": "off"
+        "effecttsgo/unstable-api-usage": "off"
+      }
+    },
+    {
+      "files": ["sdk/typescript/src/client.ts", "sdk/typescript/src/local-server.ts"],
+      "rules": {
+        "effecttsgo/lazy-effect": "off"
       }
     }
   ]
