@@ -4,7 +4,8 @@
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest", "effecttsgo"],
   "categories": {
     "correctness": "error",
-    "suspicious": "error"
+    "suspicious": "error",
+    "perf": "error"
   },
   "options": {
     "typeAware": true,
@@ -52,16 +53,65 @@
     "effecttsgo/unnecessary-pipe-chain": "off",
     "effecttsgo/unsafe-effect-type-assertion": "off",
     "effecttsgo/unstable-api-usage": "off",
+    "eslint/array-callback-return": "error",
+    "eslint/eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-console": "error",
+    "eslint/no-fallthrough": "error",
+    "eslint/no-loop-func": "error",
+    "eslint/no-promise-executor-return": "error",
+    "eslint/no-self-compare": "error",
     "eslint/no-shadow": "off",
+    "eslint/no-throw-literal": "error",
     "eslint/no-underscore-dangle": "off",
     "eslint/no-unmodified-loop-condition": "off",
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error",
     "promise/always-return": "off",
+    "promise/catch-or-return": "error",
     "typescript/consistent-return": "off",
+    "typescript/consistent-type-exports": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-deprecated": "error",
+    "typescript/no-explicit-any": "error",
     "typescript/no-generated-empty-object-type": "off",
+    "typescript/no-misused-promises": "error",
     "typescript/no-unsafe-enum-assignment": "off",
     "typescript/no-unsafe-enum-comparison": "off",
     "typescript/no-unsafe-type-assertion": "off",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/restrict-plus-operands": "error",
+    "typescript/return-await": "error",
+    "typescript/switch-exhaustiveness-check": "error",
     "unicorn/consistent-function-scoping": "off",
+    "unicorn/prefer-at": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-string-replace-all": "error",
+    "unicorn/prefer-top-level-await": "error",
     "vitest/no-conditional-expect": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/**",
+        "**/scripts/**",
+        "e2e/**",
+        "**/smoke/**",
+        "**/test/**",
+        "**/*.test.ts",
+        "sdk/reference/build.ts"
+      ],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    }
+  ]
 }
