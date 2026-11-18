@@ -780,6 +780,7 @@ export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // Long enough for a skeleton without line of sight to lose interest and for
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
+const RANGED_COVER_HEALTH = 8;
 const CREEPER_ESCAPE_SPRINT_MS = 2_500;
 const CREEPER_ESCAPE_SPRINT_SEGMENT_MS = 350;
 const CREEPER_ESCAPE_MINIMUM_SEGMENT_DISTANCE = 0.5;
@@ -4765,6 +4766,15 @@ function escapeFromTarget(
     if (latest.player.dead) {
       return;
     }
+    // A live run fled skeletons for ninety seconds, starting a fresh escape
+    // after every arrow, and died before it took cover. Once worn down,
+    // walls beat running.
+    if (
+      latest.player.health <= RANGED_COVER_HEALTH &&
+      (yield* takeCoverFromRangedFire(state, latest, target))
+    ) {
+      return;
+    }
     const nearbyEscapeCandidates = yield* state.driver.queryEntities({
       origin: latest.player.position,
       radius: RANGED_THREAT_ESCAPE_SAFE_DISTANCE,
@@ -5020,7 +5030,13 @@ function takeCoverFromRangedFire(
     if (!archerNearby) {
       return false;
     }
-    const enclosure = yield* encloseNightShelterInPlace(state, observation).pipe(
+    // The supervisors that started this escape cancelled a live wall-in
+    // halfway when the next arrow hit. Stop moving first, and let the few
+    // placements finish.
+    const enclosure = yield* state.driver.act({ type: "reset-movement" }).pipe(
+      Effect.andThen(state.driver.observe),
+      Effect.flatMap((current) => encloseNightShelterInPlace(state, current)),
+      Effect.uninterruptible,
       Effect.catchTag("BeatGameDriverError", () => Effect.succeed(undefined)),
     );
     if (enclosure === undefined) {
