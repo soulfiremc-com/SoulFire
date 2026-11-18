@@ -8,6 +8,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
 } from "../harness.ts";
 import { nativeInput } from "../native-input.ts";
@@ -104,7 +105,10 @@ export default {
           ),
         "The creative catalog is presented as ordinary player inventory",
       );
-      const tabs = state.layout!.buttons;
+      const { buttons: tabs } = yield* present(
+        state.layout,
+        "The creative inventory has no layout",
+      );
       const inventoryTab = tabs.find((button) => button.iconItemId === "minecraft:chest");
       const buildingTab = tabs.find((button) => button.iconItemId === "minecraft:bricks");
       if (!inventoryTab || !buildingTab)

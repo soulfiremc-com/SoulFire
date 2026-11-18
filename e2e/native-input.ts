@@ -4,7 +4,7 @@ import type { SoulFireBot, SoulFireClient } from "@soulfiremc/sdk";
 import type { PovFrame, PovInputEventSchema } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { CheckFailed } from "./harness.ts";
+import { CheckFailed, required } from "./harness.ts";
 
 // Each native screen uses GUI scale 3 and logical dimensions 427x240.
 export const nativeInput = (
@@ -51,7 +51,7 @@ export const nativeInput = (
         const sent = pending.then(() =>
           service.input({
             sessionId,
-            inputToken: latest!.inputToken,
+            inputToken: required(latest, "a POV frame").inputToken,
             sequence: ++sequence,
             captured: true,
             width: 1280,
@@ -91,7 +91,7 @@ export const nativeInput = (
             send(
               Array.from(text, (character) => ({
                 kind: Kind.CHARACTER,
-                code: character.codePointAt(0)!,
+                code: required(character.codePointAt(0), "a code point"),
               })),
             ),
           escape: async () => {

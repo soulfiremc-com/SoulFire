@@ -13,6 +13,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
 } from "../harness.ts";
 
@@ -29,17 +30,25 @@ const cases = [
   { source: 5, destination: 0, count: 2, packets: 3 },
 ];
 
+const incomplete = () => new CheckFailed({ message: "The click packet header is incomplete" });
+
 function clickedSlot(event: RawPacketEvent): number {
   const bytes = event.encodedPacket;
   let offset = 0;
   // Native packet ID, container ID and state ID precede the short slot index.
   for (let field = 0; field < 3; field++) {
-    while (bytes[offset++]! & 0x80) {}
+    let byte: number | undefined;
+    do {
+      byte = bytes[offset++];
+      if (byte === undefined) throw incomplete();
+    } while (byte & 0x80);
   }
-  if (event.encodedPacketTruncated || offset + 2 > bytes.length) {
-    throw new CheckFailed({ message: "The click packet header is incomplete" });
+  const high = bytes[offset];
+  const low = bytes[offset + 1];
+  if (event.encodedPacketTruncated || high === undefined || low === undefined) {
+    throw incomplete();
   }
-  return (bytes[offset]! << 8) | bytes[offset + 1]!;
+  return (high << 8) | low;
 }
 
 const pause = (ms: number) =>
@@ -285,11 +294,15 @@ export default {
                   "5 seconds",
                 ),
               );
-              const inventoryTab = creative.layout!.buttons.find(
-                (button) => button.iconItemId === "minecraft:chest",
+              const inventoryTab = await run(
+                present(
+                  creative.layout?.buttons.find(
+                    (button) => button.iconItemId === "minecraft:chest",
+                  ),
+                  "The creative inventory tab is missing",
+                ),
               );
-              await run(check(!!inventoryTab, "The creative inventory tab is missing"));
-              await run(bot.clickContainerButton(inventoryTab!.buttonId));
+              await run(bot.clickContainerButton(inventoryTab.buttonId));
               for (const count of [64, 32, 63]) {
                 await run(rcon(`clear ${BOT_NAME}`, { check: false }));
                 await run(rcon(`item replace entity ${BOT_NAME} inventory.0 with diamond 64`));

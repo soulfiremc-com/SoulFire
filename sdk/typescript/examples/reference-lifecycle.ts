@@ -7,7 +7,7 @@ export const collectWithClient = Effect.scoped(
   Effect.gen(function* () {
     const client = yield* SoulFire.connect({
       baseUrl: "http://localhost:38765",
-      token: () => process.env.SOULFIRE_TOKEN,
+      token: () => process.env["SOULFIRE_TOKEN"],
     });
     const instance = yield* client.getOrCreateInstance("reference-example", {
       server: "localhost:25565",

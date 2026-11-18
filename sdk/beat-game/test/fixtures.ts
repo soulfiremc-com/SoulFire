@@ -30,6 +30,14 @@ import {
   type BeatGameStrategyHooks,
 } from "../src/index.js";
 
+/** Returns `value`, or throws when something the test depends on is missing. */
+export function required<T>(value: T | null | undefined, what: string): T {
+  if (value === undefined || value === null) {
+    throw new Error(`Expected ${what} to be present`);
+  }
+  return value;
+}
+
 export function blockObservation(
   position: BeatGameBlockPosition,
   overrides: Partial<Omit<BeatGameBlockObservation, "position">> = {},

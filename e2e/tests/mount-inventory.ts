@@ -9,7 +9,9 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
+  required,
 } from "../harness.ts";
 
 const TAG = "sf_e2e_mount_inventory";
@@ -98,7 +100,7 @@ export default {
             "5 seconds",
             "50 millis",
           );
-          const entity = entities.entities[0]!.reference!;
+          const entity = required(entities.entities[0]?.reference, "the entity reference");
           yield* bot.mount({
             entityId: entity.networkId,
             connectionEpoch: entity.connectionEpoch,
@@ -119,7 +121,7 @@ export default {
             "5 seconds",
             "50 millis",
           );
-          const regions = opened.layout!.regions;
+          const { regions } = yield* present(opened.layout, "The mount inventory has no layout");
           const mountSlots = new Set(
             regions
               .filter((region) => !region.id.startsWith("player_"))

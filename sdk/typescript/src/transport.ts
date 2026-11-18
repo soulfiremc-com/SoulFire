@@ -33,9 +33,10 @@ export function rpcStream<A>(
         Effect.gen(function* () {
           // Abort pending next() before awaiting an async generator's return().
           controller.abort();
-          if (iterator.return !== undefined) {
+          const close = iterator.return?.bind(iterator);
+          if (close !== undefined) {
             yield* Effect.tryPromise({
-              try: () => iterator.return!(),
+              try: () => close(),
               catch: (cause) => rpcError(operation, cause),
             }).pipe(Effect.ignore);
           }

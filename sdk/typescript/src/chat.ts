@@ -236,7 +236,8 @@ export function matchChat(event: BotChatEvent, matcher: ChatMatcher): ChatMatch 
     return undefined;
   }
   return {
-    captures: result.slice(1).map((value) => value ?? ""),
+    // Groups that did not take part in the match are undefined at runtime.
+    captures: result.slice(1).map((value: string | undefined) => value ?? ""),
     event,
     groups: { ...result.groups },
   };

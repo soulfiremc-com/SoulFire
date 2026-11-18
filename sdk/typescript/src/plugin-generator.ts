@@ -961,11 +961,12 @@ function pythonCompatibilityReturn(model: GenerationModel): string {
     })),
   ];
   const apiVersion = "descriptor.api_major_version == API_MAJOR_VERSION";
-  if (predicates.length === 0) {
+  const [onlyPredicate, ...otherPredicates] = predicates;
+  if (onlyPredicate === undefined) {
     return `    return ${apiVersion}`;
   }
-  if (predicates.length === 1) {
-    return `    return ${apiVersion} and ${pythonCompatibilityPredicate(predicates[0]!, 4)}`;
+  if (otherPredicates.length === 0) {
+    return `    return ${apiVersion} and ${pythonCompatibilityPredicate(onlyPredicate, 4)}`;
   }
   return `    return (
         ${apiVersion}
@@ -1372,7 +1373,6 @@ async function rewriteTypeScriptSharedImports(outputDirectory: string): Promise<
   const existingFiles = new Set(files);
   for (const file of files) {
     const source = await readFile(file, "utf8");
-    let changed = false;
     const rewritten = source.replaceAll(/from "(\.[^"]+_pb\.js)"/g, (match, specifier: string) => {
       const target = resolve(dirname(file), specifier.replace(/\.js$/, ".ts"));
       if (existingFiles.has(target)) {
@@ -1382,10 +1382,9 @@ async function rewriteTypeScriptSharedImports(outputDirectory: string): Promise<
       if (modulePath.startsWith("../")) {
         throw new Error(`Generated import escapes its output directory: ${specifier}`);
       }
-      changed = true;
       return `from "@soulfiremc/sdk/generated/${modulePath}"`;
     });
-    if (changed) {
+    if (rewritten !== source) {
       await writeFile(file, rewritten, "utf8");
     }
   }

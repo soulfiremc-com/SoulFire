@@ -105,7 +105,7 @@ export default {
           "Server sound never reached the POV audio stream",
         );
         yield* check(
-          timestamps.every((timestamp, index) => index === 0 || timestamp > timestamps[index - 1]!),
+          timestamps.every((timestamp, index) => timestamp > (timestamps[index - 1] ?? -Infinity)),
           "POV audio timestamps regressed",
         );
         enabled = false;

@@ -1,6 +1,6 @@
 import { BotRuntimeState } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect } from "effect";
-import { check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { check, type E2ETest, eventually, rcon, required } from "../harness.ts";
 
 const NAMES = ["FleetE2EA", "FleetE2EB", "FleetE2EC"];
 
@@ -11,7 +11,7 @@ export default {
       Effect.gen(function* () {
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-fleet", {
-            server: `127.0.0.1:${process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566}`,
+            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -47,14 +47,14 @@ export default {
             Effect.gen(function* () {
               const rows = yield* instance.bots();
               const players = yield* rcon("list");
-              for (let index = 0; index < bots.length; index++) {
-                const row = rows.find((entry) => entry.profileId === bots[index]!.id);
+              for (const [index, bot] of bots.entries()) {
+                const row = rows.find((entry) => entry.profileId === bot.id);
                 const online = indices.includes(index);
                 yield* check(
                   row?.isOnline === online &&
                     row.status?.runtimeState ===
                       (online ? BotRuntimeState.RUNNING : BotRuntimeState.STOPPED) &&
-                    players.includes(NAMES[index]!) === online,
+                    players.includes(required(NAMES[index], "the bot name")) === online,
                   `${NAMES[index]} did not become ${online ? "online" : "stopped"}`,
                 );
               }
@@ -65,8 +65,8 @@ export default {
         yield* instance.start();
         yield* expectOnline([0, 1, 2]);
         for (const [index, item] of ["stick", "gold_ingot", "diamond"].entries()) {
-          const bot = bots[index]!;
-          const name = NAMES[index]!;
+          const bot = required(bots[index], "the bot");
+          const name = required(NAMES[index], "the bot name");
           yield* rcon(`gamemode creative ${name}`);
           yield* rcon(`tp ${name} ${index - 0.5} 64 0.5 0 0`);
           yield* rcon(`item replace entity ${name} hotbar.${index + 1} with ${item}`);
@@ -101,10 +101,12 @@ export default {
           );
         }
 
-        yield* bots[0]!.stop();
+        const firstBot = required(bots[0], "the first bot");
+        const secondBot = required(bots[1], "the second bot");
+        yield* firstBot.stop();
         yield* expectOnline([1, 2]);
-        yield* instance.restart({ botIds: [bots[0]!.id, bots[1]!.id] });
-        yield* bots[0]!.stop();
+        yield* instance.restart({ botIds: [firstBot.id, secondBot.id] });
+        yield* firstBot.stop();
         yield* expectOnline([1, 2]);
         yield* Effect.sleep("1 second");
         yield* expectOnline([1, 2]);

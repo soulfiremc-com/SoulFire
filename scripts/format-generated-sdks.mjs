@@ -36,6 +36,7 @@ async function formatGeneratedDirectory(directory) {
   }
 }
 
+/** @param {string} fileName */
 function isGeneratedSource(fileName) {
   return (
     fileName.endsWith("_connect.py") ||

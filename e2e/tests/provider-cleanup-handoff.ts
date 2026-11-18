@@ -4,7 +4,7 @@ import {
   BotTaskStatus,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 export default {
   name: "provider-cleanup-handoff",
@@ -36,7 +36,9 @@ export default {
         const observeHook = eventually(
           hooks().pipe(
             Effect.tap((result) => check(result.entities.length === 1, "No fishing line observed")),
-            Effect.map((result) => result.entities[0]!.reference!.uuid),
+            Effect.map(
+              (result) => required(result.entities[0]?.reference, "the entity reference").uuid,
+            ),
           ),
           "5 seconds",
           "50 millis",

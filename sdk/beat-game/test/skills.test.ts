@@ -18,7 +18,7 @@ import {
   type BeatGamePlannerDecision,
   type BeatGamePortalWorkspace,
 } from "../src/index.js";
-import { checkpoint } from "./fixtures.js";
+import { checkpoint, required } from "./fixtures.js";
 
 const now = "2026-08-28T12:00:00.000Z";
 
@@ -64,18 +64,21 @@ describe("durable beat-game skills", () => {
     const suspended = suspendDurableSkill(reserved, "nearby hostile", "2026-08-28T12:00:01.000Z");
     const store = new InMemoryBeatGameCheckpointStore();
     const saved = await Effect.runPromise(store.save(suspended, undefined));
-    const restored = await Effect.runPromise(store.load(saved.runId));
+    const restored = required(
+      await Effect.runPromise(store.load(saved.runId)),
+      "the restored checkpoint",
+    );
 
-    expect(restored?.activeSkill).toMatchObject({
+    expect(restored.activeSkill).toMatchObject({
       skillId: "portal-skill",
       status: BeatGameDurableSkillStatus.SUSPENDED,
       substep: "construct-frame",
       retries: { "nearby hostile": 1 },
     });
-    expect(latestResumablePortalWorkspace(restored!)).toEqual(workspace);
+    expect(latestResumablePortalWorkspace(restored)).toEqual(workspace);
 
     const resumed = startOrResumeDurableSkill(
-      restored!,
+      restored,
       decision,
       "2026-08-28T12:00:02.000Z",
       () => "must-not-replace",

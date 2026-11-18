@@ -616,7 +616,7 @@ function isSafeLiquidInteractionStand(
     feet?.replaceable === true &&
     head?.replaceable === true &&
     isStableSupport(support) &&
-    ![feet, head, support].some((block) => block !== undefined && isFluidBlock(block.blockId))
+    ![feet, head, support].some((block) => isFluidBlock(block.blockId))
   );
 }
 
@@ -666,8 +666,8 @@ function isFluidBlock(blockId: string): boolean {
 function isFlowingFluid(block: BeatGameBlockObservation): boolean {
   return (
     isFluidBlock(block.blockId) &&
-    block.properties.level !== undefined &&
-    block.properties.level !== "0"
+    block.properties["level"] !== undefined &&
+    block.properties["level"] !== "0"
   );
 }
 

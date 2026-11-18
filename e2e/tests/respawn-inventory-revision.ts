@@ -17,7 +17,7 @@ export default {
         );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-respawn-revision", {
-            server: `127.0.0.1:${process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566}`,
+            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );

@@ -785,10 +785,12 @@ export class SoulFireInstance {
     options: GetOrCreateBotOptions = {},
   ): Effect.Effect<SoulFireBot, SoulFireOperationError, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
+      // JavaScript callers can pass any value, so check it at runtime.
+      const requestedAuth: unknown = options.auth;
       if (
-        options.auth !== undefined &&
-        options.auth !== "offline" &&
-        options.auth !== "microsoft"
+        requestedAuth !== undefined &&
+        requestedAuth !== "offline" &&
+        requestedAuth !== "microsoft"
       ) {
         return yield* Effect.fail(
           operationError(

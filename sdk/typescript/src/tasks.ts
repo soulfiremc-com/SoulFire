@@ -885,7 +885,7 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
    */
   public wait(options?: { call?: CallOptions }): Effect.Effect<BotTask, SoulFireOperationError> {
     return Effect.gen({ self: this }, function* () {
-      if (this.terminal) return this.#snapshot;
+      if (isTerminalTaskStatus(this.#snapshot.status)) return this.#snapshot;
       yield* this.events(options).pipe(
         Stream.runForEach((event) =>
           Effect.sync(() => {
@@ -893,7 +893,8 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
           }),
         ),
       );
-      if (!this.terminal) yield* this.refresh(options?.call);
+      // The event stream above updates the snapshot, so read its status again.
+      if (!isTerminalTaskStatus(this.#snapshot.status)) yield* this.refresh(options?.call);
       return this.#snapshot;
     });
   }

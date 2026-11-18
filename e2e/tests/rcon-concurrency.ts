@@ -1,5 +1,5 @@
 import { Effect, Result } from "effect";
-import { check, type E2ETest, rcon } from "../harness.ts";
+import { check, type E2ETest, rcon, required } from "../harness.ts";
 
 export default {
   name: "rcon-concurrency",
@@ -11,7 +11,10 @@ export default {
       const expected = yield* Effect.forEach(commands, (command) => rcon(command));
       const results = yield* Effect.forEach(
         Array.from({ length: 128 }, (_, index) => index % commands.length),
-        (index) => rcon(commands[index]!).pipe(Effect.map((output) => output === expected[index])),
+        (index) =>
+          rcon(required(commands[index], "the RCON command")).pipe(
+            Effect.map((output) => output === expected[index]),
+          ),
         { concurrency: 16 },
       );
       yield* check(
@@ -21,7 +24,7 @@ export default {
       const rejected = yield* Effect.result(rcon("soulfire_e2e_missing_command"));
       yield* check(Result.isFailure(rejected), "An invalid RCON command was accepted");
       yield* check(
-        (yield* rcon(commands[0]!)) === expected[0],
+        (yield* rcon(required(commands[0], "the first RCON command"))) === expected[0],
         "A failed RCON command blocked the next command",
       );
     }),

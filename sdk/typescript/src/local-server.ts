@@ -64,7 +64,8 @@ export function installLocalServer(
         : path.dirname(path.dirname(javaPath));
     let jarPath: string;
     let installedVersion = "local";
-    if (options.jarPath === undefined) {
+    const localJarPath = options.jarPath;
+    if (localJarPath === undefined) {
       const release = yield* installIO("install.release", (signal) =>
         resolveRelease(options.version, (input, init) =>
           fetchImplementation(input, { ...init, signal }),
@@ -87,7 +88,7 @@ export function installLocalServer(
       installedVersion = release.tag_name;
     } else
       jarPath = yield* installIO("install.jar", () =>
-        requireLocalFile(options.jarPath!, "SoulFire JAR"),
+        requireLocalFile(localJarPath, "SoulFire JAR"),
       );
     const runDirectory = path.join(directory, "server");
     yield* installIO("install.mkdir", () => mkdir(runDirectory, { recursive: true }));
@@ -108,7 +109,7 @@ export function installLocalServer(
         windowsHide: true,
       });
     const semaphore = yield* Semaphore.make(1);
-    let child: ChildProcessWithoutNullStreams;
+    let child: ChildProcessWithoutNullStreams | undefined;
     let info: LocalSoulFireServer;
     const onLine = (rawLine: string) => {
       const line = stripVTControlCharacters(rawLine).trim();
@@ -175,7 +176,7 @@ export function installLocalServer(
         return info;
       },
       token: createRootApiToken(secretKey),
-      isRunning: () => child.exitCode === null && child.signalCode === null,
+      isRunning: () => child?.exitCode === null && child.signalCode === null,
       logs: () => [...logs],
       restart: () => semaphore.withPermits(1)(stop.pipe(Effect.andThen(start()))),
       stop: () => semaphore.withPermits(1)(stop),

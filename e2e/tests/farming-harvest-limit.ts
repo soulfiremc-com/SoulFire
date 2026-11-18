@@ -50,7 +50,7 @@ export default {
                     .pipe(
                       Effect.tap(({ block }) =>
                         check(
-                          block?.blockId === "minecraft:wheat" && block.properties.age === "7",
+                          block?.blockId === "minecraft:wheat" && block.properties["age"] === "7",
                           "The bot has not observed both mature crops",
                         ),
                       ),

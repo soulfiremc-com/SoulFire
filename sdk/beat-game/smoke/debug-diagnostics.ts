@@ -847,124 +847,126 @@ interface SmokeCollectionTaskAttempt {
 }
 
 function parseSmokeProgressActivity(input: unknown): readonly SmokeProgressActivity[] {
-  if (!isRecord(input) || typeof input.observedAt !== "string") {
+  if (!isRecord(input) || typeof input["observedAt"] !== "string") {
     return [];
   }
-  const observedAtMs = Date.parse(input.observedAt);
-  if (!Number.isFinite(observedAtMs) || typeof input.kind !== "string") {
+  const observedAtMs = Date.parse(input["observedAt"]);
+  if (!Number.isFinite(observedAtMs) || typeof input["kind"] !== "string") {
     return [];
   }
-  if (input.kind === "beat-game-event" && isRecord(input.event)) {
-    const event = input.event;
+  if (input["kind"] === "beat-game-event" && isRecord(input["event"])) {
+    const event = input["event"];
     if (
-      event.type === "diagnostic" &&
-      typeof event.message === "string" &&
-      (event.message === "Waiting in a sealed shelter until morning" ||
-        event.message === "Waiting under existing cover until morning")
+      event["type"] === "diagnostic" &&
+      typeof event["message"] === "string" &&
+      (event["message"] === "Waiting in a sealed shelter until morning" ||
+        event["message"] === "Waiting under existing cover until morning")
     ) {
       return [
         {
-          observedAt: input.observedAt,
+          observedAt: input["observedAt"],
           observedAtMs,
           kind: "intentional-wait",
-          message: event.message,
+          message: event["message"],
         },
       ];
     }
     if (
-      event.type !== "action-started" &&
-      event.type !== "action-succeeded" &&
-      event.type !== "action-failed"
+      event["type"] !== "action-started" &&
+      event["type"] !== "action-succeeded" &&
+      event["type"] !== "action-failed"
     ) {
       return [];
     }
     return [
       {
-        observedAt: input.observedAt,
+        observedAt: input["observedAt"],
         observedAtMs,
-        kind: event.type,
-        ...(typeof event.action === "string" ? { action: event.action } : {}),
-        ...(typeof event.detail === "string" ? { detail: event.detail } : {}),
+        kind: event["type"],
+        ...(typeof event["action"] === "string" ? { action: event["action"] } : {}),
+        ...(typeof event["detail"] === "string" ? { detail: event["detail"] } : {}),
       },
     ];
   }
-  if (input.kind === "task-progress-observed" && isRecord(input.task)) {
-    const task = input.task;
-    const progress = isRecord(task.progress) ? task.progress : undefined;
-    const detail = isRecord(progress?.detail) ? progress.detail : undefined;
-    const current = progressCount(progress?.current);
-    const total = progressCount(progress?.total);
-    const failedApproaches = Array.isArray(detail?.failedApproaches)
-      ? detail.failedApproaches.filter(isRecord)
+  if (input["kind"] === "task-progress-observed" && isRecord(input["task"])) {
+    const task = input["task"];
+    const progress = isRecord(task["progress"]) ? task["progress"] : undefined;
+    const detail = isRecord(progress?.["detail"]) ? progress["detail"] : undefined;
+    const current = progressCount(progress?.["current"]);
+    const total = progressCount(progress?.["total"]);
+    const failedApproaches = Array.isArray(detail?.["failedApproaches"])
+      ? detail["failedApproaches"].filter(isRecord)
       : [];
     return [
       {
-        observedAt: input.observedAt,
+        observedAt: input["observedAt"],
         observedAtMs,
         kind: "task-progress",
-        ...(typeof task.taskId === "string" ? { taskId: task.taskId } : {}),
+        ...(typeof task["taskId"] === "string" ? { taskId: task["taskId"] } : {}),
         ...(current === undefined ? {} : { taskCurrent: current }),
         ...(total === undefined ? {} : { taskTotal: total }),
-        ...(typeof progress?.fraction === "number" ? { taskFraction: progress.fraction } : {}),
-        ...(typeof progress?.message === "string" ? { message: progress.message } : {}),
-        ...(typeof progress?.detailType === "string"
-          ? { taskDetailType: progress.detailType }
+        ...(typeof progress?.["fraction"] === "number"
+          ? { taskFraction: progress["fraction"] }
           : {}),
-        ...(typeof detail?.phase === "number" ? { taskPhase: detail.phase } : {}),
+        ...(typeof progress?.["message"] === "string" ? { message: progress["message"] } : {}),
+        ...(typeof progress?.["detailType"] === "string"
+          ? { taskDetailType: progress["detailType"] }
+          : {}),
+        ...(typeof detail?.["phase"] === "number" ? { taskPhase: detail["phase"] } : {}),
         ...(detail === undefined
           ? {}
           : {
-              taskActiveTargets: blockPositionKeys(detail.activeTargets),
-              taskRejectedTargets: blockPositionKeys(detail.rejectedTargets),
+              taskActiveTargets: blockPositionKeys(detail["activeTargets"]),
+              taskRejectedTargets: blockPositionKeys(detail["rejectedTargets"]),
               taskFailedApproachTargets: blockPositionKeys(
-                failedApproaches.map((approach) => approach.target),
+                failedApproaches.map((approach) => approach["target"]),
               ),
               taskFailedApproachPositions: blockPositionKeys(
                 failedApproaches.flatMap((approach) =>
-                  Array.isArray(approach.playerPositions) ? approach.playerPositions : [],
+                  Array.isArray(approach["playerPositions"]) ? approach["playerPositions"] : [],
                 ),
               ),
-              taskCompletedBreaks: Array.isArray(detail.completedBreaks)
-                ? detail.completedBreaks.length
+              taskCompletedBreaks: Array.isArray(detail["completedBreaks"])
+                ? detail["completedBreaks"].length
                 : 0,
-              ...(typeof detail.consecutiveStalledPaths === "number"
+              ...(typeof detail["consecutiveStalledPaths"] === "number"
                 ? {
-                    taskConsecutiveStalledPaths: detail.consecutiveStalledPaths,
+                    taskConsecutiveStalledPaths: detail["consecutiveStalledPaths"],
                   }
                 : {}),
-              ...(typeof detail.pathCurrentMovement === "number"
-                ? { taskPathCurrentMovement: detail.pathCurrentMovement }
+              ...(typeof detail["pathCurrentMovement"] === "number"
+                ? { taskPathCurrentMovement: detail["pathCurrentMovement"] }
                 : {}),
-              ...(typeof detail.pathTotalMovements === "number"
-                ? { taskPathTotalMovements: detail.pathTotalMovements }
+              ...(typeof detail["pathTotalMovements"] === "number"
+                ? { taskPathTotalMovements: detail["pathTotalMovements"] }
                 : {}),
             }),
       },
     ];
   }
-  if (input.kind === "pathfind-completed" || input.kind === "pathfind-xz-completed") {
+  if (input["kind"] === "pathfind-completed" || input["kind"] === "pathfind-xz-completed") {
     return [
       {
-        observedAt: input.observedAt,
+        observedAt: input["observedAt"],
         observedAtMs,
         kind: "path-completed",
       },
     ];
   }
-  if (input.kind === "pathfind-failed" || input.kind === "pathfind-xz-failed") {
+  if (input["kind"] === "pathfind-failed" || input["kind"] === "pathfind-xz-failed") {
     return [
       {
-        observedAt: input.observedAt,
+        observedAt: input["observedAt"],
         observedAtMs,
         kind: "path-failed",
-        ...(typeof input.cause === "string" ? { detail: input.cause } : {}),
+        ...(typeof input["cause"] === "string" ? { detail: input["cause"] } : {}),
       },
     ];
   }
-  if (input.kind === "primitive-completed") {
+  if (input["kind"] === "primitive-completed") {
     return [
       {
-        observedAt: input.observedAt,
+        observedAt: input["observedAt"],
         observedAtMs,
         kind: "primitive-completed",
       },
@@ -990,14 +992,14 @@ function blockPositionKeys(input: unknown): readonly string[] {
   return input.flatMap((position) => {
     if (
       !isRecord(position) ||
-      typeof position.x !== "number" ||
-      typeof position.y !== "number" ||
-      typeof position.z !== "number"
+      typeof position["x"] !== "number" ||
+      typeof position["y"] !== "number" ||
+      typeof position["z"] !== "number"
     ) {
       return [];
     }
-    const dimension = typeof position.dimension === "string" ? position.dimension : "unknown";
-    return [`${dimension}:${position.x},${position.y},${position.z}`];
+    const dimension = typeof position["dimension"] === "string" ? position["dimension"] : "unknown";
+    return [`${dimension}:${position["x"]},${position["y"]},${position["z"]}`];
   });
 }
 

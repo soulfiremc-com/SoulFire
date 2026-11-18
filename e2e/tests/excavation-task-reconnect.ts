@@ -7,7 +7,7 @@ import {
   ExcavateCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 export default {
   name: "excavation-task-reconnect",
@@ -93,7 +93,10 @@ export default {
                 "15 seconds",
                 "10 millis",
               );
-              const position = (yield* bot.world.player()).position!;
+              const position = required(
+                (yield* bot.world.player()).position,
+                "the player position",
+              );
               const guard = yield* bot.tasks.guard(
                 { x: Math.floor(position.x), y: 64, z: Math.floor(position.z) },
                 { entityTypes: ["minecraft:zombie"] },

@@ -7,6 +7,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
 } from "../harness.ts";
 
@@ -34,8 +35,9 @@ export default {
             const potions = state.slots.filter(
               (s) => s.slot >= 5 && s.itemId === "minecraft:potion",
             );
-            return potions.length === 3
-              ? Effect.succeed(potions[0]!)
+            const [potion] = potions;
+            return potions.length === 3 && potion !== undefined
+              ? Effect.succeed(potion)
               : Effect.fail(new CheckFailed({ message: "The water bottles did not arrive" }));
           }),
         ),
@@ -102,6 +104,7 @@ export default {
           ),
         "Water bottles and brewed potions have indistinguishable labels or missing native details",
       );
+      const brewedPotion = yield* present(brewed.slots[0], "The brewed potion slot is missing");
       yield* bot.clickInventory(0);
       yield* eventually(
         bot
@@ -109,8 +112,8 @@ export default {
           .pipe(
             Effect.flatMap((state) =>
               check(
-                state.carriedItem?.tooltipLines.length === brewed.slots[0]!.tooltipLines.length &&
-                  label(state.carriedItem) === label(brewed.slots[0]!),
+                state.carriedItem?.tooltipLines.length === brewedPotion.tooltipLines.length &&
+                  label(state.carriedItem) === label(brewedPotion),
                 "Picking up the brewed potion lost its native tooltip",
               ),
             ),
@@ -150,7 +153,7 @@ export default {
       );
       yield* check(
         books.every((b) => b.tooltipLines.length > 1) &&
-          JSON.stringify(books[0]!.tooltipLines) !== JSON.stringify(books[1]!.tooltipLines),
+          JSON.stringify(books[0]?.tooltipLines) !== JSON.stringify(books[1]?.tooltipLines),
         "Enchanted books lost their distinct native enchantment details",
       );
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),

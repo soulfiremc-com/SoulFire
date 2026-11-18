@@ -35,6 +35,7 @@ import {
   type BeatGameDriver,
   type BeatGameDriverEvent,
   type BeatGameEntitySelector,
+  type BeatGameEnvironmentObservation,
   type BeatGameSurfaceColumn,
 } from "./driver.js";
 import {
@@ -1316,9 +1317,10 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
       for (const requirement of checkpoint.planner.requirements) {
         const previous = previousRequirements.get(requirement.key);
         if (
-          previous?.currentCount !== requirement.currentCount ||
-          previous?.targetCount !== requirement.targetCount ||
-          previous?.satisfied !== requirement.satisfied
+          previous === undefined ||
+          previous.currentCount !== requirement.currentCount ||
+          previous.targetCount !== requirement.targetCount ||
+          previous.satisfied !== requirement.satisfied
         ) {
           yield* emit(state, {
             type:
@@ -1487,7 +1489,7 @@ function shouldTakeNightShelter(
     return Effect.succeed(false);
   }
   return Effect.gen(function* () {
-    const environment = yield* state.driver.environment!;
+    const environment = yield* observeEnvironment(state);
     if (!isHostileNight(environment.gameTime)) {
       return false;
     }
@@ -1598,7 +1600,7 @@ function trySleepThroughNight(
     return Effect.succeed(false);
   }
   return Effect.gen(function* () {
-    const environment = yield* state.driver.environment!;
+    const environment = yield* observeEnvironment(state);
     if (!isHostileNight(environment.gameTime)) {
       return true;
     }
@@ -1898,7 +1900,7 @@ function waitForMorningAfterBed(state: RunState): Effect.Effect<boolean, BeatGam
     const deadline = Date.now() + NIGHT_BED_MORNING_TIMEOUT_MS;
     let daylightConfirmations = 0;
     while (Date.now() < deadline) {
-      const environment = yield* state.driver.environment!;
+      const environment = yield* observeEnvironment(state);
       daylightConfirmations =
         environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
           ? daylightConfirmations + 1
@@ -2125,7 +2127,7 @@ function shelterUntilMorning(
         });
         break;
       }
-      const environment = yield* state.driver.environment!;
+      const environment = yield* observeEnvironment(state);
       daylightConfirmations =
         environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
           ? daylightConfirmations + 1
@@ -2461,7 +2463,7 @@ function isViableNightShelterColumn(
         block === undefined ||
         block.replaceable ||
         !block.diggable ||
-        block.properties.waterlogged === "true"
+        block.properties["waterlogged"] === "true"
       ) {
         return false;
       }
@@ -2495,7 +2497,7 @@ function isViableNightShelterColumn(
       { ...shaft, z: shaft.z - 1, y: sealY },
     ]) {
       const block = yield* queryExactBlock(driver, support);
-      if (block !== undefined && !block.replaceable && block.properties.waterlogged !== "true") {
+      if (block !== undefined && !block.replaceable && block.properties["waterlogged"] !== "true") {
         return true;
       }
     }
@@ -2804,14 +2806,23 @@ function openNightShelterEnclosure(
   );
 }
 
+// Callers check `state.driver.environment` first, so a missing observer is a programming error.
+function observeEnvironment(
+  state: RunState,
+): Effect.Effect<BeatGameEnvironmentObservation, BeatGameDriverError> {
+  return (
+    state.driver.environment ??
+    Effect.die(new Error("The beat-game driver does not observe the environment"))
+  );
+}
+
 function isHostileNight(gameTime: bigint | undefined): boolean {
   if (gameTime === undefined) {
     return false;
   }
   const dayTime = ((gameTime % 24_000n) + 24_000n) % 24_000n;
-  return NIGHT_SHELTER_START_TICK < NIGHT_SHELTER_END_TICK
-    ? dayTime >= NIGHT_SHELTER_START_TICK && dayTime < NIGHT_SHELTER_END_TICK
-    : dayTime >= NIGHT_SHELTER_START_TICK || dayTime < NIGHT_SHELTER_END_TICK;
+  // The shelter window wraps past day time 0, so either side of midnight counts.
+  return dayTime >= NIGHT_SHELTER_START_TICK || dayTime < NIGHT_SHELTER_END_TICK;
 }
 
 function countNightShelterItems(
@@ -5960,7 +5971,7 @@ function blockCreeperExplosion(
   return state.driver.withControl(
     Effect.gen(function* () {
       yield* state.driver.act({ type: "reset-movement" });
-      if (observation.player.equipment.offhand !== "minecraft:shield") {
+      if (observation.player.equipment["offhand"] !== "minecraft:shield") {
         yield* state.driver.act({
           type: "equip-item",
           selector: { itemIds: ["minecraft:shield"] },
@@ -7340,7 +7351,7 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
         return undefined;
       }
       const overheadCandidates = overheadEscapeBlocks(observation.player.position);
-      let overhead = overheadCandidates.at(-1)!;
+      let overhead = overheadCandidates[1];
       let obstruction: BeatGameBlockObservation | undefined;
       for (const candidate of overheadCandidates) {
         const block = yield* queryExactBlock(state.driver, candidate);
@@ -7786,7 +7797,9 @@ function hasAirForBreathingPocketPath(observation: BeatGameObservation): boolean
   );
 }
 
-function overheadEscapeBlocks(position: BeatGamePosition): readonly BeatGameBlockPosition[] {
+function overheadEscapeBlocks(
+  position: BeatGamePosition,
+): readonly [BeatGameBlockPosition, BeatGameBlockPosition] {
   const base = {
     x: Math.floor(position.x),
     z: Math.floor(position.z),
@@ -8352,7 +8365,7 @@ function defendAgainstSingleTarget(
       const prepareShield = canBlockWithShield
         ? state.driver.withControl(
             Effect.gen(function* () {
-              if (observation.player.equipment.offhand !== "minecraft:shield") {
+              if (observation.player.equipment["offhand"] !== "minecraft:shield") {
                 yield* state.driver.act({
                   type: "equip-item",
                   selector: { itemIds: ["minecraft:shield"] },
@@ -9557,17 +9570,17 @@ function tryForageNearbyFood(
 function isReadyForageBlock(block: BeatGameBlockObservation): boolean {
   switch (block.blockId) {
     case "minecraft:beetroots":
-      return block.properties.age === "3";
+      return block.properties["age"] === "3";
     case "minecraft:carrots":
     case "minecraft:potatoes":
-      return block.properties.age === "7";
+      return block.properties["age"] === "7";
     case "minecraft:cave_vines":
     case "minecraft:cave_vines_plant":
-      return block.properties.berries === "true";
+      return block.properties["berries"] === "true";
     case "minecraft:melon":
       return block.diggable;
     case "minecraft:sweet_berry_bush":
-      return Number(block.properties.age) >= 2;
+      return Number(block.properties["age"]) >= 2;
     default:
       return false;
   }
@@ -10927,8 +10940,8 @@ function fillLiquidBucket(
                   (candidate) =>
                     sameBlockPosition(candidate.position, source.position) &&
                     ((candidate.blockId === `minecraft:${liquid}` &&
-                      candidate.properties.level === "0") ||
-                      (liquid === "water" && candidate.properties.waterlogged === "true")),
+                      candidate.properties["level"] === "0") ||
+                      (liquid === "water" && candidate.properties["waterlogged"] === "true")),
                 )
               ) {
                 return yield* new BeatGameDriverError({
@@ -12911,8 +12924,7 @@ function shouldAllowAquaticHunt(
   return (
     observation.player.health >= minimumSafeHealth &&
     (targetPreference.requireHealthRecoveryForSafeAquaticTargets !== true ||
-      observation.player.health < minimumHealth ||
-      exhaustedDrySearch) &&
+      observation.player.health < minimumHealth) &&
     targetPreference.maximumSafeAquaticFoodLevel !== undefined &&
     observation.player.food <= targetPreference.maximumSafeAquaticFoodLevel
   );
@@ -13427,7 +13439,7 @@ function isDryWalkingSpace(block: BeatGameBlockObservation | undefined): boolean
   return (
     block !== undefined &&
     !isPlayerFluidBlock(block.blockId) &&
-    block.properties.waterlogged !== "true" &&
+    block.properties["waterlogged"] !== "true" &&
     (block.replaceable || block.solid === false)
   );
 }
@@ -13838,7 +13850,7 @@ function isStableDryShaftSupport(block: BeatGameBlockObservation | undefined): b
     !block.replaceable &&
     block.solid !== false &&
     !isPlayerFluidBlock(block.blockId) &&
-    block.properties.waterlogged !== "true" &&
+    block.properties["waterlogged"] !== "true" &&
     !isGravityAffectedBlockId(block.blockId)
   );
 }
@@ -13851,7 +13863,7 @@ function isSafeDryShaftSpace(block: BeatGameBlockObservation | undefined): boole
   return (
     block !== undefined &&
     !isPlayerFluidBlock(block.blockId) &&
-    block.properties.waterlogged !== "true" &&
+    block.properties["waterlogged"] !== "true" &&
     (block.replaceable || block.diggable)
   );
 }
@@ -15179,9 +15191,6 @@ function ensureInventorySpace(
           discardPocketYaw = pocketYaw;
         }
       }
-      if (current.inventory.emptyPlayerSlots === undefined) {
-        break;
-      }
       if (discardPocketYaw === undefined) {
         cleanupFailure = new BeatGameDriverError({
           operation: "ensure-inventory-space",
@@ -15937,7 +15946,7 @@ function observeCompletedPortalWorkspace(
       const portalObserved = frame.interior.some((position) =>
         observedKeys.has(positionKey(position)),
       );
-      const waterSource = water.find(({ properties }) => properties.level === "0")?.position;
+      const waterSource = water.find(({ properties }) => properties["level"] === "0")?.position;
       const updated: BeatGamePortalWorkspace = {
         ...workspace,
         status: portalObserved ? "IGNITED" : "BUILDING",
@@ -17605,7 +17614,7 @@ function hasGuardedCorpseAtNight(
     return Effect.succeed(false);
   }
   return Effect.gen(function* () {
-    const environment = yield* state.driver.environment!;
+    const environment = yield* observeEnvironment(state);
     if (!isHostileNight(environment.gameTime)) {
       return false;
     }
@@ -18439,8 +18448,8 @@ function mergeSharedDiscoveries(
       if (discovery.kind !== "eye-sample") {
         return [];
       }
-      const directionX = discovery.metadata?.directionX;
-      const directionZ = discovery.metadata?.directionZ;
+      const directionX = discovery.metadata?.["directionX"];
+      const directionZ = discovery.metadata?.["directionZ"];
       const key = `${discovery.observedAt}:${positionKey(discovery.position)}`;
       if (
         knownEyeSamples.has(key) ||

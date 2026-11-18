@@ -369,7 +369,10 @@ export class SoulFireFleet {
               started.push(member);
               return member;
             }),
-          ).pipe(Effect.result),
+          ).pipe(
+            Effect.mapError((error): FleetTaskStartFailure => ({ bot, error })),
+            Effect.result,
+          ),
         { concurrency },
       ).pipe(
         Effect.onError(() =>
@@ -382,10 +385,10 @@ export class SoulFireFleet {
       );
       const members: FleetTaskMember<Result>[] = [];
       const failures: FleetTaskStartFailure[] = [];
-      outcomes.forEach((outcome, index) => {
+      for (const outcome of outcomes) {
         if (Result.isSuccess(outcome)) members.push(outcome.success);
-        else failures.push({ bot: bots[index]!, error: outcome.failure });
-      });
+        else failures.push(outcome.failure);
+      }
       return new SoulFireFleetTaskGroup(members, failures);
     });
   }
@@ -409,24 +412,26 @@ export class SoulFireFleet {
 
           if ((options.strategy ?? "round-robin") === "contiguous") {
             let offset = 0;
-            for (let index = 0; index < bots.length; index++) {
-              const remainingBots = bots.length - index;
+            for (const [index, bucket] of buckets.entries()) {
+              const remainingBots = buckets.length - index;
               const remainingItems = items.length - offset;
               const size = Math.min(maximumItems, Math.ceil(remainingItems / remainingBots));
-              buckets[index]!.push(...items.slice(offset, offset + size));
+              bucket.push(...items.slice(offset, offset + size));
               offset += size;
             }
           } else {
             let botIndex = 0;
             for (const item of items) {
-              while (botIndex < bots.length && buckets[botIndex]!.length >= maximumItems) {
+              let bucket = buckets[botIndex];
+              while (bucket !== undefined && bucket.length >= maximumItems) {
                 botIndex++;
+                bucket = buckets[botIndex];
               }
-              if (botIndex >= bots.length) {
+              if (bucket === undefined) {
                 break;
               }
-              buckets[botIndex]!.push(item);
-              botIndex = (botIndex + 1) % bots.length;
+              bucket.push(item);
+              botIndex = (botIndex + 1) % buckets.length;
             }
           }
 
@@ -438,7 +443,7 @@ export class SoulFireFleet {
           }
           return bots.map((bot, index) => ({
             bot,
-            items: buckets[index]!,
+            items: buckets[index] ?? [],
           }));
         },
         catch: (cause) => operationError("fleet.distribute", cause),
@@ -528,7 +533,7 @@ function matchesMetadata(bot: FleetBot, condition: FleetMetadataSelector): boole
     return false;
   }
   if ("equals" in condition) {
-    return present && deepEqual(namespace?.[condition.key], condition.equals);
+    return present && deepEqual(namespace[condition.key], condition.equals);
   }
   return condition.exists === false || present;
 }
@@ -541,7 +546,12 @@ function orderBots(bots: FleetBot[], selector: FleetSelector): void {
   if (order === "random") {
     for (let index = bots.length - 1; index > 0; index--) {
       const other = Math.floor(Math.random() * (index + 1));
-      [bots[index], bots[other]] = [bots[other]!, bots[index]!];
+      const current = bots[index];
+      const swapped = bots[other];
+      if (current !== undefined && swapped !== undefined) {
+        bots[index] = swapped;
+        bots[other] = current;
+      }
     }
     return;
   }

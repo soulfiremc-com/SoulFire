@@ -7,6 +7,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
 } from "../harness.ts";
 import { nativeInput } from "../native-input.ts";
@@ -75,11 +76,11 @@ export default {
         yield* placeBot(bot, { x: 4264.5, y: 64, z: 8.5 }, 90);
         yield* bot.openInventory();
         const creative = yield* bot.inventoryState();
-        const searchTab = creative.layout?.buttons.find(
-          (button) => button.iconItemId === "minecraft:compass",
+        const searchTab = yield* present(
+          creative.layout?.buttons.find((button) => button.iconItemId === "minecraft:compass"),
+          "The creative search tab is missing",
         );
-        yield* check(searchTab !== undefined, "The creative search tab is missing");
-        yield* bot.clickContainerButton(searchTab!.buttonId);
+        yield* bot.clickContainerButton(searchTab.buttonId);
         yield* nativeInput(client, bot, async (input) => {
           await input.click(298, 36);
           await input.type("§diamond sword");
@@ -114,9 +115,11 @@ export default {
             ),
             "3 seconds",
           );
-          yield* bot.clickInventory(
-            opened.slots.find((slot) => slot.itemId === "minecraft:iron_sword")!.slot,
+          const sword = yield* present(
+            opened.slots.find((slot) => slot.itemId === "minecraft:iron_sword"),
+            "The iron sword is missing from the opened container",
           );
+          yield* bot.clickInventory(sword.slot);
           yield* bot.clickInventory(0);
           yield* setText(opened.menuId, "item_name", input);
           yield* expectField(opened.menuId, "item_name", expected);

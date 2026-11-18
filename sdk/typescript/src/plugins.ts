@@ -15,6 +15,7 @@ import {
 } from "@bufbuild/protobuf";
 import { FileDescriptorSetSchema } from "@bufbuild/protobuf/wkt";
 import { createClient, type CallOptions, type Client, type Transport } from "@connectrpc/connect";
+import { createAsyncIterable } from "@connectrpc/connect/protocol";
 import { Effect, Stream } from "effect";
 import { operationError, SoulFirePluginError, type SoulFireOperationError } from "./errors.js";
 import { rpc, rpcStream, withSignal } from "./transport.js";
@@ -175,7 +176,7 @@ export class ReflectivePlugin {
               withSignal(options, signal).signal,
               options?.timeoutMs,
               options?.headers,
-              singleMessage(request),
+              createAsyncIterable([request]),
               options?.contextValues,
             );
             yield* response.message;
@@ -611,10 +612,6 @@ function mapReflectiveEvents(
       }),
     ),
   );
-}
-
-async function* singleMessage(message: Message): AsyncIterable<Message> {
-  yield message;
 }
 
 function typeUrlFor(schema: DescMessage): string {

@@ -13,6 +13,7 @@ import {
   CollectBlocksTaskResultSchema,
   CollectBlocksTaskSchema,
 } from "../src/generated/soulfire/task_pb.js";
+import { taskInput, unpacked } from "./task-input.js";
 
 it.each([true, false])(
   "foreground collection cleans up unfinished work (complete=%s)",
@@ -21,7 +22,7 @@ it.each([true, false])(
     const transport = createRouterTransport(({ service }) => {
       service(BotTaskService, {
         startBotTask(request) {
-          const input = anyUnpack(request.input!, CollectBlocksTaskSchema)!;
+          const input = unpacked(anyUnpack(taskInput(request), CollectBlocksTaskSchema));
           expect(input.tags).toEqual(["minecraft:logs"]);
           expect(input.count).toBe(8);
           return { taskId: "collection", status: BotTaskStatus.RUNNING };

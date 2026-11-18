@@ -164,100 +164,103 @@ export function assertValidCheckpoint(
   expectedRunId?: string,
 ): asserts value is BeatGameCheckpoint {
   const checkpoint = record(value, "checkpoint");
-  if (checkpoint.schemaVersion !== BEAT_GAME_CHECKPOINT_SCHEMA_VERSION) {
+  if (checkpoint["schemaVersion"] !== BEAT_GAME_CHECKPOINT_SCHEMA_VERSION) {
     throw new TypeError("Unsupported beat-game checkpoint schema version");
   }
-  const runId = nonEmptyString(checkpoint.runId, "checkpoint.runId");
+  const runId = nonEmptyString(checkpoint["runId"], "checkpoint.runId");
   if (expectedRunId !== undefined && runId !== expectedRunId) {
     throw new TypeError(`Checkpoint run ID ${runId} does not match ${expectedRunId}`);
   }
   for (const key of ["teamId", "instanceId", "botId", "connectionEpoch"]) {
     nonEmptyString(checkpoint[key], `checkpoint.${key}`);
   }
-  enumValue(checkpoint.role, Object.values(BeatGameTeamRole), "checkpoint.role");
-  positiveInteger(checkpoint.revision, "checkpoint.revision");
-  timestamp(checkpoint.createdAt, "checkpoint.createdAt");
-  timestamp(checkpoint.updatedAt, "checkpoint.updatedAt");
-  plannerState(checkpoint.planner);
-  worldMemory(checkpoint.memory);
-  if (checkpoint.activeSkill !== undefined) {
-    durableSkill(checkpoint.activeSkill, "checkpoint.activeSkill");
+  enumValue(checkpoint["role"], Object.values(BeatGameTeamRole), "checkpoint.role");
+  positiveInteger(checkpoint["revision"], "checkpoint.revision");
+  timestamp(checkpoint["createdAt"], "checkpoint.createdAt");
+  timestamp(checkpoint["updatedAt"], "checkpoint.updatedAt");
+  plannerState(checkpoint["planner"]);
+  worldMemory(checkpoint["memory"]);
+  if (checkpoint["activeSkill"] !== undefined) {
+    durableSkill(checkpoint["activeSkill"], "checkpoint.activeSkill");
   }
-  if (checkpoint.lastStableAction !== undefined) {
-    stableActionResult(checkpoint.lastStableAction);
+  if (checkpoint["lastStableAction"] !== undefined) {
+    stableActionResult(checkpoint["lastStableAction"]);
   }
 }
 
 function stableActionResult(value: unknown): void {
   const result = record(value, "checkpoint.lastStableAction");
-  nonEmptyString(result.action, "checkpoint.lastStableAction.action");
-  enumValue(result.phase, Object.values(BeatGamePhase), "checkpoint.lastStableAction.phase");
-  timestamp(result.completedAt, "checkpoint.lastStableAction.completedAt");
+  nonEmptyString(result["action"], "checkpoint.lastStableAction.action");
+  enumValue(result["phase"], Object.values(BeatGamePhase), "checkpoint.lastStableAction.phase");
+  timestamp(result["completedAt"], "checkpoint.lastStableAction.completedAt");
   enumValue(
-    result.evidence,
+    result["evidence"],
     ["TASK_RESULT", "OBSERVED_STATE", "OBSERVATION_AFTER_UNCERTAIN_RESULT"],
     "checkpoint.lastStableAction.evidence",
   );
-  nonEmptyString(result.connectionEpoch, "checkpoint.lastStableAction.connectionEpoch");
-  unsignedIntegerString(result.playerRevision, "checkpoint.lastStableAction.playerRevision");
-  unsignedIntegerString(result.inventoryRevision, "checkpoint.lastStableAction.inventoryRevision");
+  nonEmptyString(result["connectionEpoch"], "checkpoint.lastStableAction.connectionEpoch");
+  unsignedIntegerString(result["playerRevision"], "checkpoint.lastStableAction.playerRevision");
+  unsignedIntegerString(
+    result["inventoryRevision"],
+    "checkpoint.lastStableAction.inventoryRevision",
+  );
 }
 
 function plannerState(value: unknown): void {
   const planner = record(value, "checkpoint.planner");
-  enumValue(planner.phase, Object.values(BeatGamePhase), "checkpoint.planner.phase");
-  enumValue(planner.status, Object.values(BeatGameRunStatus), "checkpoint.planner.status");
-  nonEmptyString(planner.objective, "checkpoint.planner.objective");
-  nonNegativeInteger(planner.retryCount, "checkpoint.planner.retryCount");
-  stringArray(planner.completedActions, "checkpoint.planner.completedActions");
-  if (planner.currentAction !== undefined && typeof planner.currentAction !== "string") {
+  enumValue(planner["phase"], Object.values(BeatGamePhase), "checkpoint.planner.phase");
+  enumValue(planner["status"], Object.values(BeatGameRunStatus), "checkpoint.planner.status");
+  nonEmptyString(planner["objective"], "checkpoint.planner.objective");
+  nonNegativeInteger(planner["retryCount"], "checkpoint.planner.retryCount");
+  stringArray(planner["completedActions"], "checkpoint.planner.completedActions");
+  if (planner["currentAction"] !== undefined && typeof planner["currentAction"] !== "string") {
     throw new TypeError("checkpoint.planner.currentAction must be a string");
   }
-  if (planner.currentActionId !== undefined) {
-    nonEmptyString(planner.currentActionId, "checkpoint.planner.currentActionId");
-    if (planner.currentAction === undefined) {
+  if (planner["currentActionId"] !== undefined) {
+    nonEmptyString(planner["currentActionId"], "checkpoint.planner.currentActionId");
+    if (planner["currentAction"] === undefined) {
       throw new TypeError("checkpoint.planner.currentActionId requires currentAction");
     }
   }
-  timestamp(planner.startedAt, "checkpoint.planner.startedAt");
-  timestamp(planner.updatedAt, "checkpoint.planner.updatedAt");
-  if (!Array.isArray(planner.requirements)) {
+  timestamp(planner["startedAt"], "checkpoint.planner.startedAt");
+  timestamp(planner["updatedAt"], "checkpoint.planner.updatedAt");
+  if (!Array.isArray(planner["requirements"])) {
     throw new TypeError("checkpoint.planner.requirements must be an array");
   }
-  planner.requirements.forEach((requirement, index) => {
+  planner["requirements"].forEach((requirement, index) => {
     const item = record(requirement, `checkpoint.planner.requirements[${index}]`);
     const prefix = `checkpoint.planner.requirements[${index}]`;
-    nonEmptyString(item.key, `${prefix}.key`);
-    stringArray(item.itemIds, `${prefix}.itemIds`);
-    stringArray(item.tags, `${prefix}.tags`);
-    nonNegativeInteger(item.targetCount, `${prefix}.targetCount`);
-    nonNegativeInteger(item.currentCount, `${prefix}.currentCount`);
-    finiteNumber(item.priority, `${prefix}.priority`);
-    booleanValue(item.satisfied, `${prefix}.satisfied`);
+    nonEmptyString(item["key"], `${prefix}.key`);
+    stringArray(item["itemIds"], `${prefix}.itemIds`);
+    stringArray(item["tags"], `${prefix}.tags`);
+    nonNegativeInteger(item["targetCount"], `${prefix}.targetCount`);
+    nonNegativeInteger(item["currentCount"], `${prefix}.currentCount`);
+    finiteNumber(item["priority"], `${prefix}.priority`);
+    booleanValue(item["satisfied"], `${prefix}.satisfied`);
   });
 }
 
 function worldMemory(value: unknown): void {
   const memory = record(value, "checkpoint.memory");
-  memoryEntries(memory.blocks, "checkpoint.memory.blocks", blockObservation);
-  memoryEntries(memory.entities, "checkpoint.memory.entities", entityObservation);
-  memoryEntries(memory.containers, "checkpoint.memory.containers", blockObservation);
-  memoryEntries(memory.portals, "checkpoint.memory.portals", blockObservation);
-  if (!Array.isArray(memory.portalWorkspaces)) {
+  memoryEntries(memory["blocks"], "checkpoint.memory.blocks", blockObservation);
+  memoryEntries(memory["entities"], "checkpoint.memory.entities", entityObservation);
+  memoryEntries(memory["containers"], "checkpoint.memory.containers", blockObservation);
+  memoryEntries(memory["portals"], "checkpoint.memory.portals", blockObservation);
+  if (!Array.isArray(memory["portalWorkspaces"])) {
     throw new TypeError("checkpoint.memory.portalWorkspaces must be an array");
   }
-  memory.portalWorkspaces.forEach((workspace, index) =>
+  memory["portalWorkspaces"].forEach((workspace, index) =>
     portalWorkspace(workspace, `checkpoint.memory.portalWorkspaces[${index}]`),
   );
-  if (!Array.isArray(memory.places)) {
+  if (!Array.isArray(memory["places"])) {
     throw new TypeError("checkpoint.memory.places must be an array");
   }
-  memory.places.forEach((place, index) => {
+  memory["places"].forEach((place, index) => {
     const name = `checkpoint.memory.places[${index}]`;
     const item = record(place, name);
-    nonEmptyString(item.key, `${name}.key`);
+    nonEmptyString(item["key"], `${name}.key`);
     enumValue(
-      item.kind,
+      item["kind"],
       [
         "FORTRESS",
         "BASTION",
@@ -269,134 +272,137 @@ function worldMemory(value: unknown): void {
       ],
       `${name}.kind`,
     );
-    position(item.position, `${name}.position`);
-    timestamp(item.observedAt, `${name}.observedAt`);
-    confidence(item.confidence, `${name}.confidence`);
-    if (item.invalidationReason !== undefined) {
-      nonEmptyString(item.invalidationReason, `${name}.invalidationReason`);
+    position(item["position"], `${name}.position`);
+    timestamp(item["observedAt"], `${name}.observedAt`);
+    confidence(item["confidence"], `${name}.confidence`);
+    if (item["invalidationReason"] !== undefined) {
+      nonEmptyString(item["invalidationReason"], `${name}.invalidationReason`);
     }
   });
-  if (!Array.isArray(memory.skillHistory)) {
+  if (!Array.isArray(memory["skillHistory"])) {
     throw new TypeError("checkpoint.memory.skillHistory must be an array");
   }
-  memory.skillHistory.forEach((skill, index) =>
+  memory["skillHistory"].forEach((skill, index) =>
     durableSkill(skill, `checkpoint.memory.skillHistory[${index}]`),
   );
-  memoryEntries(memory.unreachable, "checkpoint.memory.unreachable", position);
-  memoryEntries(memory.deathPositions, "checkpoint.memory.deathPositions", deathPosition);
-  if (memory.explorationFrontiers !== undefined) {
-    const frontiers = record(memory.explorationFrontiers, "checkpoint.memory.explorationFrontiers");
+  memoryEntries(memory["unreachable"], "checkpoint.memory.unreachable", position);
+  memoryEntries(memory["deathPositions"], "checkpoint.memory.deathPositions", deathPosition);
+  if (memory["explorationFrontiers"] !== undefined) {
+    const frontiers = record(
+      memory["explorationFrontiers"],
+      "checkpoint.memory.explorationFrontiers",
+    );
     for (const [key, rawFrontier] of Object.entries(frontiers)) {
       nonEmptyString(key, "checkpoint.memory.explorationFrontiers key");
       const frontier = record(rawFrontier, `checkpoint.memory.explorationFrontiers.${key}`);
-      position(frontier.origin, `checkpoint.memory.explorationFrontiers.${key}.origin`);
+      position(frontier["origin"], `checkpoint.memory.explorationFrontiers.${key}.origin`);
       positiveInteger(
-        frontier.nextIndex,
+        frontier["nextIndex"],
         `checkpoint.memory.explorationFrontiers.${key}.nextIndex`,
       );
-      if (frontier.progressVersion !== undefined) {
-        if (frontier.progressVersion !== 2) {
+      if (frontier["progressVersion"] !== undefined) {
+        if (frontier["progressVersion"] !== 2) {
           throw new TypeError(
             `checkpoint.memory.explorationFrontiers.${key}.progressVersion must be 2`,
           );
         }
       }
-      if (frontier.target !== undefined) {
-        position(frontier.target, `checkpoint.memory.explorationFrontiers.${key}.target`);
+      if (frontier["target"] !== undefined) {
+        position(frontier["target"], `checkpoint.memory.explorationFrontiers.${key}.target`);
       }
-      if (frontier.targetAttempts !== undefined) {
+      if (frontier["targetAttempts"] !== undefined) {
         nonNegativeInteger(
-          frontier.targetAttempts,
+          frontier["targetAttempts"],
           `checkpoint.memory.explorationFrontiers.${key}.targetAttempts`,
         );
       }
-      if (frontier.lastPosition !== undefined) {
+      if (frontier["lastPosition"] !== undefined) {
         position(
-          frontier.lastPosition,
+          frontier["lastPosition"],
           `checkpoint.memory.explorationFrontiers.${key}.lastPosition`,
         );
       }
-      if (frontier.totalAdvances !== undefined) {
+      if (frontier["totalAdvances"] !== undefined) {
         nonNegativeInteger(
-          frontier.totalAdvances,
+          frontier["totalAdvances"],
           `checkpoint.memory.explorationFrontiers.${key}.totalAdvances`,
         );
       }
     }
   }
-  if (memory.latestDeath !== undefined) {
-    memoryEntry(memory.latestDeath, "checkpoint.memory.latestDeath", position);
+  if (memory["latestDeath"] !== undefined) {
+    memoryEntry(memory["latestDeath"], "checkpoint.memory.latestDeath", position);
   }
-  if (!Array.isArray(memory.eyeSamples)) {
+  if (!Array.isArray(memory["eyeSamples"])) {
     throw new TypeError("checkpoint.memory.eyeSamples must be an array");
   }
-  memory.eyeSamples.forEach((sample, index) => {
+  memory["eyeSamples"].forEach((sample, index) => {
     const item = record(sample, `checkpoint.memory.eyeSamples[${index}]`);
-    position(item.origin, `checkpoint.memory.eyeSamples[${index}].origin`);
-    const direction = record(item.direction, `checkpoint.memory.eyeSamples[${index}].direction`);
-    finiteNumber(direction.x, "eye sample direction.x");
-    finiteNumber(direction.z, "eye sample direction.z");
-    timestamp(item.observedAt, "eye sample observedAt");
-    confidence(item.confidence, "eye sample confidence");
+    position(item["origin"], `checkpoint.memory.eyeSamples[${index}].origin`);
+    const direction = record(item["direction"], `checkpoint.memory.eyeSamples[${index}].direction`);
+    finiteNumber(direction["x"], "eye sample direction.x");
+    finiteNumber(direction["z"], "eye sample direction.z");
+    timestamp(item["observedAt"], "eye sample observedAt");
+    confidence(item["confidence"], "eye sample confidence");
   });
-  if (memory.strongholdEstimate !== undefined) {
-    position(memory.strongholdEstimate, "checkpoint.memory.strongholdEstimate");
+  if (memory["strongholdEstimate"] !== undefined) {
+    position(memory["strongholdEstimate"], "checkpoint.memory.strongholdEstimate");
   }
 }
 
 function durableSkill(value: unknown, name: string): void {
   const skill = record(value, name);
-  nonEmptyString(skill.skillId, `${name}.skillId`);
-  enumValue(skill.kind, Object.values(BeatGameDurableSkillKind), `${name}.kind`);
-  enumValue(skill.phase, Object.values(BeatGamePhase), `${name}.phase`);
-  nonEmptyString(skill.action, `${name}.action`);
-  enumValue(skill.status, Object.values(BeatGameDurableSkillStatus), `${name}.status`);
-  nonEmptyString(skill.substep, `${name}.substep`);
-  positionArray(skill.targets, `${name}.targets`);
-  positionArray(skill.protectedBlocks, `${name}.protectedBlocks`);
-  stringArray(skill.protectedItemIds, `${name}.protectedItemIds`);
-  positionArray(skill.completedWorldChanges, `${name}.completedWorldChanges`);
-  nonNegativeIntegerRecord(skill.requiredResources, `${name}.requiredResources`);
-  nonNegativeIntegerRecord(skill.retries, `${name}.retries`);
-  if (skill.completionEvidence !== undefined) {
-    nonEmptyString(skill.completionEvidence, `${name}.completionEvidence`);
+  nonEmptyString(skill["skillId"], `${name}.skillId`);
+  enumValue(skill["kind"], Object.values(BeatGameDurableSkillKind), `${name}.kind`);
+  enumValue(skill["phase"], Object.values(BeatGamePhase), `${name}.phase`);
+  nonEmptyString(skill["action"], `${name}.action`);
+  enumValue(skill["status"], Object.values(BeatGameDurableSkillStatus), `${name}.status`);
+  nonEmptyString(skill["substep"], `${name}.substep`);
+  positionArray(skill["targets"], `${name}.targets`);
+  positionArray(skill["protectedBlocks"], `${name}.protectedBlocks`);
+  stringArray(skill["protectedItemIds"], `${name}.protectedItemIds`);
+  positionArray(skill["completedWorldChanges"], `${name}.completedWorldChanges`);
+  nonNegativeIntegerRecord(skill["requiredResources"], `${name}.requiredResources`);
+  nonNegativeIntegerRecord(skill["retries"], `${name}.retries`);
+  if (skill["completionEvidence"] !== undefined) {
+    nonEmptyString(skill["completionEvidence"], `${name}.completionEvidence`);
   }
-  if (skill.portalWorkspace !== undefined) {
-    portalWorkspace(skill.portalWorkspace, `${name}.portalWorkspace`);
+  if (skill["portalWorkspace"] !== undefined) {
+    portalWorkspace(skill["portalWorkspace"], `${name}.portalWorkspace`);
   }
-  timestamp(skill.startedAt, `${name}.startedAt`);
-  timestamp(skill.updatedAt, `${name}.updatedAt`);
+  timestamp(skill["startedAt"], `${name}.startedAt`);
+  timestamp(skill["updatedAt"], `${name}.updatedAt`);
 }
 
 function portalWorkspace(value: unknown, name: string): void {
   const workspace = record(value, name);
-  nonEmptyString(workspace.workspaceId, `${name}.workspaceId`);
-  position(workspace.origin, `${name}.origin`);
-  enumValue(workspace.axis, ["x", "z"], `${name}.axis`);
-  enumValue(workspace.method, ["OBSIDIAN", "CAST"], `${name}.method`);
+  nonEmptyString(workspace["workspaceId"], `${name}.workspaceId`);
+  position(workspace["origin"], `${name}.origin`);
+  enumValue(workspace["axis"], ["x", "z"], `${name}.axis`);
+  enumValue(workspace["method"], ["OBSIDIAN", "CAST"], `${name}.method`);
   enumValue(
-    workspace.status,
+    workspace["status"],
     ["RESERVED", "BUILDING", "IGNITED", "ENTERING", "ENTERED", "ABANDONED"],
     `${name}.status`,
   );
-  positionArray(workspace.targetFrame, `${name}.targetFrame`);
-  positionArray(workspace.observedFrame, `${name}.observedFrame`);
-  positionArray(workspace.interior, `${name}.interior`);
-  positionArray(workspace.protectedBlocks, `${name}.protectedBlocks`);
-  positionArray(workspace.candidateLavaSources, `${name}.candidateLavaSources`);
-  positionArray(workspace.rejectedLavaSources, `${name}.rejectedLavaSources`);
-  if (workspace.waterSource !== undefined) {
-    position(workspace.waterSource, `${name}.waterSource`);
+  positionArray(workspace["targetFrame"], `${name}.targetFrame`);
+  positionArray(workspace["observedFrame"], `${name}.observedFrame`);
+  positionArray(workspace["interior"], `${name}.interior`);
+  positionArray(workspace["protectedBlocks"], `${name}.protectedBlocks`);
+  positionArray(workspace["candidateLavaSources"], `${name}.candidateLavaSources`);
+  positionArray(workspace["rejectedLavaSources"], `${name}.rejectedLavaSources`);
+  if (workspace["waterSource"] !== undefined) {
+    position(workspace["waterSource"], `${name}.waterSource`);
   }
-  positionArray(workspace.waterFlow, `${name}.waterFlow`);
-  enumValue(workspace.bucketState, ["UNKNOWN", "EMPTY", "WATER", "LAVA"], `${name}.bucketState`);
-  enumValue(workspace.ignitionState, ["NOT_ATTEMPTED", "IGNITED"], `${name}.ignitionState`);
-  enumValue(workspace.interiorState, ["UNKNOWN", "CLEAR", "PORTAL"], `${name}.interiorState`);
-  nonNegativeInteger(workspace.entryAttempts, `${name}.entryAttempts`);
-  timestamp(workspace.observedAt, `${name}.observedAt`);
-  timestamp(workspace.updatedAt, `${name}.updatedAt`);
-  if (workspace.abandonedReason !== undefined) {
-    nonEmptyString(workspace.abandonedReason, `${name}.abandonedReason`);
+  positionArray(workspace["waterFlow"], `${name}.waterFlow`);
+  enumValue(workspace["bucketState"], ["UNKNOWN", "EMPTY", "WATER", "LAVA"], `${name}.bucketState`);
+  enumValue(workspace["ignitionState"], ["NOT_ATTEMPTED", "IGNITED"], `${name}.ignitionState`);
+  enumValue(workspace["interiorState"], ["UNKNOWN", "CLEAR", "PORTAL"], `${name}.interiorState`);
+  nonNegativeInteger(workspace["entryAttempts"], `${name}.entryAttempts`);
+  timestamp(workspace["observedAt"], `${name}.observedAt`);
+  timestamp(workspace["updatedAt"], `${name}.updatedAt`);
+  if (workspace["abandonedReason"] !== undefined) {
+    nonEmptyString(workspace["abandonedReason"], `${name}.abandonedReason`);
   }
 }
 
@@ -418,15 +424,15 @@ function nonNegativeIntegerRecord(value: unknown, name: string): void {
 function deathPosition(value: unknown, path: string): void {
   position(value, path);
   const item = record(value, path);
-  if (item.inventoryCounts !== undefined) {
-    const counts = record(item.inventoryCounts, `${path}.inventoryCounts`);
+  if (item["inventoryCounts"] !== undefined) {
+    const counts = record(item["inventoryCounts"], `${path}.inventoryCounts`);
     for (const [itemId, count] of Object.entries(counts)) {
       nonEmptyString(itemId, `${path}.inventoryCounts item ID`);
       nonNegativeInteger(count, `${path}.inventoryCounts.${itemId}`);
     }
   }
-  if (item.itemExpiresAt !== undefined) {
-    timestamp(item.itemExpiresAt, `${path}.itemExpiresAt`);
+  if (item["itemExpiresAt"] !== undefined) {
+    timestamp(item["itemExpiresAt"], `${path}.itemExpiresAt`);
   }
 }
 
@@ -447,65 +453,65 @@ function memoryEntry(
   validateValue: (value: unknown, name: string) => void,
 ): void {
   const item = record(value, name);
-  nonEmptyString(item.key, `${name}.key`);
-  validateValue(item.value, `${name}.value`);
-  timestamp(item.observedAt, `${name}.observedAt`);
-  if (item.expiresAt !== undefined) {
-    timestamp(item.expiresAt, `${name}.expiresAt`);
+  nonEmptyString(item["key"], `${name}.key`);
+  validateValue(item["value"], `${name}.value`);
+  timestamp(item["observedAt"], `${name}.observedAt`);
+  if (item["expiresAt"] !== undefined) {
+    timestamp(item["expiresAt"], `${name}.expiresAt`);
   }
-  confidence(item.confidence, `${name}.confidence`);
+  confidence(item["confidence"], `${name}.confidence`);
 }
 
 function blockObservation(value: unknown, name: string): void {
   const block = record(value, name);
-  nonEmptyString(block.blockId, `${name}.blockId`);
-  position(block.position, `${name}.position`);
-  const properties = record(block.properties, `${name}.properties`);
+  nonEmptyString(block["blockId"], `${name}.blockId`);
+  position(block["position"], `${name}.position`);
+  const properties = record(block["properties"], `${name}.properties`);
   for (const [key, property] of Object.entries(properties)) {
     if (typeof property !== "string") {
       throw new TypeError(`${name}.properties.${key} must be a string`);
     }
   }
-  booleanValue(block.diggable, `${name}.diggable`);
-  booleanValue(block.replaceable, `${name}.replaceable`);
-  if (block.solid !== undefined) {
-    booleanValue(block.solid, `${name}.solid`);
+  booleanValue(block["diggable"], `${name}.diggable`);
+  booleanValue(block["replaceable"], `${name}.replaceable`);
+  if (block["solid"] !== undefined) {
+    booleanValue(block["solid"], `${name}.solid`);
   }
-  booleanValue(block.interactive, `${name}.interactive`);
-  timestamp(block.observedAt, `${name}.observedAt`);
+  booleanValue(block["interactive"], `${name}.interactive`);
+  timestamp(block["observedAt"], `${name}.observedAt`);
 }
 
 function entityObservation(value: unknown, name: string): void {
   const entity = record(value, name);
-  nonEmptyString(entity.connectionEpoch, `${name}.connectionEpoch`);
-  nonNegativeInteger(entity.networkId, `${name}.networkId`);
-  nonEmptyString(entity.entityType, `${name}.entityType`);
-  position(entity.position, `${name}.position`);
-  vector(entity.velocity, `${name}.velocity`);
-  booleanValue(entity.alive, `${name}.alive`);
-  if (entity.uuid !== undefined) {
-    nonEmptyString(entity.uuid, `${name}.uuid`);
+  nonEmptyString(entity["connectionEpoch"], `${name}.connectionEpoch`);
+  nonNegativeInteger(entity["networkId"], `${name}.networkId`);
+  nonEmptyString(entity["entityType"], `${name}.entityType`);
+  position(entity["position"], `${name}.position`);
+  vector(entity["velocity"], `${name}.velocity`);
+  booleanValue(entity["alive"], `${name}.alive`);
+  if (entity["uuid"] !== undefined) {
+    nonEmptyString(entity["uuid"], `${name}.uuid`);
   }
-  if (entity.itemId !== undefined) {
-    nonEmptyString(entity.itemId, `${name}.itemId`);
+  if (entity["itemId"] !== undefined) {
+    nonEmptyString(entity["itemId"], `${name}.itemId`);
   }
-  if (entity.health !== undefined) {
-    finiteNumber(entity.health, `${name}.health`);
+  if (entity["health"] !== undefined) {
+    finiteNumber(entity["health"], `${name}.health`);
   }
-  timestamp(entity.observedAt, `${name}.observedAt`);
+  timestamp(entity["observedAt"], `${name}.observedAt`);
 }
 
 function position(value: unknown, name: string): void {
   const point = record(value, name);
   vector(point, name);
-  nonEmptyString(point.dimension, `${name}.dimension`);
+  nonEmptyString(point["dimension"], `${name}.dimension`);
 }
 
 function vector(value: unknown, name: string): void {
   const point = record(value, name);
-  finiteNumber(point.x, `${name}.x`);
-  finiteNumber(point.y, `${name}.y`);
-  finiteNumber(point.z, `${name}.z`);
+  finiteNumber(point["x"], `${name}.x`);
+  finiteNumber(point["y"], `${name}.y`);
+  finiteNumber(point["z"], `${name}.z`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

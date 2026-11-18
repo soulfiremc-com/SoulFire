@@ -7,7 +7,7 @@ import {
   FarmCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 const CROPS = [4263, 4266, 4270, 4274, 4277];
 
@@ -52,7 +52,7 @@ export default {
                     .block({ position: { x, y: 64, z: 8 } })
                     .pipe(
                       Effect.tap(({ block }) =>
-                        check(block?.properties.age === "7", "The mature crop has not arrived"),
+                        check(block?.properties["age"] === "7", "The mature crop has not arrived"),
                       ),
                     ),
                   "5 seconds",
@@ -105,7 +105,10 @@ export default {
                   "15 seconds",
                   "10 millis",
                 );
-                const position = (yield* bot.world.player()).position!;
+                const position = required(
+                  (yield* bot.world.player()).position,
+                  "the player position",
+                );
                 const guard = yield* bot.tasks.guard(
                   {
                     x: Math.floor(position.x),

@@ -4,7 +4,7 @@ import {
   BotTaskStatus,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 export default {
   name: "fishing-task-handoff",
@@ -43,7 +43,9 @@ export default {
                   "The fishing task has not cast its line",
                 ),
               ),
-              Effect.map((result) => result.entities[0]!.reference!.uuid),
+              Effect.map(
+                (result) => required(result.entities[0]?.reference, "the entity reference").uuid,
+              ),
             ),
             "5 seconds",
             "50 millis",

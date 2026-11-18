@@ -7,7 +7,7 @@ import {
   BreedCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 const TAG = "sf_e2e_breed_reconnect";
 
@@ -116,7 +116,7 @@ export default {
                       check(
                         partialPair
                           ? value.progress?.message === "Walking to second breeding animal" &&
-                              Number(value.progress?.current) === 0
+                              Number(value.progress.current) === 0
                           : Number(value.progress?.current) === 1,
                         `Breeding checkpoint: status=${value.status}, current=${value.progress?.current}, message=${value.progress?.message}, failure=${value.failure?.message}`,
                       ),
@@ -125,7 +125,10 @@ export default {
                 "15 seconds",
                 "10 millis",
               );
-              const position = (yield* bot.world.player()).position!;
+              const position = required(
+                (yield* bot.world.player()).position,
+                "the player position",
+              );
               const guard = yield* bot.tasks.guard(
                 { x: Math.floor(position.x), y: Math.floor(position.y), z: Math.floor(position.z) },
                 { entityTypes: ["minecraft:zombie"] },

@@ -7,7 +7,7 @@ import {
   BotTaskStatus,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
 
 const STATION = { x: 4263, y: 64, z: 8 };
 const BLOCK = "4263 64 8";
@@ -99,7 +99,10 @@ export default {
                 yield* Effect.addFinalizer(() => task.cancel("test cleanup").pipe(Effect.ignore));
                 const epochs = [(yield* bot.world.player()).connectionEpoch];
                 const pause = Effect.fn(function* () {
-                  const position = (yield* bot.world.player()).position!;
+                  const position = required(
+                    (yield* bot.world.player()).position,
+                    "the player position",
+                  );
                   const guard = yield* bot.tasks.guard(
                     {
                       x: Math.floor(position.x),

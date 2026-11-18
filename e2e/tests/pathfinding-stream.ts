@@ -17,6 +17,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
   serverPosition,
 } from "../harness.ts";
@@ -95,13 +96,13 @@ export default {
             },
             catch: (error) => new CheckFailed({ message: `${name}: ${String(error)}` }),
           });
-          const first = frames[0];
-          yield* check(!!first?.actionId, `${name} did not identify its task`);
-          yield* check(
-            first?.position !== undefined && first.distanceRemaining !== undefined,
+          const first = yield* present(frames[0], `${name} did not identify its task`);
+          yield* check(!!first.actionId, `${name} did not identify its task`);
+          const initialDistance = yield* present(
+            first.position === undefined ? undefined : first.distanceRemaining,
             `${name} omitted the initial position or remaining distance`,
           );
-          const taskId = first!.actionId;
+          const taskId = first.actionId;
           const getTask = Effect.tryPromise({
             try: () => taskService.getBotTask({ taskId }),
             catch: (error) => new CheckFailed({ message: String(error) }),
@@ -110,7 +111,7 @@ export default {
             const task = yield* getTask;
             yield* check(
               task.status === BotTaskStatus.FAILED &&
-                first?.status === PathfindStatus.FAILED &&
+                first.status === PathfindStatus.FAILED &&
                 !!task.failure?.message &&
                 first.error === task.failure.message,
               "The initial failure frame lost the provider failure details",
@@ -129,9 +130,7 @@ export default {
             );
             if (!nearby) {
               yield* check(
-                frames.some(
-                  (frame) => (frame.distanceRemaining ?? 100) < first!.distanceRemaining!,
-                ),
+                frames.some((frame) => (frame.distanceRemaining ?? 100) < initialDistance),
                 "Traversal never reported progress toward the goal",
               );
             }

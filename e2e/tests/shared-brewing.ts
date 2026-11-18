@@ -2,10 +2,10 @@ import { fromBinary } from "@bufbuild/protobuf";
 import { BrewTaskResultSchema } from "@soulfiremc/sdk/generated/soulfire/recipe_pb";
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { CheckFailed, check, type E2ETest, eventually, present, rcon } from "../harness.ts";
 
 const NAMES = ["SharedBrewA", "SharedBrewB"];
-const STATIONS = [3927, 3930];
+const STATIONS = [3927, 3930] as const;
 
 export default {
   name: "shared-brewing",
@@ -14,7 +14,7 @@ export default {
       Effect.gen(function* () {
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-shared-brewing", {
-            server: `127.0.0.1:${process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566}`,
+            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -105,7 +105,7 @@ export default {
                     1,
                     {
                       station: {
-                        x: round === 0 && i === 1 ? STATIONS[1]! : STATIONS[0]!,
+                        x: round === 0 && i === 1 ? STATIONS[1] : STATIONS[0],
                         y: 64,
                         z: 8,
                       },
@@ -147,13 +147,17 @@ export default {
                 retainedBottles += countBottles(inventory);
                 if (state.status === BotTaskStatus.COMPLETED) {
                   completed++;
-                  yield* check(!!state.result, "Completed brewing task has no result");
-                  const result = fromBinary(BrewTaskResultSchema, state.result!.value);
+                  const taskResult = yield* present(
+                    state.result,
+                    "Completed brewing task has no result",
+                  );
+                  const result = fromBinary(BrewTaskResultSchema, taskResult.value);
+                  const [output] = result.outputs;
                   yield* check(
                     result.outputs.length === 1 &&
-                      result.outputs[0]!.itemId === "minecraft:potion" &&
-                      result.outputs[0]!.potion?.potionId === "minecraft:awkward" &&
-                      result.outputs[0]!.count === 1,
+                      output?.itemId === "minecraft:potion" &&
+                      output.potion?.potionId === "minecraft:awkward" &&
+                      output.count === 1,
                     "Completed brewing task reported the wrong output",
                   );
                   const potions = yield* rcon(

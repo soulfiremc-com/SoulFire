@@ -155,7 +155,7 @@ function parseGenerateArguments(arguments_: readonly string[]): GenerateArgument
     "--api-major-version",
   );
   const plugin = values.get("--plugin");
-  const token = values.get("--token") ?? process.env.SOULFIRE_TOKEN;
+  const token = values.get("--token") ?? process.env["SOULFIRE_TOKEN"];
   const output = values.get("--output");
   const packageName = values.get("--package");
   const pluginVersion = values.get("--plugin-version");

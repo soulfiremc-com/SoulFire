@@ -567,9 +567,7 @@ export function makeSoulFireBeatGameDriver(
   let controlUsers = 0;
   const acquireSharedControl = controlMutex.withPermits(1)(
     Effect.gen(function* () {
-      if (controlLease === undefined) {
-        controlLease = yield* bot.acquireControl(CONTROL_LEASE_TTL_SECONDS);
-      }
+      controlLease ??= yield* bot.acquireControl(CONTROL_LEASE_TTL_SECONDS);
       controlUsers += 1;
       return controlLease;
     }),
@@ -1276,8 +1274,8 @@ function creeperObservation(
 ): BeatGameEntityObservation["creeper"] | undefined {
   const fuseProgress = finiteMetadataNumber(metadata, "creeper_fuse_progress");
   const swellDirection = finiteMetadataNumber(metadata, "creeper_swell_direction");
-  const powered = metadata?.creeper_powered;
-  const ignited = metadata?.creeper_ignited;
+  const powered = metadata?.["creeper_powered"];
+  const ignited = metadata?.["creeper_ignited"];
   return fuseProgress === undefined ||
     swellDirection === undefined ||
     typeof powered !== "boolean" ||
@@ -1294,8 +1292,8 @@ function creeperObservation(
 function sheepObservation(
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): BeatGameEntityObservation["sheep"] | undefined {
-  const color = metadata?.sheep_color;
-  const sheared = metadata?.sheep_sheared;
+  const color = metadata?.["sheep_color"];
+  const sheared = metadata?.["sheep_sheared"];
   return typeof color !== "string" || typeof sheared !== "boolean" ? undefined : { color, sheared };
 }
 

@@ -33,6 +33,23 @@ export type TestError = CommandFailed | CheckFailed | SoulFireOperationError;
 export const check = (condition: boolean, message: string): Effect.Effect<void, CheckFailed> =>
   condition ? Effect.void : Effect.fail(new CheckFailed({ message }));
 
+/** Succeeds with `item`, or fails with `message` when it is missing. */
+export const present = <T>(
+  item: T | null | undefined,
+  message: string,
+): Effect.Effect<T, CheckFailed> =>
+  item === undefined || item === null
+    ? Effect.fail(new CheckFailed({ message }))
+    : Effect.succeed(item);
+
+/** Returns `item`, or throws when something the test depends on is missing. */
+export const required = <T>(item: T | null | undefined, what: string): T => {
+  if (item === undefined || item === null) {
+    throw new Error(`Expected ${what} to be present`);
+  }
+  return item;
+};
+
 /** Retries `effect` until it succeeds or `timeout` has passed; then fails with its last error. */
 export const eventually = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
@@ -63,7 +80,7 @@ const IMAGE = "itzg/minecraft-server:2026.3.2-java25";
 /** SoulFire's native version, so the bot needs no protocol translation. */
 export const MINECRAFT_VERSION = "26.3";
 /** Not 25565, so a server someone runs for play keeps its port. */
-const MINECRAFT_PORT = Number(process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566);
+const MINECRAFT_PORT = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566);
 /** A flat world of one air layer: nothing exists that a test didn't build. */
 const VOID_WORLD = JSON.stringify({
   layers: [{ block: "minecraft:air", height: 1 }],
@@ -216,7 +233,7 @@ function env(vars: Record<string, string>) {
 
 /** The jar `./gradlew :dedicated-launcher:uberJar` builds, unless SOULFIRE_E2E_JAR names another. */
 export function soulfireJar() {
-  if (process.env.SOULFIRE_E2E_JAR) return path.resolve(process.env.SOULFIRE_E2E_JAR);
+  if (process.env["SOULFIRE_E2E_JAR"]) return path.resolve(process.env["SOULFIRE_E2E_JAR"]);
   const version = readFileSync(path.join(REPO_DIR, "gradle.properties"), "utf8").match(
     /^maven_version=(.+)$/m,
   )?.[1];
@@ -231,8 +248,8 @@ export function soulfireJar() {
 
 /** Java 25: SOULFIRE_E2E_JAVA, else the `java` on PATH. */
 function javaPath() {
-  if (process.env.SOULFIRE_E2E_JAVA) return process.env.SOULFIRE_E2E_JAVA;
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+  if (process.env["SOULFIRE_E2E_JAVA"]) return process.env["SOULFIRE_E2E_JAVA"];
+  for (const dir of (process.env["PATH"] ?? "").split(path.delimiter)) {
     const candidate = path.join(dir, "java");
     try {
       accessSync(candidate, constants.X_OK);

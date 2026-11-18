@@ -8,7 +8,7 @@ import {
   MaintainLoadoutTaskResultSchema,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { CheckFailed, check, type E2ETest, eventually, rcon, required } from "../harness.ts";
 
 const NAMES = ["FleetE2EA", "FleetE2EB"];
 const CHEST = { x: 4263, y: 64, z: 8 };
@@ -38,7 +38,7 @@ export default {
         );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-shared-container-confirm", {
-            server: `127.0.0.1:${process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566}`,
+            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -67,7 +67,7 @@ export default {
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
             for (const [index, bot] of bots.entries()) {
-              const name = NAMES[index]!;
+              const name = required(NAMES[index], "the bot name");
               yield* bot.closeContainer().pipe(Effect.ignore);
               yield* Effect.sleep("200 millis");
               yield* rcon(`gamemode creative ${name}`);
@@ -189,7 +189,7 @@ export default {
                   try: async (): Promise<TransferResult> => {
                     try {
                       if (mode !== "inventory") {
-                        const bot = bots[index]!;
+                        const bot = required(bots[index], "the actor bot");
                         const options = { closeContainer: round % 2 === 0 };
                         const task =
                           mode === "task"
@@ -246,13 +246,18 @@ export default {
                           index,
                           completed: true,
                           transferred: deposit ? result.totalDeposited : result.totalWithdrawn,
-                          finalCount: result.requirements[0]!.finalCount,
-                          satisfied: result.requirements[0]!.satisfied,
+                          finalCount: required(result.requirements[0], "the loadout requirement")
+                            .finalCount,
+                          satisfied: required(result.requirements[0], "the loadout requirement")
+                            .satisfied,
                         };
                       }
                       const result = await service.transferItems({
-                        scope: { instanceId: instance.id, botId: bots[index]!.id },
-                        menuId: containers[index]!.snapshot.menuId,
+                        scope: {
+                          instanceId: instance.id,
+                          botId: required(bots[index], "the actor bot").id,
+                        },
+                        menuId: required(containers[index], "the actor container").snapshot.menuId,
                         selector,
                         count: amount,
                         from: deposit ? InventoryArea.PLAYER : InventoryArea.CONTAINER,
@@ -264,7 +269,7 @@ export default {
                             [InventoryArea.MAIN, InventoryArea.HOTBAR].includes(slot.area) &&
                             slot.item?.itemId === "minecraft:diamond",
                         )
-                        .reduce((sum, slot) => sum + slot.item!.count, 0);
+                        .reduce((sum, slot) => sum + (slot.item?.count ?? 0), 0);
                       if (reported === undefined) throw new Error("Missing confirmed inventory");
                       return {
                         index,
@@ -318,7 +323,7 @@ export default {
                   );
               }
               yield* check(
-                !(yield* bots[index]!.inventory.snapshot()).carried,
+                !(yield* required(bots[index], "the actor bot").inventory.snapshot()).carried,
                 "A shared transfer retained a cursor stack after closing",
               );
             }
@@ -336,7 +341,7 @@ export default {
         yield* rcon(
           'data merge block 4263 64 8 {Items:[{Slot:0b,id:"diamond",count:32},{Slot:1b,id:"bread",count:16}]}',
         );
-        const bot = bots[0]!;
+        const bot = required(bots[0], "the first bot");
         const bread = { itemIds: ["minecraft:bread"] };
         const exact = yield* bot.tasks.withdraw(CHEST, [
           { selector, count: 32 },
@@ -367,7 +372,7 @@ export default {
         );
         const partialResult = fromBinary(
           ContainerTransferTaskResultSchema,
-          partialState.result!.value,
+          required(partialState.result, "the partial batch result").value,
         );
         const collected = yield* rcon(`data get entity ${NAMES[0]} Inventory`);
         yield* check(
@@ -413,7 +418,10 @@ export default {
           mixedState.status === BotTaskStatus.COMPLETED && !!mixedState.result,
           "A mixed loadout rebalance failed",
         );
-        const mixedResult = fromBinary(MaintainLoadoutTaskResultSchema, mixedState.result!.value);
+        const mixedResult = fromBinary(
+          MaintainLoadoutTaskResultSchema,
+          required(mixedState.result, "the mixed loadout result").value,
+        );
         const balanced = yield* rcon(`data get entity ${NAMES[0]} Inventory`);
         const deposited = yield* rcon("data get block 4263 64 8 Items");
         yield* check(

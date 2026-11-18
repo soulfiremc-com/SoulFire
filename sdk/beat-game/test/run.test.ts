@@ -47,6 +47,7 @@ import {
   installStaircaseMovementSimulation,
   observation,
   postDragonHooks,
+  required,
 } from "./fixtures.js";
 
 describe("direct escape sprint directions", () => {
@@ -25663,7 +25664,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ selector }) =>
       selector.blockIds?.length === 1 &&
       selector.blockIds[0] === "minecraft:water" &&
-      selector.properties?.level === "0"
+      selector.properties?.["level"] === "0"
         ? [undergroundSource]
         : [];
     driver.pathResolver = (position, radius, policy) =>
@@ -25885,7 +25886,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ selector }) =>
       selector.blockIds?.length === 1 &&
       selector.blockIds[0] === "minecraft:water" &&
-      selector.properties?.level === "0"
+      selector.properties?.["level"] === "0"
         ? [deepSource, blockedSurfaceSource, reachableSurfaceSource]
         : [];
     driver.pathResolver = (position, radius, policy) =>
@@ -25980,7 +25981,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ selector }) =>
       selector.blockIds?.length === 1 &&
       selector.blockIds[0] === "minecraft:water" &&
-      selector.properties?.level === "0"
+      selector.properties?.["level"] === "0"
         ? sources
         : [];
     driver.pathResolver = (position, radius, policy) =>
@@ -26069,7 +26070,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ selector }) =>
       selector.blockIds?.length === 1 &&
       selector.blockIds[0] === "minecraft:water" &&
-      selector.properties?.level === "0"
+      selector.properties?.["level"] === "0"
         ? sources
         : [];
     const resolvePath = driver.pathResolver;
@@ -26178,7 +26179,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (
         selector.blockIds?.includes("minecraft:water") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(source, {
@@ -26404,7 +26405,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(source, {
@@ -26416,7 +26417,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === undefined
+        selector.properties?.["level"] === undefined
       ) {
         return [];
       }
@@ -26698,7 +26699,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         if (radius > 0.25) {
           return sources;
@@ -26730,7 +26731,9 @@ describe("beat-game run lifecycle", () => {
         return { distance: 2 };
       }
       const source =
-        driver.currentObservation.player.position.x >= 10 ? poolSources[0]! : loneSource;
+        driver.currentObservation.player.position.x >= 10
+          ? required(poolSources[0], "the first pool source")
+          : loneSource;
       return { block: source, distance: 2 };
     };
     driver.actionResolver = (action) => {
@@ -26852,7 +26855,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(source, {
@@ -27066,7 +27069,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [source];
       }
@@ -27228,7 +27231,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [blockedSource, openSource];
       }
@@ -27411,7 +27414,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [source, source];
       }
@@ -27517,7 +27520,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(source, {
@@ -27644,7 +27647,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(
@@ -27786,7 +27789,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0" &&
+        selector.properties?.["level"] === "0" &&
         center.y <= 52
       ) {
         resolveDeepLavaRescan();
@@ -28086,7 +28089,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [source];
       }
@@ -28507,7 +28510,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(
@@ -28702,7 +28705,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return Array.from({ length: 9 }, () => source);
       }
@@ -28976,7 +28979,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         maximumResults = maximum;
         resolveLavaQuery();
@@ -29096,7 +29099,8 @@ describe("beat-game run lifecycle", () => {
     // The pool holds enough lava for a whole portal, but no stand beside it
     // is reachable, so every approach fails.
     driver.blockQueryResolver = ({ selector }) =>
-      selector.blockIds?.includes("minecraft:lava") === true && selector.properties?.level === "0"
+      selector.blockIds?.includes("minecraft:lava") === true &&
+      selector.properties?.["level"] === "0"
         ? Array.from({ length: 12 }, () => source)
         : [];
 
@@ -29943,13 +29947,14 @@ describe("beat-game run lifecycle", () => {
             },
           });
           yield* run.events.pipe(
-            Stream.runForEach((event) =>
-              event.type === "action-failed" && event.detail !== undefined
-                ? Effect.sync(() => {
-                    failures.push(event.detail!);
-                  })
-                : Effect.void,
-            ),
+            Stream.runForEach((event) => {
+              const detail = event.type === "action-failed" ? event.detail : undefined;
+              return detail === undefined
+                ? Effect.void
+                : Effect.sync(() => {
+                    failures.push(detail);
+                  });
+            }),
             Effect.forkScoped,
           );
           yield* sleepWhile(() => attempts < 2).pipe(Effect.timeout("5 seconds"));
@@ -30019,7 +30024,7 @@ describe("beat-game run lifecycle", () => {
     driver.blockQueryResolver = ({ radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return Array.from({ length: 9 }, () => source);
       }
@@ -30205,7 +30210,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
-        selector.properties?.level === "0"
+        selector.properties?.["level"] === "0"
       ) {
         return [
           blockObservation(
@@ -31334,7 +31339,7 @@ describe("beat-game run lifecycle", () => {
       driver.tasks
         .filter((task) => task.type === "attack-entity")
         .slice(0, 2)
-        .map((task) => (task.type === "attack-entity" ? task.target.networkId : undefined)),
+        .map((task) => task.target.networkId),
     ).toEqual([salmon.networkId, salmon.networkId]);
     expect(driver.paths).toContainEqual(
       expect.objectContaining({
@@ -31480,7 +31485,7 @@ describe("beat-game run lifecycle", () => {
       driver.tasks
         .filter((task) => task.type === "attack-entity")
         .slice(0, 2)
-        .map((task) => (task.type === "attack-entity" ? task.target.networkId : undefined)),
+        .map((task) => task.target.networkId),
     ).toEqual([salmon.networkId, salmon.networkId]);
     expect(driver.surfaceQueries).not.toHaveLength(0);
     expect(driver.surfaceQueries.every(({ radius }) => radius === 4)).toBe(true);
@@ -41253,7 +41258,7 @@ describe("beat-game run lifecycle", () => {
       driver.tasks
         .filter((task) => task.type === "attack-entity")
         .slice(0, 2)
-        .map((task) => (task.type === "attack-entity" ? task.target.networkId : undefined)),
+        .map((task) => task.target.networkId),
     ).toEqual([rabbit.networkId, cow.networkId]);
   });
 

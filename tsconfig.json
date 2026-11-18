@@ -6,6 +6,12 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },

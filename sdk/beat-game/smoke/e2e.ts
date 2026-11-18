@@ -2304,14 +2304,15 @@ const findDedicatedJar = fromPromise("find dedicated SoulFire JAR", async () => 
       !name.endsWith("-sources.jar") &&
       !name.endsWith("-unshaded.jar"),
   );
-  if (candidates.length !== 1) {
+  const [candidate] = candidates;
+  if (candidates.length !== 1 || candidate === undefined) {
     throw new SmokeFailure({
       message: `Expected one dedicated SoulFire JAR in ${directory}, found ${
         candidates.join(", ") || "none"
       }`,
     });
   }
-  return path.join(directory, candidates[0]!);
+  return path.join(directory, candidate);
 });
 
 const findJava = fromPromise("find Java", async () =>
@@ -2604,14 +2605,16 @@ function latestDebugTimelineEntry(
 }
 
 function isBeatGameActionEvent(entry: unknown): boolean {
-  if (!isDebugRecord(entry) || entry.kind !== "beat-game-event") {
+  if (!isDebugRecord(entry) || entry["kind"] !== "beat-game-event") {
     return false;
   }
-  const event = entry.event;
+  const event = entry["event"];
   return (
     isDebugRecord(event) &&
-    typeof event.type === "string" &&
-    ["action-started", "action-retried", "action-succeeded", "action-failed"].includes(event.type)
+    typeof event["type"] === "string" &&
+    ["action-started", "action-retried", "action-succeeded", "action-failed"].includes(
+      event["type"],
+    )
   );
 }
 
@@ -2630,14 +2633,14 @@ function querySignificantDebugActivity(limit: number): readonly unknown[] {
       limit: debugApiTimelineEntries,
     })
     .filter((entry) => {
-      if (!isDebugRecord(entry) || entry.kind !== "beat-game-event") {
+      if (!isDebugRecord(entry) || entry["kind"] !== "beat-game-event") {
         return true;
       }
-      const event = entry.event;
+      const event = entry["event"];
       return (
         isDebugRecord(event) &&
-        typeof event.type === "string" &&
-        !["checkpoint-saved", "observation-recorded", "team-claim-changed"].includes(event.type)
+        typeof event["type"] === "string" &&
+        !["checkpoint-saved", "observation-recorded", "team-claim-changed"].includes(event["type"])
       );
     })
     .slice(-limit);
@@ -2679,12 +2682,14 @@ function queryCurrentDecisionActivity(currentAction: string | undefined, limit: 
     };
   }
   const started = activity.findLast((entry) => {
-    if (!isDebugRecord(entry) || entry.kind !== "beat-game-event") {
+    if (!isDebugRecord(entry) || entry["kind"] !== "beat-game-event") {
       return false;
     }
-    const event = entry.event;
+    const event = entry["event"];
     return (
-      isDebugRecord(event) && event.type === "action-started" && event.action === currentAction
+      isDebugRecord(event) &&
+      event["type"] === "action-started" &&
+      event["action"] === currentAction
     );
   });
   const correlatedSince = debugObservedAt(started);
@@ -2720,16 +2725,16 @@ function compactDecisionActivityEntry(entry: unknown): unknown {
   if (!isDebugRecord(entry)) {
     return entry;
   }
-  if (entry.kind === "block-query") {
+  if (entry["kind"] === "block-query") {
     return compactBlockQueryActivity(entry);
   }
-  if (entry.kind !== "entity-query") {
+  if (entry["kind"] !== "entity-query") {
     return entry;
   }
-  const entities = Array.isArray(entry.entities) ? entry.entities.filter(isDebugRecord) : [];
+  const entities = Array.isArray(entry["entities"]) ? entry["entities"].filter(isDebugRecord) : [];
   const byEntityType = new Map<string, number>();
   for (const entity of entities) {
-    const entityType = typeof entity.entityType === "string" ? entity.entityType : "unknown";
+    const entityType = typeof entity["entityType"] === "string" ? entity["entityType"] : "unknown";
     byEntityType.set(entityType, (byEntityType.get(entityType) ?? 0) + 1);
   }
   const { entities: _entities, ...metadata } = entry;
@@ -2745,43 +2750,43 @@ function compactDecisionActivityEntry(entry: unknown): unknown {
         ),
       // oxlint-disable-next-line oxc/no-map-spread -- the spreads only add optional properties when they are defined
       sample: entities.slice(0, 12).map((entity) => ({
-        networkId: entity.networkId,
-        entityType: entity.entityType,
-        position: entity.position,
-        alive: entity.alive,
-        ...(entity.health === undefined ? {} : { health: entity.health }),
-        ...(entity.itemId === undefined ? {} : { itemId: entity.itemId }),
-        ...(entity.target === undefined ? {} : { target: entity.target }),
+        networkId: entity["networkId"],
+        entityType: entity["entityType"],
+        position: entity["position"],
+        alive: entity["alive"],
+        ...(entity["health"] === undefined ? {} : { health: entity["health"] }),
+        ...(entity["itemId"] === undefined ? {} : { itemId: entity["itemId"] }),
+        ...(entity["target"] === undefined ? {} : { target: entity["target"] }),
       })),
     },
   };
 }
 
 function compactBlockQueryActivity(entry: Readonly<Record<string, unknown>>): unknown {
-  const blocks = Array.isArray(entry.blocks) ? entry.blocks.filter(isDebugRecord) : [];
+  const blocks = Array.isArray(entry["blocks"]) ? entry["blocks"].filter(isDebugRecord) : [];
   const byBlockId = new Map<string, number>();
   for (const block of blocks) {
-    const blockId = typeof block.blockId === "string" ? block.blockId : "unknown";
+    const blockId = typeof block["blockId"] === "string" ? block["blockId"] : "unknown";
     byBlockId.set(blockId, (byBlockId.get(blockId) ?? 0) + 1);
   }
   const { blocks: _blocks, ...metadata } = entry;
   return {
     ...metadata,
     result: {
-      count: typeof entry.resultCount === "number" ? entry.resultCount : blocks.length,
-      sampleTruncated: entry.resultsTruncated === true,
+      count: typeof entry["resultCount"] === "number" ? entry["resultCount"] : blocks.length,
+      sampleTruncated: entry["resultsTruncated"] === true,
       byBlockId: [...byBlockId]
         .map(([blockId, count]) => ({ blockId, count }))
         .toSorted(
           (left, right) => right.count - left.count || left.blockId.localeCompare(right.blockId),
         ),
       sample: blocks.slice(0, 16).map((block) => ({
-        blockId: block.blockId,
-        position: block.position,
-        properties: block.properties,
-        diggable: block.diggable,
-        replaceable: block.replaceable,
-        solid: block.solid,
+        blockId: block["blockId"],
+        position: block["position"],
+        properties: block["properties"],
+        diggable: block["diggable"],
+        replaceable: block["replaceable"],
+        solid: block["solid"],
       })),
     },
   };
@@ -2802,14 +2807,14 @@ function shouldTraceBlockQuery(query: BeatGameQueryBlocks): boolean {
 function recentActionOutcomes(activity: readonly unknown[]): readonly unknown[] {
   return activity
     .filter((entry) => {
-      if (!isDebugRecord(entry) || entry.kind !== "beat-game-event") {
+      if (!isDebugRecord(entry) || entry["kind"] !== "beat-game-event") {
         return false;
       }
-      const event = entry.event;
+      const event = entry["event"];
       return (
         isDebugRecord(event) &&
-        typeof event.type === "string" &&
-        ["action-succeeded", "action-failed"].includes(event.type)
+        typeof event["type"] === "string" &&
+        ["action-succeeded", "action-failed"].includes(event["type"])
       );
     })
     .slice(-12);
@@ -2819,7 +2824,7 @@ function debugObservedAt(entry: unknown): string | undefined {
   if (!isDebugRecord(entry)) {
     return undefined;
   }
-  return typeof entry.observedAt === "string" ? entry.observedAt : undefined;
+  return typeof entry["observedAt"] === "string" ? entry["observedAt"] : undefined;
 }
 
 function isDebugRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -2833,7 +2838,7 @@ function parseDebugBlockRequest(input: unknown): Readonly<{
 }> {
   const request = debugRecord(input, "block request");
   return {
-    position: debugPosition(request.position, "position", true),
+    position: debugPosition(request["position"], "position", true),
     includeBlockEntity: optionalDebugBoolean(request, "includeBlockEntity") ?? true,
     includeShapes: optionalDebugBoolean(request, "includeShapes") ?? true,
   };
@@ -2848,7 +2853,9 @@ function inspectDebugWorldVolume(
       const request = debugRecord(input, "nearby world request");
       return {
         center:
-          request.center === undefined ? undefined : debugPosition(request.center, "center", true),
+          request["center"] === undefined
+            ? undefined
+            : debugPosition(request["center"], "center", true),
         horizontalRadius: optionalDebugInteger(request, "horizontalRadius", 0, 32) ?? 8,
         verticalRadius: optionalDebugInteger(request, "verticalRadius", 0, 16) ?? 4,
         includeAir: optionalDebugBoolean(request, "includeAir") ?? false,
@@ -2934,10 +2941,10 @@ function inspectDebugWorldVolume(
 function parseDebugBlockQuery(input: unknown): BeatGameQueryBlocks {
   const request = debugRecord(input, "block query");
   return {
-    center: debugPosition(request.center, "center"),
+    center: debugPosition(request["center"], "center"),
     radius: debugNumber(request, "radius", 0, 512),
-    selector: debugBlockSelector(request.selector),
-    ...(request.maximumResults === undefined
+    selector: debugBlockSelector(request["selector"]),
+    ...(request["maximumResults"] === undefined
       ? {}
       : {
           maximumResults: debugInteger(request, "maximumResults", 1, 10_000),
@@ -2948,10 +2955,12 @@ function parseDebugBlockQuery(input: unknown): BeatGameQueryBlocks {
 function parseDebugEntityQuery(input: unknown): BeatGameQueryEntities {
   const request = debugRecord(input, "entity query");
   return {
-    ...(request.origin === undefined ? {} : { origin: debugPosition(request.origin, "origin") }),
+    ...(request["origin"] === undefined
+      ? {}
+      : { origin: debugPosition(request["origin"], "origin") }),
     radius: debugNumber(request, "radius", 0, 1_024),
-    selector: debugEntitySelector(request.selector),
-    ...(request.maximumResults === undefined
+    selector: debugEntitySelector(request["selector"]),
+    ...(request["maximumResults"] === undefined
       ? {}
       : {
           maximumResults: debugInteger(request, "maximumResults", 1, 10_000),
@@ -2961,7 +2970,7 @@ function parseDebugEntityQuery(input: unknown): BeatGameQueryEntities {
 
 function parseDebugRaycast(input: unknown): BeatGameRaycastQuery {
   const request = debugRecord(input, "raycast request");
-  const direction = debugRecord(request.direction, "direction");
+  const direction = debugRecord(request["direction"], "direction");
   return {
     direction: {
       x: debugNumber(direction, "x", -1, 1),
@@ -2969,7 +2978,7 @@ function parseDebugRaycast(input: unknown): BeatGameRaycastQuery {
       z: debugNumber(direction, "z", -1, 1),
     },
     maximumDistance: debugNumber(request, "maximumDistance", 0.01, 512),
-    ...(request.includeFluids === undefined
+    ...(request["includeFluids"] === undefined
       ? {}
       : { includeFluids: debugBoolean(request, "includeFluids") }),
   };
@@ -2982,7 +2991,7 @@ function parseDebugSurfaceRequest(input: unknown): Readonly<{
 }> {
   const request = debugRecord(input, "surface request");
   return {
-    center: debugPosition(request.center, "center"),
+    center: debugPosition(request["center"], "center"),
     radius: optionalDebugInteger(request, "radius", 0, 512) ?? 16,
     sampleStep: optionalDebugInteger(request, "sampleStep", 1, 64) ?? 1,
   };
@@ -2994,10 +3003,11 @@ function parseDebugPathPlan(input: unknown): Readonly<{
   policy: BeatGamePathPolicy;
 }> {
   const request = debugRecord(input, "path plan request");
-  const suppliedPolicy = request.policy === undefined ? {} : debugRecord(request.policy, "policy");
+  const suppliedPolicy =
+    request["policy"] === undefined ? {} : debugRecord(request["policy"], "policy");
   const defaults = defaultBeatGameStrategy.path;
   return {
-    position: debugPosition(request.position, "position"),
+    position: debugPosition(request["position"], "position"),
     radius: optionalDebugNumber(request, "radius", 0, 128) ?? 1,
     policy: {
       allowMining: optionalDebugBoolean(suppliedPolicy, "allowMining") ?? defaults.allowMining,
@@ -3007,29 +3017,29 @@ function parseDebugPathPlan(input: unknown): Readonly<{
       maxSearchTimeMs:
         optionalDebugInteger(suppliedPolicy, "maxSearchTimeMs", 1, 10 * 60_000) ??
         defaults.maxSearchTimeMs,
-      ...(suppliedPolicy.avoidFluids === undefined
+      ...(suppliedPolicy["avoidFluids"] === undefined
         ? {}
         : {
             avoidFluids: debugBoolean(suppliedPolicy, "avoidFluids"),
           }),
-      ...(suppliedPolicy.sprint === undefined
+      ...(suppliedPolicy["sprint"] === undefined
         ? {}
         : { sprint: debugBoolean(suppliedPolicy, "sprint") }),
-      ...(suppliedPolicy.minimumY === undefined
+      ...(suppliedPolicy["minimumY"] === undefined
         ? {}
         : {
             minimumY: debugInteger(suppliedPolicy, "minimumY", -2_048, 2_048),
           }),
-      ...(suppliedPolicy.maximumY === undefined
+      ...(suppliedPolicy["maximumY"] === undefined
         ? {}
         : {
             maximumY: debugInteger(suppliedPolicy, "maximumY", -2_048, 2_048),
           }),
-      ...(suppliedPolicy.additionalPlaceItemIds === undefined
+      ...(suppliedPolicy["additionalPlaceItemIds"] === undefined
         ? {}
         : {
             additionalPlaceItemIds: debugStringArray(
-              suppliedPolicy.additionalPlaceItemIds,
+              suppliedPolicy["additionalPlaceItemIds"],
               "policy.additionalPlaceItemIds",
             ),
           }),
@@ -3116,7 +3126,7 @@ function latestSmokeTaskRoute() {
     limit: debugApiTimelineEntries,
   });
   const latest = activity.at(-1);
-  if (!isDebugRecord(latest) || latest.kind !== "task-progress-observed") {
+  if (!isDebugRecord(latest) || latest["kind"] !== "task-progress-observed") {
     return undefined;
   }
   return buildSmokeStuckDiagnostics({
@@ -3185,16 +3195,16 @@ function evaluateDebugSource(
 function debugBlockSelector(input: unknown): BeatGameBlockSelector {
   const selector = input === undefined ? {} : debugRecord(input, "block selector");
   return {
-    ...(selector.blockIds === undefined
+    ...(selector["blockIds"] === undefined
       ? {}
-      : { blockIds: debugStringArray(selector.blockIds, "selector.blockIds") }),
-    ...(selector.tags === undefined
+      : { blockIds: debugStringArray(selector["blockIds"], "selector.blockIds") }),
+    ...(selector["tags"] === undefined
       ? {}
-      : { tags: debugStringArray(selector.tags, "selector.tags") }),
-    ...(selector.properties === undefined
+      : { tags: debugStringArray(selector["tags"], "selector.tags") }),
+    ...(selector["properties"] === undefined
       ? {}
       : {
-          properties: debugStringRecord(selector.properties, "selector.properties"),
+          properties: debugStringRecord(selector["properties"], "selector.properties"),
         }),
     ...debugOptionalBooleans(selector, [
       "solid",
@@ -3209,21 +3219,23 @@ function debugBlockSelector(input: unknown): BeatGameBlockSelector {
 function debugEntitySelector(input: unknown): BeatGameEntitySelector {
   const selector = input === undefined ? {} : debugRecord(input, "entity selector");
   return {
-    ...(selector.entityTypes === undefined
+    ...(selector["entityTypes"] === undefined
       ? {}
       : {
-          entityTypes: debugStringArray(selector.entityTypes, "selector.entityTypes"),
+          entityTypes: debugStringArray(selector["entityTypes"], "selector.entityTypes"),
         }),
-    ...(selector.tags === undefined
+    ...(selector["tags"] === undefined
       ? {}
-      : { tags: debugStringArray(selector.tags, "selector.tags") }),
-    ...(selector.categories === undefined
+      : { tags: debugStringArray(selector["tags"], "selector.tags") }),
+    ...(selector["categories"] === undefined
       ? {}
       : {
-          categories: debugNumberArray(selector.categories, "selector.categories"),
+          categories: debugNumberArray(selector["categories"], "selector.categories"),
         }),
-    ...(selector.uuid === undefined ? {} : { uuid: debugString(selector, "uuid") }),
-    ...(selector.networkId === undefined ? {} : { networkId: debugInteger(selector, "networkId") }),
+    ...(selector["uuid"] === undefined ? {} : { uuid: debugString(selector, "uuid") }),
+    ...(selector["networkId"] === undefined
+      ? {}
+      : { networkId: debugInteger(selector, "networkId") }),
     ...debugOptionalBooleans(selector, ["alive", "requireLineOfSight"]),
   };
 }
@@ -3413,35 +3425,35 @@ function currentDebugActionContext(): SmokeDebugActionContext | undefined {
       limit: debugApiTimelineEntries,
     })
     .findLast((entry) => {
-      if (!isDebugRecord(entry) || entry.kind !== "beat-game-event") {
+      if (!isDebugRecord(entry) || entry["kind"] !== "beat-game-event") {
         return false;
       }
-      const event = entry.event;
+      const event = entry["event"];
       return (
         isDebugRecord(event) &&
-        typeof event.type === "string" &&
+        typeof event["type"] === "string" &&
         ["action-started", "action-retried", "action-succeeded", "action-failed"].includes(
-          event.type,
+          event["type"],
         )
       );
     });
-  if (!isDebugRecord(latest) || !isDebugRecord(latest.event)) {
+  if (!isDebugRecord(latest) || !isDebugRecord(latest["event"])) {
     return undefined;
   }
-  const event = latest.event;
-  if (event.type !== "action-started" && event.type !== "action-retried") {
+  const event = latest["event"];
+  if (event["type"] !== "action-started" && event["type"] !== "action-retried") {
     return undefined;
   }
-  if (typeof event.action !== "string") {
+  if (typeof event["action"] !== "string") {
     return undefined;
   }
   return {
-    action: event.action,
-    ...(typeof event.actionId === "string" ? { actionId: event.actionId } : {}),
-    ...(typeof event.phase === "string" ? { phase: event.phase } : {}),
-    ...(typeof event.sequence === "string" ? { sequence: event.sequence } : {}),
-    ...(typeof event.attempt === "number" ? { attempt: event.attempt } : {}),
-    ...(typeof latest.observedAt === "string" ? { startedAt: latest.observedAt } : {}),
+    action: event["action"],
+    ...(typeof event["actionId"] === "string" ? { actionId: event["actionId"] } : {}),
+    ...(typeof event["phase"] === "string" ? { phase: event["phase"] } : {}),
+    ...(typeof event["sequence"] === "string" ? { sequence: event["sequence"] } : {}),
+    ...(typeof event["attempt"] === "number" ? { attempt: event["attempt"] } : {}),
+    ...(typeof latest["observedAt"] === "string" ? { startedAt: latest["observedAt"] } : {}),
   };
 }
 
@@ -3539,8 +3551,9 @@ function parseWorldSpawn(output: string): Readonly<{ x: number; y: number; z: nu
 
 function offlineUuid(username: string): string {
   const bytes = createHash("md5").update(`OfflinePlayer:${username}`, "utf8").digest();
-  bytes[6] = (bytes[6]! & 0x0f) | 0x30;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  // An MD5 digest always has 16 bytes, so indexes 6 and 8 exist.
+  bytes.writeUInt8((bytes.readUInt8(6) & 0x0f) | 0x30, 6);
+  bytes.writeUInt8((bytes.readUInt8(8) & 0x3f) | 0x80, 8);
   const hex = bytes.toString("hex");
   return [
     hex.slice(0, 8),

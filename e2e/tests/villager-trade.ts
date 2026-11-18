@@ -8,6 +8,7 @@ import {
   type E2ETest,
   eventually,
   placeBot,
+  present,
   rcon,
 } from "../harness.ts";
 
@@ -70,7 +71,8 @@ export default {
             const displayed = Array.from(button?.description?.matchAll(/(\d+)x/g) ?? [], (match) =>
               Number(match[1]),
             );
-            const expected = [offer.firstCost!.count];
+            const firstCost = yield* present(offer.firstCost, "A trade offer has no first cost");
+            const expected = [firstCost.count];
             if (offer.secondCost) expected.push(offer.secondCost.count);
             yield* check(
               displayed.length === expected.length &&

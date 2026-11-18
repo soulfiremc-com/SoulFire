@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SoulFireBot } from "@soulfiremc/sdk";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { BOT_NAME, check, type E2ETest, eventually, rcon, required } from "../harness.ts";
 
 export default {
   name: "pov-audio-lifecycle",
@@ -28,7 +28,7 @@ export default {
         const service = client.service(PovService);
         const names = [BOT_NAME, ...otherNames];
         const sessions = [bot, ...others].map((target, index) => ({
-          name: names[index]!,
+          name: required(names[index], "the bot name"),
           target,
           id: randomUUID(),
           abort: new AbortController(),
@@ -115,14 +115,18 @@ export default {
             yield* ready(
               () =>
                 sessions.every(
-                  (session, index) => session.enabled && session.packets >= before[index]! + 10,
+                  (session, index) =>
+                    session.enabled && session.packets >= (before[index] ?? Infinity) + 10,
                 ),
               "Audio initialization or restart ended a concurrent POV",
             );
             for (const session of sessions) yield* rcon(`stopsound ${session.name}`);
             const stopped = sessions.map((session) => session.packets);
             yield* ready(
-              () => sessions.every((session, index) => session.packets >= stopped[index]! + 10),
+              () =>
+                sessions.every(
+                  (session, index) => session.packets >= (stopped[index] ?? Infinity) + 10,
+                ),
               "Stopping native sounds broke audio capture",
             );
             for (const session of sessions) session.requested = false;
@@ -135,11 +139,14 @@ export default {
               frames: session.frames,
             }));
             yield* ready(
-              () => sessions.every((session, index) => session.frames >= muted[index]!.frames + 5),
+              () =>
+                sessions.every(
+                  (session, index) => session.frames >= (muted[index]?.frames ?? Infinity) + 5,
+                ),
               "Video stopped during audio cleanup",
             );
             yield* check(
-              sessions.every((session, index) => session.packets === muted[index]!.packets),
+              sessions.every((session, index) => session.packets === muted[index]?.packets),
               "A muted bot continued sending audio",
             );
           }

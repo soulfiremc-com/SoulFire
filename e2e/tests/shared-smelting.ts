@@ -2,10 +2,10 @@ import { fromBinary } from "@bufbuild/protobuf";
 import { SmeltTaskResultSchema } from "@soulfiremc/sdk/generated/soulfire/recipe_pb";
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { check, type E2ETest, eventually, present, rcon } from "../harness.ts";
 
 const NAMES = ["SharedSmeltA", "SharedSmeltB"];
-const STATIONS = [3927, 3930];
+const STATIONS = [3927, 3930] as const;
 
 export default {
   name: "shared-smelting",
@@ -14,7 +14,7 @@ export default {
       Effect.gen(function* () {
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-shared-smelting", {
-            server: `127.0.0.1:${process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566}`,
+            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -96,7 +96,7 @@ export default {
                 (bot, i) =>
                   bot.tasks.smelt({ itemIds: ["minecraft:iron_ore"] }, 1, {
                     station: {
-                      x: round === 0 && i === 1 ? STATIONS[1]! : STATIONS[0]!,
+                      x: round === 0 && i === 1 ? STATIONS[1] : STATIONS[0],
                       y: 64,
                       z: 8,
                     },
@@ -120,12 +120,16 @@ export default {
                 retainedInputAndOutput += countMaterial(inventory);
                 if (state.status === BotTaskStatus.COMPLETED) {
                   completed++;
-                  yield* check(!!state.result, "Completed smelting task has no result");
-                  const result = fromBinary(SmeltTaskResultSchema, state.result!.value);
+                  const taskResult = yield* present(
+                    state.result,
+                    "Completed smelting task has no result",
+                  );
+                  const result = fromBinary(SmeltTaskResultSchema, taskResult.value);
+                  const [output] = result.outputs;
                   yield* check(
                     result.outputs.length === 1 &&
-                      result.outputs[0]!.itemId === "minecraft:iron_ingot" &&
-                      result.outputs[0]!.count === 1,
+                      output?.itemId === "minecraft:iron_ingot" &&
+                      output.count === 1,
                     "Completed smelting task reported the wrong output",
                   );
                   const ingots = yield* rcon(`clear ${NAMES[i]} iron_ingot 0`, { check: false });

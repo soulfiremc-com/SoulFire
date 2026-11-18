@@ -15,8 +15,20 @@ import {
   type PovFrame,
 } from "../sdk/typescript/src/generated/soulfire/pov_pb";
 
-const [url, instanceId, botId, otherBotId, output, mode] = process.argv.slice(2);
-const token = process.env.SF_POV_TEST_TOKEN;
+// Usage: validate-pov-session.ts <url> <instance-id> <bot-id> <other-bot-id> <output-dir> [mode]
+const args = process.argv.slice(2);
+function argument(index: number, name: string): string {
+  const value = args[index];
+  assert.ok(value, `The ${name} argument is required`);
+  return value;
+}
+const url = argument(0, "url");
+const instanceId = argument(1, "instance ID");
+const botId = argument(2, "bot ID");
+const otherBotId = argument(3, "other bot ID");
+const output = argument(4, "output directory");
+const mode = args[5];
+const token = process.env["SF_POV_TEST_TOKEN"];
 assert.ok(token);
 const transport = createGrpcWebTransport({
   baseUrl: url,
@@ -114,15 +126,25 @@ async function input(
     busy = false;
   }
 }
+async function liveState(id = botId) {
+  const { liveState: state } = await bots.getBotInfo({ instanceId, botId: id });
+  assert.ok(state, "Bot info must include the live state");
+  return state;
+}
+function currentFrame() {
+  assert.ok(latest, "A POV frame must have arrived");
+  return latest;
+}
 async function saveFrame(name: string) {
-  const before = latest!.sequence;
+  const before = currentFrame().sequence;
   await input([], true);
   await until(
     () => !!latestKey && latestKey.sequence > before,
     "Requested recovery keyframe must arrive",
   );
   const encodedPath = `${output}/${name}.h264`;
-  await writeFile(encodedPath, latestKey!.data);
+  assert.ok(latestKey, "A recovery keyframe must have arrived");
+  await writeFile(encodedPath, latestKey.data);
   // Decode independently on the validation host. The container needs no FFmpeg packages.
   execFileSync("ffmpeg", [
     "-v",
@@ -168,20 +190,23 @@ try {
       })}\n`,
     );
   } else if (mode === "adaptive") {
-    const initial = latest!.targetBitrate;
+    const initial = currentFrame().targetBitrate;
     assert.ok(initial > 0);
     await until(
-      () => latest!.targetBitrate > initial,
+      () => currentFrame().targetBitrate > initial,
       "Healthy delivery must increase target bitrate",
     );
-    const raised = latest!.targetBitrate;
+    const raised = currentFrame().targetBitrate;
     deliveryDelayMs = 250;
-    await until(() => latest!.targetBitrate < raised, "Delivery backlog must lower target bitrate");
-    const lowered = latest!.targetBitrate;
+    await until(
+      () => currentFrame().targetBitrate < raised,
+      "Delivery backlog must lower target bitrate",
+    );
+    const lowered = currentFrame().targetBitrate;
     deliveryDelayMs = 0;
     await saveFrame("interactive-adaptive-bitrate");
     await until(
-      () => latest!.targetBitrate > lowered,
+      () => currentFrame().targetBitrate > lowered,
       "Healthy delivery must recover target bitrate",
     );
     process.stdout.write(
@@ -190,7 +215,7 @@ try {
         initial,
         raised,
         lowered,
-        recovered: latest!.targetBitrate,
+        recovered: currentFrame().targetBitrate,
       })}\n`,
     );
   } else if (mode === "cursor") {
@@ -201,10 +226,9 @@ try {
     ]);
     await until(() => !!latest?.screenOpen, "Escape must open the pause menu");
     for (let y = 0.2; y <= 0.8 && latest?.cursorShape !== CursorShape.POINTER; y += 0.05) {
-      const before = latest!.sequence;
+      const before = currentFrame().sequence;
       await input([{ kind: Kind.MOVE, x: 0.5, y }]);
-      // oxlint-disable-next-line eslint/no-loop-func -- the check polls the latest frame, which the stream updates
-      await until(() => latest!.sequence > before + 2n, "Cursor hover must render");
+      await until(() => currentFrame().sequence > before + 2n, "Cursor hover must render");
     }
     assert.equal(
       latest?.cursorShape,
@@ -249,7 +273,7 @@ try {
     await input([{ kind: Kind.SCROLL, y: 1 }]);
     await sleep(200);
     assert.equal(
-      (await bots.getBotInfo({ instanceId, botId })).liveState!.selectedHotbarSlot,
+      (await liveState()).selectedHotbarSlot,
       8,
       "Wheel must select the previous hotbar slot",
     );
@@ -263,7 +287,7 @@ try {
       { kind: Kind.BUTTON, code: 2, action: 0 },
     ]);
     await sleep(250);
-    const selected = (await bots.getBotInfo({ instanceId, botId })).liveState!.selectedHotbarSlot;
+    const selected = (await liveState()).selectedHotbarSlot;
     const inventory = await bots.getInventoryState({ instanceId, botId });
     assert.equal(
       inventory.slots.find((slot) => slot.slot === 36 + selected)?.itemId,
@@ -326,15 +350,15 @@ try {
     await sleep(600);
     await input([{ kind: Kind.KEY, code: 32, action: 0 }]);
     await sleep(600);
-    const airborne = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const airborne = await liveState();
     await sleep(600);
-    const hovering = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const hovering = await liveState();
     assert.ok(hovering.y > -58, "Double jump must enable flight and Space must ascend");
     assert.ok(Math.abs(hovering.y - airborne.y) < 0.1, "Flying must hover after releasing Space");
     await tapJump();
     await tapJump();
     await sleep(1500);
-    const landed = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const landed = await liveState();
     assert.ok(landed.y < hovering.y - 1, "Double jump must disable flight");
     process.stdout.write(
       `${JSON.stringify({
@@ -347,14 +371,14 @@ try {
       })}\n`,
     );
   } else {
-    const before = (await bots.getBotInfo({ instanceId, botId })).liveState!;
-    const otherBefore = (await bots.getBotInfo({ instanceId, botId: otherBotId })).liveState!;
+    const before = await liveState();
+    const otherBefore = await liveState(otherBotId);
     captured = true;
     await input([{ kind: Kind.KEY, code: 87, action: 1 }]);
     await sleep(1100);
     await input([{ kind: Kind.KEY, code: 87, action: 0 }]);
-    const after = (await bots.getBotInfo({ instanceId, botId })).liveState!;
-    const otherAfter = (await bots.getBotInfo({ instanceId, botId: otherBotId })).liveState!;
+    const after = await liveState();
+    const otherAfter = await liveState(otherBotId);
     assert.ok(
       Math.hypot(after.x - before.x, after.z - before.z) > 0.5,
       "W must move the controlled bot",
@@ -365,7 +389,7 @@ try {
     );
     await input([{ kind: Kind.MOVE, relative: true, x: 100, y: 30 }]);
     await sleep(250);
-    const rotated = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const rotated = await liveState();
     assert.notEqual(rotated.yRot, after.yRot, "Relative mouse movement must rotate the bot");
     await input([
       { kind: Kind.KEY, code: 69, action: 1 },
@@ -393,7 +417,7 @@ try {
       { kind: Kind.KEY, code: 69, action: 0 },
     ]);
     await until(() => latest?.screenOpen === false, "E must close the inventory");
-    const afterInventory = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const afterInventory = await liveState();
     assert.equal(
       afterInventory.yRot,
       rotated.yRot,
@@ -408,7 +432,7 @@ try {
     height = 450;
     await input();
     await until(
-      () => latest?.width === 800 && latest?.height === 450,
+      () => latest?.width === 800 && latest.height === 450,
       "Live resize must change the encoded frame dimensions",
     );
     await saveFrame("interactive-world");
@@ -417,9 +441,9 @@ try {
     captured = false;
     await input();
     await sleep(300);
-    const stopped = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const stopped = await liveState();
     await sleep(500);
-    const still = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const still = await liveState();
     assert.ok(
       Math.hypot(still.x - stopped.x, still.z - stopped.z) < 0.05,
       "Release must stop held movement",
@@ -434,9 +458,9 @@ try {
     await input([{ kind: Kind.KEY, code: 87, action: 1 }]);
     await until(() => !!streamError, "Missing heartbeats must terminate the stream");
     await sleep(300);
-    const timedOut = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const timedOut = await liveState();
     await sleep(500);
-    const afterTimeout = (await bots.getBotInfo({ instanceId, botId })).liveState!;
+    const afterTimeout = await liveState();
     assert.ok(
       timedOut.health > 0 && afterTimeout.health > 0,
       "The timeout probe must remain alive",

@@ -1873,7 +1873,7 @@ export function enterPortal(
       maximumResults: 8,
     });
     const observedPortal = observedPortals[0];
-    const axis = resolvePortalAxis(observedPortal?.properties.axis, observedPortals);
+    const axis = resolvePortalAxis(observedPortal?.properties["axis"], observedPortals);
     const passage = portalPassage(target, axis, observedPortals);
     let entryOrigin = observation.player.position;
     if (hasPortalContact(observation.player.position, passage)) {
@@ -3582,7 +3582,7 @@ function leavePortalForReentry(
     }
     return yield* (
       lastFailure ??
-        behaviorError(driver, "Could not step out of the Nether portal before re-entry")
+      behaviorError(driver, "Could not step out of the Nether portal before re-entry")
     );
   });
 }
@@ -3618,7 +3618,7 @@ function completePortalTransition(
     if (nearestPortal === undefined) {
       return undefined;
     }
-    const axis = resolvePortalAxis(nearestPortal.properties.axis, observedPortals);
+    const axis = resolvePortalAxis(nearestPortal.properties["axis"], observedPortals);
     const passage = portalPassage(nearestPortal.position, axis, observedPortals);
     if (!hasPortalContact(arrival.player.position, passage)) {
       return undefined;
@@ -5293,8 +5293,8 @@ function recoverPortalCastingWaterBucket(
       const source = [...nearby]
         .filter(
           (block) =>
-            (block.blockId === "minecraft:water" && block.properties.level === "0") ||
-            block.properties.waterlogged === "true",
+            (block.blockId === "minecraft:water" && block.properties["level"] === "0") ||
+            block.properties["waterlogged"] === "true",
         )
         .toSorted(
           (left, right) =>
@@ -5447,8 +5447,8 @@ function planPortalCastingSupportScaffold(
           [positionKey(target), undefined],
         ]);
         const queue: BeatGameBlockPosition[] = [target];
-        for (let index = 0; index < queue.length; index += 1) {
-          const current = queue[index]!;
+        // The array iterator also visits positions pushed during the loop.
+        for (const current of queue) {
           for (const adjacent of portalCastingScaffoldNeighbors(current)) {
             const block = observed.get(positionKey(adjacent));
             if (isReliablePortalCastingSupport(block) && !isAvoidedFluidBlockId(block.blockId)) {
@@ -5599,7 +5599,7 @@ function leavePortalCastingScaffoldCells(
 function isReliablePortalCastingSupport(
   block: BeatGameBlockObservation | undefined,
 ): block is BeatGameBlockObservation {
-  return block !== undefined && !block.replaceable && block.properties.waterlogged === undefined;
+  return block !== undefined && !block.replaceable && block.properties["waterlogged"] === undefined;
 }
 
 function useBucketToward(
@@ -5646,8 +5646,8 @@ function useBucketToward(
     const flowingFluidInFrontOfSource =
       targeted !== undefined &&
       isAvoidedFluidBlockId(targeted.blockId) &&
-      targeted.properties.level !== undefined &&
-      targeted.properties.level !== "0";
+      targeted.properties["level"] !== undefined &&
+      targeted.properties["level"] !== "0";
     const sourceOnlySightlineIsClear = flowingFluidInFrontOfSource
       ? (yield* driver.raycast({
           direction,
@@ -5708,7 +5708,7 @@ function placeBucketOnTopOf(
       observeExactBlock(driver, target).pipe(
         Effect.flatMap((block) =>
           block?.blockId === expectedBlockId ||
-          (expectedBlockId === "minecraft:water" && block?.properties.waterlogged === "true")
+          (expectedBlockId === "minecraft:water" && block?.properties["waterlogged"] === "true")
             ? Effect.void
             : retryPortalBucketPlacement(
                 driver,
@@ -5728,14 +5728,14 @@ function placeBucketOnTopOf(
         target,
         (block) =>
           block?.blockId === expectedBlockId ||
-          (expectedBlockId === "minecraft:water" && block?.properties.waterlogged === "true"),
+          (expectedBlockId === "minecraft:water" && block?.properties["waterlogged"] === "true"),
         5,
         50,
       ),
     ),
     Effect.flatMap((block) =>
       block?.blockId === expectedBlockId ||
-      (expectedBlockId === "minecraft:water" && block?.properties.waterlogged === "true")
+      (expectedBlockId === "minecraft:water" && block?.properties["waterlogged"] === "true")
         ? Effect.void
         : retryPortalBucketPlacement(
             driver,
@@ -6273,9 +6273,6 @@ function craftItemDependencies(
           );
         }
       }
-      if (!craftability.canCraft) {
-        continue;
-      }
       if (craftability.requiredStation !== undefined && options.station === undefined) {
         lastFailure = behaviorError(
           driver,
@@ -6292,11 +6289,11 @@ function craftItemDependencies(
     }
     return yield* (
       lastFailure ??
-        behaviorError(
-          driver,
-          `No known recipe can currently produce ${resultItemId}`,
-          "resource-exhausted",
-        )
+      behaviorError(
+        driver,
+        `No known recipe can currently produce ${resultItemId}`,
+        "resource-exhausted",
+      )
     );
   });
 }

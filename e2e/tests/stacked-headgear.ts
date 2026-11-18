@@ -63,7 +63,7 @@ export default {
           const full = "full" in spec && spec.full;
           const merge = "merge" in spec && spec.merge;
           const error = "error" in spec ? spec.error : undefined;
-          const head = spec.head.split("[")[0]!;
+          const [head = spec.head] = spec.head.split("[");
           yield* bot.closeContainer();
           yield* rcon(`clear ${BOT_NAME}`, { check: false });
           yield* rcon(`gamemode ${spec.mode} ${BOT_NAME}`);

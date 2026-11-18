@@ -56,8 +56,10 @@
       }
     ],
     "eslint/no-unmodified-loop-condition": "error",
+    "eslint/no-useless-call": "error",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
+    "oxc/no-accumulating-spread": "error",
     "promise/always-return": "error",
     "promise/catch-or-return": "error",
     "typescript/ban-ts-comment": [
@@ -77,20 +79,39 @@
     "typescript/no-explicit-any": "error",
     "typescript/no-generated-empty-object-type": "error",
     "typescript/no-misused-promises": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-unnecessary-condition": [
+      "error",
+      {
+        "allowConstantLoopConditions": "only-allowed-literals"
+      }
+    ],
+    "typescript/no-unnecessary-template-expression": "error",
+    "typescript/no-unnecessary-type-arguments": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
     "typescript/no-unsafe-enum-assignment": "error",
     "typescript/no-unsafe-enum-comparison": "error",
     "typescript/no-unsafe-type-assertion": "error",
+    "typescript/no-useless-empty-export": "error",
     "typescript/only-throw-error": "error",
+    "typescript/prefer-nullish-coalescing": "error",
     "typescript/prefer-optional-chain": "error",
     "typescript/prefer-promise-reject-errors": "error",
+    "typescript/prefer-readonly": "error",
+    "typescript/prefer-reduce-type-parameter": "error",
     "typescript/prefer-ts-expect-error": "error",
+    "typescript/require-await": "error",
     "typescript/restrict-plus-operands": "error",
+    "typescript/restrict-template-expressions": "error",
     "typescript/return-await": "error",
     "typescript/switch-exhaustiveness-check": "error",
     "unicorn/consistent-function-scoping": "error",
     "unicorn/no-abusive-eslint-disable": "error",
+    "unicorn/prefer-array-find": "error",
+    "unicorn/prefer-array-flat-map": "error",
     "unicorn/prefer-at": "error",
     "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-set-has": "error",
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-top-level-await": "error",
     "vitest/no-conditional-expect": "error"
@@ -116,6 +137,13 @@
       "files": ["sdk/typescript/src/client.ts", "sdk/typescript/src/local-server.ts"],
       "rules": {
         "effecttsgo/lazy-effect": "off"
+      }
+    },
+    {
+      "files": ["sdk/typescript/test/**"],
+      "rules": {
+        "typescript/require-await": "off",
+        "eslint/require-await": "error"
       }
     }
   ]

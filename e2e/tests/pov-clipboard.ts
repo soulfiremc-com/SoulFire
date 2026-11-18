@@ -10,6 +10,7 @@ import {
   eventually,
   placeBot,
   rcon,
+  required,
 } from "../harness.ts";
 
 const ANVIL = { x: 1741, y: 64, z: 0 };
@@ -18,7 +19,10 @@ const key = (code: number, modifiers = 0) => [
   { kind: Kind.KEY, code, modifiers, action: 0 },
 ];
 const text = (value: string) =>
-  Array.from(value, (character) => ({ kind: Kind.CHARACTER, code: character.codePointAt(0)! }));
+  Array.from(value, (character) => ({
+    kind: Kind.CHARACTER,
+    code: required(character.codePointAt(0), "a code point"),
+  }));
 
 export default {
   name: "pov-clipboard",

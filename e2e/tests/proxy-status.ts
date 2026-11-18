@@ -12,7 +12,7 @@ export default {
   name: "proxy-status",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const targetPort = Number(process.env.SOULFIRE_E2E_MINECRAFT_PORT ?? 25566);
+      const targetPort = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566);
       const sockets = new Set<net.Socket>();
       let requests = 0;
       let rejectConnection = false;

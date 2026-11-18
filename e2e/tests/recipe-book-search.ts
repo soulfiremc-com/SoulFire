@@ -9,6 +9,7 @@ import {
   eventually,
   placeBot,
   rcon,
+  required,
 } from "../harness.ts";
 
 const TABLE = { x: 1569, y: 64, z: 0 };
@@ -22,7 +23,10 @@ const click = (x: number, y: number) => [
   { kind: Kind.BUTTON, code: 0, action: 0 },
 ];
 const text = (value: string) =>
-  Array.from(value, (c) => ({ kind: Kind.CHARACTER, code: c.codePointAt(0)! }));
+  Array.from(value, (c) => ({
+    kind: Kind.CHARACTER,
+    code: required(c.codePointAt(0), "a code point"),
+  }));
 
 export default {
   name: "recipe-book-search",

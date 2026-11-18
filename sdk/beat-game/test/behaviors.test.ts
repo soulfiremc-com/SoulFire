@@ -29,6 +29,7 @@ import {
   FakeBeatGameDriver,
   installStaircaseMovementSimulation,
   observation,
+  required,
 } from "./fixtures.js";
 
 function feetCenter(position: BeatGameBlockPosition): BeatGameBlockPosition {
@@ -672,10 +673,8 @@ describe("beat-game behavior programs", () => {
 
     const steering = driver.actions.filter((action) => action.type === "look");
     expect(steering).toHaveLength(3);
-    expect(steering.every((action) => action.type === "look" && action.pitch > 0)).toBe(true);
-    expect(steering[2]?.type === "look" ? steering[2].yaw : 0).not.toBe(
-      steering[0]?.type === "look" ? steering[0].yaw : 0,
-    );
+    expect(steering.every((action) => action.pitch > 0)).toBe(true);
+    expect(steering[2]?.yaw ?? 0).not.toBe(steering[0]?.yaw ?? 0);
     expect(driver.actions).toContainEqual({
       type: "set-movement",
       forward: true,
@@ -4213,12 +4212,12 @@ describe("beat-game behavior programs", () => {
         return portalBlocks;
       }
       const supports = [...solidSupports].map((key) => {
-        const [x, y, z] = key.split(",").map(Number);
+        const [x = Number.NaN, y = Number.NaN, z = Number.NaN] = key.split(",").map(Number);
         return blockObservation(
           {
-            x: x!,
-            y: y!,
-            z: z!,
+            x,
+            y,
+            z,
             dimension: "minecraft:the_nether",
           },
           { blockId: "minecraft:cobblestone" },
@@ -4532,7 +4531,9 @@ describe("beat-game behavior programs", () => {
     let misplacedLavaAvailable = false;
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:lava") === true) {
-        return misplacedLavaAvailable ? [blocks.get(framePositionKey(misplacedLava))!] : [];
+        return misplacedLavaAvailable
+          ? [required(blocks.get(framePositionKey(misplacedLava)), "the misplaced lava")]
+          : [];
       }
       if (selector.blockIds?.includes("minecraft:obsidian") === true) {
         return [...blocks.values()].filter(({ blockId }) => blockId === "minecraft:obsidian");
@@ -4580,7 +4581,10 @@ describe("beat-game behavior programs", () => {
     driver.raycastResolver = ({ includeFluids }) => {
       if (blocks.has(framePositionKey(liquidSightObstruction))) {
         return {
-          block: blocks.get(framePositionKey(liquidSightObstruction))!,
+          block: required(
+            blocks.get(framePositionKey(liquidSightObstruction)),
+            "the liquid sight obstruction",
+          ),
           distance: 1,
         };
       }
@@ -5176,7 +5180,7 @@ describe("beat-game behavior programs", () => {
             sourceCollected = true;
           }
         });
-        if (hasPlacedWater && activeWater !== undefined) {
+        if (hasPlacedWater) {
           blocks.delete(blockKey(activeWater));
         }
       }
@@ -5540,7 +5544,7 @@ describe("beat-game behavior programs", () => {
       ];
     };
     driver.raycastResolver = () => ({
-      block: blocks.get(blockKey(obstruction))!,
+      block: required(blocks.get(blockKey(obstruction)), "the obstruction"),
       distance: 1,
     });
     driver.actionObserver = (action) => {
@@ -5983,7 +5987,7 @@ describe("beat-game behavior programs", () => {
         return filled.size === frames.length
           ? [
               {
-                ...frames[0]!,
+                ...required(frames[0], "the first portal frame"),
                 blockId: "minecraft:end_portal",
                 properties: {},
               },

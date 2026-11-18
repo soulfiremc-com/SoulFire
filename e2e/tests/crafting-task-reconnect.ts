@@ -15,6 +15,7 @@ import {
   eventually,
   placeBot,
   rcon,
+  required,
 } from "../harness.ts";
 
 const TABLE = { x: 4215, y: 64, z: 8 };
@@ -219,7 +220,10 @@ export default {
                 "5 seconds",
                 "20 millis",
               );
-              const position = (yield* bot.world.player()).position!;
+              const position = required(
+                (yield* bot.world.player()).position,
+                "the player position",
+              );
               const guard = yield* guardAt(
                 {
                   x: Math.floor(position.x),

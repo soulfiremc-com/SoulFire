@@ -26,8 +26,8 @@ export default {
             5000,
           );
           const timer = setTimeout(() => abort.abort(), 15000);
-          let information = false;
-          let encoded = false;
+          // The stream below sets these flags while the outer code awaits it.
+          const seen = { information: false, encoded: false };
           const stream = (async () => {
             try {
               for await (const event of service.watchPackets(
@@ -44,10 +44,10 @@ export default {
                   event.protocolState === "configuration" &&
                   event.name === "minecraft:client_information"
                 ) {
-                  information = true;
-                  encoded = event.encodedPacket.length > 1 && !event.encodedPacketTruncated;
+                  seen.information = true;
+                  seen.encoded = event.encodedPacket.length > 1 && !event.encodedPacketTruncated;
                 }
-                if (information && event.protocolState === "play") {
+                if (seen.information && event.protocolState === "play") {
                   abort.abort();
                   break;
                 }
@@ -64,7 +64,7 @@ export default {
             clearTimeout(readyTimer);
             await runPromise(bot.restart());
             await stream;
-            return information && encoded;
+            return seen.information && seen.encoded;
           } finally {
             abort.abort();
             clearTimeout(readyTimer);

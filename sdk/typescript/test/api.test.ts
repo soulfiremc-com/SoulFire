@@ -796,11 +796,13 @@ describe("release resolution", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const fetch = vi.fn<() => Promise<Response>>(async () =>
-            Response.json({
-              assets: [],
-              tag_name: "2.9.1",
-            }),
+          const fetch = vi.fn<() => Promise<Response>>(() =>
+            Promise.resolve(
+              Response.json({
+                assets: [],
+                tag_name: "2.9.1",
+              }),
+            ),
           );
           const release = yield* Effect.promise(() => resolveRelease(undefined, fetch));
           expect(release.tag_name).toBe("2.9.1");
@@ -820,11 +822,13 @@ describe("release resolution", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const fetch = vi.fn<() => Promise<Response>>(async () =>
-            Response.json({
-              assets: [],
-              tag_name: "release/candidate",
-            }),
+          const fetch = vi.fn<() => Promise<Response>>(() =>
+            Promise.resolve(
+              Response.json({
+                assets: [],
+                tag_name: "release/candidate",
+              }),
+            ),
           );
           yield* Effect.promise(() => resolveRelease("release/candidate", fetch));
           expect(fetch).toHaveBeenCalledWith(

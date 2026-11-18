@@ -1,7 +1,16 @@
 import { Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import { BotRuntimeState } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  present,
+  rcon,
+  required,
+} from "../harness.ts";
 
 const TABLE = { x: 4263, y: 64, z: 8 };
 const TAG = "sf_e2e_disconnect_menu";
@@ -124,7 +133,7 @@ export default {
               "5 seconds",
               "50 millis",
             );
-            const reference = entities.entities[0]!.reference!;
+            const reference = required(entities.entities[0]?.reference, "the entity reference");
             yield* bot.interactEntity({
               entityId: reference.networkId,
               connectionEpoch: reference.connectionEpoch,
@@ -155,7 +164,10 @@ export default {
             "5 seconds",
             "50 millis",
           );
-          const source = opened.slots.find((stack) => stack.itemId === `minecraft:${item}`)!;
+          const source = yield* present(
+            opened.slots.find((stack) => stack.itemId === `minecraft:${item}`),
+            `The ${item} stack is missing from the opened inventory`,
+          );
           yield* bot.clickInventory(source.slot);
           if (slot !== undefined) yield* bot.clickInventory(slot);
           yield* eventually(

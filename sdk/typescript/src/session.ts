@@ -251,7 +251,8 @@ export class BotSession {
 
   private consume(stream: BotEventStreamFactory, options: BotSessionOptions): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      let receivedEvent = false;
+      // The stream callback below sets this flag while the loop waits on it.
+      const progress = { receivedEvent: false };
       let delay = DEFAULT_RECONNECT_DELAY_MS;
       while (true) {
         const cursor =
@@ -273,7 +274,7 @@ export class BotSession {
           Stream.runForEach((event) =>
             Effect.gen({ self: this }, function* () {
               this.#state = reduceBotSessionState(this.#state, event);
-              receivedEvent = true;
+              progress.receivedEvent = true;
               delay = DEFAULT_RECONNECT_DELAY_MS;
               yield* Deferred.succeed(this.ready, undefined);
               yield* PubSub.publish(this.eventsHub, Exit.succeed(event));
@@ -284,7 +285,7 @@ export class BotSession {
         if (Exit.isFailure(exit)) {
           const failure = Cause.findErrorOption(exit.cause);
           if (
-            !receivedEvent ||
+            !progress.receivedEvent ||
             Option.isNone(failure) ||
             failure.value._tag !== "SoulFireRpcError" ||
             // Closing the session interrupts this loop, so a cancellation seen here came from the

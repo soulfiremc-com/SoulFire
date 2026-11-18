@@ -79,8 +79,8 @@ export default {
                 observed.blocks.length === 1 &&
                   !observed.nextPageToken &&
                   observed.blocks[0]?.position?.x === position.x &&
-                  observed.blocks[0]?.position?.y === position.y &&
-                  observed.blocks[0]?.position?.z === position.z,
+                  observed.blocks[0].position.y === position.y &&
+                  observed.blocks[0].position.z === position.z,
                 "Unexpected dirt in the nearby mining range",
               );
               const task = yield* bot.tasks.collectBlocks("minecraft:dirt", {

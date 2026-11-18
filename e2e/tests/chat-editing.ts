@@ -1,11 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import {
+  BOT_NAME,
+  CheckFailed,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+  required,
+} from "../harness.ts";
 
 const OBJECTIVE = "sf_e2e_chat";
 const text = (value: string) =>
-  Array.from(value, (character) => ({ kind: Kind.CHARACTER, code: character.codePointAt(0)! }));
+  Array.from(value, (character) => ({
+    kind: Kind.CHARACTER,
+    code: required(character.codePointAt(0), "a code point"),
+  }));
 const key = (code: number, modifiers = 0) => [
   { kind: Kind.KEY, code, modifiers, action: 1 },
   { kind: Kind.KEY, code, modifiers, action: 0 },

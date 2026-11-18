@@ -17,6 +17,7 @@ import {
   SoulFirePluginDescriptorError,
 } from "../src/plugins.js";
 import { SoulFireTasks } from "../src/tasks.js";
+import { taskInput, unpacked } from "./task-input.js";
 
 const inputTypeUrl = `type.googleapis.com/${EchoRequestSchema.typeName}`;
 
@@ -25,7 +26,7 @@ function fixture(registry: Registry = createRegistry(file_soulfire_plugin_exampl
   const transport = createRouterTransport(({ service }) => {
     service(BotTaskService, {
       startBotTask(request) {
-        const input = anyUnpack(request.input!, EchoRequestSchema)!;
+        const input = unpacked(anyUnpack(taskInput(request), EchoRequestSchema));
         inputs.push(input);
         return create(BotTaskSchema, {
           instanceId: request.instanceId,

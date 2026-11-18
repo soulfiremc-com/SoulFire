@@ -46,19 +46,19 @@ function parseGitHubRelease(value: unknown): GitHubRelease {
   if (!isRecord(value)) {
     return {};
   }
-  const tagName = optionalString(value.tag_name);
+  const tagName = optionalString(value["tag_name"]);
   return {
     ...(tagName === undefined ? {} : { tag_name: tagName }),
-    ...(Array.isArray(value.assets)
-      ? { assets: value.assets.filter(isRecord).map(parseGitHubAsset) }
+    ...(Array.isArray(value["assets"])
+      ? { assets: value["assets"].filter(isRecord).map(parseGitHubAsset) }
       : {}),
   };
 }
 
 function parseGitHubAsset(asset: Readonly<Record<string, unknown>>): GitHubAsset {
-  const browserDownloadUrl = optionalString(asset.browser_download_url);
-  const digest = optionalString(asset.digest);
-  const name = optionalString(asset.name);
+  const browserDownloadUrl = optionalString(asset["browser_download_url"]);
+  const digest = optionalString(asset["digest"]);
+  const name = optionalString(asset["name"]);
   return {
     ...(browserDownloadUrl === undefined ? {} : { browser_download_url: browserDownloadUrl }),
     ...(digest === undefined ? {} : { digest }),
@@ -143,11 +143,11 @@ export async function ensureJvm(
 
   const releases: unknown = await response.json();
   const latest = Array.isArray(releases) && isRecord(releases[0]) ? releases[0] : undefined;
-  const binary = isRecord(latest?.binary) ? latest.binary : undefined;
-  const packageMetadata = isRecord(binary?.package) ? binary.package : undefined;
-  const checksum = optionalString(packageMetadata?.checksum);
-  const downloadUrl = optionalString(packageMetadata?.link);
-  const releaseName = optionalString(latest?.release_name);
+  const binary = isRecord(latest?.["binary"]) ? latest["binary"] : undefined;
+  const packageMetadata = isRecord(binary?.["package"]) ? binary["package"] : undefined;
+  const checksum = optionalString(packageMetadata?.["checksum"]);
+  const downloadUrl = optionalString(packageMetadata?.["link"]);
+  const releaseName = optionalString(latest?.["release_name"]);
   if (!checksum || !downloadUrl || !releaseName) {
     throw new Error("JVM metadata was incomplete");
   }

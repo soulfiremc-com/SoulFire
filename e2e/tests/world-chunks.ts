@@ -1,6 +1,6 @@
 import { Code } from "@connectrpc/connect";
 import { Effect, Result } from "effect";
-import { check, type E2ETest } from "../harness.ts";
+import { check, type E2ETest, present } from "../harness.ts";
 
 export default {
   name: "world-chunks",
@@ -43,12 +43,15 @@ export default {
         query.blocks.length === 0,
         "The loaded-only block query returned air from an unloaded chunk",
       );
-      const player = yield* bot.world.player();
+      const playerPosition = yield* present(
+        (yield* bot.world.player()).position,
+        "The player position is missing",
+      );
       const actual = yield* bot.world.block({
         position: {
-          x: Math.floor(player.position!.x),
-          y: Math.floor(player.position!.y),
-          z: Math.floor(player.position!.z),
+          x: Math.floor(playerPosition.x),
+          y: Math.floor(playerPosition.y),
+          z: Math.floor(playerPosition.z),
         },
       });
       yield* check(actual.block !== undefined, "A loaded block became unavailable");

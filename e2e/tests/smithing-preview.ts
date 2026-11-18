@@ -65,9 +65,7 @@ export default {
       for (let y = 171; y < 351; y++) {
         for (let x = 738; x < 858; x++) {
           const offset = (y * image.width + x) * 4;
-          const r = image.data[offset]!;
-          const g = image.data[offset + 1]!;
-          const b = image.data[offset + 2]!;
+          const [r = 0, g = 0, b = 0] = image.data.subarray(offset, offset + 3);
           if (g > 100 && g > r + 35 && b > r + 35) diamondPixels++;
           if (g > 90 && g > r + 30 && g > b + 30) emeraldPixels++;
         }

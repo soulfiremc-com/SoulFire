@@ -69,7 +69,8 @@ export class SmokeDebugTimeline {
       kinds === undefined
         ? this.#entries
         : this.#entries.filter(
-            (entry) => isRecord(entry) && typeof entry.kind === "string" && kinds.has(entry.kind),
+            (entry) =>
+              isRecord(entry) && typeof entry["kind"] === "string" && kinds.has(entry["kind"]),
           );
     return filtered.slice(-Math.min(requestedLimit, this.#maximumEntries));
   }

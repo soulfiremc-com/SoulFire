@@ -47,6 +47,7 @@ import {
   SleepTaskSchema,
   type StartBotTaskRequest,
 } from "../src/generated/soulfire/task_pb.js";
+import { taskInput } from "./task-input.js";
 
 describe("SoulFireTasks", () => {
   it("starts a typed task and decodes its terminal result", () =>
@@ -108,8 +109,8 @@ describe("SoulFireTasks", () => {
             botId: "bot-id",
           });
           expect(started?.input).toBeDefined();
-          expect(anyIs(started!.input!, GoToTaskSchema)).toBe(true);
-          expect(anyUnpack(started!.input!, GoToTaskSchema)).toBeDefined();
+          expect(anyIs(taskInput(started), GoToTaskSchema)).toBe(true);
+          expect(anyUnpack(taskInput(started), GoToTaskSchema)).toBeDefined();
           expect(result.finalPosition).toMatchObject({
             x: 12,
             y: 64,
@@ -152,7 +153,7 @@ describe("SoulFireTasks", () => {
             2.5,
             { targetUnavailableTimeoutSeconds: 7 },
           );
-          const input = anyUnpack(started!.input!, FollowEntityTaskSchema);
+          const input = anyUnpack(taskInput(started), FollowEntityTaskSchema);
           expect(input).toMatchObject({
             target: {
               entityId: 42,
@@ -208,7 +209,7 @@ describe("SoulFireTasks", () => {
               path: { allowMining: false, allowPlacing: false },
             },
           );
-          const input = anyUnpack(started!.input!, AttackEntityTaskSchema);
+          const input = anyUnpack(taskInput(started), AttackEntityTaskSchema);
           expect(input).toMatchObject({
             target: {
               networkId: 42,
@@ -275,7 +276,7 @@ describe("SoulFireTasks", () => {
               path: { allowMining: false, allowPlacing: false },
             },
           );
-          expect(anyUnpack(started!.input!, RangedAttackTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), RangedAttackTaskSchema)).toMatchObject({
             target: {
               networkId: 42,
               connectionEpoch: "connection-epoch",
@@ -332,7 +333,7 @@ describe("SoulFireTasks", () => {
               weapon: { tags: ["minecraft:swords"] },
             },
           );
-          expect(anyUnpack(started!.input!, AttackNearestTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), AttackNearestTaskSchema)).toMatchObject({
             selector: { entityTypes: ["minecraft:zombie"] },
             radius: 48,
             maximumTargets: 3,
@@ -381,7 +382,7 @@ describe("SoulFireTasks", () => {
               maximumEscapes: 2,
             },
           );
-          expect(anyUnpack(started!.input!, FleeTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), FleeTaskSchema)).toMatchObject({
             threats: { categories: [EntityCategory.HOSTILE] },
             triggerRadius: 8,
             safeDistance: 20,
@@ -429,7 +430,7 @@ describe("SoulFireTasks", () => {
               weapon: { tags: ["minecraft:swords"] },
             },
           );
-          expect(anyUnpack(started!.input!, GuardTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), GuardTaskSchema)).toMatchObject({
             subject: {
               case: "position",
               value: { x: 10, y: 64, z: -5 },
@@ -447,7 +448,7 @@ describe("SoulFireTasks", () => {
             { networkId: 42, connectionEpoch: "connection-epoch" },
             { entityTypes: ["minecraft:zombie"] },
           );
-          expect(anyUnpack(started!.input!, GuardTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), GuardTaskSchema)).toMatchObject({
             subject: {
               case: "entity",
               value: {
@@ -494,7 +495,7 @@ describe("SoulFireTasks", () => {
             retryIntervalTicks: 40,
             path: { allowMining: false, allowPlacing: false },
           });
-          expect(anyUnpack(started!.input!, SleepTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), SleepTaskSchema)).toMatchObject({
             bed: { x: 10, y: 64, z: -5 },
             searchRadius: 30,
             waitUntilPossible: true,
@@ -540,7 +541,7 @@ describe("SoulFireTasks", () => {
             completeWhenNoRod: true,
             restoreSelectedSlot: true,
           });
-          expect(anyUnpack(started!.input!, FishTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), FishTaskSchema)).toMatchObject({
             maximumCatches: 3,
             maximumFailedCasts: 4,
             rod: { itemIds: ["minecraft:fishing_rod"] },
@@ -595,7 +596,7 @@ describe("SoulFireTasks", () => {
             rescanIntervalTicks: 80,
             restoreSelectedSlot: true,
           });
-          expect(anyUnpack(started!.input!, FarmTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), FarmTaskSchema)).toMatchObject({
             cropIds: ["minecraft:wheat", "minecraft:carrots"],
             center: {
               x: 12,
@@ -659,7 +660,7 @@ describe("SoulFireTasks", () => {
             breedingTimeoutTicks: 120,
             restoreSelectedSlot: true,
           });
-          expect(anyUnpack(started!.input!, BreedTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), BreedTaskSchema)).toMatchObject({
             animals: { entityTypes: ["minecraft:cow"] },
             food: { itemIds: ["minecraft:wheat"] },
             center: {
@@ -721,7 +722,7 @@ describe("SoulFireTasks", () => {
             returnToOrigin: true,
             purpose: "village-scouting",
           });
-          expect(anyUnpack(started!.input!, ExploreTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), ExploreTaskSchema)).toMatchObject({
             origin: {
               x: 0,
               y: 64,
@@ -788,7 +789,7 @@ describe("SoulFireTasks", () => {
               closeContainer: true,
             },
           );
-          expect(anyUnpack(started!.input!, ContainerTransferTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), ContainerTransferTaskSchema)).toMatchObject({
             container: {
               x: 30,
               y: 65,
@@ -863,7 +864,7 @@ describe("SoulFireTasks", () => {
               closeContainer: true,
             },
           );
-          expect(anyUnpack(started!.input!, MaintainLoadoutTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), MaintainLoadoutTaskSchema)).toMatchObject({
             container: {
               x: 14,
               y: 64,
@@ -925,7 +926,7 @@ describe("SoulFireTasks", () => {
             completeWhenNoFood: true,
             restoreSelectedSlot: false,
           });
-          const input = anyUnpack(started!.input!, AutoEatTaskSchema);
+          const input = anyUnpack(taskInput(started), AutoEatTaskSchema);
           expect(input).toMatchObject({
             foodItemIds: ["minecraft:bread", "minecraft:cooked_beef"],
             foodLevel: 12,
@@ -968,7 +969,7 @@ describe("SoulFireTasks", () => {
             respawnDelayTicks: 15,
             maximumRespawns: 2,
           });
-          const input = anyUnpack(started!.input!, AutoRespawnTaskSchema);
+          const input = anyUnpack(taskInput(started), AutoRespawnTaskSchema);
           expect(input).toMatchObject({
             respawnDelayTicks: 15,
             maximumRespawns: 2,
@@ -1014,13 +1015,13 @@ describe("SoulFireTasks", () => {
             maximumEquips: 4,
             completeWhenNoUpgrade: true,
           });
-          expect(anyUnpack(started[0]!.input!, AutoTotemTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started[0]), AutoTotemTaskSchema)).toMatchObject({
             checkIntervalTicks: 8,
             maximumEquips: 2,
             completeWhenNoTotem: true,
             replaceOccupiedOffhand: true,
           });
-          expect(anyUnpack(started[1]!.input!, AutoArmorTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started[1]), AutoArmorTaskSchema)).toMatchObject({
             checkIntervalTicks: 12,
             maximumEquips: 4,
             completeWhenNoUpgrade: true,
@@ -1069,7 +1070,7 @@ describe("SoulFireTasks", () => {
               maximumY: 96,
             },
           });
-          expect(anyUnpack(started!.input!, CollectBlocksTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), CollectBlocksTaskSchema)).toMatchObject({
             blockIds: ["minecraft:oak_log"],
             tags: ["minecraft:logs"],
             count: 6,
@@ -1123,7 +1124,7 @@ describe("SoulFireTasks", () => {
               path: { allowPlacing: true, searchTimeoutSeconds: 15 },
             },
           );
-          expect(anyUnpack(started!.input!, ExcavateTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), ExcavateTaskSchema)).toMatchObject({
             cornerA: { x: 1, y: 62, z: 3, dimension: "minecraft:overworld" },
             cornerB: { x: 8, y: 65, z: 10, dimension: "minecraft:overworld" },
             maximumBlocks: 128,
@@ -1183,7 +1184,7 @@ describe("SoulFireTasks", () => {
               partitionCount: 2,
             },
           );
-          expect(anyUnpack(started!.input!, BuildTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), BuildTaskSchema)).toMatchObject({
             origin: {
               x: 100,
               y: 64,
@@ -1251,7 +1252,7 @@ describe("SoulFireTasks", () => {
               dimension: "minecraft:overworld",
             },
           });
-          expect(anyUnpack(started!.input!, CraftTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), CraftTaskSchema)).toMatchObject({
             recipeId: "display:42",
             count: 3,
             station: {
@@ -1300,7 +1301,7 @@ describe("SoulFireTasks", () => {
               dimension: "minecraft:overworld",
             },
           });
-          expect(anyUnpack(started!.input!, SmeltTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), SmeltTaskSchema)).toMatchObject({
             input: { itemIds: ["minecraft:raw_iron"] },
             count: 8,
             fuel: { tags: ["minecraft:coals"] },
@@ -1356,7 +1357,7 @@ describe("SoulFireTasks", () => {
               },
             },
           );
-          expect(anyUnpack(started!.input!, BrewTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), BrewTaskSchema)).toMatchObject({
             input: { fingerprint: "water-potion" },
             ingredient: { itemIds: ["minecraft:nether_wart"] },
             count: 3,
@@ -1403,7 +1404,7 @@ describe("SoulFireTasks", () => {
             expectedResult: { itemIds: ["minecraft:ender_pearl"] },
             closeWhenDone: true,
           });
-          expect(anyUnpack(started!.input!, VillagerTradeTaskSchema)).toMatchObject({
+          expect(anyUnpack(taskInput(started), VillagerTradeTaskSchema)).toMatchObject({
             offerIndex: 4,
             count: 3,
             expectedResult: { itemIds: ["minecraft:ender_pearl"] },

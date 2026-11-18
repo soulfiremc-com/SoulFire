@@ -10,6 +10,7 @@ import {
   eventually,
   placeBot,
   rcon,
+  required,
 } from "../harness.ts";
 
 const PAGE = "Book page before signing";
@@ -17,7 +18,10 @@ const SECOND_PAGE = "Second page before signing";
 const EDITED_SECOND_PAGE = `X${SECOND_PAGE.slice(1)}`;
 const TITLE = "Book QA";
 const text = (value: string) =>
-  Array.from(value, (character) => ({ kind: Kind.CHARACTER, code: character.codePointAt(0)! }));
+  Array.from(value, (character) => ({
+    kind: Kind.CHARACTER,
+    code: required(character.codePointAt(0), "a code point"),
+  }));
 const key = (code: number, modifiers = 0, logicalKey?: string) => [
   { kind: Kind.KEY, code, modifiers, key: logicalKey, action: 1 },
   { kind: Kind.KEY, code, modifiers, key: logicalKey, action: 0 },
