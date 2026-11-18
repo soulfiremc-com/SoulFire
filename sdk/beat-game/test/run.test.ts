@@ -5646,6 +5646,85 @@ describe("beat-game run lifecycle", () => {
     expect(startedActions).toContain("survive:night-shelter");
   });
 
+  it("skips the corpse walk when the bot kept its inventory through death", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const deathPosition = { x: 48, y: 64, z: -12, dimension: "minecraft:overworld" };
+    const observedAt = new Date(Date.now() - 60 * 1_000).toISOString();
+    const deathInventory = {
+      "minecraft:cobblestone": 17,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:shield": 1,
+    };
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId: "kept-inventory-run",
+      teamId: "kept-inventory-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            deathPositions: [
+              {
+                key: `death:${observedAt}`,
+                value: { ...deathPosition, inventoryCounts: deathInventory },
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      dead: true,
+      health: 0,
+      position: { x: 32, y: 64, z: 32, dimension: "minecraft:overworld" },
+    });
+    // keepInventory: the bot respawns at world spawn still holding everything.
+    const resolveTask = driver.taskResolver;
+    driver.taskResolver = (task, execution) =>
+      task.type === "auto-respawn"
+        ? Effect.sync(() => {
+            driver.tasks.push(task);
+            driver.currentObservation = observation({
+              counts: { ...deathInventory, "minecraft:cooked_beef": 8 },
+            });
+          })
+        : resolveTask(task, execution);
+    let recovered: string | undefined;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "kept-inventory-run",
+          team: { teamId: "kept-inventory-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              const event = yield* run.events.pipe(
+                Stream.filter((candidate) => candidate.type === "items-recovered"),
+                Stream.runHead,
+              );
+              const found = Option.getOrUndefined(event);
+              recovered = found?.type === "items-recovered" ? found.detail : undefined;
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ).pipe(Effect.timeout("5 seconds")),
+    );
+
+    expect(recovered).toBe("The bot kept its inventory through death");
+    expect(driver.paths).not.toContainEqual(expect.objectContaining({ position: deathPosition }));
+  });
+
   it("restores an unloaded pending corpse despite partial replacement inventory", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

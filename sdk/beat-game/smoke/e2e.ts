@@ -156,6 +156,9 @@ const fixtureConfiguration = {
       : optionalEnvironment("SOULFIRE_E2E_SEED"),
   attachedMinecraftContainer,
   keepContainer: booleanEnvironment("SOULFIRE_E2E_KEEP_CONTAINER", false),
+  // Survival runs keep the inventory through deaths, so a run can prove the
+  // bot finishes the game before gear loss is part of the test.
+  keepInventory: booleanEnvironment("SOULFIRE_E2E_KEEP_INVENTORY", false),
 } as const;
 
 interface CommandResult {
@@ -1713,13 +1716,22 @@ const startMinecraftFixture = Effect.suspend(() => {
     ];
 
     if (fixtureConfiguration.mode === "survival") {
-      const serverArguments = [...commonArguments, "--env", "ENABLE_RCON=false"];
+      const serverArguments = [
+        ...commonArguments,
+        ...(fixtureConfiguration.keepInventory
+          ? ["--env", "ENABLE_RCON=true", "--env", "RCON_PASSWORD=soulfire-smoke"]
+          : ["--env", "ENABLE_RCON=false"]),
+      ];
       if (fixtureConfiguration.seed !== undefined) {
         serverArguments.push("--env", `SEED=${fixtureConfiguration.seed}`);
       }
       serverArguments.push(fixtureConfiguration.image);
       yield* docker(serverArguments);
       yield* waitForMinecraftServer(containerName);
+      if (fixtureConfiguration.keepInventory) {
+        yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1_000);
+        yield* rcon(containerName, "gamerule keep_inventory true");
+      }
       const port = yield* publishedMinecraftPort(containerName);
       const fixture = {
         mode: "survival",
@@ -1733,7 +1745,8 @@ const startMinecraftFixture = Effect.suspend(() => {
       yield* record("minecraft-ready", {
         ...fixture,
         serverType: "PAPER",
-        rconEnabled: false,
+        rconEnabled: fixtureConfiguration.keepInventory,
+        keepInventory: fixtureConfiguration.keepInventory,
         seed: fixture.seed ?? "server-generated",
       });
       return fixture;

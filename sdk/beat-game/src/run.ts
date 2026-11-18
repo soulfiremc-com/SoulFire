@@ -3227,6 +3227,16 @@ function executeDecision(
               path: state.strategy.path,
             });
             let respawned = yield* observeDriverFresh(state);
+            // With keepInventory nothing drops, so a corpse walk would only
+            // search for items the bot already carries.
+            if (pendingDeath.recoverItems && keptInventoryThroughDeath(pendingDeath, respawned)) {
+              return yield* abandonPendingDeath(
+                state,
+                pendingDeath,
+                respawned,
+                "The bot kept its inventory through death",
+              );
+            }
             const safetyInterruptions = deathRecoverySafetyInterruptionCount(actionCheckpoint);
             if (
               pendingDeath.recoverItems &&
@@ -17462,6 +17472,22 @@ function madeMeaningfulDeathRecoveryApproach(
 function completePendingDeath(state: RunState, observedAt: string): Effect.Effect<void> {
   return Ref.update(state.pendingDeaths, (pendingDeaths) =>
     pendingDeaths.filter((pendingDeath) => pendingDeath.observedAt !== observedAt),
+  );
+}
+
+function keptInventoryThroughDeath(
+  pendingDeath: PendingDeath,
+  observation: BeatGameObservation,
+): boolean {
+  if (observation.player.dead) {
+    return false;
+  }
+  const carried = Object.entries(pendingDeath.inventoryCounts ?? {}).filter(
+    ([, count]) => count > 0,
+  );
+  return (
+    carried.length > 0 &&
+    carried.every(([itemId, count]) => (observation.inventory.counts[itemId] ?? 0) >= count)
   );
 }
 
