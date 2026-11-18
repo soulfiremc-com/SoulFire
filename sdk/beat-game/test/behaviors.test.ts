@@ -1934,6 +1934,65 @@ describe("beat-game behavior programs", () => {
     });
   });
 
+  it("opens a staircase step before replacing its gravel support", async () => {
+    const driver = new FakeBeatGameDriver();
+    const from = { x: 0, y: 3, z: 0, dimension: "minecraft:overworld" };
+    const to = { x: 1, y: 2, z: 0, dimension: "minecraft:overworld" };
+    const support = { ...to, y: 1 };
+    const lowerAnchor = { ...support, y: 0 };
+    const dug = new Set<string>();
+    let supportPlaced = false;
+    driver.currentObservation = observation({
+      counts: { "minecraft:cobblestone": 4 },
+    });
+    driver.blockQueryResolver = ({ center, selector }) => {
+      const position = queriedBlockPosition(center);
+      if (blockKey(position) === blockKey(support)) {
+        if (supportPlaced) {
+          return [blockObservation(support, { blockId: "minecraft:cobblestone" })];
+        }
+        if (dug.has(blockKey(support))) {
+          return selector.replaceable === false
+            ? []
+            : [blockObservation(support, { blockId: "minecraft:air", replaceable: true })];
+        }
+        return [blockObservation(support, { blockId: "minecraft:gravel" })];
+      }
+      if (dug.has(blockKey(position))) {
+        return selector.replaceable === false
+          ? []
+          : [blockObservation(position, { blockId: "minecraft:air", replaceable: true })];
+      }
+      return [blockObservation(position)];
+    };
+    installStaircaseMovementSimulation(driver, from);
+    const resolveAction = driver.actionResolver;
+    driver.actionResolver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+      }
+      // From the previous step, the undug step hides the anchor's top face.
+      if (action.type === "place-block" && blockKey(action.against) === blockKey(lowerAnchor)) {
+        if (!dug.has(blockKey(to))) {
+          return Effect.fail(
+            new BeatGameDriverError({
+              operation: "place-block",
+              code: "FAILED_PRECONDITION",
+              retryable: false,
+              message: "Block placement is not ready (FACE_OCCLUDED)",
+            }),
+          );
+        }
+        supportPlaced = true;
+      }
+      return resolveAction(action);
+    };
+
+    await Effect.runPromise(excavateStaircase(driver, { from, to }));
+
+    expect(supportPlaced).toBe(true);
+  });
+
   it("does not enter replaceable fluid in a staircase", async () => {
     const driver = new FakeBeatGameDriver();
     const from = {

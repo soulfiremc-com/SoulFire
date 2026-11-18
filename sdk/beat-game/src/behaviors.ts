@@ -654,7 +654,6 @@ export function excavateStaircase(
             return undefined;
           }
         }
-        yield* ensureStaircaseSupport(driver, step);
         yield* selectStaircaseTool(driver, tool);
         yield* digStaircaseBlockIfNeeded(driver, {
           ...step,
@@ -665,6 +664,11 @@ export function excavateStaircase(
           y: step.y + 1,
         });
         yield* digStaircaseBlockIfNeeded(driver, step);
+        // A replacement support goes on top of the block below it. From the
+        // previous step that face is only visible once this step is open: a
+        // live bot replacing gravel under an undug step failed every
+        // placement with FACE_OCCLUDED.
+        yield* ensureStaircaseSupport(driver, step);
         yield* refuseFloodedStaircaseStep(driver, step);
         const traversal = yield* walkStaircaseStep(driver, step, options.path).pipe(Effect.result);
         if (traversal._tag === "Failure") {
