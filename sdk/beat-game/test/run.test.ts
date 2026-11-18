@@ -23800,6 +23800,239 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("swims past a bridge it cannot climb to reach distant shore", async () => {
+    const driver = new FakeBeatGameDriver();
+    const distantSurfaceColumns = [
+      {
+        x: 1,
+        z: -1,
+        loaded: true,
+        surfaceY: 62,
+        blockId: "minecraft:tall_seagrass",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 1,
+        z: 0,
+        loaded: true,
+        surfaceY: 63,
+        blockId: "minecraft:tall_seagrass",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 1,
+        z: 1,
+        loaded: true,
+        surfaceY: 62,
+        blockId: "minecraft:tall_seagrass",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 4,
+        z: 0,
+        loaded: true,
+        surfaceY: 64,
+        blockId: "minecraft:grass_block",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 4,
+        z: 1,
+        loaded: true,
+        surfaceY: 64,
+        blockId: "minecraft:grass_block",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 4,
+        z: -1,
+        loaded: true,
+        surfaceY: 64,
+        blockId: "minecraft:grass_block",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    // A two-wide diagonal cobblestone bridge spans the water west of the
+    // bot, with only air under its top blocks, like the live one.
+    const bridgeColumns = [
+      { x: -2, z: 0 },
+      { x: -2, z: -1 },
+      { x: -3, z: -1 },
+      { x: -3, z: -2 },
+    ].map(({ x, z }) => ({
+      x,
+      z,
+      loaded: true,
+      surfaceY: 64,
+      blockId: "minecraft:cobblestone",
+      skyLight: 15,
+      blockLight: 0,
+    }));
+    driver.surfaceQueryResolver = (_center, radius) =>
+      radius > 16 ? distantSurfaceColumns : bridgeColumns;
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds === undefined &&
+      (Math.floor(query.center.x) === -2 || Math.floor(query.center.x) === -3) &&
+      Math.floor(query.center.y) === 63
+        ? [
+            blockObservation(
+              {
+                x: Math.floor(query.center.x),
+                y: 63,
+                z: Math.floor(query.center.z),
+                dimension: query.center.dimension,
+              },
+              { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+            ),
+          ]
+        : query.selector.blockIds?.includes("minecraft:water") === true &&
+            driver.currentObservation.player.position.x < 4
+          ? [
+              blockObservation(
+                {
+                  x: Math.floor(query.center.x),
+                  y: Math.floor(query.center.y),
+                  z: Math.floor(query.center.z),
+                  dimension: query.center.dimension,
+                },
+                {
+                  blockId: "minecraft:water",
+                  diggable: false,
+                  replaceable: true,
+                },
+              ),
+            ]
+          : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.void));
+    let swimmingUpward = false;
+    let swimmingToShore = false;
+    let ascentObservations = 0;
+    let resolveReachedShore!: () => void;
+    const reachedShore = new Promise<void>((resolve) => {
+      resolveReachedShore = resolve;
+    });
+    driver.actionObserver = (action) => {
+      const current = driver.currentObservation;
+      if (action.type === "look") {
+        driver.currentObservation = {
+          ...current,
+          player: {
+            ...current.player,
+            rotation: {
+              yaw: action.yaw,
+              pitch: action.pitch,
+            },
+          },
+        };
+        return;
+      }
+      if (action.type === "set-movement" && action.jump === true) {
+        const swimmingVertically = driver.currentObservation.player.rotation.pitch === -90;
+        // A yaw near 90 heads west toward the bridge, which the bot cannot
+        // climb, so it stays in the water there.
+        const towardBridge =
+          !swimmingVertically && Math.abs(driver.currentObservation.player.rotation.yaw - 90) < 45;
+        if (towardBridge) {
+          driver.currentObservation = {
+            ...driver.currentObservation,
+            player: {
+              ...driver.currentObservation.player,
+              position: { x: -1.5, y: 62.5, z: 0.5, dimension: "minecraft:overworld" },
+            },
+          };
+          return;
+        }
+        swimmingUpward = swimmingVertically;
+        swimmingToShore = !swimmingVertically;
+        driver.currentObservation = {
+          ...driver.currentObservation,
+          player: {
+            ...driver.currentObservation.player,
+            air: swimmingVertically ? 250 : 300,
+            position: swimmingVertically
+              ? {
+                  x: 0,
+                  y: 63.95,
+                  z: 0,
+                  dimension: "minecraft:overworld",
+                }
+              : {
+                  x: 4.5,
+                  y: 65,
+                  z: 0.5,
+                  dimension: "minecraft:overworld",
+                },
+          },
+        };
+        return;
+      }
+      if (action.type === "reset-movement") {
+        if (swimmingToShore) {
+          resolveReachedShore();
+        }
+        swimmingUpward = false;
+        swimmingToShore = false;
+      }
+    };
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (swimmingUpward) {
+          ascentObservations += 1;
+          if (ascentObservations >= 3) {
+            driver.currentObservation = {
+              ...driver.currentObservation,
+              player: {
+                ...driver.currentObservation.player,
+                air: 300,
+              },
+            };
+          }
+        }
+        return driver.currentObservation;
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            air: 100,
+            food: 5,
+            position: { x: 0, y: 62.5, z: 0 },
+          });
+          yield* Effect.promise(() => reachedShore).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.surfaceQueries).toContainEqual(
+      expect.objectContaining({
+        radius: 96,
+        sampleStep: 4,
+      }),
+    );
+    expect(driver.currentObservation.player.position).toMatchObject({
+      x: 4.5,
+      y: 65,
+      z: 0.5,
+    });
+  });
+
   it("interrupts a shore crossing to defend against a nearby hostile", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceColumns = [-1, 0, 1].map((z) => ({

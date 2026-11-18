@@ -7138,6 +7138,7 @@ function findDrySurfaceEscapeColumns(
       () =>
         state.driver.sampleSurface(position, AIR_ESCAPE_SURFACE_SEARCH_RADIUS, 1).pipe(
           Effect.map((columns) => selectStableSurfaceEscapeColumns(columns, position)),
+          Effect.flatMap((columns) => withoutFloatingSpans(state.driver, position, columns)),
           Effect.filterOrElse(
             (nearbySurfaces) => nearbySurfaces.length > 0,
             () =>
@@ -7151,6 +7152,27 @@ function findDrySurfaceEscapeColumns(
           ),
         ),
     ),
+  );
+}
+
+// A bridge or overhang has nothing solid under its top block, so a swimmer
+// cannot climb onto it. A live bot fell off its own bridge into the ocean
+// and kept swimming back to it while real shore lay 30 blocks away.
+function withoutFloatingSpans(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+  columns: readonly { readonly x: number; readonly z: number; readonly surfaceY: number }[],
+): Effect.Effect<
+  readonly { readonly x: number; readonly z: number; readonly surfaceY: number }[],
+  BeatGameDriverError
+> {
+  return Effect.filter(columns, (column) =>
+    queryExactBlock(driver, {
+      x: column.x,
+      y: column.surfaceY - 1,
+      z: column.z,
+      dimension: position.dimension,
+    }).pipe(Effect.map((support) => support === undefined || !support.replaceable)),
   );
 }
 
