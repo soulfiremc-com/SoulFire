@@ -134,6 +134,13 @@ public final class AutoEatTaskProvider
         return;
       }
       ticks++;
+      // A dead bot cannot eat, and waiting for it hung a live run's action
+      // for ten minutes on the death screen.
+      var currentPlayer = context.bot().minecraft().player;
+      if (currentPlayer != null && currentPlayer.isDeadOrDying()) {
+        abortForPlayerDeath();
+        return;
+      }
       if (finishActiveMeal()) {
         return;
       }
@@ -221,6 +228,19 @@ public final class AutoEatTaskProvider
         }
       }
       return false;
+    }
+
+    private void abortForPlayerDeath() {
+      var meal = activeMeal;
+      activeMeal = null;
+      if (meal != null) {
+        context.bot().botControl().cancel(meal.control());
+      }
+      result.completeExceptionally(
+        Status.FAILED_PRECONDITION
+          .withDescription("Player died while eating")
+          .asRuntimeException()
+      );
     }
 
     private void complete(AutoEatCompletionReason reason) {
