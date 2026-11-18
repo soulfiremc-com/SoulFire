@@ -108,6 +108,13 @@ public final class BlockPlaceAction implements WorldAction {
     return SFVec3i.fromInt(connection.minecraft().player.blockPosition());
   }
 
+  /// Sneaking keeps a placement from using the block it is placed against.
+  /// In water it swims the player down instead: a live bot bridging over
+  /// water sank under its own block and drowned there.
+  static boolean sneaksWhilePlacing(boolean inWater) {
+    return !inWater;
+  }
+
   @Override
   public void tick(BotConnection connection) {
     var clientEntity = connection.minecraft().player;
@@ -117,6 +124,11 @@ public final class BlockPlaceAction implements WorldAction {
     // a player on a vine slides down the whole time unless it sneaks.
     if (clientEntity.onClimbable()) {
       connection.controlState().shift(true);
+    }
+    // In water the player sinks unless it swims up, so it holds jump to
+    // stay at the surface while it waits.
+    if (clientEntity.isInWater()) {
+      connection.controlState().jump(true);
     }
 
     if (placementItem == null) {
@@ -158,7 +170,9 @@ public final class BlockPlaceAction implements WorldAction {
       return;
     }
 
-    connection.controlState().shift(true);
+    if (sneaksWhilePlacing(clientEntity.isInWater())) {
+      connection.controlState().shift(true);
+    }
     var placement = BlockPlacementSupport.evaluate(
       connection,
       placementItem.hand(),

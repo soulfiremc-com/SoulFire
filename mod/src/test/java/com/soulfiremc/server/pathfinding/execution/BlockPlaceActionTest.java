@@ -66,4 +66,11 @@ final class BlockPlaceActionTest {
       Blocks.AIR.defaultBlockState()
     ));
   }
+
+  @Test
+  void swimsUpInsteadOfSneakingWhilePlacingInWater() {
+    // Sneaking in water swims down, under the block being placed
+    assertFalse(BlockPlaceAction.sneaksWhilePlacing(true));
+    assertTrue(BlockPlaceAction.sneaksWhilePlacing(false));
+  }
 }
