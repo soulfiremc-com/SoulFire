@@ -13125,6 +13125,19 @@ function escapeEnvironmentalDamage(
       yield* extinguishFire(state, yield* state.driver.observe);
       return;
     }
+    // Drowned throw tridents from under the water where the bot cannot see
+    // them, and a live run died to three throws while it treaded water. Dry
+    // land is out of their reach.
+    const lastDamage = yield* Ref.get(state.lastDamage);
+    if (
+      !burning.player.dead &&
+      lastDamage?.damageType !== undefined &&
+      PROJECTILE_DAMAGE_TYPES.has(lastDamage.damageType) &&
+      (yield* isPlayerInFluid(state.driver, burning.player.position))
+    ) {
+      yield* swimToNearbyDrySurface(state, true);
+      return;
+    }
     const occupiedBlocks = yield* Effect.forEach(
       occupiedPositions,
       (occupiedPosition) => queryExactBlock(state.driver, occupiedPosition),

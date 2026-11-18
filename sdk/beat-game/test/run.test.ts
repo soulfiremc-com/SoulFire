@@ -6383,6 +6383,106 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(12);
   });
 
+  it("swims ashore when tridents hit it in the water", async () => {
+    const driver = new FakeBeatGameDriver();
+    let actionStarted = false;
+    let health = 20;
+    const position = { x: 0.5, y: 62, z: 0.5, dimension: "minecraft:overworld" } as const;
+    driver.currentObservation = observation({ health, position, onGround: false });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 16;
+        }
+        driver.currentObservation = observation({ health, position, onGround: false });
+        return driver.currentObservation;
+      });
+    // Open water around the bot, with a dry shore four blocks east.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      const block = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      const water = block.x < 4 && block.y <= 62;
+      if (selector.blockIds !== undefined) {
+        return water && selector.blockIds.includes("minecraft:water")
+          ? [
+              blockObservation(block, {
+                blockId: "minecraft:water",
+                replaceable: true,
+                solid: false,
+              }),
+            ]
+          : [];
+      }
+      return [
+        water
+          ? blockObservation(block, { blockId: "minecraft:water", replaceable: true, solid: false })
+          : block.y <= 62
+            ? blockObservation(block, { blockId: "minecraft:grass_block" })
+            : blockObservation(block, {
+                blockId: "minecraft:air",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              }),
+      ];
+    };
+    driver.surfaceColumns = Array.from({ length: 9 }, (_, x) =>
+      [-1, 0, 1].map((z) => ({
+        x: x - 2,
+        z,
+        loaded: true,
+        surfaceY: 62,
+        blockId: x - 2 < 4 ? "minecraft:water" : "minecraft:grass_block",
+        biomeId: "minecraft:river",
+        skyLight: 15,
+        blockLight: 0,
+      })),
+    ).flat();
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: new Date().toISOString(),
+      amount: 4,
+      health: 16,
+      damageType: "minecraft:trident",
+    } as const).pipe(Stream.concat(Stream.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted = true;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* Effect.sleep(400);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    // The live bot's water-avoiding route from inside the water never got it
+    // out, so it swims straight for the shore.
+    expect(driver.actions).toContainEqual({ type: "look", yaw: -90, pitch: -20 });
+    expect(driver.actions).toContainEqual({
+      type: "set-movement",
+      forward: true,
+      jump: true,
+      sprint: true,
+    });
+  }, 10_000);
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;
