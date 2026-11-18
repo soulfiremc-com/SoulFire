@@ -23,6 +23,8 @@ import com.soulfiremc.server.pathfinding.graph.GraphInstructions;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.FluidState;
 import org.jspecify.annotations.Nullable;
 
 import java.util.OptionalInt;
@@ -54,7 +56,7 @@ public record AvoidFluidConstraint(
       return false;
     }
     return isDryDestination(blockAccessor, instruction)
-      || isAscendingFluidEscape(instruction, submergedStartY);
+      || isAscendingFluidEscape(blockAccessor, instruction, submergedStartY);
   }
 
   static boolean isDryDestination(
@@ -90,11 +92,24 @@ public record AvoidFluidConstraint(
       && level.getFluidState(position.west()).isEmpty();
   }
 
+  /// Swimming up out of still water is allowed. Falling water is not: a
+  /// live bot in a pool at the foot of a waterfall kept routing up the
+  /// waterfall, ran low on air partway and dropped back into the pool.
   static boolean isAscendingFluidEscape(
+    BlockGetter level,
     GraphInstructions instruction,
     OptionalInt submergedStartY
   ) {
+    var feet = instruction.blockPosition().toBlockPos();
     return submergedStartY.isPresent()
-      && instruction.blockPosition().y > submergedStartY.getAsInt();
+      && instruction.blockPosition().y > submergedStartY.getAsInt()
+      && !isFallingFluid(level.getFluidState(feet))
+      && !isFallingFluid(level.getFluidState(feet.above()));
+  }
+
+  private static boolean isFallingFluid(FluidState fluid) {
+    return !fluid.isEmpty()
+      && fluid.hasProperty(FlowingFluid.FALLING)
+      && fluid.getValue(FlowingFluid.FALLING);
   }
 }

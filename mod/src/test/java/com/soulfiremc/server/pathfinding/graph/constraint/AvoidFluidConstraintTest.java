@@ -26,6 +26,7 @@ import com.soulfiremc.server.pathfinding.graph.actions.movement.ActionDirection;
 import com.soulfiremc.test.utils.TestBlockAccessorBuilder;
 import com.soulfiremc.test.utils.TestPathConstraint;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -123,6 +124,24 @@ final class AvoidFluidConstraintTest {
     assertFalse(submerged.allowsInstruction(instruction(2, 63, 0), level));
     assertFalse(dry.allowsInstruction(instruction(1, 65, 0), level));
     assertTrue(submerged.allowsInstruction(instruction(3, 64, 0), level));
+  }
+
+  @Test
+  void doesNotClimbAWaterfallFromASubmergedStart() {
+    var blocks = new TestBlockAccessorBuilder();
+    var fallingWater = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 8);
+    for (var y = 64; y <= 70; y++) {
+      blocks.setBlockStateAt(0, y, 0, fallingWater);
+    }
+    blocks.setBlockAt(1, 65, 0, Blocks.WATER);
+    var level = blocks.build();
+    var submerged = new AvoidFluidConstraint(
+      TestPathConstraint.INSTANCE,
+      OptionalInt.of(64)
+    );
+
+    assertFalse(submerged.allowsInstruction(instruction(0, 65, 0), level));
+    assertTrue(submerged.allowsInstruction(instruction(1, 65, 0), level));
   }
 
   @Test
