@@ -1480,10 +1480,14 @@ describe("beat-game run lifecycle", () => {
           });
           yield* run.events.pipe(
             Stream.runForEach((event) =>
-              event.type === "action-failed" &&
-              event.detail?.includes("night fell while the bot was under-equipped") === true
+              (event.type === "action-failed" &&
+                event.detail?.includes("night fell while the bot was under-equipped") === true) ||
+              // The interrupt now shelters before it reports the failure.
+              (event.type === "action-started" && event.action === "survive:night-shelter")
                 ? Effect.sync(() => {
-                    failures.push(event.detail ?? "");
+                    failures.push(
+                      event.type === "action-failed" ? (event.detail ?? "") : event.action,
+                    );
                   })
                 : Effect.void,
             ),
@@ -1504,7 +1508,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(actionStarted).toBe(true);
-    expect(failures).toHaveLength(1);
+    // The night interrupt shelters right away instead of returning to work.
+    expect(failures).toEqual(["survive:night-shelter"]);
   });
 
   it("places a carried bed and skips the hostile night", async () => {

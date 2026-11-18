@@ -949,6 +949,7 @@ interface ActionResult {
   readonly fallClutchPosition?: BeatGamePosition;
   readonly environmentalEscapePosition?: BeatGamePosition;
   readonly travelMealRequested?: boolean;
+  readonly nightShelterRequested?: boolean;
   readonly completedPendingDeath?: string;
 }
 
@@ -3824,28 +3825,43 @@ function executeDecision(
                       )
                   : result.defenseTarget !== undefined
                     ? defendAndRecover(state, result.defenseTarget)
-                    : result.travelMealRequested === true
+                    : result.nightShelterRequested === true
                       ? state.driver.observe.pipe(
                           Effect.flatMap((latest) =>
-                            eatWhenNeeded(state.driver, {
-                              foodItemIds: preferredUsableFoodItemIds(latest),
-                              foodLevel: Math.min(
-                                20,
-                                Math.max(18, state.strategy.eatBelowFood + 2),
+                            runNightShelterAction(state, latest).pipe(
+                              Effect.catch((error) =>
+                                emit(state, {
+                                  type: "diagnostic",
+                                  message: "Night shelter attempt failed",
+                                  data: { error: error.message },
+                                }),
                               ),
-                              maximumMeals: 1,
-                              completeWhenNoFood: true,
-                              path: state.strategy.path,
-                            }),
+                            ),
                           ),
                         )
-                      : Effect.void;
+                      : result.travelMealRequested === true
+                        ? state.driver.observe.pipe(
+                            Effect.flatMap((latest) =>
+                              eatWhenNeeded(state.driver, {
+                                foodItemIds: preferredUsableFoodItemIds(latest),
+                                foodLevel: Math.min(
+                                  20,
+                                  Math.max(18, state.strategy.eatBelowFood + 2),
+                                ),
+                                maximumMeals: 1,
+                                completeWhenNoFood: true,
+                                path: state.strategy.path,
+                              }),
+                            ),
+                          )
+                        : Effect.void;
         const interruptedForSafety =
           result.fallClutchPosition !== undefined ||
           result.airEscapePosition !== undefined ||
           result.environmentalEscapePosition !== undefined ||
           result.escapeTarget !== undefined ||
           result.defenseTarget !== undefined ||
+          result.nightShelterRequested === true ||
           result.travelMealRequested === true;
         const handledResponse =
           result.airEscapePosition === undefined && result.fallClutchPosition === undefined
@@ -4236,6 +4252,11 @@ function monitorObservedSafety(
         previousShelterNeeded && shelterNeeded
           ? Effect.succeed({
               replanReason: "night fell while the bot was under-equipped",
+              // The main loop rechecks the night with a different snapshot.
+              // A live run bounced between this interrupt and resuming its
+              // food search fifteen times, never sheltering, so the shelter
+              // runs here.
+              nightShelterRequested: true,
             } satisfies ActionResult)
           : Effect.suspend(() => monitor(observation)),
       ),
