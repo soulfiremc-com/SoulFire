@@ -455,6 +455,11 @@ const LAND_HUNT_MAXIMUM_VERTICAL_DISTANCE = 12;
 const FOOD_LAND_HUNT_MAXIMUM_VERTICAL_RISE = 40;
 const DIRECTED_HUNT_MAXIMUM_DETOUR = 32;
 const DIRECTED_HUNT_DESTINATION_REACHED_RADIUS = 3;
+// Loaded terrain reaches about 160 blocks, and a forest canopy tops its
+// columns with leaves, so a coarse surface survey finds trees beyond the
+// block search radius.
+const TREE_SURVEY_RADIUS = 160;
+const TREE_SURVEY_SAMPLE_STEP = 4;
 const URGENT_AQUATIC_HUNT_MAXIMUM_HORIZONTAL_DISTANCE = 64;
 const URGENT_AQUATIC_HUNT_MAXIMUM_VERTICAL_DISTANCE = 4;
 const LAND_HUNT_CHASE_TIMEOUT_MS = 20_000;
@@ -9127,15 +9132,20 @@ function satisfyRequirementFromWorld(
     case "food":
       return satisfyFoodRequirement(state, requirement, observation);
     case "logs":
-      return collectBlocksOrExplore(state, observation, {
-        blockIds: requirement.itemIds,
-        tags: requirement.tags,
-        count: bufferedCollectionCount("logs", missing),
-        progressItemIds: requirement.itemIds,
-        purpose: "find-logs",
-        avoidSubmergedTargets: true,
-        requireSurfaceTargets: true,
-      });
+      return findNearestTreeColumn(state, observation.player.position).pipe(
+        Effect.flatMap((explorationTarget) =>
+          collectBlocksOrExplore(state, observation, {
+            blockIds: requirement.itemIds,
+            tags: requirement.tags,
+            count: bufferedCollectionCount("logs", missing),
+            progressItemIds: requirement.itemIds,
+            purpose: "find-logs",
+            avoidSubmergedTargets: true,
+            requireSurfaceTargets: true,
+            ...(explorationTarget === undefined ? {} : { explorationTarget }),
+          }),
+        ),
+      );
     case "cobblestone":
       return collectBlocksOrExplore(state, observation, {
         blockIds: ["minecraft:stone"],
@@ -14157,6 +14167,44 @@ function selectElevatedSurfaceColumns(
           surfaceHorizontalDistanceSquared(right, position),
     )
     .slice(0, AIR_ESCAPE_DIRECTION_SECTORS);
+}
+
+// A live run spawned on treeless high ground and explored for 25 minutes
+// before it found the forest 140 blocks away in loaded chunks. Heading for
+// the nearest surveyed tree replaces the blind frontier search.
+function findNearestTreeColumn(
+  state: RunState,
+  position: BeatGamePosition,
+): Effect.Effect<BeatGamePosition | undefined> {
+  if (position.dimension !== "minecraft:overworld") {
+    return Effect.undefined;
+  }
+  return state.driver.sampleSurface(position, TREE_SURVEY_RADIUS, TREE_SURVEY_SAMPLE_STEP).pipe(
+    Effect.map((columns) => {
+      const nearest = columns
+        .filter(
+          (column) =>
+            column.loaded &&
+            column.surfaceY !== undefined &&
+            (column.blockId?.endsWith("_leaves") === true ||
+              column.blockId?.endsWith("_log") === true),
+        )
+        .toSorted(
+          (left, right) =>
+            surfaceHorizontalDistanceSquared(left, position) -
+            surfaceHorizontalDistanceSquared(right, position),
+        )[0];
+      return nearest?.surfaceY === undefined
+        ? undefined
+        : {
+            x: nearest.x + 0.5,
+            y: nearest.surfaceY + 1,
+            z: nearest.z + 0.5,
+            dimension: position.dimension,
+          };
+    }),
+    Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
+  );
 }
 
 function surfaceHorizontalDistanceSquared(

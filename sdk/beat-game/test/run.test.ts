@@ -373,6 +373,16 @@ const skeletonAt = (networkId: number, x: number, z: number) =>
     observedAt: "2026-01-01T00:00:00.000Z",
   }) as const;
 const blockKey = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+const grassColumn = (x: number, z: number) => ({
+  x,
+  z,
+  loaded: true,
+  surfaceY: 63,
+  blockId: "minecraft:grass_block",
+  biomeId: "minecraft:plains",
+  skyLight: 15,
+  blockLight: 0,
+});
 const mob = (networkId: number, entityType: string, x: number) =>
   ({
     connectionEpoch: "epoch-1",
@@ -10208,6 +10218,54 @@ describe("beat-game run lifecycle", () => {
 
     expect(timeline).toContain("toss");
     expect(timeline.indexOf("toss")).toBeLessThan(timeline.indexOf("corpse-path"));
+  });
+
+  it("heads for a surveyed forest when no logs are within reach", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    // Treeless ground around spawn; the forest canopy starts 140 blocks to
+    // the southwest, inside loaded terrain.
+    driver.surfaceQueryResolver = (_center, radius) =>
+      radius >= 160
+        ? [
+            grassColumn(40, 0),
+            grassColumn(0, -40),
+            { ...grassColumn(-100, 100), surfaceY: 70, blockId: "minecraft:oak_leaves" },
+          ]
+        : [
+            grassColumn(1, 0),
+            grassColumn(0, 1),
+            grassColumn(1, 1),
+            grassColumn(-1, 0),
+            grassColumn(0, -1),
+          ];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.paths.length === 0 && driver.xzPaths.length === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeout("5 seconds"),
+        ),
+      ),
+    );
+
+    const firstTarget = driver.paths[0]?.position ?? driver.xzPaths[0];
+    expect(firstTarget?.x).toBeLessThan(0);
+    expect(firstTarget?.z).toBeGreaterThan(0);
   });
 
   it("bootstraps equipment from surface logs outside the current line of sight", async () => {
