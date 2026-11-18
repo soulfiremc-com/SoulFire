@@ -37,6 +37,7 @@ import com.soulfiremc.server.bot.ControlPriority;
 import com.soulfiremc.server.bot.ControlResource;
 import com.soulfiremc.server.bot.ControlStopReason;
 import com.soulfiremc.server.bot.ControlTask;
+import com.soulfiremc.server.pathfinding.execution.BlockBreakRejectedException;
 import com.soulfiremc.server.pathfinding.execution.UnreachableGoalException;
 import com.soulfiremc.server.user.PermissionContext;
 import com.soulfiremc.server.user.SoulFireUser;
@@ -788,7 +789,7 @@ public final class BotTaskManager implements AutoCloseable {
     }
   }
 
-  private static BotTaskFailure failure(
+  static BotTaskFailure failure(
     String code,
     Throwable throwable,
     boolean retryable
@@ -799,7 +800,13 @@ public final class BotTaskManager implements AutoCloseable {
         throwable.getMessage(),
         throwable.getClass().getSimpleName()
       ))
-      .setRetryable(retryable || throwable instanceof UnreachableGoalException)
+      // A block the server refuses to break leaves a route to plan around.
+      // A live run treated one as final and stopped while it hunted food.
+      .setRetryable(
+        retryable
+          || throwable instanceof UnreachableGoalException
+          || throwable instanceof BlockBreakRejectedException
+      )
       .build();
   }
 

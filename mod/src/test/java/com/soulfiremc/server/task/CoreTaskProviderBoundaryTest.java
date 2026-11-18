@@ -17,6 +17,8 @@
  */
 package com.soulfiremc.server.task;
 
+import com.soulfiremc.server.pathfinding.SFVec3i;
+import com.soulfiremc.server.pathfinding.execution.BlockBreakRejectedException;
 import com.soulfiremc.server.pathfinding.execution.UnreachableGoalException;
 import io.grpc.Status;
 import org.junit.jupiter.api.Test;
@@ -25,7 +27,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CoreTaskProviderBoundaryTest {
   private static final Set<String> EXPECTED_TASK_TYPES = Set.of(
@@ -113,5 +117,19 @@ class CoreTaskProviderBoundaryTest {
         UnreachableGoalException.qualityBound(2.6, 1.5)
       )
     );
+  }
+
+  @Test
+  void treatsARejectedBlockBreakAsRetryable() {
+    assertTrue(BotTaskManager.failure(
+      "task_failed",
+      new BlockBreakRejectedException(SFVec3i.from(66, 103, -59)),
+      false
+    ).getRetryable());
+    assertFalse(BotTaskManager.failure(
+      "task_failed",
+      new IllegalStateException("Unexpected provider failure"),
+      false
+    ).getRetryable());
   }
 }
