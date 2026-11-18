@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, createRouterTransport } from "@connectrpc/connect";
 import { Cause, Deferred, Effect, Exit, Fiber, Scope } from "effect";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { SoulFire as NodeSoulFire } from "../src/node.js";
 import { SoulFire as BunSoulFire } from "../src/bun.js";
 import * as LocalServer from "../src/local-server.js";
@@ -298,12 +298,11 @@ describe("named bot setup", () => {
         }),
       ),
     );
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit))
-      expect(Cause.squash(exit.cause)).toMatchObject({
-        _tag: "SoulFireRpcError",
-        code: Code.PermissionDenied,
-      });
+    assert(Exit.isFailure(exit));
+    expect(Cause.squash(exit.cause)).toMatchObject({
+      _tag: "SoulFireRpcError",
+      code: Code.PermissionDenied,
+    });
     expect(fixture.states).toEqual([BotDesiredState.RUNNING, BotDesiredState.STOPPED]);
     expect(fixture.subscriptions).toBe(0);
   });

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Effect, Result } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, assert, describe, expect, it } from "vitest";
 
 import {
   BeatGameCheckpointError,
@@ -36,11 +36,9 @@ describe("beat-game checkpoint stores", () => {
     const conflict = await Effect.runPromise(
       store.save({ ...initial, revision: 2 }, 0).pipe(Effect.result),
     );
-    expect(Result.isFailure(conflict)).toBe(true);
-    if (Result.isFailure(conflict)) {
-      expect(conflict.failure).toBeInstanceOf(BeatGameCheckpointError);
-      expect(conflict.failure.actualRevision).toBe(1);
-    }
+    assert(Result.isFailure(conflict));
+    expect(conflict.failure).toBeInstanceOf(BeatGameCheckpointError);
+    expect(conflict.failure.actualRevision).toBe(1);
   });
 
   it("writes restart-safe JSON and removes only the expected revision", async () => {
@@ -85,10 +83,8 @@ describe("beat-game checkpoint stores", () => {
     );
 
     const loaded = await Effect.runPromise(store.load(initial.runId).pipe(Effect.result));
-    expect(Result.isFailure(loaded)).toBe(true);
-    if (Result.isFailure(loaded)) {
-      expect(loaded.failure).toBeInstanceOf(BeatGameCheckpointError);
-    }
+    assert(Result.isFailure(loaded));
+    expect(loaded.failure).toBeInstanceOf(BeatGameCheckpointError);
   });
 
   it("rejects corrupt durable exploration progress", async () => {
@@ -119,10 +115,8 @@ describe("beat-game checkpoint stores", () => {
         .pipe(Effect.result),
     );
 
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isFailure(result)) {
-      expect(result.failure).toBeInstanceOf(BeatGameCheckpointError);
-    }
+    assert(Result.isFailure(result));
+    expect(result.failure).toBeInstanceOf(BeatGameCheckpointError);
   });
 
   it("rejects corrupt pending exploration attempt state", async () => {
@@ -155,9 +149,7 @@ describe("beat-game checkpoint stores", () => {
         .pipe(Effect.result),
     );
 
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isFailure(result)) {
-      expect(result.failure).toBeInstanceOf(BeatGameCheckpointError);
-    }
+    assert(Result.isFailure(result));
+    expect(result.failure).toBeInstanceOf(BeatGameCheckpointError);
   });
 });

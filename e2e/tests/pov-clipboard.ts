@@ -156,5 +156,6 @@ export default {
         ),
         "5 seconds",
       );
+      return undefined;
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),
 } satisfies E2ETest;

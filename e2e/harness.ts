@@ -85,7 +85,7 @@ const rconCommands = Semaphore.makeUnsafe(1);
  */
 export const rcon = (
   command: string,
-  { check = true } = {},
+  { check: checkReply = true } = {},
 ): Effect.Effect<string, CommandFailed> =>
   rconCommands.withPermit(
     run("docker", ["exec", CONTAINER, "rcon-cli", command], { timeout: 10_000 }).pipe(
@@ -93,7 +93,7 @@ export const rcon = (
       Effect.uninterruptible,
       Effect.map(({ stdout }) => stdout.trim()),
       Effect.filterOrFail(
-        (out) => !check || !RCON_ERROR.test(out),
+        (out) => !checkReply || !RCON_ERROR.test(out),
         (out) => new CommandFailed({ command: `/${command}`, message: out }),
       ),
     ),

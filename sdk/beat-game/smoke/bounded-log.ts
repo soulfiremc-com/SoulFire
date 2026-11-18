@@ -27,23 +27,25 @@ export class BoundedLog {
 
   public append(value: string): Promise<void> {
     const buffer = Buffer.from(value);
-    const write = this.#pending.then(async () => {
-      await mkdir(path.dirname(this.#filename), { recursive: true });
-      this.#bytes ??= await fileSize(this.#filename);
-      for (let offset = 0; offset < buffer.byteLength; offset += this.#maximumBytes) {
-        const chunk = buffer.subarray(
-          offset,
-          Math.min(offset + this.#maximumBytes, buffer.byteLength),
-        );
-        if (this.#bytes > 0 && this.#bytes + chunk.byteLength > this.#maximumBytes) {
-          await this.#rotate();
-        }
-        await appendFile(this.#filename, chunk);
-        this.#bytes += chunk.byteLength;
-      }
-    });
+    const write = this.#pending.then(() => this.#write(buffer));
     this.#pending = write.catch(() => undefined);
     return write;
+  }
+
+  async #write(buffer: Buffer): Promise<void> {
+    await mkdir(path.dirname(this.#filename), { recursive: true });
+    this.#bytes ??= await fileSize(this.#filename);
+    for (let offset = 0; offset < buffer.byteLength; offset += this.#maximumBytes) {
+      const chunk = buffer.subarray(
+        offset,
+        Math.min(offset + this.#maximumBytes, buffer.byteLength),
+      );
+      if (this.#bytes > 0 && this.#bytes + chunk.byteLength > this.#maximumBytes) {
+        await this.#rotate();
+      }
+      await appendFile(this.#filename, chunk);
+      this.#bytes += chunk.byteLength;
+    }
   }
 
   public flush(): Promise<void> {

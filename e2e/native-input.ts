@@ -63,6 +63,8 @@ export const nativeInput = (
         pending = sent;
         return sent;
       };
+      // The frame stream updates `latest` while the loops below wait for it.
+      const screenOpen = () => latest?.screenOpen;
       const heartbeat = setInterval(() => {
         if (latest)
           void send().catch((error) => {
@@ -71,7 +73,7 @@ export const nativeInput = (
       }, 500);
       try {
         const deadline = Date.now() + 10_000;
-        while (!latest?.screenOpen) {
+        while (!screenOpen()) {
           if (streamError) throw streamError;
           if (Date.now() > deadline) throw new Error("The native inventory did not render");
           await new Promise((resolve) => {
@@ -94,10 +96,11 @@ export const nativeInput = (
             ),
           escape: async () => {
             await send([], true);
-            const deadline = Date.now() + 5000;
-            while (latest?.screenOpen !== false) {
+            const escapeDeadline = Date.now() + 5000;
+            while (screenOpen() !== false) {
               if (streamError) throw streamError;
-              if (Date.now() > deadline) throw new Error("Escape did not return to the game view");
+              if (Date.now() > escapeDeadline)
+                throw new Error("Escape did not return to the game view");
               await new Promise((resolve) => {
                 setTimeout(resolve, 25);
               });

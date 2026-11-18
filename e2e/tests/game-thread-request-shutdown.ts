@@ -7,14 +7,15 @@ export default {
   run: ({ bot }) =>
     Effect.scoped(
       Effect.gen(function* () {
-        let polling = true;
+        const runPromise = Effect.runPromiseWith(yield* Effect.context());
+        const control = { polling: true };
         let slowestRequestMs = 0;
         let requests = 0;
         const poll = async () => {
-          while (polling) {
+          while (control.polling) {
             const started = performance.now();
             // Reads may succeed or report that the connection is unavailable. Neither may hang.
-            await Effect.runPromise(bot.world.player({ timeoutMs: 15_000 }).pipe(Effect.result));
+            await runPromise(bot.world.player({ timeoutMs: 15_000 }).pipe(Effect.result));
             slowestRequestMs = Math.max(slowestRequestMs, performance.now() - started);
             requests++;
             await new Promise((resolve) => {
@@ -24,7 +25,7 @@ export default {
         };
         const readers = [poll(), poll(), poll(), poll()];
         const finish = Effect.promise(async () => {
-          polling = false;
+          control.polling = false;
           await Promise.all(readers);
         });
         yield* Effect.addFinalizer(() => finish);

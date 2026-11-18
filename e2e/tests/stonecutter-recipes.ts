@@ -46,7 +46,7 @@ export default {
       const state = yield* eventually(
         bot.inventoryState().pipe(
           Effect.filterOrFail(
-            (state) => state.slots.some((slot) => slot.slot === 0),
+            (current) => current.slots.some((slot) => slot.slot === 0),
             () => new CheckFailed({ message: "The stonecutter input is empty" }),
           ),
         ),
@@ -66,10 +66,7 @@ export default {
       });
       yield* check(!invalid.success, "A nonexistent stonecutter recipe was accepted");
       const recipe = buttons.find((button) => button.iconItemId === "minecraft:quartz_slab");
-      if (!recipe)
-        return yield* Effect.fail(
-          new CheckFailed({ message: "The quartz slab recipe is missing" }),
-        );
+      if (!recipe) return yield* new CheckFailed({ message: "The quartz slab recipe is missing" });
       const selected = yield* Effect.tryPromise({
         try: () => service.clickContainerButton({ ...scope, buttonId: recipe.buttonId }),
         catch: (cause) => new CheckFailed({ message: `Container RPC failed: ${String(cause)}` }),
@@ -77,9 +74,9 @@ export default {
       yield* check(selected.success, "The quartz slab recipe was rejected");
       yield* eventually(
         bot.inventoryState().pipe(
-          Effect.flatMap((state) =>
+          Effect.flatMap((current) =>
             check(
-              state.slots.some((slot) => slot.slot === 1 && slot.itemId === recipe.iconItemId),
+              current.slots.some((slot) => slot.slot === 1 && slot.itemId === recipe.iconItemId),
               "The selected recipe did not produce quartz slabs",
             ),
           ),
@@ -98,5 +95,6 @@ export default {
         ),
         "5 seconds",
       );
+      return undefined;
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),
 } satisfies E2ETest;

@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { randomUUID } from "node:crypto";
 import { create } from "@bufbuild/protobuf";
 import { MinecraftAccountProtoSchema } from "@soulfiremc/sdk/generated/soulfire/common_pb";
@@ -15,7 +16,7 @@ export default {
         const suffix = randomUUID().slice(0, 8);
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance(`e2e-replace-${suffix}`),
-          (instance) => instance.delete().pipe(Effect.ignore),
+          (created) => created.delete().pipe(Effect.ignore),
         );
         for (const namespace of source.settings) {
           for (const entry of namespace.entries) {
@@ -47,7 +48,7 @@ export default {
         yield* check(
           Result.isFailure(rejected) &&
             rejected.failure._tag === "SoulFireRpcError" &&
-            rejected.failure.code === 3,
+            rejected.failure.code === Code.InvalidArgument,
           "The invalid replacement was not rejected before removing accounts",
         );
         yield* check(
@@ -101,6 +102,7 @@ export default {
           (yield* bot.info()).liveState !== undefined,
           "Replacement in another profile disconnected the harness bot",
         );
+        return undefined;
       }),
     ),
 } satisfies E2ETest;

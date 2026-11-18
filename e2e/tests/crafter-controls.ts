@@ -94,9 +94,9 @@ export default {
       yield* rcon("item replace block 621 64 0 container.0 with oak_planks");
       yield* eventually(
         bot.inventoryState().pipe(
-          Effect.flatMap((state) =>
+          Effect.flatMap((current) =>
             check(
-              state.slots.some(
+              current.slots.some(
                 (slot) => slot.slot === 45 && slot.itemId === "minecraft:oak_button",
               ),
               "The crafter recipe preview never synchronized",
@@ -106,5 +106,6 @@ export default {
         "5 seconds",
       );
       yield* check(!(yield* toggle()).success, "An occupied crafter slot could be disabled");
+      return undefined;
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),
 } satisfies E2ETest;

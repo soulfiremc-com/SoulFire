@@ -10,6 +10,7 @@ import {
   SoulFireBehaviorError,
 } from "../src/behaviors.js";
 import type { SoulFireBot } from "../src/index.js";
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- these combinator tests never call methods on the bot
 const effectBot = {} as SoulFireBot;
 describe("Effect behavior combinators", () => {
   it("composes typed results, retries failures, and races for first success", () =>
@@ -111,7 +112,7 @@ it("preserves custom behavior errors and required services through composition",
   const dependent = defineBehavior(() =>
     Effect.gen(function* () {
       const counter = yield* Counter;
-      if (counter.value < 0) return yield* Effect.fail(new CustomFailure());
+      if (counter.value < 0) return yield* new CustomFailure();
       return counter.value;
     }),
   );

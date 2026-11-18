@@ -9,16 +9,45 @@ import {
 } from "../src/index.js";
 import { observation } from "./fixtures.js";
 
+const keys = (strategy: typeof defaultBeatGameStrategy, bedUnavailable = false) =>
+  requirementsForPhase(
+    BeatGamePhase.LOCATE_STRONGHOLD,
+    observation({ counts: { "minecraft:white_bed": 1 } }).inventory,
+    strategy,
+    { bedUnavailable },
+  ).map(({ key, targetCount, currentCount }) => ({ key, targetCount, currentCount }));
+const order = (strategy: typeof defaultBeatGameStrategy) =>
+  requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(
+    ({ key }) => key,
+  );
+const orderWithIron = (strategy: typeof defaultBeatGameStrategy, iron: number) =>
+  requirementsForPhase(
+    BeatGamePhase.PREPARE_OVERWORLD,
+    observation({ counts: { "minecraft:iron_ingot": iron } }).inventory,
+    strategy,
+  ).map(({ key }) => key);
+const prepareKeys = (bedUnavailable: boolean) =>
+  requirementsForPhase(
+    BeatGamePhase.PREPARE_OVERWORLD,
+    observation().inventory,
+    defaultBeatGameStrategy,
+    { bedUnavailable },
+  ).map(({ key }) => key);
+const logRequirement = (counts: Readonly<Record<string, number>>) =>
+  requirementsForPhase(
+    BeatGamePhase.PREPARE_OVERWORLD,
+    observation({ counts }).inventory,
+    defaultBeatGameStrategy,
+  ).find(({ key }) => key === "logs");
+const ironRequirement = (counts: Readonly<Record<string, number>>) =>
+  requirementsForPhase(
+    BeatGamePhase.PREPARE_OVERWORLD,
+    observation({ counts }).inventory,
+    defaultBeatGameStrategy,
+  ).find(({ key }) => key === "iron");
+
 describe("beat-game requirements", () => {
   it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
-    const keys = (strategy: typeof defaultBeatGameStrategy, bedUnavailable = false) =>
-      requirementsForPhase(
-        BeatGamePhase.LOCATE_STRONGHOLD,
-        observation({ counts: { "minecraft:white_bed": 1 } }).inventory,
-        strategy,
-        { bedUnavailable },
-      ).map(({ key, targetCount, currentCount }) => ({ key, targetCount, currentCount }));
-
     expect(keys(fastBeatGameStrategy)).toContainEqual({
       key: "dragon-beds",
       targetCount: 4,
@@ -29,11 +58,6 @@ describe("beat-game requirements", () => {
   });
 
   it("takes the bed right after wood and a weapon in a fast run", () => {
-    const order = (strategy: typeof defaultBeatGameStrategy) =>
-      requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(
-        ({ key }) => key,
-      );
-
     expect(order(fastBeatGameStrategy).slice(0, 3)).toEqual(["logs", "basic-melee-weapon", "bed"]);
     // The full cooked food stock waits for the iron and the shield.
     expect(order(fastBeatGameStrategy).indexOf("food")).toBeGreaterThan(
@@ -48,30 +72,18 @@ describe("beat-game requirements", () => {
   });
 
   it("crafts the shield before the food supply once a fast run holds iron", () => {
-    const order = (strategy: typeof defaultBeatGameStrategy, iron: number) =>
-      requirementsForPhase(
-        BeatGamePhase.PREPARE_OVERWORLD,
-        observation({ counts: { "minecraft:iron_ingot": iron } }).inventory,
-        strategy,
-      ).map(({ key }) => key);
-
-    expect(order(fastBeatGameStrategy, 1).indexOf("shield")).toBeLessThan(
-      order(fastBeatGameStrategy, 1).indexOf("food-supply"),
+    expect(orderWithIron(fastBeatGameStrategy, 1).indexOf("shield")).toBeLessThan(
+      orderWithIron(fastBeatGameStrategy, 1).indexOf("food-supply"),
     );
-    expect(order(fastBeatGameStrategy, 0).indexOf("shield")).toBeGreaterThan(
-      order(fastBeatGameStrategy, 0).indexOf("food-supply"),
+    expect(orderWithIron(fastBeatGameStrategy, 0).indexOf("shield")).toBeGreaterThan(
+      orderWithIron(fastBeatGameStrategy, 0).indexOf("food-supply"),
     );
-    expect(order(defaultBeatGameStrategy, 1).indexOf("shield")).toBeGreaterThan(
-      order(defaultBeatGameStrategy, 1).indexOf("food-supply"),
+    expect(orderWithIron(defaultBeatGameStrategy, 1).indexOf("shield")).toBeGreaterThan(
+      orderWithIron(defaultBeatGameStrategy, 1).indexOf("food-supply"),
     );
   });
 
   it("gets armor right after cobblestone in a fast run", () => {
-    const order = (strategy: typeof defaultBeatGameStrategy) =>
-      requirementsForPhase(BeatGamePhase.PREPARE_OVERWORLD, observation().inventory, strategy).map(
-        ({ key }) => key,
-      );
-
     expect(order(fastBeatGameStrategy).indexOf("chestplate")).toBe(
       order(fastBeatGameStrategy).indexOf("cobblestone") + 1,
     );
@@ -141,16 +153,8 @@ describe("beat-game requirements", () => {
   });
 
   it("drops the bed once the sheep search is exhausted", () => {
-    const keys = (bedUnavailable: boolean) =>
-      requirementsForPhase(
-        BeatGamePhase.PREPARE_OVERWORLD,
-        observation().inventory,
-        defaultBeatGameStrategy,
-        { bedUnavailable },
-      ).map(({ key }) => key);
-
-    expect(keys(false)).toContain("bed");
-    expect(keys(true)).not.toContain("bed");
+    expect(prepareKeys(false)).toContain("bed");
+    expect(prepareKeys(true)).not.toContain("bed");
   });
 
   it("secures an edible supply before spending time on stone", () => {
@@ -206,13 +210,6 @@ describe("beat-game requirements", () => {
   });
 
   it("shrinks the bootstrap log reserve as durable equipment comes online", () => {
-    const logRequirement = (counts: Readonly<Record<string, number>>) =>
-      requirementsForPhase(
-        BeatGamePhase.PREPARE_OVERWORLD,
-        observation({ counts }).inventory,
-        defaultBeatGameStrategy,
-      ).find(({ key }) => key === "logs");
-
     expect(logRequirement({})).toMatchObject({
       targetCount: 8,
       satisfied: false,
@@ -257,13 +254,6 @@ describe("beat-game requirements", () => {
   });
 
   it("credits crafted equipment toward the preparation iron budget", () => {
-    const ironRequirement = (counts: Readonly<Record<string, number>>) =>
-      requirementsForPhase(
-        BeatGamePhase.PREPARE_OVERWORLD,
-        observation({ counts }).inventory,
-        defaultBeatGameStrategy,
-      ).find(({ key }) => key === "iron");
-
     expect(ironRequirement({})).toMatchObject({
       currentCount: 0,
       targetCount: 7,

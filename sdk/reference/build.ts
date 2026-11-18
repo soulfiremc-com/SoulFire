@@ -15,7 +15,7 @@ if (language !== "typescript" && language !== "python") {
   throw new Error("Usage: bun build.ts <typescript|python>");
 }
 
-const root = import.meta.dir;
+const root = import.meta.dirname;
 const { version } = JSON.parse(readFileSync(join(root, "../typescript/package.json"), "utf8"));
 const assets = join(root, "dist", language);
 rmSync(assets, { recursive: true, force: true });

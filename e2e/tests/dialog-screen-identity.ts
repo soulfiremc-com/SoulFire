@@ -5,18 +5,18 @@ import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "..
 
 const OBJECTIVE = "sf_dialog_id";
 
+const rpc = <A>(call: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: call,
+    catch: (cause) => new CheckFailed({ message: `Dialog identity RPC failed: ${String(cause)}` }),
+  });
+
 export default {
   name: "dialog-screen-identity",
-  run: ({ bot, client }) =>
-    Effect.gen(function* () {
+  run: ({ bot, client }) => {
+    return Effect.gen(function* () {
       const service = client.service(BotService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
-      const rpc = <A>(call: () => Promise<A>) =>
-        Effect.tryPromise({
-          try: call,
-          catch: (cause) =>
-            new CheckFailed({ message: `Dialog identity RPC failed: ${String(cause)}` }),
-        });
       const show = (title: string, value: string) =>
         Effect.gen(function* () {
           yield* rcon(
@@ -120,5 +120,6 @@ export default {
           ),
         ),
       ),
-    ),
+    );
+  },
 } satisfies E2ETest;

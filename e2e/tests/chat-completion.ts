@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { Effect, Result } from "effect";
 import { BOT_NAME, check, type E2ETest, rcon } from "../harness.ts";
 
@@ -38,7 +39,7 @@ export default {
         yield* check(
           Result.isFailure(response) &&
             response.failure._tag === "SoulFireRpcError" &&
-            response.failure.code === 3,
+            response.failure.code === Code.InvalidArgument,
           `Invalid completion cursor ${cursor} was not rejected`,
         );
       }

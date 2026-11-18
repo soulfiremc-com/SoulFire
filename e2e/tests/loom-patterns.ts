@@ -34,9 +34,11 @@ export default {
         yield* rcon(`give ${BOT_NAME} ${item}`);
         const slot = yield* eventually(
           bot.inventoryState().pipe(
-            Effect.map((state) => state.slots.find((slot) => slot.itemId === `minecraft:${item}`)),
+            Effect.map((state) =>
+              state.slots.find((candidate) => candidate.itemId === `minecraft:${item}`),
+            ),
             Effect.filterOrFail(
-              (slot) => slot !== undefined,
+              (found) => found !== undefined,
               () => new CheckFailed({ message: "The loom material never arrived" }),
             ),
           ),
@@ -47,8 +49,8 @@ export default {
       const state = yield* eventually(
         bot.inventoryState().pipe(
           Effect.filterOrFail(
-            (state) =>
-              state.slots.some(
+            (current) =>
+              current.slots.some(
                 (slot) => slot.slot === 3 && slot.itemId === "minecraft:white_banner",
               ),
             () => new CheckFailed({ message: "The loom preview never arrived" }),

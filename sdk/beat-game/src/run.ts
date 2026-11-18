@@ -1164,7 +1164,7 @@ export function beatGameTeam(
   bots: readonly SoulFireBot[],
   options: BeatGameTeamRunOptions = {},
 ): Effect.Effect<BeatGameTeamRun, BeatGameError, Scope.Scope> {
-  return Effect.all(bots.map(liveEnvironmentDriver), { concurrency: "unbounded" }).pipe(
+  return Effect.forEach(bots, liveEnvironmentDriver, { concurrency: "unbounded" }).pipe(
     Effect.flatMap((drivers) => beatGameTeamWithDrivers(drivers, options)),
   );
 }
@@ -1185,7 +1185,7 @@ function liveEnvironmentDriver(
         }),
       }),
     ),
-    Effect.catch(() => Effect.succeed(fallback)),
+    Effect.orElseSucceed(() => fallback),
   );
 }
 
@@ -1200,8 +1200,9 @@ export function beatGameTeamWithDrivers(
     const teamId = options.teamId ?? crypto.randomUUID();
     const store = options.checkpointStore ?? new InMemoryBeatGameCheckpointStore();
     const coordinator = options.coordinator ?? new InMemoryBeatGameCoordinator();
-    const runs = yield* Effect.all(
-      drivers.map((driver, index) =>
+    const runs = yield* Effect.forEach(
+      drivers,
+      (driver, index) =>
         beatGameWithDriver(driver, {
           runId: `${teamId}-${driver.botId}`,
           team: {
@@ -1213,37 +1214,26 @@ export function beatGameTeamWithDrivers(
           coordinator,
           ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
         }),
-      ),
       { concurrency: "unbounded" },
     );
     return {
       teamId,
       runs,
-      awaitCompletion: Effect.all(
-        runs.map(({ awaitCompletion }) => awaitCompletion),
-        { concurrency: "unbounded" },
-      ),
-      pause: Effect.all(
-        runs.map(({ pause }) => pause),
-        {
-          concurrency: "unbounded",
-          discard: true,
-        },
-      ),
-      resume: Effect.all(
-        runs.map(({ resume }) => resume),
-        {
-          concurrency: "unbounded",
-          discard: true,
-        },
-      ),
-      stop: Effect.all(
-        runs.map(({ stop }) => stop),
-        {
-          concurrency: "unbounded",
-          discard: true,
-        },
-      ),
+      awaitCompletion: Effect.forEach(runs, ({ awaitCompletion }) => awaitCompletion, {
+        concurrency: "unbounded",
+      }),
+      pause: Effect.forEach(runs, ({ pause }) => pause, {
+        concurrency: "unbounded",
+        discard: true,
+      }),
+      resume: Effect.forEach(runs, ({ resume }) => resume, {
+        concurrency: "unbounded",
+        discard: true,
+      }),
+      stop: Effect.forEach(runs, ({ stop }) => stop, {
+        concurrency: "unbounded",
+        discard: true,
+      }),
     };
   });
 }
@@ -1398,10 +1388,9 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
       );
     }
   }).pipe(
-    Effect.catch((error): Effect.Effect<never, BeatGameError> =>
-      error instanceof BeatGameCancelled
-        ? Effect.fail(error)
-        : markFailed(state, error).pipe(Effect.andThen(Effect.fail(error))),
+    Effect.catchIf(
+      (error) => !(error instanceof BeatGameCancelled),
+      (error) => markFailed(state, error).pipe(Effect.andThen(Effect.fail(error))),
     ),
   );
 }
@@ -2401,8 +2390,9 @@ function waitForNightShelterTravelThreat(
               }),
             )
           : findImmediateThreat(state, observation).pipe(
-              Effect.flatMap((threat) =>
-                threat === undefined ? Effect.suspend(poll) : Effect.succeed(threat),
+              Effect.filterOrElse(
+                (threat) => threat !== undefined,
+                () => Effect.suspend(poll),
               ),
             ),
       ),
@@ -2613,6 +2603,19 @@ const ENCLOSURE_SIDES = [
   { x: 0, z: -1 },
 ] as const;
 
+// Powder snow is not replaceable but has no collision, so it neither walls
+// the bot in nor supports a placed block.
+const isSolid = (block: BeatGameBlockObservation | undefined): boolean =>
+  block !== undefined &&
+  !block.replaceable &&
+  block.solid !== false &&
+  !isPlayerFluidBlock(block.blockId);
+const foodCount = (current: BeatGameObservation): number =>
+  EDIBLE_FOOD_ITEM_IDS.reduce(
+    (total, itemId) => total + (current.inventory.counts[itemId] ?? 0),
+    0,
+  );
+
 // Places blocks around the bot's feet, head and roof where it stands. This
 // works on open ground and in shafts whose floor cannot be dug.
 function encloseNightShelterInPlace(
@@ -2634,13 +2637,6 @@ function encloseNightShelterInPlace(
     z: roof.z + side.z,
   }));
   const roofCorner = { ...roof, x: roof.x + 1 };
-  // Powder snow is not replaceable but has no collision, so it neither walls
-  // the bot in nor supports a placed block.
-  const isSolid = (block: BeatGameBlockObservation | undefined): boolean =>
-    block !== undefined &&
-    !block.replaceable &&
-    block.solid !== false &&
-    !isPlayerFluidBlock(block.blockId);
   return Effect.gen(function* () {
     if (!isSolid(yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 1 }))) {
       return undefined;
@@ -2823,7 +2819,7 @@ function abandonExhaustedAction(
       yield* persist(state, (current) =>
         suspendDurableSkill(current, `failed:${error.message}`, new Date().toISOString()),
       );
-      return yield* Effect.fail(error);
+      return yield* error;
     }
     if (!durable) {
       yield* Ref.update(state.abandonedActionRounds, (current) =>
@@ -2989,7 +2985,7 @@ function runDecisionWithRetry(
                     attempt: number,
                     detail: "A fresh observation confirmed the action before retry",
                   });
-                  return;
+                  return undefined;
                 }
                 return yield* attempt(number + 1, fresh);
               })
@@ -3577,15 +3573,16 @@ function executeDecision(
           Effect.map((current) =>
             requirementActionResult(decision.requirement, observation, current),
           ),
-          Effect.catch((error) =>
-            error instanceof BeatGameDriverError && error.code === "resource-exhausted"
-              ? Effect.succeed({
-                  replanReason: `resource acquisition remains incomplete while satisfying ${
-                    decision.requirement.key
-                  }: ${error.message}`,
-                  replanDelayMs: REQUIREMENT_NO_PROGRESS_REPLAN_DELAY_MS,
-                } satisfies ActionResult)
-              : Effect.fail(error),
+          Effect.catchIf(
+            (error): error is BeatGameDriverError =>
+              error instanceof BeatGameDriverError && error.code === "resource-exhausted",
+            (error) =>
+              Effect.succeed({
+                replanReason: `resource acquisition remains incomplete while satisfying ${
+                  decision.requirement.key
+                }: ${error.message}`,
+                replanDelayMs: REQUIREMENT_NO_PROGRESS_REPLAN_DELAY_MS,
+              } satisfies ActionResult),
           ),
         );
       }
@@ -3627,15 +3624,16 @@ function executeDecision(
                 ),
               );
         return buildAndEnter.pipe(
-          Effect.catch((error) =>
-            error instanceof BeatGameDriverError && isRouteUnavailable(error)
-              ? Effect.succeed({
-                  replanReason: `retained the portal workspace after a local route failure: ${
-                    error.message
-                  }`,
-                  replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
-                } satisfies ActionResult)
-              : Effect.fail(error),
+          Effect.catchIf(
+            (error): error is BeatGameDriverError =>
+              error instanceof BeatGameDriverError && isRouteUnavailable(error),
+            (error) =>
+              Effect.succeed({
+                replanReason: `retained the portal workspace after a local route failure: ${
+                  error.message
+                }`,
+                replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
+              } satisfies ActionResult),
           ),
         );
       }
@@ -3788,19 +3786,21 @@ function executeDecision(
             path: state.strategy.path,
           })
         ).pipe(Effect.as({} satisfies ActionResult));
+      default:
+        return decision satisfies never;
     }
   })();
   const executeWithSafety = (
     safetyObservation: BeatGameObservation,
   ): Effect.Effect<ActionResult, unknown> =>
     findImmediateActionThreat(state, decision, safetyObservation).pipe(
-      Effect.flatMap((initialThreat) =>
-        initialThreat === undefined
-          ? Effect.raceFirst(
-              execute,
-              monitorActionSafety(state, decision, observation, safetyObservation),
-            )
-          : Effect.succeed(initialThreat),
+      Effect.filterOrElse(
+        (initialThreat) => initialThreat !== undefined,
+        () =>
+          Effect.raceFirst(
+            execute,
+            monitorActionSafety(state, decision, observation, safetyObservation),
+          ),
       ),
       Effect.flatMap((result) => {
         const response =
@@ -3930,7 +3930,7 @@ function findImmediateActionThreat(
         decision.type === "fight-ender-dragon" ||
         observation.player.dead
       ) {
-        return Effect.succeed(undefined);
+        return Effect.undefined;
       }
       return findImmediateThreat(state, observation).pipe(
         Effect.map((threat) => {
@@ -3963,7 +3963,7 @@ function findAirSafetyInterruption(
   observation: BeatGameObservation,
 ): Effect.Effect<ActionResult | undefined, BeatGameDriverError> {
   if (observation.player.dead || !hasUnsafeAirDuringAction(decision, observation)) {
-    return Effect.succeed(undefined);
+    return Effect.undefined;
   }
   return isPlayerInFluid(state.driver, observation.player.position).pipe(
     Effect.map((inFluid) =>
@@ -4311,20 +4311,18 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
         observation.player.onGround ||
         observation.player.velocity.y >= FALL_CLUTCH_SAFE_VELOCITY
       ) {
-        return;
+        return undefined;
       }
       if (
         isNether(observation.player.position.dimension) ||
         (observation.inventory.counts["minecraft:water_bucket"] ?? 0) === 0
       ) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "fall-clutch",
-            code: "missing_water_bucket",
-            retryable: true,
-            message: "A dangerous fall started without a usable water bucket",
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "fall-clutch",
+          code: "missing_water_bucket",
+          retryable: true,
+          message: "A dangerous fall started without a usable water bucket",
+        });
       }
 
       yield* state.driver.act({ type: "reset-movement" });
@@ -4346,7 +4344,7 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
           observation.player.onGround ||
           observation.player.velocity.y >= FALL_CLUTCH_SAFE_VELOCITY
         ) {
-          return;
+          return undefined;
         }
 
         const landing = yield* state.driver.raycast({
@@ -4368,16 +4366,14 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
         yield* Effect.sleep(FALL_CLUTCH_POLL_MS);
       }
 
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "fall-clutch",
-          code: placementAttempted ? "clutch_not_confirmed" : "no_landing_block",
-          retryable: true,
-          message: placementAttempted
-            ? "Water placement did not stop the dangerous fall"
-            : "No landing block entered water-bucket reach during the fall",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "fall-clutch",
+        code: placementAttempted ? "clutch_not_confirmed" : "no_landing_block",
+        retryable: true,
+        message: placementAttempted
+          ? "Water placement did not stop the dangerous fall"
+          : "No landing block entered water-bucket reach during the fall",
+      });
     }).pipe(Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
   );
 }
@@ -4454,9 +4450,9 @@ function findImmediateThreat(
         ...nearbyDangerousNeutralMobs,
       ]);
       const escapeOnlyThreat = candidates.find(
-        ({ target, distanceSquared }) =>
+        ({ target, distanceSquared: targetDistanceSquared }) =>
           ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) &&
-          distanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2,
+          targetDistanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2,
       );
       if (escapeOnlyThreat !== undefined) {
         return { target: escapeOnlyThreat.target, response: "flee" };
@@ -4468,7 +4464,7 @@ function findImmediateThreat(
       if (aggressiveEnderman !== undefined) {
         return { target: aggressiveEnderman.target, response: "flee" };
       }
-      const melee = candidates.find(({ target, distanceSquared }) => {
+      const melee = candidates.find(({ target, distanceSquared: targetDistanceSquared }) => {
         if (
           !isActiveMeleeHostile(target) ||
           PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)
@@ -4478,15 +4474,15 @@ function findImmediateThreat(
         const responseRadius = shouldDisengageFromThreat(state, observation, target)
           ? PROACTIVE_MELEE_DISENGAGEMENT_RADIUS
           : MELEE_ENGAGEMENT_RADIUS;
-        return distanceSquared <= responseRadius ** 2;
+        return targetDistanceSquared <= responseRadius ** 2;
       });
       if (melee !== undefined) {
         if (hasNearbyGroupAggroMember(melee.target, nearbyGroupCandidates)) {
           return { target: melee.target, response: "flee" };
         }
         const nearbyThreats = candidates.filter(
-          ({ distanceSquared }) =>
-            distanceSquared <=
+          ({ distanceSquared: targetDistanceSquared }) =>
+            targetDistanceSquared <=
             PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
         );
         const hasShield = (observation.inventory.counts["minecraft:shield"] ?? 0) > 0;
@@ -4504,15 +4500,15 @@ function findImmediateThreat(
         };
       }
       const ranged = candidates.find(
-        ({ target, distanceSquared }) =>
+        ({ target, distanceSquared: targetDistanceSquared }) =>
           PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
-          distanceSquared <=
+          targetDistanceSquared <=
             PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
       );
       if (ranged !== undefined) {
         const nearbyThreats = candidates.filter(
-          ({ distanceSquared }) =>
-            distanceSquared <=
+          ({ distanceSquared: targetDistanceSquared }) =>
+            targetDistanceSquared <=
             PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
         );
         const overwhelmingAmbush = isOverwhelmingAmbush(
@@ -5129,7 +5125,7 @@ function takeCoverFromRangedFire(
         ),
       ),
       Effect.uninterruptible,
-      Effect.catchTag("BeatGameDriverError", () => Effect.succeed(undefined)),
+      Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
     );
     if (cover === undefined) {
       return false;
@@ -6234,7 +6230,7 @@ function findDryThreatEscapeTarget(
   maximumVerticalDistance = MAXIMUM_DAMAGE_FREE_FALL_DISTANCE,
 ): Effect.Effect<BeatGamePosition | undefined, BeatGameDriverError> {
   if (player.dimension !== "minecraft:overworld" || threat.dimension !== player.dimension) {
-    return Effect.succeed(undefined);
+    return Effect.undefined;
   }
   return state.driver.sampleSurface(player, AIR_ESCAPE_SURFACE_SEARCH_RADIUS, 1).pipe(
     Effect.map((columns) =>
@@ -7110,23 +7106,23 @@ function findDrySurfaceEscapeColumns(
   BeatGameDriverError
 > {
   return findNearbyDryEscapeLedges(state, position).pipe(
-    Effect.flatMap((nearbyLedges) =>
-      nearbyLedges.length > 0
-        ? Effect.succeed(nearbyLedges)
-        : state.driver.sampleSurface(position, AIR_ESCAPE_SURFACE_SEARCH_RADIUS, 1).pipe(
-            Effect.map((columns) => selectStableSurfaceEscapeColumns(columns, position)),
-            Effect.flatMap((nearbySurfaces) =>
-              nearbySurfaces.length > 0
-                ? Effect.succeed(nearbySurfaces)
-                : state.driver
-                    .sampleSurface(
-                      position,
-                      AIR_ESCAPE_EXTENDED_SURFACE_SEARCH_RADIUS,
-                      AIR_ESCAPE_EXTENDED_SURFACE_SAMPLE_STEP,
-                    )
-                    .pipe(Effect.map((columns) => selectSurfaceEscapeColumns(columns, position))),
-            ),
+    Effect.filterOrElse(
+      (nearbyLedges) => nearbyLedges.length > 0,
+      () =>
+        state.driver.sampleSurface(position, AIR_ESCAPE_SURFACE_SEARCH_RADIUS, 1).pipe(
+          Effect.map((columns) => selectStableSurfaceEscapeColumns(columns, position)),
+          Effect.filterOrElse(
+            (nearbySurfaces) => nearbySurfaces.length > 0,
+            () =>
+              state.driver
+                .sampleSurface(
+                  position,
+                  AIR_ESCAPE_EXTENDED_SURFACE_SEARCH_RADIUS,
+                  AIR_ESCAPE_EXTENDED_SURFACE_SAMPLE_STEP,
+                )
+                .pipe(Effect.map((columns) => selectSurfaceEscapeColumns(columns, position))),
           ),
+        ),
     ),
   );
 }
@@ -7225,17 +7221,17 @@ function escapeToOverworldSurface(
     let lastPathFailure: BeatGameDriverError | undefined;
     for (let attempt = 0; attempt < AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS; attempt += 1) {
       if (!(yield* needsOverworldSurfaceRecovery(state, currentPosition))) {
-        return;
+        return undefined;
       }
       const recovery = yield* returnToOverworldSurface(state, currentPosition).pipe(Effect.result);
       if (recovery._tag === "Failure") {
         if (recovery.failure.operation !== "pathfind") {
-          return yield* Effect.fail(recovery.failure);
+          return yield* recovery.failure;
         }
         lastPathFailure = recovery.failure;
         const observation = yield* state.driver.observe;
         if (observation.player.dead) {
-          return;
+          return undefined;
         }
         if (yield* isPlayerInFluid(state.driver, observation.player.position)) {
           yield* excavateAirEscapeShaft(state);
@@ -7243,24 +7239,22 @@ function escapeToOverworldSurface(
       }
       const current = yield* state.driver.observe;
       if (current.player.dead) {
-        return;
+        return undefined;
       }
       currentPosition = current.player.position;
     }
     if (!(yield* needsOverworldSurfaceRecovery(state, currentPosition))) {
-      return;
+      return undefined;
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "pathfind",
-        code: "no-progress",
-        retryable: true,
-        message: `The bot remained below the Overworld surface at ${positionKey(
-          currentPosition,
-        )} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts`,
-        ...(lastPathFailure === undefined ? {} : { cause: lastPathFailure }),
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "pathfind",
+      code: "no-progress",
+      retryable: true,
+      message: `The bot remained below the Overworld surface at ${positionKey(
+        currentPosition,
+      )} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts`,
+      ...(lastPathFailure === undefined ? {} : { cause: lastPathFailure }),
+    });
   });
 }
 
@@ -7273,11 +7267,11 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
     ) {
       const observation = yield* state.driver.observe;
       if (observation.player.dead) {
-        return;
+        return undefined;
       }
       const surface = yield* nearestAirEscapeSurface(state, observation.player.position);
       if (surface !== undefined && observation.player.position.y >= surface.surfaceY + 0.75) {
-        return;
+        return undefined;
       }
       const overheadCandidates = overheadEscapeBlocks(observation.player.position);
       let overhead = overheadCandidates.at(-1)!;
@@ -7292,58 +7286,50 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
       }
       if (obstruction !== undefined && !obstruction.replaceable) {
         if (!obstruction.diggable) {
-          return yield* Effect.fail(
-            new BeatGameDriverError({
-              operation: "escape-submerged-cavity",
-              code: "unreachable",
-              retryable: true,
-              message: `The overhead escape route is blocked by ${
-                obstruction.blockId
-              } at ${positionKey(overhead)}`,
-            }),
-          );
+          return yield* new BeatGameDriverError({
+            operation: "escape-submerged-cavity",
+            code: "unreachable",
+            retryable: true,
+            message: `The overhead escape route is blocked by ${
+              obstruction.blockId
+            } at ${positionKey(overhead)}`,
+          });
         }
         const cleared = yield* digAirEscapeObstruction(state, observation, obstruction, overhead);
         if (!cleared) {
-          return yield* Effect.fail(
-            new BeatGameDriverError({
-              operation: "escape-submerged-cavity",
-              code: "unreachable",
-              retryable: true,
-              message: `Breaking ${obstruction.blockId} at ${positionKey(
-                overhead,
-              )} would consume the emergency air reserve`,
-            }),
-          );
+          return yield* new BeatGameDriverError({
+            operation: "escape-submerged-cavity",
+            code: "unreachable",
+            retryable: true,
+            message: `Breaking ${obstruction.blockId} at ${positionKey(
+              overhead,
+            )} would consume the emergency air reserve`,
+          });
         }
       }
       const rose = yield* swimUpOneLevel(state, observation.player.position.y);
       if (!rose) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "escape-submerged-cavity",
-            code: "unreachable",
-            retryable: true,
-            message: `The bot could not rise through the cleared block at ${positionKey(overhead)}`,
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "escape-submerged-cavity",
+          code: "unreachable",
+          retryable: true,
+          message: `The bot could not rise through the cleared block at ${positionKey(overhead)}`,
+        });
       }
       const current = yield* state.driver.observe;
       if (current.player.dead) {
-        return;
+        return undefined;
       }
       if (!(yield* isPlayerInFluid(state.driver, current.player.position))) {
-        return;
+        return undefined;
       }
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "escape-submerged-cavity",
-        code: "unreachable",
-        retryable: true,
-        message: `The bot did not reach the surface after clearing ${AIR_ESCAPE_MAXIMUM_SHAFT_BLOCKS} overhead blocks`,
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "escape-submerged-cavity",
+      code: "unreachable",
+      retryable: true,
+      message: `The bot did not reach the surface after clearing ${AIR_ESCAPE_MAXIMUM_SHAFT_BLOCKS} overhead blocks`,
+    });
   });
 }
 
@@ -7428,30 +7414,30 @@ function settleForSubmergedDig(
   ): Effect.Effect<BeatGameObservation, BeatGameDriverError> =>
     Effect.sleep(100).pipe(
       Effect.andThen(state.driver.observe),
-      Effect.flatMap((observation) =>
-        observation.player.dead ||
-        observation.player.onGround ||
-        attemptsRemaining <= 1 ||
-        hasCriticalAir(observation)
-          ? Effect.succeed(observation)
-          : wait(attemptsRemaining - 1),
+      Effect.filterOrElse(
+        (observation) =>
+          observation.player.dead ||
+          observation.player.onGround ||
+          attemptsRemaining <= 1 ||
+          hasCriticalAir(observation),
+        () => wait(attemptsRemaining - 1),
       ),
     );
   return state.driver.observe.pipe(
-    Effect.flatMap((observation) =>
-      observation.player.dead || observation.player.onGround
-        ? Effect.succeed(observation)
-        : state.driver.withControl(
-            state.driver
-              .act({
-                type: "set-movement",
-                sneak: true,
-              })
-              .pipe(
-                Effect.andThen(wait(AIR_ESCAPE_DIG_SETTLE_ATTEMPTS)),
-                Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
-              ),
-          ),
+    Effect.filterOrElse(
+      (observation) => observation.player.dead || observation.player.onGround,
+      () =>
+        state.driver.withControl(
+          state.driver
+            .act({
+              type: "set-movement",
+              sneak: true,
+            })
+            .pipe(
+              Effect.andThen(wait(AIR_ESCAPE_DIG_SETTLE_ATTEMPTS)),
+              Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
+            ),
+        ),
     ),
   );
 }
@@ -7878,21 +7864,19 @@ function isPlayerInBlocks(
     ...playerBlock,
     y: Math.floor(position.y + 1.62),
   };
-  return Effect.all(
-    [playerBlock, headBlock].map((block) =>
-      driver
-        .queryBlocks({
-          center: blockCenter(block),
-          radius: 0.25,
-          selector: { blockIds },
-          maximumResults: 1,
-        })
-        .pipe(
-          Effect.map((blocks) =>
-            blocks.some(({ position: observed }) => sameBlockPosition(observed, block)),
-          ),
+  return Effect.forEach([playerBlock, headBlock], (block) =>
+    driver
+      .queryBlocks({
+        center: blockCenter(block),
+        radius: 0.25,
+        selector: { blockIds },
+        maximumResults: 1,
+      })
+      .pipe(
+        Effect.map((blocks) =>
+          blocks.some(({ position: observed }) => sameBlockPosition(observed, block)),
         ),
-    ),
+      ),
   ).pipe(Effect.map((results) => results.some(Boolean)));
 }
 
@@ -9423,11 +9407,6 @@ function tryForageNearbyFood(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<boolean, BeatGameDriverError> {
-  const foodCount = (current: BeatGameObservation): number =>
-    EDIBLE_FOOD_ITEM_IDS.reduce(
-      (total, itemId) => total + (current.inventory.counts[itemId] ?? 0),
-      0,
-    );
   const before = foodCount(observation);
   return state.driver
     .queryBlocks({
@@ -9652,6 +9631,14 @@ function huntForFoodRequirement(
   );
 }
 
+const caughtFoodCount = (value: BeatGameObservation): number =>
+  (value.inventory.counts["minecraft:cod"] ?? 0) +
+  (value.inventory.counts["minecraft:salmon"] ?? 0);
+const countInventoryItems = (current: BeatGameObservation, itemIds: readonly string[]): number =>
+  itemIds.reduce((count, itemId) => count + (current.inventory.counts[itemId] ?? 0), 0);
+const inventoryLogCount = (value: BeatGameObservation): number =>
+  LOG_ITEM_IDS.reduce((total, itemId) => total + (value.inventory.counts[itemId] ?? 0), 0);
+
 function tryFishForFood(
   state: RunState,
   observation: BeatGameObservation,
@@ -9667,9 +9654,6 @@ function tryFishForFood(
     ) {
       return false;
     }
-    const caughtFoodCount = (value: BeatGameObservation): number =>
-      (value.inventory.counts["minecraft:cod"] ?? 0) +
-      (value.inventory.counts["minecraft:salmon"] ?? 0);
     const caughtFoodBeforeCollection = caughtFoodCount(current);
     yield* collectNearbyDrops(state.driver, {
       itemIds: ["minecraft:cod", "minecraft:salmon"],
@@ -9700,7 +9684,7 @@ function tryFishForFood(
         if (preparation.failure.code === "resource-exhausted") {
           return false;
         }
-        return yield* Effect.fail(preparation.failure);
+        return yield* preparation.failure;
       }
       current = yield* state.driver.observe;
       if ((current.inventory.counts["minecraft:fishing_rod"] ?? 0) === 0) {
@@ -9745,9 +9729,7 @@ function tryFishForFood(
       })).some(
         (block) =>
           sameBlockPosition(block.position, above) &&
-          !PLAYER_FLUID_BLOCK_IDS.includes(
-            block.blockId as (typeof PLAYER_FLUID_BLOCK_IDS)[number],
-          ),
+          !(PLAYER_FLUID_BLOCK_IDS as readonly string[]).includes(block.blockId),
       );
       if (!exposed) {
         continue;
@@ -10064,7 +10046,7 @@ function preferDirectWoodFurnaceFuel(
 ): Effect.Effect<readonly string[] | undefined, BeatGameDriverError> {
   const directWoodFuel = directWoodFurnaceFuelItemIds(observation, outputCount);
   return directWoodFuel === undefined
-    ? Effect.succeed(undefined)
+    ? Effect.undefined
     : queryNearbyCoal(state, observation, 1).pipe(
         Effect.map((coal) => (coal.length === 0 ? directWoodFuel : undefined)),
       );
@@ -10179,8 +10161,7 @@ function reclaimPlacedFurnace(
     // run as an ensuring finalizer, so restore interruptibility before racing
     // the cleanup against its deadline.
     Effect.interruptible,
-    Effect.timeout(FURNACE_RECLAIM_TIMEOUT),
-    Effect.catchTag("TimeoutError", () => Effect.void),
+    Effect.timeoutOrElse({ duration: FURNACE_RECLAIM_TIMEOUT, orElse: () => Effect.void }),
   );
 }
 
@@ -10238,18 +10219,16 @@ function ensureEfficientFurnaceFuel(
 
     const charcoalCount = bufferedCollectionCount("fuel", missingFuel);
     const starterFuelItems = Math.ceil(charcoalCount / 1.5);
-    const countItems = (current: BeatGameObservation, itemIds: readonly string[]): number =>
-      itemIds.reduce((count, itemId) => count + (current.inventory.counts[itemId] ?? 0), 0);
     const hasEnoughCharcoalMaterials = (current: BeatGameObservation): boolean => {
-      const plankCount = countItems(current, PLANK_ITEM_IDS);
-      const logCount = countItems(current, LOG_ITEM_IDS);
+      const plankCount = countInventoryItems(current, PLANK_ITEM_IDS);
+      const logCount = countInventoryItems(current, LOG_ITEM_IDS);
       return plankCount >= starterFuelItems
         ? logCount >= charcoalCount
         : logCount >= charcoalCount + starterFuelItems;
     };
     if (!hasEnoughCharcoalMaterials(currentObservation)) {
-      const plankCount = countItems(currentObservation, PLANK_ITEM_IDS);
-      const logCount = countItems(currentObservation, LOG_ITEM_IDS);
+      const plankCount = countInventoryItems(currentObservation, PLANK_ITEM_IDS);
+      const logCount = countInventoryItems(currentObservation, LOG_ITEM_IDS);
       const requiredLogs = charcoalCount + (plankCount >= starterFuelItems ? 0 : starterFuelItems);
       yield* collectBlocksOrExplore(state, currentObservation, {
         blockIds: LOG_ITEM_IDS,
@@ -10267,18 +10246,16 @@ function ensureEfficientFurnaceFuel(
       );
     }
     if (!hasEnoughCharcoalMaterials(currentObservation)) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "task.smelt",
-          code: "resource-exhausted",
-          retryable: true,
-          message: "Not enough distinct logs and starter fuel are available to make charcoal",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "task.smelt",
+        code: "resource-exhausted",
+        retryable: true,
+        message: "Not enough distinct logs and starter fuel are available to make charcoal",
+      });
     }
 
     const charcoalFuelItemIds =
-      countItems(currentObservation, PLANK_ITEM_IDS) >= starterFuelItems
+      countInventoryItems(currentObservation, PLANK_ITEM_IDS) >= starterFuelItems
         ? PLANK_ITEM_IDS
         : LOG_ITEM_IDS;
     yield* smelt(state.driver, {
@@ -10557,13 +10534,13 @@ function fillLiquidBucket(
     if (liquid === "lava" && (yield* isPlayerInLava(state.driver, current.player.position))) {
       yield* escapeLava(state, current);
       yield* extinguishFire(state, yield* state.driver.observe);
-      return;
+      return undefined;
     }
     if ((observation.inventory.counts["minecraft:bucket"] ?? 0) === 0) {
       const ironIngots = observation.inventory.counts["minecraft:iron_ingot"] ?? 0;
       if (ironIngots < 3) {
         yield* satisfyIronRequirement(state, observation, 3 - ironIngots);
-        return;
+        return undefined;
       }
       yield* craftWithTable(state, observation, "minecraft:bucket", 1);
       current = yield* state.driver.observe;
@@ -10573,7 +10550,7 @@ function fillLiquidBucket(
       (yield* needsOverworldSurfaceRecovery(state, current.player.position))
     ) {
       yield* returnToOverworldSurface(state, current.player.position);
-      return;
+      return undefined;
     }
     let liquidSources = yield* state.driver.queryBlocks({
       center: current.player.position,
@@ -10607,7 +10584,7 @@ function fillLiquidBucket(
       current.player.position.y > DEEP_LAVA_SEARCH_MAX_Y
     ) {
       yield* preparePortalCastingLavaPool(state, current);
-      return;
+      return undefined;
     }
     let source = sources[0];
     if (source === undefined) {
@@ -10645,23 +10622,21 @@ function fillLiquidBucket(
             );
             const descended = yield* excavateResourceSearchStaircase(state, beforeDescent, targetY);
             if (!descended) {
-              return;
+              return undefined;
             }
             current = yield* state.driver.observe;
             if (current.player.position.y > beforeDescent.y + 0.5) {
-              return;
+              return undefined;
             }
             if (current.player.position.y >= beforeDescent.y - 0.5) {
-              return yield* Effect.fail(
-                new BeatGameDriverError({
-                  operation: "find-deep-lava",
-                  code: "unreachable",
-                  retryable: true,
-                  message: `The lava descent made no vertical progress from Y${beforeDescent.y.toFixed(
-                    1,
-                  )}`,
-                }),
-              );
+              return yield* new BeatGameDriverError({
+                operation: "find-deep-lava",
+                code: "unreachable",
+                retryable: true,
+                message: `The lava descent made no vertical progress from Y${beforeDescent.y.toFixed(
+                  1,
+                )}`,
+              });
             }
             liquidSources = yield* state.driver.queryBlocks({
               center: current.player.position,
@@ -10708,7 +10683,7 @@ function fillLiquidBucket(
           (yield* needsOverworldSurfaceRecovery(state, current.player.position))
         ) {
           yield* returnToOverworldSurface(state, current.player.position);
-          return;
+          return undefined;
         }
         return yield* explore(state.driver, {
           origin: current.player.position,
@@ -10754,7 +10729,7 @@ function fillLiquidBucket(
           Math.floor(current.player.position.y) - DEEP_LAVA_DESCENT_STEP,
         );
         yield* excavateResourceSearchStaircase(state, current.player.position, targetY);
-        return;
+        return undefined;
       }
       const approach = yield* approachLiquidSourceFromSide(state.driver, current, sources, {
         path: state.strategy.path,
@@ -10777,9 +10752,9 @@ function fillLiquidBucket(
             Math.floor(current.player.position.y) - DEEP_LAVA_DESCENT_STEP,
           );
           yield* excavateResourceSearchStaircase(state, current.player.position, targetY);
-          return;
+          return undefined;
         }
-        return yield* Effect.fail(approach.failure);
+        return yield* approach.failure;
       }
       source = approach.success;
     } else {
@@ -10792,7 +10767,7 @@ function fillLiquidBucket(
           purpose: explorationPurpose("find-water", current.player.position),
           path: state.strategy.path,
         });
-        return;
+        return undefined;
       }
       source = reachableSource;
     }
@@ -10806,10 +10781,10 @@ function fillLiquidBucket(
             clearedBlocks <= MAXIMUM_LIQUID_SIGHT_CLEARING_BLOCKS;
             clearedBlocks += 1
           ) {
-            const current = yield* state.driver.observe;
+            const latest = yield* state.driver.observe;
             const eyePosition = {
-              ...current.player.position,
-              y: current.player.position.y + 1.62,
+              ...latest.player.position,
+              y: latest.player.position.y + 1.62,
             };
             const sourceCenter = {
               x: source.position.x + 0.5,
@@ -10825,15 +10800,13 @@ function fillLiquidBucket(
               direction.x * direction.x + direction.y * direction.y + direction.z * direction.z,
             );
             if (sourceDistance > LIQUID_INTERACTION_REACH) {
-              return yield* Effect.fail(
-                new BeatGameDriverError({
-                  operation: `fill-${liquid}-bucket`,
-                  retryable: true,
-                  message: `The ${liquid} source remained ${sourceDistance.toFixed(
-                    2,
-                  )} blocks away after pathfinding`,
-                }),
-              );
+              return yield* new BeatGameDriverError({
+                operation: `fill-${liquid}-bucket`,
+                retryable: true,
+                message: `The ${liquid} source remained ${sourceDistance.toFixed(
+                  2,
+                )} blocks away after pathfinding`,
+              });
             }
             const rotation = rotationToward(eyePosition, sourceCenter);
             yield* state.driver.act({
@@ -10877,15 +10850,13 @@ function fillLiquidBucket(
                       (liquid === "water" && candidate.properties.waterlogged === "true")),
                 )
               ) {
-                return yield* Effect.fail(
-                  new BeatGameDriverError({
-                    operation: `fill-${liquid}-bucket`,
-                    retryable: true,
-                    message: `The selected ${liquid} source at ${positionKey(
-                      source.position,
-                    )} changed while the bot approached it`,
-                  }),
-                );
+                return yield* new BeatGameDriverError({
+                  operation: `fill-${liquid}-bucket`,
+                  retryable: true,
+                  message: `The selected ${liquid} source at ${positionKey(
+                    source.position,
+                  )} changed while the bot approached it`,
+                });
               }
               yield* state.driver.act({
                 type: "select-item",
@@ -10910,10 +10881,10 @@ function fillLiquidBucket(
                       }),
                   ),
                 );
-              return;
+              return undefined;
             }
             const playerStabilityBlock = isPlayerStabilityBlock(
-              current.player.position,
+              latest.player.position,
               obstruction.position,
             );
             const safeLavaSightlineBlock =
@@ -10924,19 +10895,17 @@ function fillLiquidBucket(
               !safeLavaSightlineBlock ||
               clearedBlocks === MAXIMUM_LIQUID_SIGHT_CLEARING_BLOCKS
             ) {
-              return yield* Effect.fail(
-                new BeatGameDriverError({
-                  operation: `expose-${liquid}-source`,
-                  retryable: true,
-                  message: playerStabilityBlock
-                    ? `Refused to expose the ${liquid} source by mining the player's footing at ${positionKey(
-                        obstruction.position,
-                      )}`
-                    : `Could not expose the ${liquid} source through ${
-                        obstruction.blockId
-                      } at ${positionKey(obstruction.position)}`,
-                }),
-              );
+              return yield* new BeatGameDriverError({
+                operation: `expose-${liquid}-source`,
+                retryable: true,
+                message: playerStabilityBlock
+                  ? `Refused to expose the ${liquid} source by mining the player's footing at ${positionKey(
+                      obstruction.position,
+                    )}`
+                  : `Could not expose the ${liquid} source through ${
+                      obstruction.blockId
+                    } at ${positionKey(obstruction.position)}`,
+              });
             }
             yield* state.driver.act({
               type: "select-item",
@@ -10949,19 +10918,21 @@ function fillLiquidBucket(
               position: obstruction.position,
             });
           }
+          return undefined;
         }),
       )
       .pipe(Effect.result);
     if (collection._tag === "Failure") {
       if (liquid === "water") {
         yield* rememberUnreachableLiquidSources(state, liquid, [source]);
-        return;
+        return undefined;
       }
-      return yield* Effect.fail(collection.failure);
+      return yield* collection.failure;
     }
     if (liquid === "lava") {
       yield* retreatAfterLavaCollection(state, source.position, approachOrigin);
     }
+    return undefined;
   });
 }
 
@@ -11292,7 +11263,7 @@ function excavateResourceSearchStaircase(
     );
     if (origin._tag === "Failure") {
       if (origin.failure.operation !== "find-resource-staircase-origin") {
-        return yield* Effect.fail(origin.failure);
+        return yield* origin.failure;
       }
       yield* relocateResourceSearchStaircase(state, position, "unstable");
       return false;
@@ -11305,7 +11276,7 @@ function excavateResourceSearchStaircase(
     ).pipe(Effect.result);
     if (destination._tag === "Failure") {
       if (destination.failure.operation !== "find-resource-staircase-destination") {
-        return yield* Effect.fail(destination.failure);
+        return yield* destination.failure;
       }
       yield* relocateResourceSearchStaircase(state, position, "blocked");
       return false;
@@ -11326,7 +11297,7 @@ function excavateResourceSearchStaircase(
       return false;
     }
     if (excavation.failure.code !== "fluid_exposed") {
-      return yield* Effect.fail(excavation.failure);
+      return yield* excavation.failure;
     }
 
     yield* relocateResourceSearchStaircase(state, position, "flooded");
@@ -11440,15 +11411,13 @@ function findStableResourceSearchStaircaseOrigin(
         return staged;
       }
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "find-resource-staircase-origin",
-        code: "unreachable",
-        retryable: true,
-        message:
-          "No reachable dry ground with stable footing is available for a resource-search staircase",
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "find-resource-staircase-origin",
+      code: "unreachable",
+      retryable: true,
+      message:
+        "No reachable dry ground with stable footing is available for a resource-search staircase",
+    });
   });
 }
 
@@ -11504,15 +11473,13 @@ function selectResourceSearchStaircaseDestination(
         z: from.z + direction.z * depth,
       };
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "find-resource-staircase-destination",
-        code: "unreachable",
-        retryable: true,
-        message:
-          "No fully loaded, fluid-free, and supportable corridor is available for a resource-search staircase",
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "find-resource-staircase-destination",
+      code: "unreachable",
+      retryable: true,
+      message:
+        "No fully loaded, fluid-free, and supportable corridor is available for a resource-search staircase",
+    });
   });
 }
 
@@ -11534,7 +11501,7 @@ function isGravityAffectedBlockId(blockId: string): boolean {
 }
 
 function isPlayerFluidBlock(blockId: string): boolean {
-  return PLAYER_FLUID_BLOCK_IDS.includes(blockId as (typeof PLAYER_FLUID_BLOCK_IDS)[number]);
+  return (PLAYER_FLUID_BLOCK_IDS as readonly string[]).includes(blockId);
 }
 
 function queryExactBlockAt(
@@ -11658,7 +11625,7 @@ function ensureFlint(
   return Effect.gen(function* () {
     let current = observation;
     if ((current.inventory.counts["minecraft:flint"] ?? 0) > 0) {
-      return;
+      return undefined;
     }
     if ((current.inventory.counts["minecraft:gravel"] ?? 0) === 0) {
       yield* collectBlocksOrExplore(state, current, {
@@ -11672,22 +11639,20 @@ function ensureFlint(
       current = yield* state.driver.observe;
     }
     if ((current.inventory.counts["minecraft:flint"] ?? 0) > 0) {
-      return;
+      return undefined;
     }
     if ((current.inventory.counts["minecraft:gravel"] ?? 0) === 0) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "acquire-flint",
-          retryable: true,
-          message: "Breaking nearby gravel produced neither gravel nor flint",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "acquire-flint",
+        retryable: true,
+        message: "Breaking nearby gravel produced neither gravel nor flint",
+      });
     }
 
     for (let attempt = 0; attempt < 64; attempt += 1) {
       current = yield* state.driver.observe;
       if ((current.inventory.counts["minecraft:flint"] ?? 0) > 0) {
-        return;
+        return undefined;
       }
       if ((current.inventory.counts["minecraft:gravel"] ?? 0) === 0) {
         yield* collectNearbyDrops(state.driver, {
@@ -11698,16 +11663,14 @@ function ensureFlint(
         });
         current = yield* state.driver.observe;
         if ((current.inventory.counts["minecraft:flint"] ?? 0) > 0) {
-          return;
+          return undefined;
         }
         if ((current.inventory.counts["minecraft:gravel"] ?? 0) === 0) {
-          return yield* Effect.fail(
-            new BeatGameDriverError({
-              operation: "acquire-flint",
-              retryable: true,
-              message: "The recycled gravel item could not be recovered",
-            }),
-          );
+          return yield* new BeatGameDriverError({
+            operation: "acquire-flint",
+            retryable: true,
+            message: "The recycled gravel item could not be recovered",
+          });
         }
       }
 
@@ -11756,13 +11719,11 @@ function ensureFlint(
         break;
       }
       if (target === undefined) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "acquire-flint",
-            retryable: true,
-            message: "No dry collision-free position accepted recycled gravel",
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "acquire-flint",
+          retryable: true,
+          message: "No dry collision-free position accepted recycled gravel",
+        });
       }
       yield* state.driver.act({ type: "dig-block", position: target });
       yield* collectNearbyDrops(state.driver, {
@@ -11773,13 +11734,11 @@ function ensureFlint(
       });
     }
 
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "acquire-flint",
-        retryable: true,
-        message: "Recycling gravel did not produce flint after 64 attempts",
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "acquire-flint",
+      retryable: true,
+      message: "Recycling gravel did not produce flint after 64 attempts",
+    });
   });
 }
 
@@ -11972,7 +11931,7 @@ function huntOrExplore(
       if (
         expectedDropItemIds.length > 0 ? collected >= maximumTargets : attacked >= maximumTargets
       ) {
-        return;
+        return undefined;
       }
       yield* ensureInventorySpace(state, current, RESOURCE_COLLECTION_RESERVED_SLOTS);
       current = yield* state.driver.observe;
@@ -12007,7 +11966,7 @@ function huntOrExplore(
         );
         current = yield* state.driver.observe;
         if (current.player.dead) {
-          return;
+          return undefined;
         }
         if (!(yield* isPlayerInFluid(state.driver, current.player.position))) {
           continue;
@@ -12020,7 +11979,7 @@ function huntOrExplore(
           continue;
         }
         if (recovery._tag === "Failure") {
-          return yield* Effect.fail(recovery.failure);
+          return yield* recovery.failure;
         }
         continue;
       }
@@ -12048,7 +12007,7 @@ function huntOrExplore(
         if (aquaticRetryTargetId !== undefined) {
           continue;
         }
-        return;
+        return undefined;
       }
       if (expectedDropItemIds.length > 0) {
         yield* collectNearbyDrops(state.driver, {
@@ -12064,7 +12023,7 @@ function huntOrExplore(
         });
         current = yield* state.driver.observe;
         if (expectedDropCount(current) - initialExpectedDropCount >= maximumTargets) {
-          return;
+          return undefined;
         }
       }
       let observedStructureBlocks: readonly BeatGameBlockObservation[] = [];
@@ -12240,8 +12199,9 @@ function huntOrExplore(
               })
               .pipe(
                 Effect.as(true),
-                Effect.catch((cause) =>
-                  cause.operation === "pathfind" ? Effect.succeed(false) : Effect.fail(cause),
+                Effect.catchIf(
+                  (cause) => cause.operation === "pathfind",
+                  () => Effect.succeed(false),
                 ),
               );
             if (!approached) {
@@ -12280,15 +12240,16 @@ function huntOrExplore(
                 },
               )
               .pipe(
-                Effect.catch((cause) =>
-                  cause.operation === "pathfind" ? Effect.void : Effect.fail(cause),
+                Effect.catchIf(
+                  (cause) => cause.operation === "pathfind",
+                  () => Effect.void,
                 ),
               );
             continue;
           }
         }
         if (explorationHops >= maximumExplorationHops) {
-          return;
+          return undefined;
         }
         explorationHops += 1;
         if (yield* needsOverworldSurfaceRecovery(state, current.player.position)) {
@@ -12337,10 +12298,9 @@ function huntOrExplore(
           const explorationOutcome = yield* Effect.raceFirst(
             advance.pipe(
               Effect.as({ type: "advanced" } as const),
-              Effect.catch((cause) =>
-                cause.operation === "pathfind" || cause.operation === "pathfindXZ"
-                  ? Effect.succeed({ type: "route-failed" } as const)
-                  : Effect.fail(cause),
+              Effect.catchIf(
+                (cause) => cause.operation === "pathfind" || cause.operation === "pathfindXZ",
+                () => Effect.succeed({ type: "route-failed" } as const),
               ),
             ),
             waitForVisibleHuntingTarget(
@@ -12352,9 +12312,9 @@ function huntOrExplore(
               targetPreference,
               aquaticHuntAllowed,
             ).pipe(
-              Effect.map((target) => ({
+              Effect.map((huntTarget) => ({
                 type: "target-visible" as const,
-                target,
+                target: huntTarget,
               })),
             ),
           );
@@ -12374,10 +12334,9 @@ function huntOrExplore(
               true,
               true,
             ).pipe(
-              Effect.catch((cause) =>
-                cause.operation === "pathfind" || cause.operation === "pathfindXZ"
-                  ? Effect.void
-                  : Effect.fail(cause),
+              Effect.catchIf(
+                (cause) => cause.operation === "pathfind" || cause.operation === "pathfindXZ",
+                () => Effect.void,
               ),
             );
           } else if (explorationOutcome.type === "route-failed") {
@@ -12452,10 +12411,9 @@ function huntOrExplore(
         );
         const approached = yield* approach.pipe(
           Effect.as(true),
-          Effect.catch((cause) =>
-            cause.operation === "pathfind" || cause.operation === "pathfindXZ"
-              ? Effect.succeed(false)
-              : Effect.fail(cause),
+          Effect.catchIf(
+            (cause) => cause.operation === "pathfind" || cause.operation === "pathfindXZ",
+            () => Effect.succeed(false),
           ),
         );
         if (!approached) {
@@ -12543,12 +12501,12 @@ function huntOrExplore(
           cause.code === "land_chase_timeout" ||
           cause.code === "aquatic_air_low"
             ? Effect.void
-            : persist(state, (current) => ({
-                ...current,
+            : persist(state, (latestCheckpoint) => ({
+                ...latestCheckpoint,
                 memory: {
-                  ...current.memory,
+                  ...latestCheckpoint.memory,
                   unreachable: [
-                    ...current.memory.unreachable,
+                    ...latestCheckpoint.memory.unreachable,
                     {
                       key: targetKey,
                       value: target.position,
@@ -12575,8 +12533,8 @@ function huntOrExplore(
                 cause.code === "aquatic_air_low"
                   ? retry.pipe(
                       Effect.andThen(state.driver.observe),
-                      Effect.flatMap((observation) =>
-                        emergencyAirAscent(state, observation.player.position, {
+                      Effect.flatMap((latest) =>
+                        emergencyAirAscent(state, latest.player.position, {
                           seekDrySurfaceAfterRecovery: false,
                         }),
                       ),
@@ -12931,14 +12889,12 @@ function returnToOverworldSurface(
     let surfaces =
       drySurfaces.length > 0 ? drySurfaces : selectSwimmableSurfaceEscapeColumns(columns, position);
     if (surfaces.length === 0) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "pathfind",
-          code: "unreachable",
-          retryable: true,
-          message: "No loaded traversable surface is available for recovery",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "pathfind",
+        code: "unreachable",
+        retryable: true,
+        message: "No loaded traversable surface is available for recovery",
+      });
     }
     let targets: readonly BeatGamePosition[] = surfaces.map((surface) => ({
       x: surface.x + 0.5,
@@ -12964,7 +12920,7 @@ function returnToOverworldSurface(
       });
       if (overhead !== undefined && !overhead.replaceable && overhead.diggable) {
         yield* leaveCoveredVerticalShaft(state, observation, overhead);
-        return;
+        return undefined;
       }
     }
     if (!startingInFluid) {
@@ -12991,7 +12947,7 @@ function returnToOverworldSurface(
           !(yield* isPlayerInFluid(state.driver, reached.player.position)) &&
           !(yield* needsOverworldSurfaceRecovery(state, reached.player.position))
         ) {
-          return;
+          return undefined;
         }
       }
     }
@@ -12999,7 +12955,7 @@ function returnToOverworldSurface(
       let stairPosition = (yield* state.driver.observe).player.position;
       for (let segment = 0; segment < SURFACE_RECOVERY_MAXIMUM_STAIR_SEGMENTS; segment += 1) {
         if (!(yield* needsOverworldSurfaceRecovery(state, stairPosition))) {
-          return;
+          return undefined;
         }
         const climbed = yield* excavateDryShaftRecoveryStaircase(
           state,
@@ -13010,7 +12966,7 @@ function returnToOverworldSurface(
         }
         const latest = yield* state.driver.observe;
         if (latest.player.dead || latest.player.position.dimension !== position.dimension) {
-          return;
+          return undefined;
         }
         if (latest.player.position.y < stairPosition.y + 0.5) {
           break;
@@ -13039,7 +12995,7 @@ function returnToOverworldSurface(
     }
     const current = yield* state.driver.observe;
     if (current.player.dead) {
-      return;
+      return undefined;
     }
     columns = yield* state.driver.sampleSurface(
       current.player.position,
@@ -13058,14 +13014,12 @@ function returnToOverworldSurface(
       dimension: current.player.position.dimension,
     }));
     if (targets.length === 0) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "pathfind",
-          code: "unreachable",
-          retryable: true,
-          message: "No loaded traversable surface is available for recovery",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "pathfind",
+        code: "unreachable",
+        retryable: true,
+        message: "No loaded traversable surface is available for recovery",
+      });
     }
     yield* prepareSurfaceEscapePickaxe(state, current.player.position, targets);
     yield* pathfindToFirstReachableSurface(state, targets, 0, undefined, {
@@ -13074,6 +13028,7 @@ function returnToOverworldSurface(
       allowPlacing: true,
       avoidFluids: drySurfaces.length > 0 && !startingInFluid,
     });
+    return undefined;
   });
 }
 
@@ -13137,8 +13092,9 @@ function climbToHigherOverworldGround(
         ? Effect.succeed(false)
         : pathfindToFirstReachableSurface(state, targets, 0, ELEVATED_SURFACE_PATH_TIMEOUT_MS).pipe(
             Effect.as(true),
-            Effect.catch((cause) =>
-              cause.operation === "pathfind" ? Effect.succeed(false) : Effect.fail(cause),
+            Effect.catchIf(
+              (cause) => cause.operation === "pathfind",
+              () => Effect.succeed(false),
             ),
           ),
     ),
@@ -13169,8 +13125,9 @@ function escapeEnvironmentalDamage(
       yield* extinguishFire(state, yield* state.driver.observe);
       return;
     }
-    const occupiedBlocks = yield* Effect.all(
-      occupiedPositions.map((occupiedPosition) => queryExactBlock(state.driver, occupiedPosition)),
+    const occupiedBlocks = yield* Effect.forEach(
+      occupiedPositions,
+      (occupiedPosition) => queryExactBlock(state.driver, occupiedPosition),
       { concurrency: "unbounded" },
     );
     const diggableObstructions = occupiedBlocks.filter(
@@ -13262,8 +13219,9 @@ function recoverLocalNavigationTrap(
       DRY_SURFACE_APPROACH_RADIUS,
     ).pipe(
       Effect.as(true),
-      Effect.catch((cause) =>
-        cause.operation === "pathfind" ? Effect.succeed(false) : Effect.fail(cause),
+      Effect.catchIf(
+        (cause) => cause.operation === "pathfind",
+        () => Effect.succeed(false),
       ),
     );
     if (pathRecovered) {
@@ -13467,14 +13425,12 @@ function excavateDryShaftRecoveryStaircase(
         Math.floor(current.player.position.z) !== step.feet.z ||
         current.player.position.y < step.feet.y - 0.25
       ) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "recover-dry-shaft",
-            code: "no-progress",
-            retryable: true,
-            message: `The bot did not reach recovery stair ${positionKey(step.feet)}`,
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "recover-dry-shaft",
+          code: "no-progress",
+          retryable: true,
+          message: `The bot did not reach recovery stair ${positionKey(step.feet)}`,
+        });
       }
     }
     return true;
@@ -13677,7 +13633,7 @@ function placeDryShaftRecoveryBlock(
   return Effect.gen(function* () {
     const existing = yield* queryExactBlock(driver, expected);
     if (isStableDryShaftSupport(existing)) {
-      return;
+      return undefined;
     }
     // An unconfirmed attempt may still have used up a block, so every attempt
     // checks the inventory again.
@@ -13701,7 +13657,7 @@ function placeDryShaftRecoveryBlock(
     for (let confirmation = 0; confirmation < 10; confirmation += 1) {
       const placed = yield* queryExactBlock(driver, expected);
       if (isStableDryShaftSupport(placed)) {
-        return;
+        return undefined;
       }
       yield* Effect.sleep(50);
     }
@@ -13716,16 +13672,14 @@ function placeDryShaftRecoveryBlock(
     }
     // The server can refuse a placement it cannot see, which it reports as
     // final. Another stair or route may still work, so the bot replans.
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "recover-dry-shaft",
-        code: "no-progress",
-        retryable: true,
-        message: `The recovery support was not placed at ${positionKey(expected)}${
-          placement._tag === "Failure" ? `: ${placement.failure.message}` : ""
-        }`,
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "recover-dry-shaft",
+      code: "no-progress",
+      retryable: true,
+      message: `The recovery support was not placed at ${positionKey(expected)}${
+        placement._tag === "Failure" ? `: ${placement.failure.message}` : ""
+      }`,
+    });
   });
 }
 
@@ -13829,17 +13783,20 @@ function pathfindToFirstReachableSurface(
     ),
   );
   return airSafePathfind.pipe(
-    Effect.catch((cause) =>
-      cause.operation === "pathfind" && cause.code === "unreachable" && index + 1 < targets.length
-        ? pathfindToFirstReachableSurface(
-            state,
-            targets,
-            index + 1,
-            attemptTimeoutMs,
-            path,
-            goalRadius,
-          )
-        : Effect.fail(cause),
+    Effect.catchIf(
+      (cause) =>
+        cause.operation === "pathfind" &&
+        cause.code === "unreachable" &&
+        index + 1 < targets.length,
+      () =>
+        pathfindToFirstReachableSurface(
+          state,
+          targets,
+          index + 1,
+          attemptTimeoutMs,
+          path,
+          goalRadius,
+        ),
     ),
   );
 }
@@ -14216,12 +14173,13 @@ function advanceExplorationFrontier(
       preferSurface,
       allowFluidFallback,
     ).pipe(
-      Effect.catch((cause) =>
-        preferSurface && (cause.operation === "pathfind" || cause.operation === "pathfindXZ")
-          ? recoverSurfaceAfterExplorationFailure(state, cause).pipe(
-              Effect.andThen(Effect.fail(cause)),
-            )
-          : Effect.fail(cause),
+      Effect.catchIf(
+        (cause) =>
+          preferSurface && (cause.operation === "pathfind" || cause.operation === "pathfindXZ"),
+        (cause) =>
+          recoverSurfaceAfterExplorationFailure(state, cause).pipe(
+            Effect.andThen(Effect.fail(cause)),
+          ),
       ),
       Effect.ensuring(persistExplorationAttempt(state, attempt, hop)),
     );
@@ -14851,13 +14809,11 @@ function ensureWorkstation(
         };
       }
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "ensure-workstation",
-        retryable: true,
-        message: `${blockId} could not be placed on any nearby support`,
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "ensure-workstation",
+      retryable: true,
+      message: `${blockId} could not be placed on any nearby support`,
+    });
   });
 }
 
@@ -14905,14 +14861,12 @@ function prepareDryWorkstationSite(
         }
       }
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "ensure-workstation",
-        code: "unreachable",
-        retryable: true,
-        message: `The bot could not reach dry, supported ground for a ${blockId}`,
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "ensure-workstation",
+      code: "unreachable",
+      retryable: true,
+      message: `The bot could not reach dry, supported ground for a ${blockId}`,
+    });
   });
 }
 
@@ -14951,46 +14905,48 @@ function ensureInventorySpace(
   observation: BeatGameObservation,
   minimumEmptySlots = 1,
 ): Effect.Effect<void, BeatGameDriverError> {
+  const discardPath = (allowMining: boolean) => ({
+    ...state.strategy.path,
+    allowMining,
+    allowPlacing: false,
+    avoidFluids: true,
+    maxSearchTimeMs: Math.min(
+      state.strategy.path.maxSearchTimeMs,
+      INVENTORY_DISCARD_ESCAPE_MAX_SEARCH_TIME_MS,
+    ),
+  });
+
+  const tryRelativeDiscardPath = (
+    origin: BeatGameObservation,
+    distance: number,
+    allowMining: boolean,
+    yawOffsets: readonly number[] = [0, 90, -90, 180],
+    baseYaw = origin.player.rotation.yaw,
+  ) =>
+    Effect.gen(function* () {
+      for (const yawOffset of yawOffsets) {
+        const yawRadians = ((baseYaw + yawOffset) * Math.PI) / 180;
+        const escaped = yield* state.driver
+          .pathfind(
+            {
+              x: origin.player.position.x - Math.sin(yawRadians) * distance,
+              y: origin.player.position.y,
+              z: origin.player.position.z + Math.cos(yawRadians) * distance,
+              dimension: origin.player.position.dimension,
+            },
+            0.75,
+            discardPath(allowMining),
+          )
+          .pipe(Effect.result);
+        if (escaped._tag === "Success") {
+          return true;
+        }
+      }
+      return false;
+    });
+
   return Effect.gen(function* () {
     let current = observation;
-    const discardPath = (allowMining: boolean) => ({
-      ...state.strategy.path,
-      allowMining,
-      allowPlacing: false,
-      avoidFluids: true,
-      maxSearchTimeMs: Math.min(
-        state.strategy.path.maxSearchTimeMs,
-        INVENTORY_DISCARD_ESCAPE_MAX_SEARCH_TIME_MS,
-      ),
-    });
-    const tryRelativeDiscardPath = (
-      origin: BeatGameObservation,
-      distance: number,
-      allowMining: boolean,
-      yawOffsets: readonly number[] = [0, 90, -90, 180],
-      baseYaw = origin.player.rotation.yaw,
-    ) =>
-      Effect.gen(function* () {
-        for (const yawOffset of yawOffsets) {
-          const yawRadians = ((baseYaw + yawOffset) * Math.PI) / 180;
-          const escaped = yield* state.driver
-            .pathfind(
-              {
-                x: origin.player.position.x - Math.sin(yawRadians) * distance,
-                y: origin.player.position.y,
-                z: origin.player.position.z + Math.cos(yawRadians) * distance,
-                dimension: origin.player.position.dimension,
-              },
-              0.75,
-              discardPath(allowMining),
-            )
-            .pipe(Effect.result);
-          if (escaped._tag === "Success") {
-            return true;
-          }
-        }
-        return false;
-      });
     const targetEmptySlots = Math.min(36, minimumEmptySlots + INVENTORY_EMPTY_SLOT_BUFFER);
     let discardPocketYaw: number | undefined;
     let discardReturnTarget: BeatGamePosition | undefined;
@@ -15013,7 +14969,7 @@ function ensureInventorySpace(
           current = yield* state.driver.observe;
         }
         if (current.inventory.emptyPlayerSlots === undefined) {
-          return;
+          return undefined;
         }
         const discardSiteDistance = Math.hypot(
           current.player.position.x - discardSiteOrigin.x,
@@ -15163,8 +15119,9 @@ function ensureInventorySpace(
       }
     }
     if (cleanupFailure !== undefined) {
-      return yield* Effect.fail(cleanupFailure);
+      return yield* cleanupFailure;
     }
+    return undefined;
   });
 }
 
@@ -15263,13 +15220,11 @@ function placeWorkstationDirectly(
       maximumResults: 1,
     })).some(({ position }) => sameBlockPosition(position, target));
     if (!cleared) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "place-workstation",
-          retryable: true,
-          message: `Could not clear a local position for ${blockId}`,
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "place-workstation",
+        retryable: true,
+        message: `Could not clear a local position for ${blockId}`,
+      });
     }
     yield* driver.act({
       type: "select-item",
@@ -15284,6 +15239,7 @@ function placeWorkstationDirectly(
       face: "up",
       hand: "main",
     });
+    return undefined;
   });
 }
 
@@ -15429,13 +15385,11 @@ function findWorkstationTargets(
       ? available
       : clearable.length > 0
         ? clearable.slice(0, 16)
-        : yield* Effect.fail(
-            new BeatGameDriverError({
-              operation: "find-workstation-targets",
-              retryable: true,
-              message: "No supported open or diggable block is available for a workstation",
-            }),
-          );
+        : yield* new BeatGameDriverError({
+            operation: "find-workstation-targets",
+            retryable: true,
+            message: "No supported open or diggable block is available for a workstation",
+          });
   });
 }
 
@@ -15490,7 +15444,7 @@ function moveToEyeBaseline(
     const checkpoint = yield* Ref.get(state.checkpoint);
     const latest = checkpoint.memory.eyeSamples.at(-1);
     if (latest === undefined) {
-      return;
+      return undefined;
     }
     const baseline = EYE_TRIANGULATION_BASELINE;
     const candidates = [1, -1].flatMap((side) =>
@@ -15506,12 +15460,13 @@ function moveToEyeBaseline(
         .pathfind(target, 4, state.strategy.path)
         .pipe(Effect.result);
       if (reached._tag === "Success") {
-        return;
+        return undefined;
       }
       if (!isRouteUnavailable(reached.failure) || index === candidates.length - 1) {
-        return yield* Effect.fail(reached.failure);
+        return yield* reached.failure;
       }
     }
+    return undefined;
   });
 }
 
@@ -15649,7 +15604,7 @@ function constructPortalWithDurableObservation(
           Effect.andThen(Ref.get(workspace)),
           Effect.flatMap((current) => observeCompletedPortalWorkspace(state, current, plan.frame)),
           Effect.flatMap((current) => Ref.set(workspace, current)),
-          Effect.catch(() => Effect.void),
+          Effect.ignore,
         ),
       ).pipe(Effect.forkScoped);
       const frame = yield* plan.workspace.method === "CAST"
@@ -16213,7 +16168,7 @@ function tryEnterKnownPortal(
       return true;
     }
     if (!entry.failure.retryable) {
-      return yield* Effect.fail(entry.failure);
+      return yield* entry.failure;
     }
     yield* markPortalRouteUnavailable(
       state,
@@ -16274,14 +16229,12 @@ function approachRememberedPortal(
     }
     for (let leg = 0; leg < REMEMBERED_PORTAL_MAXIMUM_APPROACH_LEGS; leg += 1) {
       if (current.player.position.dimension !== portal.dimension) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "pathfindXZ",
-            code: "dimension_changed",
-            retryable: true,
-            message: "Changed dimensions while approaching a remembered portal",
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "pathfindXZ",
+          code: "dimension_changed",
+          retryable: true,
+          message: "Changed dimensions while approaching a remembered portal",
+        });
       }
       const distance = Math.sqrt(horizontalDistanceSquared(current.player.position, portal));
       if (distance <= REMEMBERED_PORTAL_FINAL_APPROACH_DISTANCE) {
@@ -16304,14 +16257,12 @@ function approachRememberedPortal(
         horizontalDistanceSquared(current.player.position, portal),
       );
       if (previousDistance - remainingDistance < REMEMBERED_PORTAL_MINIMUM_LEG_PROGRESS) {
-        return yield* Effect.fail(
-          new BeatGameDriverError({
-            operation: "pathfindXZ",
-            code: "no_progress",
-            retryable: true,
-            message: "Segmented navigation made no useful progress toward the remembered portal",
-          }),
-        );
+        return yield* new BeatGameDriverError({
+          operation: "pathfindXZ",
+          code: "no_progress",
+          retryable: true,
+          message: "Segmented navigation made no useful progress toward the remembered portal",
+        });
       }
     }
     current = yield* state.driver.observe;
@@ -16319,14 +16270,12 @@ function approachRememberedPortal(
       Math.sqrt(horizontalDistanceSquared(current.player.position, portal)) >
       REMEMBERED_PORTAL_FINAL_APPROACH_DISTANCE
     ) {
-      return yield* Effect.fail(
-        new BeatGameDriverError({
-          operation: "pathfindXZ",
-          code: "search_limit",
-          retryable: true,
-          message: "Remembered portal navigation exceeded its bounded leg count",
-        }),
-      );
+      return yield* new BeatGameDriverError({
+        operation: "pathfindXZ",
+        code: "search_limit",
+        retryable: true,
+        message: "Remembered portal navigation exceeded its bounded leg count",
+      });
     }
     yield* state.driver.pathfind(portal, 8, {
       ...portalCarefulPathPolicy(state.strategy.path),
@@ -16335,6 +16284,7 @@ function approachRememberedPortal(
         REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES,
       ),
     });
+    return undefined;
   });
 }
 
@@ -16369,10 +16319,11 @@ function invalidatePortalEvidence(
   portal: BeatGamePosition,
   reason: string,
 ): Effect.Effect<void, BeatGameError> {
+  const matchesPortal = (position: BeatGamePosition) =>
+    position.dimension === portal.dimension && distanceSquared(position, portal) <= 8 ** 2;
+
   return persist(state, (checkpoint) => {
     const now = new Date().toISOString();
-    const matchesPortal = (position: BeatGamePosition) =>
-      position.dimension === portal.dimension && distanceSquared(position, portal) <= 8 ** 2;
     const downgradeWorkspace = (workspace: BeatGamePortalWorkspace): BeatGamePortalWorkspace =>
       matchesPortal(workspace.origin) && workspace.interiorState === "PORTAL"
         ? {
@@ -17402,7 +17353,7 @@ function inspectNearbyCorpseDrops(
     horizontalDistanceSquared(observation.player.position, pendingDeath.position) >
       CORPSE_DROP_INSPECTION_DISTANCE ** 2
   ) {
-    return Effect.succeed(undefined);
+    return Effect.undefined;
   }
   const corpseItemIds = new Set(
     Object.entries(pendingDeath.inventoryCounts ?? {})
@@ -17710,8 +17661,9 @@ function prepareForDistantDeathRecovery(
   }> = {},
 ): Effect.Effect<string | undefined, BeatGameError | BeatGameDriverError> {
   if (observation.player.position.dimension !== pendingDeath.position.dimension) {
-    return Effect.succeed(undefined);
+    return Effect.undefined;
   }
+
   return Effect.gen(function* () {
     let current = observation;
     const recoveryPath = {
@@ -17735,12 +17687,10 @@ function prepareForDistantDeathRecovery(
         options.travelFoodTargetCount ?? DEATH_RECOVERY_FOOD_RESERVE_COUNT,
       ),
     );
-    const logCount = (value: BeatGameObservation): number =>
-      LOG_ITEM_IDS.reduce((total, itemId) => total + (value.inventory.counts[itemId] ?? 0), 0);
     const additionalLogsForWoodenPickaxe = (value: BeatGameObservation): number => {
       const plankEquivalent =
         PLANK_ITEM_IDS.reduce((total, itemId) => total + (value.inventory.counts[itemId] ?? 0), 0) +
-        logCount(value) * 4;
+        inventoryLogCount(value) * 4;
       const craftingTablePlanks =
         (value.inventory.counts["minecraft:crafting_table"] ?? 0) > 0 ? 0 : 4;
       const stickPlanks = (value.inventory.counts["minecraft:stick"] ?? 0) >= 2 ? 0 : 2;
@@ -17790,7 +17740,11 @@ function prepareForDistantDeathRecovery(
           fallbackToLocalExploration: true,
         },
       );
-      return Effect.raceFirst(search, Effect.sleep(DEATH_RECOVERY_FOOD_SEARCH_TIMEOUT_MS)).pipe(
+      return search.pipe(
+        Effect.timeoutOrElse({
+          duration: DEATH_RECOVERY_FOOD_SEARCH_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
         Effect.andThen(state.driver.observe),
       );
     };
@@ -17869,7 +17823,7 @@ function prepareForDistantDeathRecovery(
       }
     }
     if (!hasMeleeWeapon(current)) {
-      const logs = logCount(current);
+      const logs = inventoryLogCount(current);
       if (logs < EMERGENCY_ARMAMENT_LOG_COUNT) {
         yield* collectBlocksOrExplore(state, current, {
           blockIds: LOG_ITEM_IDS,
@@ -17883,7 +17837,7 @@ function prepareForDistantDeathRecovery(
         });
         current = yield* state.driver.observe;
       }
-      if (logCount(current) < EMERGENCY_ARMAMENT_LOG_COUNT) {
+      if (inventoryLogCount(current) < EMERGENCY_ARMAMENT_LOG_COUNT) {
         return "still gathering enough wood to craft a corpse recovery weapon";
       }
       yield* craftWithTable(state, current, "minecraft:wooden_sword", 1);
@@ -17974,7 +17928,7 @@ function prepareForDistantDeathRecovery(
         ? undefined
         : "still gathering enough wood to craft a deep corpse recovery pickaxe";
     }
-    const bufferedLogs = logCount(current);
+    const bufferedLogs = inventoryLogCount(current);
     if (bufferedLogs < DEATH_RECOVERY_BOOTSTRAP_LOG_COUNT) {
       yield* collectBlocksOrExplore(state, current, {
         blockIds: LOG_ITEM_IDS,
@@ -18308,15 +18262,16 @@ function awaitRunnable(state: RunState): Effect.Effect<void, BeatGameError> {
   return Effect.gen(function* () {
     if (yield* Deferred.isDone(state.stopped)) {
       const checkpoint = yield* Ref.get(state.checkpoint);
-      return yield* Effect.fail(cancelled(checkpoint, "stopped"));
+      return yield* cancelled(checkpoint, "stopped");
     }
     while (yield* Ref.get(state.paused)) {
       if (yield* Deferred.isDone(state.stopped)) {
         const checkpoint = yield* Ref.get(state.checkpoint);
-        return yield* Effect.fail(cancelled(checkpoint, "stopped"));
+        return yield* cancelled(checkpoint, "stopped");
       }
       yield* Effect.sleep(50);
     }
+    return undefined;
   });
 }
 
@@ -18384,7 +18339,7 @@ function releaseActionClaim(state: RunState, claim: BeatGameClaim): Effect.Effec
     const checkpoint = yield* Ref.get(state.checkpoint);
     const released = yield* state.coordinator
       .release(checkpoint.teamId, claim.key, checkpoint.botId)
-      .pipe(Effect.catch(() => Effect.succeed(false)));
+      .pipe(Effect.orElseSucceed(() => false));
     if (released) {
       yield* emit(state, {
         type: "team-claim-changed",
@@ -18711,6 +18666,8 @@ function actionObservedComplete(
     case "search-stronghold":
     case "fight-ender-dragon":
       return false;
+    default:
+      return decision satisfies never;
   }
 }
 
@@ -18803,8 +18760,9 @@ function resolvePortalBuildFrame(
   };
 
   return resolveExistingPortalBuildFrame(driver, observation).pipe(
-    Effect.flatMap((frame) =>
-      frame === undefined ? findFloor(0, highestY) : Effect.succeed(frame),
+    Effect.filterOrElse(
+      (frame) => frame !== undefined,
+      () => findFloor(0, highestY),
     ),
   );
 }
@@ -18832,7 +18790,7 @@ function resolveExistingPortalBuildFrame(
         ): Effect.Effect<PortalFrame | undefined, BeatGameDriverError> => {
           const candidate = candidates[index];
           if (candidate === undefined) {
-            return Effect.succeed(undefined);
+            return Effect.undefined;
           }
           return portalBuildWorkspaceIsClearable(driver, candidate.frame).pipe(
             Effect.flatMap((clearable) =>

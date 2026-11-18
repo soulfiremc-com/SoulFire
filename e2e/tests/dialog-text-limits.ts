@@ -98,6 +98,7 @@ export default {
   name: "dialog-text-limits",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const service = client.service(BotService);
       const read = Effect.tryPromise({
@@ -170,12 +171,12 @@ export default {
             await frames.next();
             await frames.next();
             for (const test of cases) {
-              await Effect.runPromise(show(test.name, test.initial, test.limit, test.multiline));
+              await runPromise(show(test.name, test.initial, test.limit, test.multiline));
               // The next tab focuses the field after the dialog's warning button.
               await send([...key(258), ...test.keys, ...text(test.insert ?? "")], test.paste);
               await frames.next();
               await frames.next();
-              await Effect.runPromise(
+              await runPromise(
                 eventually(
                   read.pipe(
                     Effect.flatMap((state) => {

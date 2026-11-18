@@ -796,7 +796,7 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
   public constructor(
     private readonly client: Client<typeof BotTaskService>,
     snapshot: BotTask,
-    private readonly resultSchema: Result,
+    private readonly resultSchema: Result | undefined,
     private readonly callOptions: (options?: CallOptions) => CallOptions | undefined,
   ) {
     this.#snapshot = snapshot;
@@ -947,6 +947,7 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
         );
       }
       if (this.resultSchema === undefined) {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- without a result schema, Result is undefined and the conditional type resolves to BotTask
         return task as Result extends DescMessage ? MessageShape<Result> : BotTask;
       }
       if (task.result === undefined) {
@@ -987,6 +988,7 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
           ),
         );
       }
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- anyUnpack decoded the payload with resultSchema, so it is MessageShape<Result>; TypeScript cannot resolve the conditional type for a generic Result
       return result as Result extends DescMessage ? MessageShape<Result> : BotTask;
     });
   }
@@ -1046,7 +1048,7 @@ export class SoulFireTasks {
           withSignal(this.callOptions(call), signal),
         ),
       );
-      return new SoulFireTask(this.client, task, resultSchema as Result, this.callOptions);
+      return new SoulFireTask(this.client, task, resultSchema, this.callOptions);
     });
   }
 
@@ -2644,7 +2646,7 @@ export class SoulFireTasks {
           ),
         );
       }
-      return new SoulFireTask(this.client, task, resultSchema as Result, this.callOptions);
+      return new SoulFireTask(this.client, task, resultSchema, this.callOptions);
     });
   }
 

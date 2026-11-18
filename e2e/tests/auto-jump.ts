@@ -25,6 +25,7 @@ export default {
         value: fromJson(ValueSchema, value),
       });
     return Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon("forceload add 2016 0");
       yield* rcon("fill 2016 63 0 2020 63 4 stone");
@@ -104,10 +105,10 @@ export default {
               token = frame.inputToken;
               await input(true);
               captured = true;
-              await Effect.runPromise(enabled(true));
+              await runPromise(enabled(true));
               for (let sample = 0; sample < 60; sample++) {
                 if (sample % 10 === 0) await input(true);
-                const info = await Effect.runPromise(bot.info());
+                const info = await runPromise(bot.info());
                 if (!info.liveState || Math.abs(info.liveState.y - 64) >= 0.01)
                   throw new Error(
                     `Automatic jumping moved a captured bot to Y=${info.liveState?.y}`,
@@ -116,14 +117,14 @@ export default {
                   setTimeout(resolve, 25);
                 });
               }
-              const native = await Effect.runPromise(serverPosition);
-              if (Math.abs(native.y - 64) >= 0.01)
-                throw new Error(`Vanilla observed a captured bot jumping to Y=${native.y}`);
+              const nativePosition = await runPromise(serverPosition);
+              if (Math.abs(nativePosition.y - 64) >= 0.01)
+                throw new Error(`Vanilla observed a captured bot jumping to Y=${nativePosition.y}`);
               break;
             }
             if (!captured) throw new Error("The POV stream ended without taking control");
           } finally {
-            await Effect.runPromise(enabled(false));
+            await runPromise(enabled(false));
             if (token) await input(false).catch(() => {});
             abort.abort();
           }

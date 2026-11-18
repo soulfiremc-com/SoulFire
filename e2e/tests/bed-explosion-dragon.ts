@@ -1,5 +1,5 @@
 import { BlockFace, Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
-import { Effect } from "effect";
+import { Console, Effect } from "effect";
 import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 
 const END = "execute in minecraft:the_end run";
@@ -27,7 +27,7 @@ const topSolid = (x: number, z: number, from: number) =>
         return y;
       }
     }
-    return yield* Effect.fail(new CheckFailed({ message: `No ground at ${x} ${z}` }));
+    return yield* new CheckFailed({ message: `No ground at ${x} ${z}` });
   });
 
 // Checks that a bed set off under a perched dragon's head hurts it badly
@@ -110,7 +110,7 @@ export default {
         yield* Effect.sleep("1 second");
         const dragonAfter = yield* dragonNumber("Health");
         const botAfter = yield* botHealth;
-        console.log(JSON.stringify({ dragonBefore, dragonAfter, botBefore, botAfter }));
+        yield* Console.log(JSON.stringify({ dragonBefore, dragonAfter, botBefore, botAfter }));
         yield* check(
           dragonAfter < dragonBefore - 20,
           "One bed did not hurt the perched dragon badly",

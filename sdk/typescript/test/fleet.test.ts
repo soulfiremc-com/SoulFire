@@ -5,6 +5,7 @@ import { Deferred, Effect, Fiber, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
+  BotConnectionPhase,
   BotDesiredState,
   BotRuntimeState,
   BotService,
@@ -61,10 +62,12 @@ describe("SoulFireFleet", () => {
           yield* fleet.start(selector);
           yield* soulfire.close();
           expect(selected.map(({ id }) => id)).toEqual(["healthy", "nearby"]);
-          expect(assignments.map(({ bot, items }) => [bot.id, items])).toEqual([
-            ["healthy", ["one", "three"]],
-            ["nearby", ["two"]],
-          ]);
+          expect(assignments.map(({ bot: assignedBot, items }) => [assignedBot.id, items])).toEqual(
+            [
+              ["healthy", ["one", "three"]],
+              ["nearby", ["two"]],
+            ],
+          );
           expect(lifecycleRequest?.botIds).toEqual(["healthy", "nearby"]);
         }),
       ),
@@ -106,7 +109,10 @@ describe("SoulFireFleet", () => {
           yield* soulfire.close();
           expect(maximumActive).toBe(1);
           expect(group.size).toBe(2);
-          expect(events.map(({ bot }) => bot.id)).toEqual(["healthy", "nearby"]);
+          expect(events.map(({ bot: assignedBot }) => assignedBot.id)).toEqual([
+            "healthy",
+            "nearby",
+          ]);
           expect(report.rejected).toHaveLength(0);
           expect(report.fulfilled.map(({ value }) => value.respawns)).toEqual([1, 1]);
         }),
@@ -163,7 +169,7 @@ function fleetTransport(options: {
             {
               profileId: "offline",
               isOnline: false,
-              connectionPhase: 5,
+              connectionPhase: BotConnectionPhase.DISCONNECTED,
               accountName: "Offline",
               status: {
                 profileId: "offline",
@@ -256,7 +262,7 @@ function bot(profileId: string, health: number, x: number, z: number) {
   return {
     profileId,
     isOnline: true,
-    connectionPhase: 3,
+    connectionPhase: BotConnectionPhase.SPAWNED,
     accountName: profileId,
     status: {
       profileId,

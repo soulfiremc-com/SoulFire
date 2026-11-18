@@ -67,17 +67,16 @@ export class InMemoryBeatGameCheckpointStore implements BeatGameCheckpointStore 
     Effect.gen({ self: this }, function* () {
       const current = this.#checkpoints.get(runId);
       if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
-        return yield* Effect.fail(
-          makeCheckpointError(
-            current,
-            runId,
-            `Checkpoint revision changed before removal`,
-            expectedRevision,
-            current?.revision,
-          ),
+        return yield* makeCheckpointError(
+          current,
+          runId,
+          `Checkpoint revision changed before removal`,
+          expectedRevision,
+          current?.revision,
         );
       }
       this.#checkpoints.delete(runId);
+      return undefined;
     });
 }
 
@@ -287,9 +286,9 @@ function worldMemory(value: unknown): void {
   memoryEntries(memory.deathPositions, "checkpoint.memory.deathPositions", deathPosition);
   if (memory.explorationFrontiers !== undefined) {
     const frontiers = record(memory.explorationFrontiers, "checkpoint.memory.explorationFrontiers");
-    for (const [key, value] of Object.entries(frontiers)) {
+    for (const [key, rawFrontier] of Object.entries(frontiers)) {
       nonEmptyString(key, "checkpoint.memory.explorationFrontiers key");
-      const frontier = record(value, `checkpoint.memory.explorationFrontiers.${key}`);
+      const frontier = record(rawFrontier, `checkpoint.memory.explorationFrontiers.${key}`);
       position(frontier.origin, `checkpoint.memory.explorationFrontiers.${key}.origin`);
       positiveInteger(
         frontier.nextIndex,
@@ -509,11 +508,15 @@ function vector(value: unknown, name: string): void {
   finiteNumber(point.z, `${name}.z`);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function record(value: unknown, name: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new TypeError(`${name} must be an object`);
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
 function nonEmptyString(value: unknown, name: string): string {
@@ -550,13 +553,13 @@ function finiteNumber(value: unknown, name: string): number {
 }
 
 function positiveInteger(value: unknown, name: string): void {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
     throw new TypeError(`${name} must be a positive safe integer`);
   }
 }
 
 function nonNegativeInteger(value: unknown, name: string): void {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${name} must be a non-negative safe integer`);
   }
 }

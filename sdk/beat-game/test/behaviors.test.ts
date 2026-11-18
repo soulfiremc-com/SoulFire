@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import {
   activateEndPortal,
@@ -39,6 +39,13 @@ function feetCenter(position: BeatGameBlockPosition): BeatGameBlockPosition {
   };
 }
 
+const framePositionKey = (position: {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly dimension: string;
+}) => `${position.dimension}:${position.x}:${position.y}:${position.z}`;
+
 function installPortalWorld(
   driver: FakeBeatGameDriver,
   frame: ReturnType<typeof createNetherPortalFrame>,
@@ -47,14 +54,8 @@ function installPortalWorld(
     readonly rejectFirstPlacementAt?: ReturnType<typeof createNetherPortalFrame>["blocks"][number];
   } = {},
 ) {
-  const key = (position: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-    readonly dimension: string;
-  }) => `${position.dimension}:${position.x}:${position.y}:${position.z}`;
   const blocks = new Map(
-    (options.initialBlocks ?? []).map((block) => [key(block.position), block]),
+    (options.initialBlocks ?? []).map((block) => [framePositionKey(block.position), block]),
   );
   const placementAttempts = new Map<string, number>();
   let portalActive = false;
@@ -83,7 +84,7 @@ function installPortalWorld(
       dimension: center.dimension,
     };
     return [
-      blocks.get(key(position)) ??
+      blocks.get(framePositionKey(position)) ??
         blockObservation(position, {
           blockId: "minecraft:air",
           replaceable: true,
@@ -92,7 +93,7 @@ function installPortalWorld(
   };
   driver.actionObserver = (action) => {
     if (action.type === "dig-block") {
-      blocks.delete(key(action.position));
+      blocks.delete(framePositionKey(action.position));
       return;
     }
     if (action.type === "interact-block") {
@@ -116,12 +117,12 @@ function installPortalWorld(
       z: action.against.z + offset.z,
       dimension: action.against.dimension,
     };
-    const targetKey = key(target);
+    const targetKey = framePositionKey(target);
     placementAttempts.set(targetKey, (placementAttempts.get(targetKey) ?? 0) + 1);
     if (
       !rejectedPlacement &&
       options.rejectFirstPlacementAt !== undefined &&
-      targetKey === key(options.rejectFirstPlacementAt)
+      targetKey === framePositionKey(options.rejectFirstPlacementAt)
     ) {
       rejectedPlacement = true;
       return;
@@ -134,7 +135,7 @@ function installPortalWorld(
     blocks.set(targetKey, blockObservation(target, { blockId: itemId }));
   };
 
-  return { blocks, key, placementAttempts };
+  return { blocks, key: framePositionKey, placementAttempts };
 }
 
 function queriedBlockPosition(
@@ -152,6 +153,27 @@ function queriedBlockPosition(
     dimension: center.dimension,
   };
 }
+
+const recipe = (
+  recipeId: string,
+  resultItemId: string,
+  resultCount: number,
+  ingredients: readonly {
+    readonly itemIds: readonly string[];
+    readonly count: number;
+  }[],
+) => ({
+  recipeId,
+  recipeType: "crafting",
+  resultItemId,
+  resultCount,
+  ingredients: ingredients.map((ingredient) => ({
+    ...ingredient,
+    tags: [],
+  })),
+});
+const blockKey = (position: BeatGameBlockPosition) =>
+  `${position.dimension}:${position.x}:${position.y}:${position.z}`;
 
 describe("beat-game behavior programs", () => {
   it("bounds recovery eating and completes when supplies run out", async () => {
@@ -2596,24 +2618,6 @@ describe("beat-game behavior programs", () => {
     let logs = 2;
     let planks = 0;
     let sticks = 0;
-    const recipe = (
-      recipeId: string,
-      resultItemId: string,
-      resultCount: number,
-      ingredients: readonly {
-        readonly itemIds: readonly string[];
-        readonly count: number;
-      }[],
-    ) => ({
-      recipeId,
-      recipeType: "crafting",
-      resultItemId,
-      resultCount,
-      ingredients: ingredients.map((ingredient) => ({
-        ...ingredient,
-        tags: [],
-      })),
-    });
     driver.recipeResolver = (resultItemId) => {
       if (resultItemId === "minecraft:wooden_pickaxe") {
         return [
@@ -2900,10 +2904,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(result._tag).toBe("Failure");
-    if (result._tag === "Failure") {
-      expect(result.failure.code).toBe("resource-exhausted");
-    }
+    assert(result._tag === "Failure");
+    expect(result.failure.code).toBe("resource-exhausted");
   });
 
   it("unlocks the crafting table recipe by producing planks first", async () => {
@@ -4396,21 +4398,24 @@ describe("beat-game behavior programs", () => {
       y: origin.y + 1,
       z: origin.z - 2,
     };
-    const key = (position: {
-      readonly x: number;
-      readonly y: number;
-      readonly z: number;
-      readonly dimension: string;
-    }) => `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map(
       frame.blocks.map((position) => [
-        key(position),
+        framePositionKey(position),
         blockObservation(position, { blockId: "minecraft:obsidian" }),
       ]),
     );
-    blocks.set(key(target), blockObservation(target, { blockId: "minecraft:deepslate" }));
-    blocks.set(key(water), blockObservation(water, { blockId: "minecraft:deepslate" }));
-    blocks.set(key(interior), blockObservation(interior, { blockId: "minecraft:deepslate" }));
+    blocks.set(
+      framePositionKey(target),
+      blockObservation(target, { blockId: "minecraft:deepslate" }),
+    );
+    blocks.set(
+      framePositionKey(water),
+      blockObservation(water, { blockId: "minecraft:deepslate" }),
+    );
+    blocks.set(
+      framePositionKey(interior),
+      blockObservation(interior, { blockId: "minecraft:deepslate" }),
+    );
     const liquidSightObstruction = {
       ...origin,
       x: origin.x + 1,
@@ -4418,13 +4423,13 @@ describe("beat-game behavior programs", () => {
       z: origin.z - 1,
     };
     blocks.set(
-      key(liquidSightObstruction),
+      framePositionKey(liquidSightObstruction),
       blockObservation(liquidSightObstruction, {
         blockId: "minecraft:deepslate",
       }),
     );
     blocks.set(
-      key(replaceableInterior),
+      framePositionKey(replaceableInterior),
       blockObservation(replaceableInterior, {
         blockId: "minecraft:cave_air",
         replaceable: true,
@@ -4436,13 +4441,13 @@ describe("beat-game behavior programs", () => {
       { ...castingStand, y: castingStand.y - 1 },
     ]) {
       const isWaterSupport =
-        key(support) ===
-        key({
+        framePositionKey(support) ===
+        framePositionKey({
           ...water,
           y: water.y - 1,
         });
       blocks.set(
-        key(support),
+        framePositionKey(support),
         blockObservation(
           support,
           isWaterSupport
@@ -4468,7 +4473,7 @@ describe("beat-game behavior programs", () => {
     let misplacedLavaAvailable = false;
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:lava") === true) {
-        return misplacedLavaAvailable ? [blocks.get(key(misplacedLava))!] : [];
+        return misplacedLavaAvailable ? [blocks.get(framePositionKey(misplacedLava))!] : [];
       }
       if (selector.blockIds?.includes("minecraft:obsidian") === true) {
         return [...blocks.values()].filter(({ blockId }) => blockId === "minecraft:obsidian");
@@ -4479,12 +4484,12 @@ describe("beat-game behavior programs", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      if (conversionPending && key(position) === key(target)) {
+      if (conversionPending && framePositionKey(position) === framePositionKey(target)) {
         conversionQueries += 1;
         if (conversionQueries >= 3) {
           conversionPending = false;
           blocks.set(
-            key(target),
+            framePositionKey(target),
             blockObservation(target, {
               blockId: "minecraft:obsidian",
             }),
@@ -4492,7 +4497,7 @@ describe("beat-game behavior programs", () => {
         }
       }
       return [
-        blocks.get(key(position)) ??
+        blocks.get(framePositionKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -4514,9 +4519,9 @@ describe("beat-game behavior programs", () => {
       });
     };
     driver.raycastResolver = ({ includeFluids }) => {
-      if (blocks.has(key(liquidSightObstruction))) {
+      if (blocks.has(framePositionKey(liquidSightObstruction))) {
         return {
-          block: blocks.get(key(liquidSightObstruction))!,
+          block: blocks.get(framePositionKey(liquidSightObstruction))!,
           distance: 1,
         };
       }
@@ -4524,8 +4529,8 @@ describe("beat-game behavior programs", () => {
         return { distance: 2 };
       }
       const liquid = misplacedLavaAvailable
-        ? blocks.get(key(misplacedLava))
-        : blocks.get(key(water));
+        ? blocks.get(framePositionKey(misplacedLava))
+        : blocks.get(framePositionKey(water));
       return liquid === undefined ? { distance: 2 } : { block: liquid, distance: 2 };
     };
     driver.actionObserver = (action) => {
@@ -4545,7 +4550,7 @@ describe("beat-game behavior programs", () => {
         return;
       }
       if (action.type === "dig-block") {
-        blocks.delete(key(action.position));
+        blocks.delete(framePositionKey(action.position));
         return;
       }
       if (action.type !== "use-item" && action.type !== "interact-block") {
@@ -4560,7 +4565,7 @@ describe("beat-game behavior programs", () => {
           misplacedLavaPlacements += 1;
           misplacedLavaAvailable = true;
           blocks.set(
-            key(misplacedLava),
+            framePositionKey(misplacedLava),
             blockObservation(misplacedLava, {
               blockId: "minecraft:lava",
               properties: { level: "0" },
@@ -4571,7 +4576,7 @@ describe("beat-game behavior programs", () => {
         }
         pendingLavaTarget = target;
         blocks.set(
-          key(target),
+          framePositionKey(target),
           blockObservation(target, {
             blockId: "minecraft:lava",
             replaceable: true,
@@ -4589,7 +4594,7 @@ describe("beat-game behavior programs", () => {
         });
         conversionPending = true;
         blocks.set(
-          key(water),
+          framePositionKey(water),
           blockObservation(water, {
             blockId: "minecraft:water",
             properties: { level: "0" },
@@ -4605,14 +4610,14 @@ describe("beat-game behavior programs", () => {
             counts["minecraft:lava_bucket"] = 1;
           });
           misplacedLavaAvailable = false;
-          blocks.delete(key(misplacedLava));
+          blocks.delete(framePositionKey(misplacedLava));
           return;
         }
         updateInventory((counts) => {
           counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
           counts["minecraft:water_bucket"] = 1;
         });
-        blocks.delete(key(water));
+        blocks.delete(framePositionKey(water));
       }
     };
     driver.actionResolver = (action) => {
@@ -4682,11 +4687,14 @@ describe("beat-game behavior programs", () => {
       position: replaceableInterior,
     });
     const interiorDigIndex = driver.actions.findIndex(
-      (action) => action.type === "dig-block" && key(action.position) === key(interior),
+      (action) =>
+        action.type === "dig-block" &&
+        framePositionKey(action.position) === framePositionKey(interior),
     );
     const sightlineDigIndex = driver.actions.findIndex(
       (action) =>
-        action.type === "dig-block" && key(action.position) === key(liquidSightObstruction),
+        action.type === "dig-block" &&
+        framePositionKey(action.position) === framePositionKey(liquidSightObstruction),
     );
     const interiorToolSelectionIndex = driver.actions.findIndex(
       (action) =>
@@ -4701,7 +4709,8 @@ describe("beat-game behavior programs", () => {
       driver.actions.findIndex(
         (action) =>
           action.type === "dig-block" &&
-          (key(action.position) === key(target) || key(action.position) === key(water)),
+          (framePositionKey(action.position) === framePositionKey(target) ||
+            framePositionKey(action.position) === framePositionKey(water)),
       ),
     ).toBeLessThan(liquidPlacementIndex);
     expect(driver.paths).toContainEqual({
@@ -4741,8 +4750,8 @@ describe("beat-game behavior programs", () => {
     });
     expect(water.z).toBeGreaterThan(castingStand.z);
     expect(water.z).toBeLessThan(target.z);
-    expect(blocks.get(key(target))?.blockId).toBe("minecraft:obsidian");
-    expect(blocks.has(key(misplacedLava))).toBe(false);
+    expect(blocks.get(framePositionKey(target))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.has(framePositionKey(misplacedLava))).toBe(false);
     expect(misplacedLavaPlacements).toBe(1);
     expect(conversionQueries).toBe(3);
     expect(driver.actions.filter(({ type }) => type === "use-item")).toHaveLength(3);
@@ -4786,10 +4795,8 @@ describe("beat-game behavior programs", () => {
     if (target === undefined || interior === undefined) {
       throw new Error("Expected portal frame geometry");
     }
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const existingFrame = frame.blocks
-      .filter((position) => key(position) !== key(target))
+      .filter((position) => blockKey(position) !== blockKey(target))
       .map((position) =>
         blockObservation(position, {
           blockId: "minecraft:obsidian",
@@ -4808,7 +4815,7 @@ describe("beat-game behavior programs", () => {
       }
       const position = queriedBlockPosition(center);
       return [
-        key(position) === key(interior)
+        blockKey(position) === blockKey(interior)
           ? blockObservation(position, {
               blockId: "minecraft:bedrock",
               diggable: false,
@@ -4876,14 +4883,12 @@ describe("beat-game behavior programs", () => {
       z: 8,
       dimension: origin.dimension,
     } as const;
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
-    const targetKeys = new Set(targets.map(key));
+    const targetKeys = new Set(targets.map(blockKey));
     const blocks = new Map(
       frame.blocks
-        .filter((position) => !targetKeys.has(key(position)))
+        .filter((position) => !targetKeys.has(blockKey(position)))
         .map((position) => [
-          key(position),
+          blockKey(position),
           blockObservation(position, { blockId: "minecraft:obsidian" }),
         ]),
     );
@@ -4895,7 +4900,7 @@ describe("beat-game behavior programs", () => {
       ]),
     ]) {
       blocks.set(
-        key(support),
+        blockKey(support),
         blockObservation(support, {
           blockId: "minecraft:cobblestone",
         }),
@@ -4920,7 +4925,7 @@ describe("beat-game behavior programs", () => {
         },
       ),
     ]) {
-      blocks.set(key(block.position), block);
+      blocks.set(blockKey(block.position), block);
     }
     driver.currentObservation = observation({
       counts: {
@@ -4937,7 +4942,10 @@ describe("beat-game behavior programs", () => {
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (selector.blockIds?.includes("minecraft:lava") === true) {
         lavaQueryCount += 1;
-        if (radius === 0.25 && key(queriedBlockPosition(center)) === key(source.position)) {
+        if (
+          radius === 0.25 &&
+          blockKey(queriedBlockPosition(center)) === blockKey(source.position)
+        ) {
           sourceVerificationCount += 1;
           return sourceVerificationCount === 1 ? [] : [source];
         }
@@ -4969,7 +4977,7 @@ describe("beat-game behavior programs", () => {
       }
       const position = queriedBlockPosition(center);
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -4994,7 +5002,9 @@ describe("beat-game behavior programs", () => {
         dimension: player.dimension,
       };
       const target =
-        key(targetPosition) === key(source.position) ? source : blocks.get(key(targetPosition));
+        blockKey(targetPosition) === blockKey(source.position)
+          ? source
+          : blocks.get(blockKey(targetPosition));
       if (
         includeFluids === true &&
         target !== undefined &&
@@ -5002,7 +5012,7 @@ describe("beat-game behavior programs", () => {
       ) {
         return { block: target, distance: maximumDistance };
       }
-      return key(targetPosition) === key(source.position) &&
+      return blockKey(targetPosition) === blockKey(source.position) &&
         maximumDistance > 4 &&
         player.x !== safeStand.x + 0.5
         ? {
@@ -5051,7 +5061,7 @@ describe("beat-game behavior programs", () => {
       }
       if (selectedItemId === "minecraft:lava_bucket") {
         activeTarget = targets.find(
-          (target) => blocks.get(key(target))?.blockId !== "minecraft:obsidian",
+          (target) => blocks.get(blockKey(target))?.blockId !== "minecraft:obsidian",
         );
         if (activeTarget === undefined) {
           throw new Error("Expected another portal casting target");
@@ -5061,7 +5071,7 @@ describe("beat-game behavior programs", () => {
           counts["minecraft:bucket"] = (counts["minecraft:bucket"] ?? 0) + 1;
         });
         blocks.set(
-          key(activeTarget),
+          blockKey(activeTarget),
           blockObservation(activeTarget, {
             blockId: "minecraft:lava",
             replaceable: true,
@@ -5079,13 +5089,13 @@ describe("beat-game behavior programs", () => {
           counts["minecraft:bucket"] = (counts["minecraft:bucket"] ?? 0) + 1;
         });
         blocks.set(
-          key(activeTarget),
+          blockKey(activeTarget),
           blockObservation(activeTarget, {
             blockId: "minecraft:obsidian",
           }),
         );
         blocks.set(
-          key(activeWater),
+          blockKey(activeWater),
           blockObservation(activeWater, {
             blockId: "minecraft:water",
             properties: { level: "0" },
@@ -5097,7 +5107,7 @@ describe("beat-game behavior programs", () => {
       if (selectedItemId === "minecraft:bucket") {
         const activeWater =
           activeTarget === undefined ? undefined : { ...activeTarget, z: activeTarget.z - 1 };
-        const hasPlacedWater = activeWater !== undefined && blocks.has(key(activeWater));
+        const hasPlacedWater = activeWater !== undefined && blocks.has(blockKey(activeWater));
         updateInventory((counts) => {
           counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
           if (hasPlacedWater) {
@@ -5108,7 +5118,7 @@ describe("beat-game behavior programs", () => {
           }
         });
         if (hasPlacedWater && activeWater !== undefined) {
-          blocks.delete(key(activeWater));
+          blocks.delete(blockKey(activeWater));
         }
       }
     };
@@ -5120,8 +5130,8 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    expect(blocks.get(key(firstTarget))?.blockId).toBe("minecraft:obsidian");
-    expect(blocks.get(key(secondTarget))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.get(blockKey(firstTarget))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.get(blockKey(secondTarget))?.blockId).toBe("minecraft:obsidian");
     expect(lavaQueryCount).toBeGreaterThanOrEqual(5);
     expect(sourceVerificationCount).toBe(2);
     expect(sourceCollected).toBe(true);
@@ -5169,13 +5179,11 @@ describe("beat-game behavior programs", () => {
       y: target.y - 1,
       z: origin.z - 2,
     };
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map(
       frame.blocks
-        .filter((position) => key(position) !== key(target))
+        .filter((position) => blockKey(position) !== blockKey(target))
         .map((position) => [
-          key(position),
+          blockKey(position),
           blockObservation(position, { blockId: "minecraft:obsidian" }),
         ]),
     );
@@ -5185,7 +5193,7 @@ describe("beat-game behavior programs", () => {
       { ...castingStand, y: castingStand.y - 1 },
     ]) {
       blocks.set(
-        key(support),
+        blockKey(support),
         blockObservation(support, {
           blockId: "minecraft:cobblestone",
         }),
@@ -5208,7 +5216,7 @@ describe("beat-game behavior programs", () => {
       }
       const position = queriedBlockPosition(center);
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -5255,7 +5263,7 @@ describe("beat-game behavior programs", () => {
       },
     );
     driver.raycastResolver = ({ includeFluids }) => {
-      const source = blocks.get(key(water));
+      const source = blocks.get(blockKey(water));
       return includeFluids === true && source !== undefined
         ? { block: flowingWater, distance: 1 }
         : { distance: 2 };
@@ -5286,7 +5294,7 @@ describe("beat-game behavior programs", () => {
       if (action.type === "interact-block") {
         if (selectedItemId === "minecraft:lava_bucket") {
           blocks.set(
-            key(target),
+            blockKey(target),
             blockObservation(target, {
               blockId: "minecraft:lava",
               replaceable: true,
@@ -5298,13 +5306,13 @@ describe("beat-game behavior programs", () => {
           });
         } else if (selectedItemId === "minecraft:water_bucket") {
           blocks.set(
-            key(target),
+            blockKey(target),
             blockObservation(target, {
               blockId: "minecraft:obsidian",
             }),
           );
           blocks.set(
-            key(water),
+            blockKey(water),
             blockObservation(water, {
               blockId: "minecraft:water",
               properties: { level: "0" },
@@ -5319,7 +5327,7 @@ describe("beat-game behavior programs", () => {
         return;
       }
       if (action.type === "use-item" && selectedItemId === "minecraft:bucket") {
-        blocks.delete(key(water));
+        blocks.delete(blockKey(water));
         updateInventory((counts) => {
           counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
           counts["minecraft:water_bucket"] = 1;
@@ -5377,7 +5385,7 @@ describe("beat-game behavior programs", () => {
       throw new Error("Expected a lava placement look action");
     }
     expect(lavaLook.pitch).toBeGreaterThan(0);
-    expect(blocks.get(key(target))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.get(blockKey(target))?.blockId).toBe("minecraft:obsidian");
     expect(driver.raycasts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ includeFluids: true }),
@@ -5407,13 +5415,11 @@ describe("beat-game behavior programs", () => {
     if (target === undefined || obstruction === undefined) {
       throw new Error("Expected distinct portal frame blocks");
     }
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map(
       frame.blocks
-        .filter((position) => key(position) !== key(target))
+        .filter((position) => blockKey(position) !== blockKey(target))
         .map((position) => [
-          key(position),
+          blockKey(position),
           blockObservation(position, { blockId: "minecraft:obsidian" }),
         ]),
     );
@@ -5430,7 +5436,7 @@ describe("beat-game behavior programs", () => {
       { ...castingStand, y: castingStand.y - 1 },
     ]) {
       blocks.set(
-        key(support),
+        blockKey(support),
         blockObservation(support, {
           blockId: "minecraft:deepslate",
         }),
@@ -5467,7 +5473,7 @@ describe("beat-game behavior programs", () => {
       }
       const position = queriedBlockPosition(center);
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -5475,7 +5481,7 @@ describe("beat-game behavior programs", () => {
       ];
     };
     driver.raycastResolver = () => ({
-      block: blocks.get(key(obstruction))!,
+      block: blocks.get(blockKey(obstruction))!,
       distance: 1,
     });
     driver.actionObserver = (action) => {
@@ -5502,7 +5508,7 @@ describe("beat-game behavior programs", () => {
       type: "dig-block",
       position: obstruction,
     });
-    expect(blocks.get(key(obstruction))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.get(blockKey(obstruction))?.blockId).toBe("minecraft:obsidian");
     expect(driver.activeControlScopes).toBe(0);
   });
 
@@ -5548,18 +5554,16 @@ describe("beat-game behavior programs", () => {
     const safeStandSupport = { ...safeStand, y: safeStand.y - 1 };
     const targetSupport = { ...target, y: target.y - 1 };
     const waterSupport = { ...water, y: water.y - 1 };
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map(
       frame.blocks.map((position) => [
-        key(position),
+        blockKey(position),
         blockObservation(position, { blockId: "minecraft:obsidian" }),
       ]),
     );
-    blocks.delete(key(target));
+    blocks.delete(blockKey(target));
     for (const position of [castingStandSupport, scaffoldBase, safeStand, safeStandHead]) {
       blocks.set(
-        key(position),
+        blockKey(position),
         blockObservation(position, {
           blockId: "minecraft:air",
           diggable: false,
@@ -5570,7 +5574,7 @@ describe("beat-game behavior programs", () => {
     }
     for (const position of [scaffoldAnchor, safeStandSupport, targetSupport, waterSupport]) {
       blocks.set(
-        key(position),
+        blockKey(position),
         blockObservation(position, {
           blockId: "minecraft:cobblestone",
         }),
@@ -5607,7 +5611,7 @@ describe("beat-game behavior programs", () => {
         dimension: center.dimension,
       };
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -5633,14 +5637,14 @@ describe("beat-game behavior programs", () => {
           { ...position, z: position.z - 1 },
           { ...position, z: position.z + 1 },
         ].some((neighbor) => {
-          const observed = blocks.get(key(neighbor));
+          const observed = blocks.get(blockKey(neighbor));
           return observed !== undefined && !observed.replaceable;
         });
         if (!supported) {
           return;
         }
         blocks.set(
-          key(position),
+          blockKey(position),
           blockObservation(position, {
             blockId: block.blockId,
           }),
@@ -5669,7 +5673,7 @@ describe("beat-game behavior programs", () => {
       }
       if (selectedItemId === "minecraft:lava_bucket") {
         blocks.set(
-          key(target),
+          blockKey(target),
           blockObservation(target, {
             blockId: "minecraft:lava",
             replaceable: true,
@@ -5679,13 +5683,13 @@ describe("beat-game behavior programs", () => {
       }
       if (selectedItemId === "minecraft:water_bucket") {
         blocks.set(
-          key(target),
+          blockKey(target),
           blockObservation(target, {
             blockId: "minecraft:obsidian",
           }),
         );
         blocks.set(
-          key(water),
+          blockKey(water),
           blockObservation(water, {
             blockId: "minecraft:water",
             properties: { level: "0" },
@@ -5695,7 +5699,7 @@ describe("beat-game behavior programs", () => {
         return;
       }
       if (selectedItemId === "minecraft:bucket") {
-        blocks.delete(key(water));
+        blocks.delete(blockKey(water));
       }
     };
 
@@ -5732,7 +5736,7 @@ describe("beat-game behavior programs", () => {
         maxFallDistance: 1,
       }),
     });
-    expect(blocks.get(key(target))?.blockId).toBe("minecraft:obsidian");
+    expect(blocks.get(blockKey(target))?.blockId).toBe("minecraft:obsidian");
   });
 
   it("builds portal casting supports one layer at a time", async () => {
@@ -5751,8 +5755,6 @@ describe("beat-game behavior programs", () => {
     if (firstTarget === undefined || nextLayerTarget === undefined) {
       throw new Error("Expected portal targets on multiple layers");
     }
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map<string, ReturnType<typeof blockObservation>>();
     const lavaSources = Array.from({ length: frame.blocks.length - 1 }, (_, index) => {
       const position = {
@@ -5784,7 +5786,7 @@ describe("beat-game behavior programs", () => {
       }
       const position = queriedBlockPosition(center);
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -5803,7 +5805,7 @@ describe("beat-game behavior programs", () => {
           dimension: task.origin.dimension,
         };
         blocks.set(
-          key(position),
+          blockKey(position),
           blockObservation(position, {
             blockId: block.blockId,
           }),
@@ -6641,10 +6643,8 @@ describe("beat-game behavior programs", () => {
     };
     let teleported = false;
     let selectedItem = "minecraft:cobblestone";
-    const key = (position: BeatGameBlockPosition) =>
-      `${position.dimension}:${position.x}:${position.y}:${position.z}`;
     const blocks = new Map<string, ReturnType<typeof blockObservation>>([
-      [key({ ...moved, y: moved.y - 1 }), blockObservation({ ...moved, y: moved.y - 1 })],
+      [blockKey({ ...moved, y: moved.y - 1 }), blockObservation({ ...moved, y: moved.y - 1 })],
     ]);
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:dragon_egg") === true) {
@@ -6667,7 +6667,7 @@ describe("beat-game behavior programs", () => {
         dimension: center.dimension,
       };
       return [
-        blocks.get(key(position)) ??
+        blocks.get(blockKey(position)) ??
           blockObservation(position, {
             blockId: "minecraft:air",
             replaceable: true,
@@ -6696,7 +6696,7 @@ describe("beat-game behavior programs", () => {
           dimension: action.against.dimension,
         };
         blocks.set(
-          key(target),
+          blockKey(target),
           blockObservation(target, {
             blockId: selectedItem,
             solid: selectedItem !== "minecraft:torch",
@@ -6707,7 +6707,7 @@ describe("beat-game behavior programs", () => {
       if (action.type !== "dig-block") {
         return;
       }
-      blocks.delete(key(action.position));
+      blocks.delete(blockKey(action.position));
       if (action.position.y === initial.y) {
         teleported = true;
       }

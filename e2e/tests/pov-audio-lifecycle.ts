@@ -85,7 +85,7 @@ export default {
                 },
                 { signal: session.abort.signal },
               )
-              .then(() => {})
+              .then(() => undefined)
               .catch((failure: unknown) => {
                 if (!session.abort.signal.aborted) session.failure = failure;
               })

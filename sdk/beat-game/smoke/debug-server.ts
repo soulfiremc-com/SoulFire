@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { Cause, Effect, Exit, Option, type Scope } from "effect";
+import { Cause, Data, Effect, Exit, Option, type Scope } from "effect";
 
 const DEFAULT_MAXIMUM_BODY_BYTES = 1024 * 1024;
 
@@ -74,6 +74,10 @@ export class SmokeDebugTimeline {
     return filtered.slice(-Math.min(requestedLimit, this.#maximumEntries));
   }
 }
+
+class SmokeDebugListenError extends Data.TaggedError("SmokeDebugListenError")<{
+  readonly message: string;
+}> {}
 
 export class SmokeDebugRequestError extends Error {
   public readonly status: number;
@@ -158,7 +162,11 @@ function listen(server: Server, port: number): Effect.Effect<AddressInfo, Error>
       server.off("error", onError);
       const address = server.address();
       if (address === null || typeof address === "string") {
-        resume(Effect.fail(new Error("Debug server did not expose a TCP address")));
+        resume(
+          Effect.fail(
+            new SmokeDebugListenError({ message: "Debug server did not expose a TCP address" }),
+          ),
+        );
         return;
       }
       resume(Effect.succeed(address));

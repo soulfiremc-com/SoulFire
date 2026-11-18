@@ -11,8 +11,13 @@ const TAG = "sf_e2e_breed_handoff";
 
 export default {
   name: "breeding-task-handoff",
-  run: ({ bot }) =>
-    Effect.scoped(
+  run: ({ bot }) => {
+    const hooks = () =>
+      bot.world.queryEntities({
+        radius: 24,
+        selector: { entityTypes: ["minecraft:fishing_bobber"] },
+      });
+    return Effect.scoped(
       Effect.gen(function* () {
         const forced: number[] = [];
         yield* Effect.addFinalizer(() =>
@@ -33,11 +38,6 @@ export default {
         }
         yield* rcon("fill 4260 63 4 4278 63 12 stone");
         yield* rcon(`gamemode creative ${BOT_NAME}`);
-        const hooks = () =>
-          bot.world.queryEntities({
-            radius: 24,
-            selector: { entityTypes: ["minecraft:fishing_bobber"] },
-          });
         const observeHook = eventually(
           hooks().pipe(
             Effect.tap((result) => check(result.entities.length === 1, "No fishing line observed")),
@@ -195,5 +195,6 @@ export default {
           );
         }
       }),
-    ),
+    );
+  },
 } satisfies E2ETest;

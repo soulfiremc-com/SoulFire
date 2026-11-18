@@ -13,6 +13,7 @@ export default {
       yield* placeBot(bot, { x: 1222.5, y: 220, z: 0.5 });
       yield* rcon(`stopsound ${BOT_NAME}`);
       const service = client.service(PovService);
+      // oxlint-disable-next-line effecttsgo/abort-controller-in-effect -- the async watch loop and heartbeat run outside Effect, and cleanup must abort before awaiting them
       const abort = new AbortController();
       const sessionId = randomUUID();
       let sequence = 0n;

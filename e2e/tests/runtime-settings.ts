@@ -10,6 +10,11 @@ import {
   rcon,
 } from "../harness.ts";
 
+const hasHelmet = (item: string) =>
+  rcon(`execute if items entity ${BOT_NAME} armor.head minecraft:${item}`, {
+    check: false,
+  }).pipe(Effect.flatMap((reply) => check(reply.startsWith("Test passed"), reply)));
+
 export default {
   name: "runtime-settings",
   run: ({ bot, client }) => {
@@ -50,10 +55,6 @@ export default {
         "5 seconds",
       );
     });
-    const hasHelmet = (item: string) =>
-      rcon(`execute if items entity ${BOT_NAME} armor.head minecraft:${item}`, {
-        check: false,
-      }).pipe(Effect.flatMap((reply) => check(reply.startsWith("Test passed"), reply)));
     return Effect.gen(function* () {
       yield* rcon("forceload add 864 0");
       yield* rcon("fill 864 63 0 868 63 4 stone");

@@ -139,7 +139,9 @@ export default {
       const sword = yield* eventually(
         bot.inventoryState().pipe(
           Effect.flatMap((state) => {
-            const slot = state.slots.find((slot) => slot.itemId === "minecraft:iron_sword");
+            const slot = state.slots.find(
+              (candidate) => candidate.itemId === "minecraft:iron_sword",
+            );
             return slot
               ? Effect.succeed(slot.slot)
               : Effect.fail(new CheckFailed({ message: "Sword did not arrive" }));
@@ -240,6 +242,7 @@ export default {
         ),
         "A stale search changed the reopened creative inventory",
       );
+      return undefined;
     }).pipe(
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),

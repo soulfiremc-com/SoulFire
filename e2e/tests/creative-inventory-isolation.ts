@@ -5,10 +5,24 @@ import { nativeInput } from "../native-input.ts";
 
 const OTHER = "E2ECreative2";
 
+const firstItem = (target: SoulFireBot, itemId: string) =>
+  eventually(
+    target.inventoryState().pipe(
+      Effect.flatMap((state) =>
+        check(
+          state.slots.some((slot) => slot.slot === 0 && slot.itemId === itemId),
+          "The creative search results changed or did not load",
+        ),
+      ),
+    ),
+    "5 seconds",
+    "100 millis",
+  );
+
 export default {
   name: "creative-inventory-isolation",
-  run: ({ bot, client }) =>
-    Effect.gen(function* () {
+  run: ({ bot, client }) => {
+    return Effect.gen(function* () {
       const run = Effect.runPromiseWith(yield* Effect.context());
       const instance = client.instance(bot.instanceId);
       let otherId: string | undefined;
@@ -27,19 +41,6 @@ export default {
       yield* rcon(`tp ${OTHER} 1746.5 64 0.5`);
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon(`gamemode creative ${OTHER}`);
-      const firstItem = (target: SoulFireBot, itemId: string) =>
-        eventually(
-          target.inventoryState().pipe(
-            Effect.flatMap((state) =>
-              check(
-                state.slots.some((slot) => slot.slot === 0 && slot.itemId === itemId),
-                "The creative search results changed or did not load",
-              ),
-            ),
-          ),
-          "5 seconds",
-          "100 millis",
-        );
       yield* bot.openInventory();
       yield* nativeInput(client, bot, async (input) => {
         await input.click(298, 36);
@@ -93,5 +94,6 @@ export default {
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),
       Effect.scoped,
-    ),
+    );
+  },
 } satisfies E2ETest;

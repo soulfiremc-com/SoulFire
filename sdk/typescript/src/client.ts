@@ -41,7 +41,6 @@ import {
   type BotControlLease,
   type BotEvent,
   type DigBlockRequestSchema,
-  type DismountRequestSchema,
   type FindBlocksRequestSchema,
   type FindBlocksResponse,
   type GetBlockRequestSchema,
@@ -55,8 +54,6 @@ import {
   type MountEntityResponse,
   type PathfindProgress,
   type PlaceBlockRequestSchema,
-  type ReleaseItemRequestSchema,
-  type RespawnRequestSchema,
   type RespondResourcePackRequestSchema,
   type SetCreativeSlotRequestSchema,
   type SetFlyingRequestSchema,
@@ -255,6 +252,9 @@ type ScopedRequest<T extends DescMessage> = Omit<
   "$typeName" | "botId" | "instanceId"
 >;
 
+/** Request for an RPC whose only fields are the bot and instance IDs the SDK fills in. */
+type EmptyScopedRequest = Readonly<Record<string, never>>;
+
 type InstanceScopedRequest<T extends DescMessage> = Omit<
   MessageInitShape<T>,
   "$typeName" | "id" | "instanceId"
@@ -376,7 +376,7 @@ export class SoulFireClient {
     options: SoulFireOptions,
   ): Effect.Effect<SoulFireClient, SoulFireConnectionError, Scope.Scope> {
     return SoulFireClient.unauthenticated(options).pipe(
-      Effect.flatMap((client) => client.#handshake(options).pipe(Effect.as(client))),
+      Effect.tap((client) => client.#handshake(options)),
       Effect.mapError((cause) => new SoulFireConnectionError({ cause })),
     );
   }
@@ -892,14 +892,13 @@ export class SoulFireInstance {
     request: InstanceScopedRequest<typeof InstanceUpdateMetaRequestSchema>,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.updateMetadata", (signal) =>
         this.#instanceClient.updateInstanceMeta(
           { ...request, id: this.id },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -907,14 +906,13 @@ export class SoulFireInstance {
     request: InstanceScopedRequest<typeof InstanceUpdateConfigEntryRequestSchema>,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.setConfigEntry", (signal) =>
         this.#instanceClient.updateInstanceConfigEntry(
           { ...request, id: this.id },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -922,14 +920,13 @@ export class SoulFireInstance {
     accounts: readonly MinecraftAccountProto[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.addAccounts", (signal) =>
         this.#instanceClient.addInstanceAccountsBatch(
           { id: this.id, accounts: [...accounts] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -938,14 +935,13 @@ export class SoulFireInstance {
     accounts: readonly MinecraftAccountProto[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.replaceAccounts", (signal) =>
         this.#instanceClient.replaceInstanceAccounts(
           { id: this.id, accounts: [...accounts] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -953,14 +949,13 @@ export class SoulFireInstance {
     profileIds: readonly string[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.removeAccounts", (signal) =>
         this.#instanceClient.removeInstanceAccountsBatch(
           { id: this.id, profileIds: [...new Set(profileIds)] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -968,14 +963,13 @@ export class SoulFireInstance {
     proxies: readonly ProxyProto[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.addProxies", (signal) =>
         this.#instanceClient.addInstanceProxiesBatch(
           { id: this.id, proxies: [...proxies] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -983,14 +977,13 @@ export class SoulFireInstance {
     addresses: readonly string[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.removeProxies", (signal) =>
         this.#instanceClient.removeInstanceProxiesBatch(
           { id: this.id, addresses: [...new Set(addresses)] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -999,14 +992,13 @@ export class SoulFireInstance {
     proxies: readonly ProxyProto[],
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireInstance.removeProxyEntries", (signal) =>
         this.#instanceClient.removeInstanceProxyEntries(
           { id: this.id, proxies: [...proxies] },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -1312,7 +1304,7 @@ export class SoulFireBot {
     options: Pick<GetOrCreateBotOptions, "readyTimeoutMs" | "call"> = {},
   ): Effect.Effect<void, SoulFireOperationError, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
-      if (this.#session !== undefined) return;
+      if (this.#session !== undefined) return undefined;
       const timeoutMs = options.readyTimeoutMs ?? 30_000;
       if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
         return yield* Effect.fail(
@@ -1370,6 +1362,7 @@ export class SoulFireBot {
             ),
         }),
       );
+      return undefined;
     });
   }
 
@@ -1618,8 +1611,9 @@ export class SoulFireBot {
     return Effect.gen({ self: this }, function* () {
       const current = yield* this.info(options?.call);
       if (current.status === undefined)
-        return yield* Effect.fail(
-          rpcError("bot.waitForOnline", new Error("SoulFire did not return bot status")),
+        return yield* rpcError(
+          "bot.waitForOnline",
+          new Error("SoulFire did not return bot status"),
         );
       if (current.liveState !== undefined) return current.status;
       let latestStatus = current.status;
@@ -1633,8 +1627,9 @@ export class SoulFireBot {
         Stream.runHead,
       );
       if (Option.isNone(snapshot))
-        return yield* Effect.fail(
-          rpcError("bot.waitForOnline", new Error("Bot event stream ended before it came online")),
+        return yield* rpcError(
+          "bot.waitForOnline",
+          new Error("Bot event stream ended before it came online"),
         );
       return latestStatus;
     });
@@ -1684,11 +1679,11 @@ export class SoulFireBot {
   ): Effect.Effect<BotSession, SoulFireOperationError, Scope.Scope> {
     if (this.#session !== undefined && options === undefined) return Effect.succeed(this.#session);
     return BotSession.open(
-      (request, options) =>
+      (request, callOptions) =>
         rpcStream("bot.observe", (signal) =>
           this.liveClient.watchBotEvents(
             { ...request, instanceId: this.instanceId, botId: this.id },
-            withWatchSignal(options, signal),
+            withWatchSignal(callOptions, signal),
           ),
         ),
       options,
@@ -1892,7 +1887,7 @@ export class SoulFireBot {
    * Lets go of an item in use: fires a drawn bow, stops eating.
    */
   public releaseItem(
-    request: ScopedRequest<typeof ReleaseItemRequestSchema> = {},
+    request: EmptyScopedRequest = {},
     options?: CallOptions,
   ): Effect.Effect<BotActionResult, SoulFireOperationError> {
     return Effect.flatMap(
@@ -1996,7 +1991,7 @@ export class SoulFireBot {
    * Respawns a dead bot, or leaves the End credits.
    */
   public respawn(
-    request: ScopedRequest<typeof RespawnRequestSchema> = {},
+    request: EmptyScopedRequest = {},
     options?: CallOptions,
   ): Effect.Effect<BotActionResult, SoulFireOperationError> {
     return Effect.flatMap(
@@ -2091,7 +2086,7 @@ export class SoulFireBot {
   }
 
   public dismount(
-    request: ScopedRequest<typeof DismountRequestSchema> = {},
+    request: EmptyScopedRequest = {},
     options?: CallOptions,
   ): Effect.Effect<BotActionResult, SoulFireOperationError> {
     return Effect.flatMap(
@@ -2340,7 +2335,7 @@ export class SoulFireBot {
    * Cancels the `goTo` in progress.
    */
   public stopPathfinding(options?: CallOptions): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireBot.stopPathfinding", (signal) =>
         this.liveClient.stopPathfinding(
           {
@@ -2350,7 +2345,6 @@ export class SoulFireBot {
           withSignal(this.#actionOptions(options), signal),
         ),
       ),
-      () => undefined,
     );
   }
 

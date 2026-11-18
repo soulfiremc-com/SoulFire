@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { Schema } from "effect";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 const packageDirectory = path.resolve(import.meta.dirname, "..");
@@ -25,23 +26,25 @@ const artifactRoot = path.resolve(
   ),
 );
 
-interface QualificationMetrics {
-  readonly runId: string;
-  readonly mode: "controlled" | "survival";
-  readonly seed: string;
-  readonly completed: boolean;
-  readonly durationMs: number;
-  readonly deaths: number;
-  readonly pathAttempts: number;
-  readonly pathCompletions: number;
-  readonly pathFailures: number;
-  readonly pathInterruptions: number;
-  readonly actionRetries: number;
-  readonly safetyInterruptions: number;
-  readonly skillRetries: number;
-  readonly portalWorkspaces: number;
-  readonly observedPhases: readonly string[];
-}
+const QualificationMetrics = Schema.Struct({
+  runId: Schema.String,
+  mode: Schema.Literals(["controlled", "survival"]),
+  seed: Schema.String,
+  completed: Schema.Boolean,
+  durationMs: Schema.Finite,
+  deaths: Schema.Finite,
+  pathAttempts: Schema.Finite,
+  pathCompletions: Schema.Finite,
+  pathFailures: Schema.Finite,
+  pathInterruptions: Schema.Finite,
+  actionRetries: Schema.Finite,
+  safetyInterruptions: Schema.Finite,
+  skillRetries: Schema.Finite,
+  portalWorkspaces: Schema.Finite,
+  observedPhases: Schema.Array(Schema.String),
+});
+type QualificationMetrics = typeof QualificationMetrics.Type;
+const decodeQualificationMetrics = Schema.decodeSync(Schema.fromJsonString(QualificationMetrics));
 
 interface QualificationRunResult {
   readonly index: number;
@@ -115,7 +118,7 @@ async function readRunResult(
       runId,
       artifactDirectory,
       exitCode,
-      metrics: JSON.parse(source) as QualificationMetrics,
+      metrics: decodeQualificationMetrics(source),
     };
   } catch (cause) {
     return {
@@ -128,26 +131,26 @@ async function readRunResult(
   }
 }
 
-async function writeReport(results: readonly QualificationRunResult[]) {
-  const completed = results.flatMap(({ metrics }) =>
+async function writeReport(runResults: readonly QualificationRunResult[]) {
+  const completed = runResults.flatMap(({ metrics }) =>
     metrics?.completed === true ? [metrics] : [],
   );
   const durations = completed
     .map(({ durationMs }) => durationMs)
     .toSorted((left, right) => left - right);
-  const report = {
+  const qualificationReport = {
     qualificationId,
     generatedAt: new Date().toISOString(),
     mode: controlled ? "controlled" : "survival",
     seed,
     requiredConsecutiveRuns: runCount,
-    attemptedRuns: results.length,
+    attemptedRuns: runResults.length,
     successfulRuns: completed.length,
     qualified:
-      results.length === runCount &&
+      runResults.length === runCount &&
       completed.length === runCount &&
-      results.every(({ exitCode }) => exitCode === 0),
-    completionRate: results.length === 0 ? 0 : completed.length / results.length,
+      runResults.every(({ exitCode }) => exitCode === 0),
+    completionRate: runResults.length === 0 ? 0 : completed.length / runResults.length,
     medianCompletionTimeMs: percentile(durations, 0.5),
     p95CompletionTimeMs: percentile(durations, 0.95),
     totals: {
@@ -160,20 +163,20 @@ async function writeReport(results: readonly QualificationRunResult[]) {
       skillRetries: sum(completed, "skillRetries"),
       portalWorkspaces: sum(completed, "portalWorkspaces"),
     },
-    results,
+    results: runResults,
   } as const;
   await writeFile(
     path.join(artifactRoot, "qualification-report.json"),
-    `${JSON.stringify(report, null, 2)}\n`,
+    `${JSON.stringify(qualificationReport, null, 2)}\n`,
   );
-  return report;
+  return qualificationReport;
 }
 
-function percentile(values: readonly number[], percentile: number): number | null {
+function percentile(values: readonly number[], fraction: number): number | null {
   if (values.length === 0) {
     return null;
   }
-  const rank = Math.max(0, Math.ceil(values.length * percentile) - 1);
+  const rank = Math.max(0, Math.ceil(values.length * fraction) - 1);
   return values[rank] ?? null;
 }
 

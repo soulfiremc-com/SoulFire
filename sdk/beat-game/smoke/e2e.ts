@@ -47,7 +47,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { Cause, Duration, Effect, Exit, Fiber, Ref, Schedule, Scope, Stream } from "effect";
+import { Cause, Data, Duration, Effect, Exit, Fiber, Ref, Schedule, Scope, Stream } from "effect";
 import { pruneArtifactRuns } from "./artifact-retention.ts";
 import { BoundedLog } from "./bounded-log.ts";
 import {
@@ -66,6 +66,11 @@ import {
   summarizeSmokeSpatialDiagnostics,
   type SmokeActivePathTrace,
 } from "./debug-diagnostics.ts";
+
+class SmokeFailure extends Data.TaggedError("SmokeFailure")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 const execFile = promisify(execFileCallback);
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
@@ -279,9 +284,9 @@ const program = Effect.scoped(
           });
           const localServer = soulfire.localServer;
           if (localServer === undefined) {
-            return yield* Effect.fail(
-              new Error("Auto-provisioned SoulFire did not expose its local process"),
-            );
+            return yield* new SmokeFailure({
+              message: "Auto-provisioned SoulFire did not expose its local process",
+            });
           }
           yield* fromPromise("record SoulFire process", () =>
             writeFile(
@@ -425,10 +430,9 @@ const program = Effect.scoped(
     if (fixture.mode === "controlled") {
       yield* poll(
         rcon(fixture, "list").pipe(
-          Effect.flatMap((result) =>
-            result.stdout.includes(botName)
-              ? Effect.succeed(result)
-              : Effect.fail(new Error(`${botName} is not listed by Minecraft`)),
+          Effect.filterOrFail(
+            (result) => result.stdout.includes(botName),
+            () => new SmokeFailure({ message: `${botName} is not listed by Minecraft` }),
           ),
         ),
         "Minecraft player join",
@@ -438,11 +442,10 @@ const program = Effect.scoped(
     }
     yield* poll(
       bot.world.player().pipe(
-        Effect.mapError((cause) => new Error("read bot readiness", { cause })),
-        Effect.flatMap((player) =>
-          player.dead || player.position !== undefined
-            ? Effect.succeed(player)
-            : Effect.fail(new Error("Bot has not loaded its position")),
+        Effect.mapError((cause) => new SmokeFailure({ message: "read bot readiness", cause })),
+        Effect.filterOrFail(
+          (player) => player.dead || player.position !== undefined,
+          () => new SmokeFailure({ message: "Bot has not loaded its position" }),
         ),
       ),
       "SoulFire world readiness",
@@ -525,8 +528,8 @@ const program = Effect.scoped(
       };
       const blocks = yield* Effect.forEach(
         Array.from({ length: 7 }, (_, xOffset) =>
-          Array.from({ length: 7 }, (_, yOffset) =>
-            Array.from({ length: 7 }, (_, zOffset) => ({
+          Array.from({ length: 7 }, (_y, yOffset) =>
+            Array.from({ length: 7 }, (_z, zOffset) => ({
               x: center.x + xOffset - 3,
               y: center.y + yOffset - 3,
               z: center.z + zOffset - 3,
@@ -556,23 +559,23 @@ const program = Effect.scoped(
       yield* record("world-neighborhood", { center, blocks });
     }
     if (fixture.mode === "survival" && fixture.freshWorld && initialItems.length > 0) {
-      return yield* Effect.fail(
-        new Error(
-          `Authoritative smoke bot joined with a non-empty inventory: ${json(initialItems)}`,
-        ),
-      );
+      return yield* new SmokeFailure({
+        message: `Authoritative smoke bot joined with a non-empty inventory: ${json(initialItems)}`,
+      });
     }
 
     if (fixture.mode === "controlled") {
       yield* provisionBot(fixture, botName);
       yield* poll(
         bot.world.player().pipe(
-          Effect.mapError((cause) => new Error("read prepared bot position", { cause })),
-          Effect.flatMap((preparedPlayer) =>
-            preparedPlayer.onGround &&
-            Math.abs((preparedPlayer.position?.y ?? 0) - fixture.spawn.y) < 1
-              ? Effect.succeed(preparedPlayer)
-              : Effect.fail(new Error("Bot has not reached the prepared arena")),
+          Effect.mapError(
+            (cause) => new SmokeFailure({ message: "read prepared bot position", cause }),
+          ),
+          Effect.filterOrFail(
+            (preparedPlayer) =>
+              preparedPlayer.onGround &&
+              Math.abs((preparedPlayer.position?.y ?? 0) - fixture.spawn.y) < 1,
+            () => new SmokeFailure({ message: "Bot has not reached the prepared arena" }),
           ),
         ),
         "prepared arena arrival",
@@ -605,14 +608,14 @@ const program = Effect.scoped(
       });
     }
     const debugSession = debugApiEnabled ? environmentSession : undefined;
-    const environment = Effect.sync(() => {
+    const observeEnvironment = Effect.sync(() => {
       const state = environmentSession.state.environment;
       return {
         ...(state.gameTime === undefined ? {} : { gameTime: state.gameTime }),
         ...(state.raining === undefined ? {} : { raining: state.raining }),
       };
     });
-    const baseDriver = makeSoulFireBeatGameDriver(bot, { environment });
+    const baseDriver = makeSoulFireBeatGameDriver(bot, { environment: observeEnvironment });
     if (joinedPlayer.dead) {
       yield* record("bot-chunks-deferred", {
         radiusChunks: 4,
@@ -652,9 +655,9 @@ const program = Effect.scoped(
       yield* record("controlled-corridor-sampled", { blocks: corridorSample });
       const missingFloor = corridorSample.find(({ blockId }) => blockId !== "minecraft:stone");
       if (missingFloor !== undefined) {
-        return yield* Effect.fail(
-          new Error(`Controlled corridor floor is not observable at ${json(missingFloor)}`),
-        );
+        return yield* new SmokeFailure({
+          message: `Controlled corridor floor is not observable at ${json(missingFloor)}`,
+        });
       }
       const corridorAirSample = yield* Effect.forEach(
         [-1, 0, 1, 8, 15, 16, 31, 32, 41, 47, 48, 63, 64].flatMap((offset) =>
@@ -685,9 +688,9 @@ const program = Effect.scoped(
       });
       const obstructedAir = corridorAirSample.find(({ blockId }) => blockId !== "minecraft:air");
       if (obstructedAir !== undefined) {
-        return yield* Effect.fail(
-          new Error(`Controlled corridor is not dry at ${json(obstructedAir)}`),
-        );
+        return yield* new SmokeFailure({
+          message: `Controlled corridor is not dry at ${json(obstructedAir)}`,
+        });
       }
     }
     let lastObservedInventoryRevision: bigint | undefined;
@@ -810,7 +813,7 @@ const program = Effect.scoped(
       });
     const driver = {
       ...baseDriver,
-      environment,
+      environment: observeEnvironment,
       observe: baseDriver.observe.pipe(
         Effect.tap((observation) => {
           const effects = [];
@@ -1073,9 +1076,9 @@ const program = Effect.scoped(
         reached.player.position.z - travelTarget.z,
       );
       if (targetDistance > 1.5) {
-        return yield* Effect.fail(
-          new Error(`Long-travel path ended ${targetDistance.toFixed(2)} blocks from its target`),
-        );
+        return yield* new SmokeFailure({
+          message: `Long-travel path ended ${targetDistance.toFixed(2)} blocks from its target`,
+        });
       }
       yield* driver
         .pathfind(returnTarget, 1.25, travelPolicy)
@@ -1572,25 +1575,23 @@ const program = Effect.scoped(
       result.finalCheckpoint.planner.phase !== BeatGamePhase.COMPLETE ||
       result.finalCheckpoint.planner.status !== BeatGameRunStatus.COMPLETED
     ) {
-      return yield* Effect.fail(
-        new Error(
-          `Beat-game run ended in ${result.finalCheckpoint.planner.phase}/${
-            result.finalCheckpoint.planner.status
-          }`,
-        ),
-      );
+      return yield* new SmokeFailure({
+        message: `Beat-game run ended in ${result.finalCheckpoint.planner.phase}/${
+          result.finalCheckpoint.planner.status
+        }`,
+      });
     }
     if (isEnd(finalPlayer.position?.dimension ?? "")) {
-      return yield* Effect.fail(
-        new Error("Beat-game run completed while the bot was still in the End"),
-      );
+      return yield* new SmokeFailure({
+        message: "Beat-game run completed while the bot was still in the End",
+      });
     }
     const requiredPhases = Object.values(BeatGamePhase);
     const missingPhases = requiredPhases.filter((phase) => !observedPhases.has(phase));
     if (fixture.mode === "controlled" && missingPhases.length > 0) {
-      return yield* Effect.fail(
-        new Error(`Controlled completion skipped phase gates: ${missingPhases.join(", ")}`),
-      );
+      return yield* new SmokeFailure({
+        message: `Controlled completion skipped phase gates: ${missingPhases.join(", ")}`,
+      });
     }
     const skillRetries = result.finalCheckpoint.memory.skillHistory.reduce(
       (total, skill) =>
@@ -1624,6 +1625,7 @@ const program = Effect.scoped(
       finalPlayer,
       exitedEnd: !isEnd(finalPlayer.position?.dimension ?? ""),
     });
+    return undefined;
   }).pipe(
     Effect.timeout(Duration.millis(timeoutMs + 5 * 60_000)),
     Effect.tapCause((cause) =>
@@ -1638,9 +1640,9 @@ const startMinecraftFixture = Effect.suspend(() => {
   const start = Effect.gen(function* () {
     if (fixtureConfiguration.attachedMinecraftContainer !== undefined) {
       if (fixtureConfiguration.mode !== "survival") {
-        return yield* Effect.fail(
-          new Error("Controlled smoke mode cannot attach to an existing Minecraft world"),
-        );
+        return yield* new SmokeFailure({
+          message: "Controlled smoke mode cannot attach to an existing Minecraft world",
+        });
       }
       const containerName = fixtureConfiguration.attachedMinecraftContainer;
       const inspection = yield* docker([
@@ -1650,7 +1652,9 @@ const startMinecraftFixture = Effect.suspend(() => {
         containerName,
       ]);
       if (inspection.stdout.trim() !== "true") {
-        return yield* Effect.fail(new Error(`Minecraft container ${containerName} is not running`));
+        return yield* new SmokeFailure({
+          message: `Minecraft container ${containerName} is not running`,
+        });
       }
       const port = yield* publishedMinecraftPort(containerName);
       const fixture = {
@@ -1737,7 +1741,7 @@ const startMinecraftFixture = Effect.suspend(() => {
 
     const seed = fixtureConfiguration.seed;
     if (seed === undefined) {
-      return yield* Effect.fail(new Error("The controlled smoke fixture requires a seed"));
+      return yield* new SmokeFailure({ message: "The controlled smoke fixture requires a seed" });
     }
     yield* docker([
       ...commonArguments,
@@ -1979,21 +1983,24 @@ async function stopReusableSoulFireProcesses(
   }
 
   const procEntries = await readdir("/proc", { withFileTypes: true });
-  await Promise.all(
+  const matchingProcessIds = await Promise.all(
     procEntries.flatMap((entry) => {
       const pid = Number(entry.name);
       if (!entry.isDirectory() || !Number.isSafeInteger(pid) || pid < 1) {
         return [];
       }
       return [
-        matchesSoulFireProcess(pid, expectedRunDirectory, expectedJar).then((matches) => {
-          if (matches) {
-            processIds.add(pid);
-          }
-        }),
+        matchesSoulFireProcess(pid, expectedRunDirectory, expectedJar).then((matches) =>
+          matches ? pid : undefined,
+        ),
       ];
     }),
   );
+  for (const pid of matchingProcessIds) {
+    if (pid !== undefined) {
+      processIds.add(pid);
+    }
+  }
 
   for (const pid of processIds) {
     await stopProcess(pid);
@@ -2044,9 +2051,9 @@ async function matchesSoulFireProcess(
     if (workingDirectory !== expectedRunDirectory) {
       return false;
     }
-    const arguments_ = commandLine.split("\0").filter(Boolean);
-    const jarFlag = arguments_.lastIndexOf("-jar");
-    const jarArgument = arguments_[jarFlag + 1];
+    const processArguments = commandLine.split("\0").filter(Boolean);
+    const jarFlag = processArguments.lastIndexOf("-jar");
+    const jarArgument = processArguments[jarFlag + 1];
     return (
       jarFlag >= 0 && jarArgument !== undefined && (await realpath(jarArgument)) === expectedJar
     );
@@ -2089,8 +2096,8 @@ function signalProcess(pid: number, signal: NodeJS.Signals): boolean {
   }
 }
 
-async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+async function waitForProcessExit(pid: number, exitTimeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + exitTimeoutMs;
   while (Date.now() < deadline) {
     if (!isProcessRunning(pid)) {
       return true;
@@ -2186,7 +2193,9 @@ function provisionBot(
         Effect.flatMap((result) =>
           /No (?:player|entity) was found|Incorrect argument/iu.test(result.stdout)
             ? Effect.fail(
-                new Error(`Minecraft rejected fixture command ${command}: ${result.stdout.trim()}`),
+                new SmokeFailure({
+                  message: `Minecraft rejected fixture command ${command}: ${result.stdout.trim()}`,
+                }),
               )
             : Effect.void,
         ),
@@ -2266,7 +2275,7 @@ function controlEndEncounter(
           }
         });
       }),
-      Effect.catch(() => Effect.void),
+      Effect.ignore,
       Effect.andThen(Effect.sleep(1_000)),
     );
     return yield* Effect.forever(tick);
@@ -2283,14 +2292,12 @@ const findDedicatedJar = fromPromise("find dedicated SoulFire JAR", async () => 
       !name.endsWith("-unshaded.jar"),
   );
   if (candidates.length !== 1) {
-    throw new Error(
-      `Expected one dedicated SoulFire JAR in ${directory}, found ${
+    throw new SmokeFailure({
+      message: `Expected one dedicated SoulFire JAR in ${directory}, found ${
         candidates.join(", ") || "none"
       }`,
-    );
+    });
   }
-  // tsgolint checks smoke files without tsconfig.smoke.json, which enables noUncheckedIndexedAccess.
-  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
   return path.join(directory, candidates[0]!);
 });
 
@@ -2315,10 +2322,9 @@ function rcon(
 function waitForMinecraftServer(containerName: string): Effect.Effect<CommandResult, Error> {
   return poll(
     docker(["logs", containerName]).pipe(
-      Effect.flatMap((result) =>
-        /Done \([^)]+\)! For help/iu.test(`${result.stdout}\n${result.stderr}`)
-          ? Effect.succeed(result)
-          : Effect.fail(new Error("Minecraft has not finished starting")),
+      Effect.filterOrFail(
+        (result) => /Done \([^)]+\)! For help/iu.test(`${result.stdout}\n${result.stderr}`),
+        () => new SmokeFailure({ message: "Minecraft has not finished starting" }),
       ),
     ),
     "Minecraft server readiness",
@@ -2342,11 +2348,11 @@ function assertAdminCommandPolicy(fixture: SurvivalMinecraftFixture): Effect.Eff
         .filter((line) => /\[Rcon:|issued server command:|made .* a server operator/iu.test(line));
       if (adminLines.length > 0) {
         return Effect.fail(
-          new Error(
-            `Authoritative smoke violated its administrative command policy:\n${adminLines.join(
+          new SmokeFailure({
+            message: `Authoritative smoke violated its administrative command policy:\n${adminLines.join(
               "\n",
             )}`,
-          ),
+          }),
         );
       }
       return record("admin-command-audit", {
@@ -2377,7 +2383,7 @@ function guardStartupAir(bot: SoulFireBot): Effect.Effect<never> {
         ? bot.setMovement({ jump: true })
         : bot.resetMovement(),
     ),
-    Effect.catch(() => Effect.void),
+    Effect.ignore,
     Effect.andThen(Effect.sleep(100)),
   );
   return tick.pipe(Effect.forever);
@@ -2392,11 +2398,7 @@ function poll<A>(
   return effect.pipe(
     Effect.catch((cause) =>
       attempts <= 1
-        ? Effect.fail(
-            new Error(`${description} did not become ready`, {
-              cause,
-            }),
-          )
+        ? Effect.fail(new SmokeFailure({ message: `${description} did not become ready`, cause }))
         : Effect.sleep(delayMs).pipe(
             Effect.andThen(poll(effect, description, attempts - 1, delayMs)),
           ),
@@ -3138,6 +3140,7 @@ function evaluateDebugSource(
     Effect.flatMap((source) =>
       Effect.tryPromise({
         try: async () => {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- AsyncFunction has no global binding or type; its prototype constructor builds async evaluators
           const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
             ...parameters: string[]
           ) => (context: Readonly<Record<string, unknown>>) => Promise<unknown>;
@@ -3152,10 +3155,15 @@ function evaluateDebugSource(
             }),
           );
           return Effect.isEffect(result)
-            ? Effect.runPromise(result as Effect.Effect<unknown, unknown>)
+            ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- debug eval returns arbitrary user code; an Effect that needs services fails when it runs
+              Effect.runPromise(result as Effect.Effect<unknown, unknown>)
             : result;
         },
-        catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+        catch: (cause) =>
+          new SmokeFailure({
+            message: cause instanceof Error ? cause.message : String(cause),
+            cause,
+          }),
       }),
     ),
   );
@@ -3234,10 +3242,10 @@ function debugPosition(input: unknown, name: string, integer = false): BeatGameP
 }
 
 function debugRecord(input: unknown, name: string): Readonly<Record<string, unknown>> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (!isDebugRecord(input)) {
     throw new SmokeDebugRequestError(`${name} must be an object`);
   }
-  return input as Readonly<Record<string, unknown>>;
+  return input;
 }
 
 function debugString(input: Readonly<Record<string, unknown>>, key: string): string {
@@ -3343,11 +3351,17 @@ function debugNumberArray(input: unknown, name: string): readonly number[] {
 }
 
 function debugStringRecord(input: unknown, name: string): Readonly<Record<string, string>> {
-  const record = debugRecord(input, name);
-  if (!Object.values(record).every((value) => typeof value === "string")) {
+  const entries = debugRecord(input, name);
+  if (!hasStringValues(entries)) {
     throw new SmokeDebugRequestError(`${name} values must all be strings`);
   }
-  return record as Readonly<Record<string, string>>;
+  return entries;
+}
+
+function hasStringValues(
+  entries: Readonly<Record<string, unknown>>,
+): entries is Readonly<Record<string, string>> {
+  return Object.values(entries).every((value) => typeof value === "string");
 }
 
 function record(
@@ -3476,8 +3490,8 @@ function fromPromise<A>(operation: string, run: () => Promise<A>): Effect.Effect
     try: run,
     catch: (cause) =>
       cause instanceof Error
-        ? new Error(`${operation}: ${cause.message}`, { cause })
-        : new Error(`${operation}: ${String(cause)}`),
+        ? new SmokeFailure({ message: `${operation}: ${cause.message}`, cause })
+        : new SmokeFailure({ message: `${operation}: ${String(cause)}` }),
   });
 }
 

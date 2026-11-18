@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { Effect, Result, Schedule } from "effect";
 import { BotService, ClickType } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import {
@@ -46,7 +47,7 @@ export default {
           schedule: Schedule.spaced("50 millis").pipe(Schedule.upTo({ duration: "2 seconds" })),
           while: (error) =>
             error._tag === "SoulFireRpcError" &&
-            error.code === 7 &&
+            error.code === Code.PermissionDenied &&
             error.message.includes("leased"),
         }),
       );
@@ -119,23 +120,23 @@ export default {
         "The creative search field rejected text",
       );
       yield* stateCheck(
-        (state) =>
-          state.slots.some((slot) => slot.slot === 0 && slot.itemId === "minecraft:nether_star"),
+        (current) =>
+          current.slots.some((slot) => slot.slot === 0 && slot.itemId === "minecraft:nether_star"),
         "Creative search did not refresh the catalog",
       );
       yield* bot.clickInventory(0, ClickType.MIDDLE_CLICK);
       yield* stateCheck(
-        (state) => state.carriedItem?.count === 64,
+        (current) => current.carriedItem?.count === 64,
         "Creative clone did not copy a full stack",
       );
       yield* bot.clickInventory(-999, ClickType.RIGHT_CLICK);
       yield* stateCheck(
-        (state) => state.carriedItem?.count === 63,
+        (current) => current.carriedItem?.count === 63,
         "Dropping one cursor item used the wrong creative action",
       );
       yield* bot.clickInventory(-999, ClickType.LEFT_CLICK);
       yield* stateCheck(
-        (state) => state.carriedItem === undefined,
+        (current) => current.carriedItem === undefined,
         "Dropping the remaining cursor stack failed",
       );
       const droppedStarCount = rcon(
@@ -162,7 +163,7 @@ export default {
       yield* bot.clickInventory(0, ClickType.SWAP_HOTBAR, 2);
       yield* bot.clickInventory(0, ClickType.SHIFT_LEFT_CLICK);
       yield* stateCheck(
-        (state) => state.carriedItem?.count === 64,
+        (current) => current.carriedItem?.count === 64,
         "Creative shift-click did not copy a full stack",
       );
       yield* bot.clickInventory(48);
@@ -190,12 +191,12 @@ export default {
       const first = (yield* bot.inventoryState()).slots.find((slot) => slot.slot === 0)?.itemId;
       yield* bot.clickContainerButton(-2);
       yield* stateCheck(
-        (state) => state.slots.find((slot) => slot.slot === 0)?.itemId !== first,
+        (current) => current.slots.find((slot) => slot.slot === 0)?.itemId !== first,
         "The next creative page did not scroll",
       );
       yield* bot.clickContainerButton(-1);
       yield* stateCheck(
-        (state) => state.slots.find((slot) => slot.slot === 0)?.itemId === first,
+        (current) => current.slots.find((slot) => slot.slot === 0)?.itemId === first,
         "The previous creative page did not restore its first row",
       );
       yield* check(
@@ -204,13 +205,13 @@ export default {
       );
       yield* bot.clickContainerButton(inventoryTab.buttonId);
       yield* stateCheck(
-        (state) =>
-          state.layout?.totalSlots === 47 &&
-          state.slots.some(
+        (current) =>
+          current.layout?.totalSlots === 47 &&
+          current.slots.some(
             (slot) => slot.slot === 36 && slot.itemId === "minecraft:diamond_sword",
           ) &&
-          state.slots.some((slot) => slot.slot === 37 && slot.count === 64) &&
-          state.layout.regions.every((region) => region.startIndex >= 5),
+          current.slots.some((slot) => slot.slot === 37 && slot.count === 64) &&
+          current.layout.regions.every((region) => region.startIndex >= 5),
         "The creative inventory tab lost its native slot indices or exposes hidden crafting slots",
       );
       yield* check(
@@ -236,7 +237,7 @@ export default {
       yield* bot.clickInventory(9);
       yield* bot.clickInventory(-999, ClickType.RIGHT_CLICK);
       yield* stateCheck(
-        (state) => state.carriedItem?.count === 15,
+        (current) => current.carriedItem?.count === 15,
         "Drop One discarded the whole cursor stack on the creative inventory tab",
       );
       yield* eventually(
@@ -252,7 +253,7 @@ export default {
       );
       yield* bot.clickInventory(46);
       yield* stateCheck(
-        (state) => !state.carriedItem && !state.slots.some((slot) => slot.slot === 9),
+        (current) => !current.carriedItem && !current.slots.some((slot) => slot.slot === 9),
         "The creative trash slot did not destroy the carried stack",
       );
       yield* bot.clickInventory(46, ClickType.SHIFT_LEFT_CLICK);
@@ -268,6 +269,7 @@ export default {
         "5 seconds",
       );
       yield* bot.closeContainer();
+      return undefined;
     }).pipe(
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),

@@ -401,18 +401,107 @@ describe("smoke environment diagnostics", () => {
   });
 });
 
+const repeatedFailure = (seconds: number) => ({
+  observedAt: `2026-08-03T10:04:${String(seconds).padStart(2, "0")}.000Z`,
+  kind: "beat-game-event",
+  event: {
+    type: "action-failed",
+    action: "recover-death",
+    detail: "still searching for enough travel food",
+  },
+});
+const taskProgress = (observedAt: string) => ({
+  observedAt,
+  kind: "task-progress-observed",
+  task: {
+    taskId: "task-1",
+    progress: {
+      current: 4n,
+      total: 20n,
+      fraction: 0.2,
+      message: "Following route",
+    },
+  },
+});
+const collectionTaskProgress = (taskId: string, observedAt: string, x: number) => ({
+  observedAt,
+  kind: "task-progress-observed",
+  task: {
+    taskId,
+    progress: {
+      current: "0",
+      total: "2",
+      fraction: 0,
+      message: "Skipping unreachable block",
+      detailType: "soulfire.v1.CollectBlocksTaskProgressDetail",
+      detail: {
+        phase: 6,
+        activeTargets: [
+          {
+            x: 19,
+            y: 66,
+            z: -16,
+            dimension: "minecraft:overworld",
+          },
+        ],
+        rejectedTargets: [
+          {
+            x: 19,
+            y: 66,
+            z: -16,
+            dimension: "minecraft:overworld",
+          },
+        ],
+        failedApproaches: [
+          {
+            target: {
+              x: 19,
+              y: 66,
+              z: -16,
+              dimension: "minecraft:overworld",
+            },
+            playerPositions: [
+              {
+                x,
+                y: 63,
+                z: -14,
+                dimension: "minecraft:overworld",
+              },
+            ],
+          },
+        ],
+        completedBreaks: [],
+        consecutiveStalledPaths: 3,
+      },
+    },
+  },
+});
+const interruptedPath = (seconds: number) => ({
+  observedAt: `2026-08-03T10:00:${String(seconds).padStart(2, "0")}.000Z`,
+  kind: "pathfind-interrupted",
+  cause: "All fibers interrupted without errors.",
+});
+const progress = (observedAt: string) => ({
+  observedAt,
+  kind: "task-progress-observed",
+  task: {
+    taskId: "attack-1",
+    progress: { fraction: 0, message: "Chasing entity" },
+  },
+});
+const failedShelterAttempt = (second: number) => ({
+  observedAt: `2026-08-03T10:00:${String(second).padStart(2, "0")}.000Z`,
+  kind: "beat-game-event",
+  event: {
+    type: "action-failed",
+    action: "survive:night-shelter",
+    detail: "The shelter attempt ended before morning",
+  },
+});
+
 describe("smoke stuck diagnostics", () => {
   it("distinguishes a stalled path and repeated replan loop from slow progress", () => {
     const capturedAt = "2026-08-03T10:05:00.000Z";
-    const repeatedFailure = (seconds: number) => ({
-      observedAt: `2026-08-03T10:04:${String(seconds).padStart(2, "0")}.000Z`,
-      kind: "beat-game-event",
-      event: {
-        type: "action-failed",
-        action: "recover-death",
-        detail: "still searching for enough travel food",
-      },
-    });
 
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt,
@@ -449,19 +538,6 @@ describe("smoke stuck diagnostics", () => {
   });
 
   it("detects task progress that remains frozen across observations", () => {
-    const taskProgress = (observedAt: string) => ({
-      observedAt,
-      kind: "task-progress-observed",
-      task: {
-        taskId: "task-1",
-        progress: {
-          current: 4n,
-          total: 20n,
-          fraction: 0.2,
-          message: "Following route",
-        },
-      },
-    });
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt: "2026-08-03T10:00:20.000Z",
       currentAction: "satisfy:logs",
@@ -490,59 +566,6 @@ describe("smoke stuck diagnostics", () => {
   });
 
   it("detects repeated unreachable collection targets across moving tasks", () => {
-    const taskProgress = (taskId: string, observedAt: string, x: number) => ({
-      observedAt,
-      kind: "task-progress-observed",
-      task: {
-        taskId,
-        progress: {
-          current: "0",
-          total: "2",
-          fraction: 0,
-          message: "Skipping unreachable block",
-          detailType: "soulfire.v1.CollectBlocksTaskProgressDetail",
-          detail: {
-            phase: 6,
-            activeTargets: [
-              {
-                x: 19,
-                y: 66,
-                z: -16,
-                dimension: "minecraft:overworld",
-              },
-            ],
-            rejectedTargets: [
-              {
-                x: 19,
-                y: 66,
-                z: -16,
-                dimension: "minecraft:overworld",
-              },
-            ],
-            failedApproaches: [
-              {
-                target: {
-                  x: 19,
-                  y: 66,
-                  z: -16,
-                  dimension: "minecraft:overworld",
-                },
-                playerPositions: [
-                  {
-                    x,
-                    y: 63,
-                    z: -14,
-                    dimension: "minecraft:overworld",
-                  },
-                ],
-              },
-            ],
-            completedBreaks: [],
-            consecutiveStalledPaths: 3,
-          },
-        },
-      },
-    });
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt: "2026-08-03T10:04:00.000Z",
       currentAction: "recover-death",
@@ -553,9 +576,9 @@ describe("smoke stuck diagnostics", () => {
         distanceToGoal: 4,
       },
       activity: [
-        taskProgress("collect-1", "2026-08-03T10:01:00.000Z", 18),
-        taskProgress("collect-2", "2026-08-03T10:02:00.000Z", 19),
-        taskProgress("collect-3", "2026-08-03T10:03:00.000Z", 20),
+        collectionTaskProgress("collect-1", "2026-08-03T10:01:00.000Z", 18),
+        collectionTaskProgress("collect-2", "2026-08-03T10:02:00.000Z", 19),
+        collectionTaskProgress("collect-3", "2026-08-03T10:03:00.000Z", 20),
       ],
     });
 
@@ -641,11 +664,6 @@ describe("smoke stuck diagnostics", () => {
   });
 
   it("does not report intentionally interrupted routes as failures", () => {
-    const interruptedPath = (seconds: number) => ({
-      observedAt: `2026-08-03T10:00:${String(seconds).padStart(2, "0")}.000Z`,
-      kind: "pathfind-interrupted",
-      cause: "All fibers interrupted without errors.",
-    });
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt: "2026-08-03T10:00:20.000Z",
       currentAction: "satisfy:food",
@@ -668,14 +686,6 @@ describe("smoke stuck diagnostics", () => {
   });
 
   it("does not treat an unquantified entity chase as frozen progress", () => {
-    const progress = (observedAt: string) => ({
-      observedAt,
-      kind: "task-progress-observed",
-      task: {
-        taskId: "attack-1",
-        progress: { fraction: 0, message: "Chasing entity" },
-      },
-    });
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt: "2026-08-03T10:00:20.000Z",
       currentAction: "satisfy:food",
@@ -762,15 +772,6 @@ describe("smoke stuck diagnostics", () => {
   });
 
   it("clears historical shelter retries once the current shelter is sealed", () => {
-    const failedShelterAttempt = (second: number) => ({
-      observedAt: `2026-08-03T10:00:${String(second).padStart(2, "0")}.000Z`,
-      kind: "beat-game-event",
-      event: {
-        type: "action-failed",
-        action: "survive:night-shelter",
-        detail: "The shelter attempt ended before morning",
-      },
-    });
     const diagnostics = buildSmokeStuckDiagnostics({
       capturedAt: "2026-08-03T10:08:00.000Z",
       currentAction: "survive:night-shelter",

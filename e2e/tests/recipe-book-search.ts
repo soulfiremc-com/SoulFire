@@ -28,6 +28,7 @@ export default {
   name: "recipe-book-search",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       yield* rcon("forceload add 1552 -16 1584 16");
       yield* rcon("fill 1566 63 -2 1571 63 2 stone");
       yield* rcon("fill 1566 64 -2 1571 67 2 air");
@@ -49,7 +50,7 @@ export default {
         try: async () => {
           const pov = client.service(PovService);
           const expectOutput = (item: string, count: number, message: string) =>
-            Effect.runPromise(
+            runPromise(
               eventually(
                 bot.inventoryState().pipe(
                   Effect.flatMap((state) =>

@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { Effect, Result } from "effect";
 import { check, type E2ETest } from "../harness.ts";
 
@@ -25,13 +26,13 @@ export default {
       yield* check(
         Result.isFailure(distantWait) &&
           distantWait.failure._tag === "SoulFireRpcError" &&
-          distantWait.failure.code === 4,
+          distantWait.failure.code === Code.DeadlineExceeded,
         "Waiting for chunks outside the client cache reported them as loaded",
       );
       yield* check(
         Result.isFailure(distantBlock) &&
           distantBlock.failure._tag === "SoulFireRpcError" &&
-          distantBlock.failure.code === 9,
+          distantBlock.failure.code === Code.FailedPrecondition,
         "An unloaded block was returned as observed world data",
       );
       yield* check(

@@ -58,11 +58,13 @@ it.each([true, false])(
       createClient(BotLiveService, transport),
       createClient(BotTaskService, transport),
     );
-    const exit = await Effect.runPromise(
-      bot.collect("#logs", { count: 8 }).pipe(Effect.timeout("100 millis"), Effect.exit),
+    const exit = await Effect.runPromiseExit(
+      bot.collect("#logs", { count: 8 }).pipe(Effect.timeout("100 millis")),
     );
-    if (Exit.isSuccess(exit)) expect(exit.value.blocksBroken).toBe(8);
     expect(Exit.isSuccess(exit)).toBe(complete);
+    expect(Exit.isSuccess(exit) ? exit.value.blocksBroken : undefined).toBe(
+      complete ? 8 : undefined,
+    );
     expect(cancellations).toBe(complete ? 0 : 1);
   },
 );

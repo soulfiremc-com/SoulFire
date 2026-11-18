@@ -195,12 +195,10 @@ export class SoulFireChat {
   ): Effect.Effect<ChatMatch, SoulFireOperationError> {
     const next = this.watch(matcher, options).pipe(
       Stream.runHead,
-      Effect.flatMap((match) =>
-        Option.isSome(match)
-          ? Effect.succeed(match.value)
-          : Effect.fail(
-              rpcError("chat.waitFor", new Error("The bot event stream ended before chat matched")),
-            ),
+      Effect.flatMap(
+        Effect.fromOption(() =>
+          rpcError("chat.waitFor", new Error("The bot event stream ended before chat matched")),
+        ),
       ),
     );
     return options.timeoutMs === undefined

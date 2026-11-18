@@ -21,6 +21,7 @@ export default {
     const setting = (key: string, value: boolean | { min: number; max: number }) =>
       instance.setConfigEntry({ namespace: "anti-afk", key, value: fromJson(ValueSchema, value) });
     return Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon("forceload add 2080 0 2111 31");
       yield* rcon("fill 2080 63 0 2110 63 30 stone");
@@ -79,19 +80,19 @@ export default {
               await new Promise((resolve) => {
                 setTimeout(resolve, 500);
               });
-              const origin = await Effect.runPromise(serverPosition);
+              const start = await runPromise(serverPosition);
               for (const enabled of [false, true]) {
-                await Effect.runPromise(setting("enabled", enabled));
+                await runPromise(setting("enabled", enabled));
                 for (let sample = 0; sample < 30; sample++) {
                   await input();
                   await new Promise((resolve) => {
                     setTimeout(resolve, 100);
                   });
-                  const info = await Effect.runPromise(bot.info());
+                  const info = await runPromise(bot.info());
                   if (!info.liveState) throw new Error("The controlled bot went offline");
                   const distance = Math.hypot(
-                    info.liveState.x - origin.x,
-                    info.liveState.z - origin.z,
+                    info.liveState.x - start.x,
+                    info.liveState.z - start.z,
                   );
                   if (distance > 0.05)
                     throw new Error(
@@ -99,15 +100,15 @@ export default {
                     );
                 }
               }
-              const native = await Effect.runPromise(serverPosition);
-              const distance = Math.hypot(native.x - origin.x, native.z - origin.z);
+              const native = await runPromise(serverPosition);
+              const distance = Math.hypot(native.x - start.x, native.z - start.z);
               if (distance > 0.05)
                 throw new Error(`Vanilla observed the controlled bot move ${distance} blocks`);
               break;
             }
             if (!captured) throw new Error("The POV stream ended without taking control");
           } finally {
-            await Effect.runPromise(setting("enabled", false));
+            await runPromise(setting("enabled", false));
             if (token) {
               // Reclaim control if the plugin stole it, so cleanup also stops its path.
               await input().catch(() => {});

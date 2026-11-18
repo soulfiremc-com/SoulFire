@@ -21,6 +21,7 @@ export default {
   run: ({ bot, client }) =>
     Effect.scoped(
       Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context());
         yield* rcon("forceload add 3440 0 3487 15");
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -45,7 +46,7 @@ export default {
           const task = yield* Effect.gen(function* () {
             if (mode === "sdk-look") {
               yield* bot.look(-90, 0);
-              return;
+              return undefined;
             }
             yield* rcon(
               `summon cow ${mode === "completed-attack" ? 3458.5 : mode === "preempted-attack" ? 3477.5 : 3466.5} 64 8.5 {Tags:["${TAG}"],NoAI:1b}`,
@@ -89,6 +90,13 @@ export default {
             return attack;
           });
           if (mode !== "preempted-attack") yield* Effect.sleep("700 millis");
+          const rotation = async () => {
+            const text = await runPromise(rcon(`data get entity ${BOT_NAME} Rotation`));
+            const match = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/);
+            if (!match) throw new Error(`Unexpected rotation: ${text}`);
+            return Number(match[1]);
+          };
+
           yield* Effect.tryPromise({
             try: async () => {
               const pov = client.service(PovService);
@@ -96,12 +104,6 @@ export default {
               const abort = new AbortController();
               let sequence = 0n;
               const nextSequence = () => ++sequence;
-              const rotation = async () => {
-                const text = await Effect.runPromise(rcon(`data get entity ${BOT_NAME} Rotation`));
-                const match = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/);
-                if (!match) throw new Error(`Unexpected rotation: ${text}`);
-                return Number(match[1]);
-              };
               try {
                 for await (const frame of pov.watch(
                   {

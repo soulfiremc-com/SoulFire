@@ -632,7 +632,7 @@ async function runBufGenerate(
 ): Promise<void> {
   const descriptorPath = join(outputDirectory, "plugin-api.binpb");
   const executable = resolveBufExecutable();
-  const arguments_ = [
+  const bufArguments = [
     "generate",
     descriptorPath,
     "--template",
@@ -640,7 +640,7 @@ async function runBufGenerate(
     ...sourceFiles.flatMap((file) => ["--path", file]),
   ];
   try {
-    await executeFile(executable, arguments_, {
+    await executeFile(executable, bufArguments, {
       cwd: outputDirectory,
       maxBuffer: 16 * 1024 * 1024,
     });
@@ -987,19 +987,19 @@ function pythonCompatibilityPredicate(
   if (predicate.kind === "event") {
     return `${JSON.stringify(predicate.value)} in descriptor.event_type_urls`;
   }
-  const indent = " ".repeat(indentation);
+  const padding = " ".repeat(indentation);
   const body = " ".repeat(indentation + 4);
   if (predicate.kind === "service") {
     return `any(
 ${body}service.full_name == ${JSON.stringify(predicate.value)}
 ${body}for service in descriptor.services
-${indent})`;
+${padding})`;
   }
   return `any(
 ${body}task.input_type_url == ${JSON.stringify(predicate.input)}
 ${body}and task.result_type_url == ${JSON.stringify(predicate.result)}
 ${body}for task in descriptor.task_types
-${indent})`;
+${padding})`;
 }
 
 function pythonRuntimeImports(model: GenerationModel): string {

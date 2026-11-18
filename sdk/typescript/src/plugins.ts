@@ -245,10 +245,14 @@ export class ReflectivePlugin {
       }
       const { inputSchema, resultSchema, value } = yield* Effect.try({
         try: () => {
-          const inputSchema = this.#message(task.inputTypeUrl);
-          const resultSchema = this.#message(task.resultTypeUrl);
-          const value = fromJson(inputSchema, input, { registry: this.registry });
-          return { inputSchema, resultSchema, value };
+          const parsedInputSchema = this.#message(task.inputTypeUrl);
+          const parsedResultSchema = this.#message(task.resultTypeUrl);
+          const parsedValue = fromJson(parsedInputSchema, input, { registry: this.registry });
+          return {
+            inputSchema: parsedInputSchema,
+            resultSchema: parsedResultSchema,
+            value: parsedValue,
+          };
         },
         catch: (cause) => operationError("ReflectivePlugin.startTask", cause),
       });

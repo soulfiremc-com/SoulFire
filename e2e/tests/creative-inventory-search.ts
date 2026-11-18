@@ -165,6 +165,7 @@ export default {
         ),
         "5 seconds",
       );
+      return undefined;
     }).pipe(
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),

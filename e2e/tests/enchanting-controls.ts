@@ -35,10 +35,12 @@ export default {
           const slot = yield* eventually(
             bot.inventoryState().pipe(
               Effect.map((state) =>
-                state.slots.find((slot) => slot.slot > 1 && slot.itemId === `minecraft:${item}`),
+                state.slots.find(
+                  (candidate) => candidate.slot > 1 && candidate.itemId === `minecraft:${item}`,
+                ),
               ),
               Effect.filterOrFail(
-                (slot) => slot !== undefined,
+                (found) => found !== undefined,
                 () => new CheckFailed({ message: "The enchanting material never arrived" }),
               ),
             ),

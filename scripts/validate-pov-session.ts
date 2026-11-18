@@ -42,6 +42,8 @@ let captured = false;
 let width = 640,
   height = 360;
 let busy = false;
+// Concurrent input calls wait here until the running call clears `busy`.
+const isBusy = () => busy;
 let deliveryDelayMs = 0;
 const sleep = (ms: number) =>
   new Promise((resolve) => {
@@ -87,7 +89,7 @@ async function input(
   events: Parameters<typeof create<typeof PovInputEventSchema>>[1][] = [],
   requestKeyFrame = false,
 ) {
-  while (busy) await sleep(5);
+  while (isBusy()) await sleep(5);
   busy = true;
   try {
     await pov.input({
@@ -159,11 +161,11 @@ try {
     );
     await saveFrame("interactive-nether");
     assert.equal(streamError, undefined, "Dimension changes must preserve the session");
-    console.log(
-      JSON.stringify({
+    process.stdout.write(
+      `${JSON.stringify({
         dimensionTransfer: true,
         framesAfterTransfer: frameCount - framesAtTransfer,
-      }),
+      })}\n`,
     );
   } else if (mode === "adaptive") {
     const initial = latest!.targetBitrate;
@@ -182,14 +184,14 @@ try {
       () => latest!.targetBitrate > lowered,
       "Healthy delivery must recover target bitrate",
     );
-    console.log(
-      JSON.stringify({
+    process.stdout.write(
+      `${JSON.stringify({
         adaptiveBitrate: true,
         initial,
         raised,
         lowered,
         recovered: latest!.targetBitrate,
-      }),
+      })}\n`,
     );
   } else if (mode === "cursor") {
     captured = true;
@@ -239,7 +241,9 @@ try {
       { kind: Kind.KEY, code: 257, action: 0 },
     ]);
     await until(() => latest?.screenOpen === false, "Closing chat must hide the cursor");
-    console.log(JSON.stringify({ pointingCursor: true, textCursor: true, hiddenInWorld: true }));
+    process.stdout.write(
+      `${JSON.stringify({ pointingCursor: true, textCursor: true, hiddenInWorld: true })}\n`,
+    );
   } else if (mode === "world") {
     captured = true;
     await input([{ kind: Kind.SCROLL, y: 1 }]);
@@ -332,15 +336,15 @@ try {
     await sleep(1500);
     const landed = (await bots.getBotInfo({ instanceId, botId })).liveState!;
     assert.ok(landed.y < hovering.y - 1, "Double jump must disable flight");
-    console.log(
-      JSON.stringify({
+    process.stdout.write(
+      `${JSON.stringify({
         escapeMenu: true,
         doubleJumpFlight: true,
         middleClick: true,
         rightClick: true,
         leftClick: true,
         hotbarScroll: true,
-      }),
+      })}\n`,
     );
   } else {
     const before = (await bots.getBotInfo({ instanceId, botId })).liveState!;
@@ -446,8 +450,8 @@ try {
       Math.hypot(afterTimeout.x - timedOut.x, afterTimeout.z - timedOut.z) < 0.05,
       `Heartbeat timeout must release held movement: ${JSON.stringify([timedOut, afterTimeout].map(({ x, y, z, health }) => ({ x, y, z, health })))}`,
     );
-    console.log(
-      JSON.stringify({
+    process.stdout.write(
+      `${JSON.stringify({
         frameCount,
         encodedBytes,
         keyFrames,
@@ -460,7 +464,7 @@ try {
         releaseHeldKeys: true,
         heartbeatTimeout: true,
         longSession: true,
-      }),
+      })}\n`,
     );
   }
 } finally {

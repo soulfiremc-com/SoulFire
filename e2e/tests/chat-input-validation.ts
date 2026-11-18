@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { Effect, Result } from "effect";
 import { BOT_NAME, check, type E2ETest, eventually, rcon } from "../harness.ts";
 
@@ -18,7 +19,7 @@ export default {
           yield* check(
             Result.isFailure(result) &&
               result.failure._tag === "SoulFireRpcError" &&
-              result.failure.code === 3,
+              result.failure.code === Code.InvalidArgument,
             `${test.kind} accepted illegal character ${character.charCodeAt(0)}`,
           );
           yield* check(

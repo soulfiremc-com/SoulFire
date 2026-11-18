@@ -140,5 +140,6 @@ export default {
         (yield* rcon("data get block 821 68 0 primary_effect")).includes("minecraft:speed"),
         "Cancel applied the pending beacon effect",
       );
+      return undefined;
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),
 } satisfies E2ETest;

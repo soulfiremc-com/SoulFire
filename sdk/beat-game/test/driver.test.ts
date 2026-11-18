@@ -10,6 +10,11 @@ import {
   type SoulFireBot,
 } from "@soulfiremc/sdk";
 import { create } from "@bufbuild/protobuf";
+import { Code } from "@connectrpc/connect";
+import {
+  BotActionResultSchema,
+  BotActionStatus,
+} from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import { BotTaskFailureSchema, BotTaskSchema } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect, Fiber, Stream } from "effect";
 import { describe, expect, it } from "vitest";
@@ -177,6 +182,7 @@ function effectBot(
         };
       }),
   };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake implements only the bot methods the driver calls
   return { bot: bot as unknown as SoulFireBot, calls };
 }
 
@@ -610,7 +616,7 @@ describe("production SoulFire beat-game driver", () => {
     const cause = new SoulFireRpcError({
       operation: "inventory.selectHotbar",
       cause: new Error("No matching item is available"),
-      code: 5,
+      code: Code.NotFound,
       retryable: false,
       message: "No matching item is available",
     });
@@ -635,11 +641,13 @@ describe("production SoulFire beat-game driver", () => {
 
   it("reads the status of a failed bot action from its message", async () => {
     // As in a live run whose dig target was out of reach.
-    const cause = new SoulFireActionError({
-      actionId: "action-1",
-      status: 2,
-      error: "OUT_OF_RANGE: Target block is outside the bot's interaction reach",
-    } as ConstructorParameters<typeof SoulFireActionError>[0]);
+    const cause = new SoulFireActionError(
+      create(BotActionResultSchema, {
+        actionId: "action-1",
+        status: BotActionStatus.CANCELLED,
+        error: "OUT_OF_RANGE: Target block is outside the bot's interaction reach",
+      }),
+    );
     const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
     const driver = makeSoulFireBeatGameDriver(bot);
 

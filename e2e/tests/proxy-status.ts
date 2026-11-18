@@ -69,7 +69,8 @@ export default {
             socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             if (data.length > end + 4) upstream.write(data.subarray(end + 4));
             socket.pipe(upstream);
-            upstream.pipe(delayed).pipe(socket);
+            upstream.pipe(delayed);
+            delayed.pipe(socket);
           });
         };
         socket.on("data", receive);
@@ -98,7 +99,7 @@ export default {
         client.getOrCreateInstance(`Proxy status ${randomUUID().slice(0, 8)}`, {
           server: `127.0.0.1:${targetPort}`,
         }),
-        (instance) => instance.delete().pipe(Effect.orDie),
+        (created) => created.delete().pipe(Effect.orDie),
       );
       for (const [key, value] of Object.entries({
         "proxy-check-address": `127.0.0.1:${targetPort}`,
@@ -110,7 +111,10 @@ export default {
           value: fromJson(ValueSchema, value),
         });
       }
-      const port = (proxy.address() as net.AddressInfo).port;
+      const address = proxy.address();
+      if (address === null || typeof address === "string")
+        return yield* new CheckFailed({ message: "The test proxy did not expose a TCP port" });
+      const port = address.port;
       for (let attempt = 0; attempt < 4; attempt++) {
         const expectValid = attempt !== 3;
         rejectConnection = !expectValid;
@@ -142,5 +146,6 @@ export default {
       }
       yield* check(requests === 4, "Status checks did not traverse the proxy");
       yield* bot.world.player();
+      return undefined;
     }).pipe(Effect.scoped),
 } satisfies E2ETest;

@@ -512,11 +512,56 @@ export interface BeatGameDriver {
   ) => Effect.Effect<A, E | BeatGameDriverError, R>;
 }
 
+const mapError = (operation: string) => (cause: unknown) => driverError(operation, cause);
+const pathOptions = (policy: BeatGamePathPolicy) => ({
+  allowMining: policy.allowMining,
+  allowPlacing: policy.allowPlacing,
+  avoidFluids: policy.avoidFluids ?? false,
+  ...(policy.additionalPlaceItemIds === undefined || policy.additionalPlaceItemIds.length === 0
+    ? {}
+    : {
+        additionalPlaceItemIds: [...policy.additionalPlaceItemIds],
+      }),
+  ...(policy.protectedBlocks === undefined || policy.protectedBlocks.length === 0
+    ? {}
+    : {
+        protectedBlocks: policy.protectedBlocks.map(blockPosition),
+      }),
+  ...(policy.sprint === undefined ? {} : { sprint: policy.sprint }),
+  ...(policy.minimumY === undefined ? {} : { minimumY: policy.minimumY }),
+  ...(policy.maximumY === undefined ? {} : { maximumY: policy.maximumY }),
+  searchMode: ((): PathfindSearchMode => {
+    switch (policy.searchMode) {
+      case BeatGamePathSearchMode.PRECISION:
+        return PathfindSearchMode.PRECISION;
+      case BeatGamePathSearchMode.URGENT:
+        return PathfindSearchMode.URGENT;
+      case BeatGamePathSearchMode.ESCAPE:
+        return PathfindSearchMode.ESCAPE;
+      case BeatGamePathSearchMode.NORMAL:
+      case undefined:
+        return PathfindSearchMode.NORMAL;
+      default:
+        return PathfindSearchMode.NORMAL;
+    }
+  })(),
+  ...(policy.maximumQualityBound === undefined
+    ? {}
+    : { maximumQualityBound: policy.maximumQualityBound }),
+  ...(policy.maximumExpandedStates === undefined
+    ? {}
+    : { maximumExpandedStates: policy.maximumExpandedStates }),
+  maximumFallDistance: policy.maxFallDistance,
+  ...(policy.maxParkourGap === undefined ? {} : { maximumParkourGap: policy.maxParkourGap }),
+  smoothCamera: policy.smoothCamera ?? false,
+  timeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
+  searchTimeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
+});
+
 export function makeSoulFireBeatGameDriver(
   bot: SoulFireBot,
   options: SoulFireBeatGameDriverOptions = {},
 ): BeatGameDriver {
-  const mapError = (operation: string) => (cause: unknown) => driverError(operation, cause);
   const controlMutex = Semaphore.makeUnsafe(1);
   let controlLease: SoulFireBotControlLease | undefined;
   let controlUsers = 0;
@@ -547,54 +592,10 @@ export function makeSoulFireBeatGameDriver(
               }
             }),
           ),
-          Effect.catch(() => Effect.void),
+          Effect.ignore,
         );
       }),
     );
-  const pathOptions = (policy: BeatGamePathPolicy) => ({
-    allowMining: policy.allowMining,
-    allowPlacing: policy.allowPlacing,
-    avoidFluids: policy.avoidFluids ?? false,
-    ...(policy.additionalPlaceItemIds === undefined || policy.additionalPlaceItemIds.length === 0
-      ? {}
-      : {
-          additionalPlaceItemIds: [...policy.additionalPlaceItemIds],
-        }),
-    ...(policy.protectedBlocks === undefined || policy.protectedBlocks.length === 0
-      ? {}
-      : {
-          protectedBlocks: policy.protectedBlocks.map(blockPosition),
-        }),
-    ...(policy.sprint === undefined ? {} : { sprint: policy.sprint }),
-    ...(policy.minimumY === undefined ? {} : { minimumY: policy.minimumY }),
-    ...(policy.maximumY === undefined ? {} : { maximumY: policy.maximumY }),
-    searchMode: ((): PathfindSearchMode => {
-      switch (policy.searchMode) {
-        case BeatGamePathSearchMode.PRECISION:
-          return PathfindSearchMode.PRECISION;
-        case BeatGamePathSearchMode.URGENT:
-          return PathfindSearchMode.URGENT;
-        case BeatGamePathSearchMode.ESCAPE:
-          return PathfindSearchMode.ESCAPE;
-        case BeatGamePathSearchMode.NORMAL:
-        case undefined:
-          return PathfindSearchMode.NORMAL;
-        default:
-          return PathfindSearchMode.NORMAL;
-      }
-    })(),
-    ...(policy.maximumQualityBound === undefined
-      ? {}
-      : { maximumQualityBound: policy.maximumQualityBound }),
-    ...(policy.maximumExpandedStates === undefined
-      ? {}
-      : { maximumExpandedStates: policy.maximumExpandedStates }),
-    maximumFallDistance: policy.maxFallDistance,
-    ...(policy.maxParkourGap === undefined ? {} : { maximumParkourGap: policy.maxParkourGap }),
-    smoothCamera: policy.smoothCamera ?? false,
-    timeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
-    searchTimeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
-  });
 
   const observe = Effect.all({
     player: bot.world.player(),
@@ -682,7 +683,13 @@ export function makeSoulFireBeatGameDriver(
         : { idempotencyKey: execution.idempotencyKey }),
       ...(execution.deadline === undefined ? {} : { deadline: execution.deadline }),
     };
-    const started = (() => {
+    const started: Effect.Effect<
+      {
+        readonly result: () => Effect.Effect<unknown, unknown>;
+        readonly cancel: (reason?: string) => Effect.Effect<unknown, unknown>;
+      },
+      unknown
+    > = (() => {
       switch (task.type) {
         case "collect-blocks":
           return bot.tasks.collectBlocks(task.blockIds, {
@@ -967,17 +974,11 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { expectedResult: itemSelector(task.expectedResult) }),
           });
+        default:
+          return task satisfies never;
       }
     })();
-    return (
-      started as unknown as Effect.Effect<
-        {
-          readonly result: () => Effect.Effect<unknown, unknown>;
-          readonly cancel: (reason?: string) => Effect.Effect<unknown, unknown>;
-        },
-        unknown
-      >
-    ).pipe(
+    return started.pipe(
       Effect.flatMap((handle) =>
         handle
           .result()
@@ -1378,6 +1379,8 @@ function executePrimitive(
       return bot.resetMovement();
     case "close-container":
       return bot.closeContainer();
+    default:
+      return action satisfies never;
   }
 }
 
@@ -1432,6 +1435,8 @@ function blockFace(value: BeatGameBlockFace): BlockFace {
       return BlockFace.WEST;
     case "east":
       return BlockFace.EAST;
+    default:
+      return value satisfies never;
   }
 }
 

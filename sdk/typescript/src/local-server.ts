@@ -110,6 +110,17 @@ export function installLocalServer(
     const semaphore = yield* Semaphore.make(1);
     let child: ChildProcessWithoutNullStreams;
     let info: LocalSoulFireServer;
+    const onLine = (rawLine: string) => {
+      const line = stripVTControlCharacters(rawLine).trim();
+      if (line.length === 0) return;
+      logs.push(line);
+      try {
+        options.onLog?.(line);
+      } catch {
+        /* Keep draining process output if a log consumer fails. */
+      }
+    };
+
     const start = Effect.fn("SoulFire.install.start")(function* () {
       child = yield* Effect.try({
         try: spawnServer,
@@ -118,16 +129,6 @@ export function installLocalServer(
       const current = child;
       const output = readline.createInterface({ input: current.stdout });
       const errors = readline.createInterface({ input: current.stderr });
-      const onLine = (rawLine: string) => {
-        const line = stripVTControlCharacters(rawLine).trim();
-        if (line.length === 0) return;
-        logs.push(line);
-        try {
-          options.onLog?.(line);
-        } catch {
-          /* Keep draining process output if a log consumer fails. */
-        }
-      };
       output.on("line", onLine);
       errors.on("line", onLine);
       current.once("close", () => {
@@ -160,6 +161,7 @@ export function installLocalServer(
         runDirectory,
         version: installedVersion,
       };
+      return undefined;
     });
     const stop = Effect.suspend(() => (child === undefined ? Effect.void : stopChild(child)));
     // Register process ownership before waiting for readiness.
@@ -235,7 +237,7 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
           Effect.callback<void>((resume) => {
             if (child.exitCode !== null || child.signalCode !== null) {
               resume(Effect.void);
-              return;
+              return undefined;
             }
             const onExit = () => resume(Effect.void);
             child.once("exit", onExit);

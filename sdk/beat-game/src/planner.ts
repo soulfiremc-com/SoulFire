@@ -282,6 +282,8 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
         : phaseTransition(phase, BeatGamePhase.COMPLETE);
     case BeatGamePhase.COMPLETE:
       return phaseTransition(phase, phase);
+    default:
+      return phase satisfies never;
   }
 }
 
@@ -457,6 +459,8 @@ export function nextPhase(phase: BeatGamePhase): BeatGamePhase {
     case BeatGamePhase.EXIT_END:
     case BeatGamePhase.COMPLETE:
       return BeatGamePhase.COMPLETE;
+    default:
+      return phase satisfies never;
   }
 }
 
@@ -480,6 +484,8 @@ export function objectiveForPhase(phase: BeatGamePhase): string {
       return "Enter the exit portal and return from the End";
     case BeatGamePhase.COMPLETE:
       return "The dragon is defeated and the bot has left the End";
+    default:
+      return phase satisfies never;
   }
 }
 

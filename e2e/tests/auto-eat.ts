@@ -14,18 +14,19 @@ import {
 
 export default {
   name: "auto-eat",
-  run: ({ bot, client }) =>
-    Effect.gen(function* () {
+  run: ({ bot, client }) => {
+    const plugin = (enabled: boolean) =>
+      client.instance(bot.instanceId).setConfigEntry({
+        namespace: "auto-eat",
+        key: "enabled",
+        value: { kind: { case: "boolValue", value: enabled } },
+      });
+    return Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       const previousDifficulty = (yield* rcon("difficulty"))
         .match(/difficulty is (Peaceful|Easy|Normal|Hard)/)?.[1]
         ?.toLowerCase();
       yield* check(!!previousDifficulty, "Cannot determine the difficulty to restore");
-      const plugin = (enabled: boolean) =>
-        client.instance(bot.instanceId).setConfigEntry({
-          namespace: "auto-eat",
-          key: "enabled",
-          value: { kind: { case: "boolValue", value: enabled } },
-        });
       const failures: string[] = [];
       yield* Effect.gen(function* () {
         yield* rcon("difficulty hard");
@@ -104,8 +105,8 @@ export default {
                       },
                       { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
                     )) {
-                      await Effect.runPromise(giveFood);
-                      await Effect.runPromise(
+                      await runPromise(giveFood);
+                      await runPromise(
                         eventually(
                           bot.inventoryState().pipe(
                             Effect.flatMap((state) =>
@@ -201,5 +202,6 @@ export default {
           }),
         ),
       );
-    }),
+    });
+  },
 } satisfies E2ETest;

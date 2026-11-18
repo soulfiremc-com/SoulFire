@@ -49,6 +49,6 @@ for (const heading of headings) {
   }
 }
 
-console.log(
-  `Validated ${headings.length} Mineflayer API headings against the SoulFire parity matrix.`,
+process.stdout.write(
+  `Validated ${headings.length} Mineflayer API headings against the SoulFire parity matrix.\n`,
 );

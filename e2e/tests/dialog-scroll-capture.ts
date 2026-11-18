@@ -45,6 +45,7 @@ export default {
   name: "dialog-scroll-capture",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       yield* rcon("forceload add 2496 0 2511 15");
       yield* rcon("fill 2496 63 0 2511 63 15 stone");
       yield* placeBot(bot, { x: 2504.5, y: 64, z: 8.5 });
@@ -108,18 +109,18 @@ export default {
                 continue;
               }
               await input(click);
-              await Effect.runPromise(expectScore(9));
-              await Effect.runPromise(resetScore);
-              await Effect.runPromise(expectScore(0));
-              await Effect.runPromise(
+              await runPromise(expectScore(9));
+              await runPromise(resetScore);
+              await runPromise(expectScore(0));
+              await runPromise(
                 bot.renderPov({ width: 320, height: 1000, maxDistance: 32, includeHud: true }),
               );
               await input(click);
-              await Effect.runPromise(expectScore(9));
-              await Effect.runPromise(resetScore);
-              await Effect.runPromise(expectScore(0));
+              await runPromise(expectScore(9));
+              await runPromise(resetScore);
+              await runPromise(expectScore(0));
               await input([...scroll(100), ...click]);
-              await Effect.runPromise(expectScore(8));
+              await runPromise(expectScore(8));
               return;
             }
             throw new Error("The scroll dialog viewer ended early");

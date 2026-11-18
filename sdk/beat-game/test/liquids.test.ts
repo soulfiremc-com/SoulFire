@@ -6,6 +6,52 @@ import { approachLiquidSourceFromSide } from "../src/liquids.js";
 import { defaultBeatGameStrategy, type BeatGameBlockPosition } from "../src/model.js";
 import { blockObservation, FakeBeatGameDriver, observation } from "./fixtures.js";
 
+const standVolume = (stand: BeatGameBlockPosition, obstruction?: BeatGameBlockPosition) => [
+  blockObservation(stand, {
+    blockId: "minecraft:air",
+    replaceable: true,
+  }),
+  blockObservation(
+    { ...stand, y: stand.y + 1 },
+    {
+      blockId: "minecraft:air",
+      replaceable: true,
+    },
+  ),
+  blockObservation({ ...stand, y: stand.y - 1 }),
+  ...(obstruction === undefined
+    ? []
+    : [blockObservation(obstruction, { blockId: "minecraft:stone" })]),
+];
+const openStandVolume = (stand: BeatGameBlockPosition) => [
+  blockObservation(stand, {
+    blockId: "minecraft:air",
+    replaceable: true,
+  }),
+  blockObservation(
+    { ...stand, y: stand.y + 1 },
+    {
+      blockId: "minecraft:air",
+      replaceable: true,
+    },
+  ),
+  blockObservation({ ...stand, y: stand.y - 1 }),
+];
+const discoveredVolume = (stand: BeatGameBlockPosition) => [
+  blockObservation(stand, {
+    blockId: "minecraft:air",
+    replaceable: true,
+  }),
+  blockObservation(
+    { ...stand, y: stand.y + 1 },
+    {
+      blockId: "minecraft:air",
+      replaceable: true,
+    },
+  ),
+  blockObservation({ ...stand, y: stand.y - 1 }),
+];
+
 describe("lava interaction positioning", () => {
   it("uses a visible source beyond four blocks without replanning", async () => {
     const driver = new FakeBeatGameDriver();
@@ -135,23 +181,6 @@ describe("lava interaction positioning", () => {
       z: 0,
       dimension: "minecraft:overworld",
     } as const;
-    const standVolume = (stand: BeatGameBlockPosition, obstruction?: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-      ...(obstruction === undefined
-        ? []
-        : [blockObservation(obstruction, { blockId: "minecraft:stone" })]),
-    ];
     const blockedStandVolume = standVolume(blockedStand, {
       x: 1,
       y: -51,
@@ -359,23 +388,9 @@ describe("lava interaction positioning", () => {
       z: 0,
       dimension: "minecraft:overworld",
     } as const;
-    const standVolume = (stand: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-    ];
-    const buriedVolume = standVolume(buriedStand);
+    const buriedVolume = openStandVolume(buriedStand);
     const exposedVolume = [
-      ...standVolume(exposedStand),
+      ...openStandVolume(exposedStand),
       blockObservation(
         { ...exposedSource.position, y: -51 },
         {
@@ -664,20 +679,6 @@ describe("lava interaction positioning", () => {
       z: 0,
       dimension: "minecraft:overworld",
     } as const;
-    const discoveredVolume = (stand: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-    ];
     const floodedStandVolume = discoveredVolume(floodedStand);
     const safeStandVolume = discoveredVolume(safeStand);
     driver.currentObservation = observation({

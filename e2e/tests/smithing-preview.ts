@@ -26,10 +26,12 @@ export default {
         const slot = yield* eventually(
           bot.inventoryState().pipe(
             Effect.map((state) =>
-              state.slots.find((slot) => slot.slot >= 4 && slot.itemId === `minecraft:${item}`),
+              state.slots.find(
+                (candidate) => candidate.slot >= 4 && candidate.itemId === `minecraft:${item}`,
+              ),
             ),
             Effect.filterOrFail(
-              (slot) => slot !== undefined,
+              (found) => found !== undefined,
               () => new CheckFailed({ message: "A smithing material did not arrive" }),
             ),
           ),

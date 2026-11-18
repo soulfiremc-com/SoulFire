@@ -20,16 +20,6 @@ interface GitHubRelease {
   tag_name?: string;
 }
 
-interface AdoptiumRelease {
-  binary?: {
-    package?: {
-      checksum?: string;
-      link?: string;
-    };
-  };
-  release_name?: string;
-}
-
 export async function requireLocalFile(value: string, description: string): Promise<string> {
   const resolved = path.resolve(value);
   let metadata;
@@ -42,6 +32,38 @@ export async function requireLocalFile(value: string, description: string): Prom
     throw new Error(`${description} is not a file: ${resolved}`);
   }
   return resolved;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function parseGitHubRelease(value: unknown): GitHubRelease {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const tagName = optionalString(value.tag_name);
+  return {
+    ...(tagName === undefined ? {} : { tag_name: tagName }),
+    ...(Array.isArray(value.assets)
+      ? { assets: value.assets.filter(isRecord).map(parseGitHubAsset) }
+      : {}),
+  };
+}
+
+function parseGitHubAsset(asset: Readonly<Record<string, unknown>>): GitHubAsset {
+  const browserDownloadUrl = optionalString(asset.browser_download_url);
+  const digest = optionalString(asset.digest);
+  const name = optionalString(asset.name);
+  return {
+    ...(browserDownloadUrl === undefined ? {} : { browser_download_url: browserDownloadUrl }),
+    ...(digest === undefined ? {} : { digest }),
+    ...(name === undefined ? {} : { name }),
+  };
 }
 
 export async function resolveRelease(
@@ -68,7 +90,7 @@ export async function resolveRelease(
     throw new Error(`Failed to fetch SoulFire release metadata (${response.status})`);
   }
 
-  const release = (await response.json()) as GitHubRelease;
+  const release = parseGitHubRelease(await response.json());
   if (!release.tag_name || !Array.isArray(release.assets)) {
     throw new Error("SoulFire release metadata was incomplete");
   }
@@ -119,11 +141,13 @@ export async function ensureJvm(
     throw new Error(`Failed to fetch JVM metadata (${response.status})`);
   }
 
-  const releases = (await response.json()) as AdoptiumRelease[];
-  const packageMetadata = releases[0]?.binary?.package;
-  const checksum = packageMetadata?.checksum;
-  const downloadUrl = packageMetadata?.link;
-  const releaseName = releases[0]?.release_name;
+  const releases: unknown = await response.json();
+  const latest = Array.isArray(releases) && isRecord(releases[0]) ? releases[0] : undefined;
+  const binary = isRecord(latest?.binary) ? latest.binary : undefined;
+  const packageMetadata = isRecord(binary?.package) ? binary.package : undefined;
+  const checksum = optionalString(packageMetadata?.checksum);
+  const downloadUrl = optionalString(packageMetadata?.link);
+  const releaseName = optionalString(latest?.release_name);
   if (!checksum || !downloadUrl || !releaseName) {
     throw new Error("JVM metadata was incomplete");
   }

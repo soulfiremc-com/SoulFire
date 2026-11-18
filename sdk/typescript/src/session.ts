@@ -169,15 +169,11 @@ export class BotSession {
       const session = new BotSession(events, ready, scope);
       yield* Scope.addFinalizer(scope, PubSub.shutdown(events));
       yield* session.consume(stream, options).pipe(
-        Effect.onExit((exit) =>
-          Exit.isFailure(exit)
-            ? Deferred.failCause(ready, exit.cause).pipe(Effect.asVoid)
-            : Effect.void,
-        ),
+        Effect.onError((cause) => Deferred.failCause(ready, cause).pipe(Effect.asVoid)),
         Effect.forkIn(scope),
       );
       yield* Deferred.await(ready).pipe(
-        Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
+        Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))),
       );
       return session;
     });
@@ -203,15 +199,13 @@ export class BotSession {
     const next = this.events().pipe(
       Stream.filter((event) => predicate(event, this.#state)),
       Stream.runHead,
-      Effect.flatMap((event) =>
-        Option.isSome(event)
-          ? Effect.succeed(event.value)
-          : Effect.fail(
-              operationError(
-                "session.waitFor",
-                new Error("Bot session closed before the expected event"),
-              ),
-            ),
+      Effect.flatMap(
+        Effect.fromOption(() =>
+          operationError(
+            "session.waitFor",
+            new Error("Bot session closed before the expected event"),
+          ),
+        ),
       ),
     );
     return options.timeoutMs === undefined

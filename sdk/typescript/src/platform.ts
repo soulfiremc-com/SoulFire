@@ -1,6 +1,6 @@
 import type * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type { HttpMethod } from "effect/http/HttpMethod";
+import * as HttpMethod from "effect/http/HttpMethod";
 import { Effect, Stream } from "effect";
 
 /**
@@ -11,7 +11,11 @@ import { Effect, Stream } from "effect";
 export function makeEffectHttpClientFetch(client: HttpClient.HttpClient): typeof globalThis.fetch {
   return async (input, init) => {
     const webRequest = new Request(input, init);
-    let request = HttpClientRequest.make(webRequest.method as HttpMethod)(webRequest.url);
+    const method = webRequest.method;
+    if (!HttpMethod.isHttpMethod(method)) {
+      throw new TypeError(`Unsupported HTTP method: ${method}`);
+    }
+    let request = HttpClientRequest.make(method)(webRequest.url);
     if (webRequest.method !== "GET" && webRequest.method !== "HEAD") {
       request = HttpClientRequest.bodyUint8Array(
         request,

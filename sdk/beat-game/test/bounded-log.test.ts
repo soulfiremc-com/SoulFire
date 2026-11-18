@@ -63,5 +63,15 @@ async function readEntries(filename: string): Promise<readonly { id: number }[]>
   return (await readFile(filename, "utf8"))
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line) as { id: number });
+    .map((line) => {
+      const entry: unknown = JSON.parse(line);
+      if (typeof entry !== "object" || entry === null || !("id" in entry)) {
+        throw new Error(`Unexpected log line: ${line}`);
+      }
+      const { id } = entry;
+      if (typeof id !== "number") {
+        throw new TypeError(`Unexpected log id: ${line}`);
+      }
+      return { id };
+    });
 }

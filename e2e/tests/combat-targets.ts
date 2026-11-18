@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { BotActionStatus } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import {
   AttackEntityCompletionReason,
@@ -131,7 +132,8 @@ export default {
             );
           } else {
             yield* check(
-              started.failure._tag === "SoulFireRpcError" && started.failure.code === 9,
+              started.failure._tag === "SoulFireRpcError" &&
+                started.failure.code === Code.FailedPrecondition,
               `Unexpected task rejection for ${fixture.type}`,
             );
           }

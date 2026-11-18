@@ -54,8 +54,8 @@ export default {
       const state = yield* eventually(
         bot.inventoryState().pipe(
           Effect.filterOrFail(
-            (state) =>
-              state.layout?.containerType === "merchant" && state.layout.buttons.length === 3,
+            (current) =>
+              current.layout?.containerType === "merchant" && current.layout.buttons.length === 3,
             () => new CheckFailed({ message: "The villager trade menu did not open" }),
           ),
         ),
@@ -66,7 +66,7 @@ export default {
           const offers = (yield* bot.recipes.listVillagerTrades()).offers;
           const buttons = (yield* bot.inventoryState()).layout?.buttons ?? [];
           for (const offer of offers) {
-            const button = buttons.find((button) => button.buttonId === offer.offerIndex);
+            const button = buttons.find((candidate) => candidate.buttonId === offer.offerIndex);
             const displayed = Array.from(button?.description?.matchAll(/(\d+)x/g) ?? [], (match) =>
               Number(match[1]),
             );
@@ -86,8 +86,7 @@ export default {
         "The fixture did not produce demand-adjusted and clamped prices",
       );
       const trade = state.layout?.buttons.find((button) => button.iconItemId === "minecraft:apple");
-      if (!trade)
-        return yield* Effect.fail(new CheckFailed({ message: "The apple trade is missing" }));
+      if (!trade) return yield* new CheckFailed({ message: "The apple trade is missing" });
       const selected = yield* Effect.tryPromise({
         try: () =>
           client.service(BotService).clickContainerButton({
@@ -107,9 +106,9 @@ export default {
       );
       yield* eventually(
         bot.inventoryState().pipe(
-          Effect.flatMap((state) =>
+          Effect.flatMap((current) =>
             check(
-              state.slots.some(
+              current.slots.some(
                 (slot) => slot.slot === 2 && slot.itemId === "minecraft:apple" && slot.count === 2,
               ),
               "The selected trade never filled the payment and result slots",
@@ -154,8 +153,8 @@ export default {
         bot
           .inventoryState()
           .pipe(
-            Effect.flatMap((state) =>
-              check(state.layout?.buttons.length === 3, "Offers not ready"),
+            Effect.flatMap((current) =>
+              check(current.layout?.buttons.length === 3, "Offers not ready"),
             ),
           ),
         "5 seconds",
@@ -184,9 +183,9 @@ export default {
       );
       yield* eventually(
         bot.inventoryState().pipe(
-          Effect.flatMap((state) =>
+          Effect.flatMap((current) =>
             check(
-              state.slots.some((slot) => slot.slot === 2 && slot.itemId === "minecraft:bread"),
+              current.slots.some((slot) => slot.slot === 2 && slot.itemId === "minecraft:bread"),
               "Discounted output missing",
             ),
           ),
@@ -211,6 +210,7 @@ export default {
         (yield* rcon(`clear ${BOT_NAME} minecraft:bread 0`)).includes("Found 1"),
         "The discounted bread was not stored exactly once",
       );
+      return undefined;
     }).pipe(
       Effect.ensuring(
         bot

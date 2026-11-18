@@ -125,10 +125,10 @@ export default {
                 Effect.catch((error) =>
                   Effect.flatMap(
                     Effect.forEach(tasks, (task) => task.refresh()),
-                    (states) =>
+                    (current) =>
                       Effect.fail(
                         new CheckFailed({
-                          message: `Round ${round} brewing did not finish (${error.message}): ${states
+                          message: `Round ${round} brewing did not finish (${error.message}): ${current
                             .map(
                               (state) =>
                                 `${BotTaskStatus[state.status]} ${JSON.stringify(state.failure ?? null)}`,

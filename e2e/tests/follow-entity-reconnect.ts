@@ -18,10 +18,24 @@ import {
 
 const TAG = "sf_e2e_follow_reconnect";
 
+const near = (x: number) =>
+  eventually(
+    serverPosition.pipe(
+      Effect.tap((position) =>
+        check(
+          Math.hypot(position.x - x, position.z - 8.5) <= 3,
+          `The follower did not reach ${x}: ${JSON.stringify(position)}`,
+        ),
+      ),
+    ),
+    "20 seconds",
+    "100 millis",
+  );
+
 export default {
   name: "follow-entity-reconnect",
-  run: ({ bot }) =>
-    Effect.scoped(
+  run: ({ bot }) => {
+    return Effect.scoped(
       Effect.gen(function* () {
         const forced: number[] = [];
         yield* Effect.addFinalizer(() =>
@@ -62,19 +76,6 @@ export default {
               ),
             );
         const target = yield* eventually(observe(), "10 seconds", "100 millis");
-        const near = (x: number) =>
-          eventually(
-            serverPosition.pipe(
-              Effect.tap((position) =>
-                check(
-                  Math.hypot(position.x - x, position.z - 8.5) <= 3,
-                  `The follower did not reach ${x}: ${JSON.stringify(position)}`,
-                ),
-              ),
-            ),
-            "20 seconds",
-            "100 millis",
-          );
         const task = yield* bot.tasks.followEntity(target.networkId, 2, {
           targetUnavailableTimeoutSeconds: 5,
           reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
@@ -88,8 +89,11 @@ export default {
             task
               .refresh()
               .pipe(
-                Effect.tap((task) =>
-                  check(task.status === BotTaskStatus.RECOVERING, "The follow task did not pause"),
+                Effect.tap((current) =>
+                  check(
+                    current.status === BotTaskStatus.RECOVERING,
+                    "The follow task did not pause",
+                  ),
                 ),
               ),
             "10 seconds",
@@ -104,9 +108,9 @@ export default {
             bot.world
               .player()
               .pipe(
-                Effect.tap((player) =>
+                Effect.tap((current) =>
                   check(
-                    player.connectionEpoch !== previousEpoch,
+                    current.connectionEpoch !== previousEpoch,
                     "The follower still has its old connection",
                   ),
                 ),
@@ -120,10 +124,10 @@ export default {
             task
               .refresh()
               .pipe(
-                Effect.tap((task) =>
+                Effect.tap((current) =>
                   check(
-                    task.status === BotTaskStatus.RUNNING,
-                    `The follow task did not recover: ${task.status}, ${task.failure?.code ?? ""}`,
+                    current.status === BotTaskStatus.RUNNING,
+                    `The follow task did not recover: ${current.status}, ${current.failure?.code ?? ""}`,
                   ),
                 ),
               ),
@@ -154,5 +158,6 @@ export default {
         );
         yield* sentinel.result({ call: { timeoutMs: 5000 } });
       }),
-    ),
+    );
+  },
 } satisfies E2ETest;

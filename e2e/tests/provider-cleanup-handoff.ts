@@ -8,8 +8,13 @@ import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../ha
 
 export default {
   name: "provider-cleanup-handoff",
-  run: ({ bot }) =>
-    Effect.scoped(
+  run: ({ bot }) => {
+    const hooks = () =>
+      bot.world.queryEntities({
+        radius: 24,
+        selector: { entityTypes: ["minecraft:fishing_bobber"] },
+      });
+    return Effect.scoped(
       Effect.gen(function* () {
         const forced: number[] = [];
         yield* Effect.addFinalizer(() =>
@@ -28,11 +33,6 @@ export default {
           }
         }
         yield* rcon(`gamemode creative ${BOT_NAME}`);
-        const hooks = () =>
-          bot.world.queryEntities({
-            radius: 24,
-            selector: { entityTypes: ["minecraft:fishing_bobber"] },
-          });
         const observeHook = eventually(
           hooks().pipe(
             Effect.tap((result) => check(result.entities.length === 1, "No fishing line observed")),
@@ -184,5 +184,6 @@ export default {
           }
         }
       }),
-    ),
+    );
+  },
 } satisfies E2ETest;

@@ -5,18 +5,18 @@ import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "..
 
 const URL = "https://example.invalid/soulfire-link-qa";
 
+const rpc = <A>(call: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: call,
+    catch: (cause) => new CheckFailed({ message: `Link dialog RPC failed: ${String(cause)}` }),
+  });
+
 export default {
   name: "dialog-link-confirmation",
-  run: ({ bot, client }) =>
-    Effect.gen(function* () {
+  run: ({ bot, client }) => {
+    return Effect.gen(function* () {
       const service = client.service(BotService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
-      const rpc = <A>(call: () => Promise<A>) =>
-        Effect.tryPromise({
-          try: call,
-          catch: (cause) =>
-            new CheckFailed({ message: `Link dialog RPC failed: ${String(cause)}` }),
-        });
       yield* rcon(
         `dialog show ${BOT_NAME} {type:"minecraft:notice",title:"Link QA",pause:false,after_action:"none",action:{label:"Open link",action:{type:"open_url",url:"${URL}"}}}`,
       );
@@ -138,5 +138,6 @@ export default {
       yield* returned();
     }).pipe(
       Effect.ensuring(rcon(`dialog clear ${BOT_NAME}`, { check: false }).pipe(Effect.ignore)),
-    ),
+    );
+  },
 } satisfies E2ETest;

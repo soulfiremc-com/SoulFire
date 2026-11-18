@@ -1,6 +1,6 @@
-import { Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
+import { Data, Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import {
   BeatGamePhase,
@@ -28,6 +28,18 @@ import {
   selectInventoryDiscard,
   selectRedundantEquipmentDiscard,
 } from "../src/run.js";
+
+class ScenarioFailure extends Data.TaggedError("ScenarioFailure")<{
+  readonly message: string;
+}> {}
+
+// Polls state that driver callbacks and other fibers update while the run is active.
+const sleepWhile = (condition: () => boolean, intervalMs = 1) =>
+  Effect.gen(function* () {
+    while (condition()) {
+      yield* Effect.sleep(intervalMs);
+    }
+  });
 import {
   blockObservation,
   checkpoint,
@@ -233,30 +245,31 @@ async function runUntilExplorationStarts(options: {
   return path;
 }
 
-function installNightBedTestWorld(driver: FakeBeatGameDriver): () => boolean {
-  let bedPlaced = false;
-  const air = (x: number, y: number, z: number) =>
-    blockObservation(
-      {
-        x,
-        y,
-        z,
-        dimension: "minecraft:overworld",
-      },
-      {
-        blockId: "minecraft:air",
-        diggable: false,
-        replaceable: true,
-        solid: false,
-      },
-    );
-  const stone = (x: number, y: number, z: number) =>
-    blockObservation({
+const airBlock = (x: number, y: number, z: number) =>
+  blockObservation(
+    {
       x,
       y,
       z,
       dimension: "minecraft:overworld",
-    });
+    },
+    {
+      blockId: "minecraft:air",
+      diggable: false,
+      replaceable: true,
+      solid: false,
+    },
+  );
+const stoneBlock = (x: number, y: number, z: number) =>
+  blockObservation({
+    x,
+    y,
+    z,
+    dimension: "minecraft:overworld",
+  });
+
+function installNightBedTestWorld(driver: FakeBeatGameDriver): () => boolean {
+  let bedPlaced = false;
   driver.blockQueryResolver = ({ center, radius, selector }) => {
     if (selector.blockIds?.includes("minecraft:water") === true) {
       return [];
@@ -296,15 +309,15 @@ function installNightBedTestWorld(driver: FakeBeatGameDriver): () => boolean {
     }
     if (radius > 1) {
       return [
-        air(0, 64, 0),
-        air(0, 65, 0),
-        air(0, 64, 1),
-        air(0, 65, 1),
-        air(0, 64, 2),
-        air(0, 65, 2),
-        stone(0, 63, 0),
-        stone(0, 63, 1),
-        stone(0, 63, 2),
+        airBlock(0, 64, 0),
+        airBlock(0, 65, 0),
+        airBlock(0, 64, 1),
+        airBlock(0, 65, 1),
+        airBlock(0, 64, 2),
+        airBlock(0, 65, 2),
+        stoneBlock(0, 63, 0),
+        stoneBlock(0, 63, 1),
+        stoneBlock(0, 63, 2),
       ];
     }
     if (
@@ -340,6 +353,54 @@ function installNightBedTestWorld(driver: FakeBeatGameDriver): () => boolean {
   return () => bedPlaced;
 }
 
+const coordinateKey = (x: number, y: number, z: number) => `${x}:${y}:${z}`;
+const noRoute = (operation: string) =>
+  new BeatGameDriverError({
+    operation,
+    code: "unreachable",
+    retryable: true,
+    message: "No route found to the goal!",
+  });
+const skeletonAt = (networkId: number, x: number, z: number) =>
+  ({
+    connectionEpoch: "epoch-1",
+    networkId,
+    entityType: "minecraft:skeleton",
+    position: { x, y: 64, z, dimension: "minecraft:overworld" },
+    velocity: { x: 0, y: 0, z: 0 },
+    alive: true,
+    health: 20,
+    observedAt: "2026-01-01T00:00:00.000Z",
+  }) as const;
+const blockKey = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+const mob = (networkId: number, entityType: string, x: number) =>
+  ({
+    connectionEpoch: "epoch-1",
+    networkId,
+    entityType,
+    position: { x, y: 64, z: 0, dimension: "minecraft:overworld" },
+    velocity: { x: 0, y: 0, z: 0 },
+    alive: true,
+    health: 20,
+    observedAt: "2026-01-01T00:00:00.000Z",
+  }) as const;
+const standVolumeAt = (stand: BeatGameBlockPosition) => [
+  blockObservation(stand, {
+    blockId: "minecraft:air",
+    replaceable: true,
+  }),
+  blockObservation(
+    { ...stand, y: stand.y + 1 },
+    {
+      blockId: "minecraft:air",
+      replaceable: true,
+    },
+  ),
+  blockObservation({ ...stand, y: stand.y - 1 }),
+];
+const blockPositionKey = (position: BeatGameBlockPosition) =>
+  `${position.x}:${position.y}:${position.z}`;
+
 describe("beat-game run lifecycle", () => {
   it("reports incomplete resource movement as progress, not success", async () => {
     const driver = new FakeBeatGameDriver();
@@ -365,25 +426,23 @@ describe("beat-game run lifecycle", () => {
                 }),
             },
           });
-          const progressed = yield* run.events.pipe(
+          const progressedEvent = yield* run.events.pipe(
             Stream.filter((event) => event.type === "action-progressed"),
             Stream.runHead,
             Effect.timeout("2 seconds"),
           );
-          const snapshot = yield* run.snapshot;
+          const currentSnapshot = yield* run.snapshot;
           yield* run.stop;
-          return [progressed, snapshot] as const;
+          return [progressedEvent, currentSnapshot] as const;
         }),
       ),
     );
 
-    expect(Option.isSome(progressed)).toBe(true);
-    if (Option.isSome(progressed)) {
-      expect(progressed.value).toMatchObject({
-        type: "action-progressed",
-        action: "satisfy:logs",
-      });
-    }
+    assert(Option.isSome(progressed));
+    expect(progressed.value).toMatchObject({
+      type: "action-progressed",
+      action: "satisfy:logs",
+    });
     expect(snapshot.checkpoint.planner.completedActions).not.toContain("satisfy:logs");
   });
 
@@ -466,9 +525,9 @@ describe("beat-game run lifecycle", () => {
             yield* Effect.sleep(1);
           }
           yield* Effect.sleep(10);
-          const snapshot = yield* run.snapshot;
+          const currentSnapshot = yield* run.snapshot;
           yield* run.stop;
-          return snapshot;
+          return currentSnapshot;
         }),
       ),
     );
@@ -756,7 +815,10 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The bot never looked for Nether stems")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The bot never looked for Nether stems" }),
+              ),
           }),
         ),
       ),
@@ -815,7 +877,10 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The arrival portal was never remembered")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The arrival portal was never remembered" }),
+              ),
           }),
         ),
       ),
@@ -883,7 +948,10 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The bot never walked toward the linked portal")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The bot never walked toward the linked portal" }),
+              ),
           }),
         ),
       ),
@@ -962,7 +1030,10 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The bot never headed for the linked portal")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The bot never headed for the linked portal" }),
+              ),
           }),
         ),
       ),
@@ -1024,9 +1095,7 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (safetyObservations < 3) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => safetyObservations < 3);
           yield* Effect.sleep(5);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
@@ -1091,9 +1160,7 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (safetyObservations < 3) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => safetyObservations < 3);
           yield* Effect.sleep(5);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
@@ -1153,9 +1220,7 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (!actionStarted || driver.surfaceQueries.length < 3) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !actionStarted || driver.surfaceQueries.length < 3);
           yield* Effect.sleep(5);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
@@ -1336,16 +1401,15 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (!actionStarted || driver.blockQueries.length < 3) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !actionStarted || driver.blockQueries.length < 3);
           yield* Effect.sleep(5);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }).pipe(
           Effect.timeoutOrElse({
             duration: "2 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for covered travel")),
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for covered travel" })),
           }),
         ),
       ),
@@ -1403,16 +1467,17 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (!actionStarted || driver.surfaceQueries.length < 3) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !actionStarted || driver.surfaceQueries.length < 3);
           yield* Effect.sleep(5);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }).pipe(
           Effect.timeoutOrElse({
             duration: "2 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for cave work to start")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for cave work to start" }),
+              ),
           }),
         ),
       ),
@@ -1501,7 +1566,8 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "2 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for night shelter")),
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for night shelter" })),
           }),
         ),
       ),
@@ -1559,7 +1625,8 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "3 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for bed sleep")),
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for bed sleep" })),
           }),
         ),
       ),
@@ -1747,7 +1814,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "3 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for crafted bed sleep")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for crafted bed sleep" }),
+              ),
           }),
         ),
       ),
@@ -1809,7 +1879,6 @@ describe("beat-game run lifecycle", () => {
         }
         return { gameTime: 1_000n };
       });
-    const key = (x: number, y: number, z: number) => `${x}:${y}:${z}`;
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:water") === true) {
         return [];
@@ -1820,7 +1889,7 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const blockKey = key(position.x, position.y, position.z);
+      const positionKey = coordinateKey(position.x, position.y, position.z);
       const isShaft = position.x === 0 && position.z === 0;
       const isSeal = isShaft && position.y === 63;
       const isShaftFloor = isShaft && position.y >= 61 && position.y <= 63;
@@ -1828,7 +1897,7 @@ describe("beat-game run lifecycle", () => {
       if (
         (isSeal && sealPlaced) ||
         isSealSupport ||
-        (isShaftFloor && !removedBlocks.has(blockKey))
+        (isShaftFloor && !removedBlocks.has(positionKey))
       ) {
         return [
           blockObservation(position, {
@@ -1848,7 +1917,7 @@ describe("beat-game run lifecycle", () => {
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
         const collectedDirt = action.position.y === 63 ? { "minecraft:dirt": 1 } : {};
-        removedBlocks.add(key(action.position.x, action.position.y, action.position.z));
+        removedBlocks.add(coordinateKey(action.position.x, action.position.y, action.position.z));
         if (action.position.y === Math.floor(driver.currentObservation.player.position.y) - 1) {
           driver.currentObservation = observation({
             position: {
@@ -1866,7 +1935,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (action.type === "place-block") {
         sealPlaced = true;
-        removedBlocks.delete(key(0, 63, 0));
+        removedBlocks.delete(coordinateKey(0, 63, 0));
       }
     };
 
@@ -2342,13 +2411,6 @@ describe("beat-game run lifecycle", () => {
         blockLight: 0,
       })),
     );
-    const noRoute = (operation: string) =>
-      new BeatGameDriverError({
-        operation,
-        code: "unreachable",
-        retryable: true,
-        message: "No route found to the goal!",
-      });
     // As on a live cliff ledge, no walk that may not dig leaves the pocket.
     driver.pathResolver = (position, radius, policy) =>
       Effect.sync(() => {
@@ -2375,7 +2437,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The bot never tried to dig out of the pocket")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The bot never tried to dig out of the pocket" }),
+              ),
           }),
         ),
       ),
@@ -2494,7 +2559,6 @@ describe("beat-game run lifecycle", () => {
       blockLight: 0,
     }));
     const removedBlocks = new Set<string>();
-    const key = (x: number, y: number, z: number) => `${x}:${y}:${z}`;
     let sealPlaced = false;
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:water") === true) {
@@ -2506,7 +2570,7 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const blockKey = key(position.x, position.y, position.z);
+      const positionKey = coordinateKey(position.x, position.y, position.z);
       const unstableShaft = position.x === 0 && position.z === 0;
       const unstableShaftSupport = position.x === -1 && position.y === 63 && position.z === 0;
       const floodingShaftNeighbor = position.x === 1 && position.y === 62 && position.z === 0;
@@ -2515,7 +2579,7 @@ describe("beat-game run lifecycle", () => {
       const stableSealSupport = position.x === 5 && position.y === 63 && position.z === 0;
       const solidUnstableFloor = unstableShaft && position.y >= 61 && position.y <= 63;
       const solidStableFloor =
-        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(blockKey);
+        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(positionKey);
       if (floodingShaftNeighbor) {
         return [
           blockObservation(position, {
@@ -2558,7 +2622,7 @@ describe("beat-game run lifecycle", () => {
       });
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
-        removedBlocks.add(key(action.position.x, action.position.y, action.position.z));
+        removedBlocks.add(coordinateKey(action.position.x, action.position.y, action.position.z));
         if (
           action.position.x === 4 &&
           action.position.z === 0 &&
@@ -2578,7 +2642,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (action.type === "place-block") {
         sealPlaced = true;
-        removedBlocks.delete(key(4, 63, 0));
+        removedBlocks.delete(coordinateKey(4, 63, 0));
         driver.currentEnvironment = { gameTime: 1_000n };
       }
     };
@@ -2682,7 +2746,6 @@ describe("beat-game run lifecycle", () => {
       );
     };
     const removedBlocks = new Set<string>();
-    const key = (x: number, y: number, z: number) => `${x}:${y}:${z}`;
     let sealPlaced = false;
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:water") === true) {
@@ -2694,12 +2757,12 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const blockKey = key(position.x, position.y, position.z);
+      const positionKey = coordinateKey(position.x, position.y, position.z);
       const stableShaft = position.x === 16 && position.z === 0;
       const stableSeal = stableShaft && position.y === 63;
       const stableSupport = position.x === 17 && position.y === 63 && position.z === 0;
       const stableFloor =
-        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(blockKey);
+        stableShaft && position.y >= 61 && position.y <= 63 && !removedBlocks.has(positionKey);
       if ((stableSeal && sealPlaced) || stableSupport || stableFloor) {
         return [
           blockObservation(position, {
@@ -2726,7 +2789,7 @@ describe("beat-game run lifecycle", () => {
       });
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
-        removedBlocks.add(key(action.position.x, action.position.y, action.position.z));
+        removedBlocks.add(coordinateKey(action.position.x, action.position.y, action.position.z));
         driver.currentObservation = observation({
           counts: driver.currentObservation.inventory.counts,
           position: {
@@ -2737,7 +2800,7 @@ describe("beat-game run lifecycle", () => {
       }
       if (action.type === "place-block") {
         sealPlaced = true;
-        removedBlocks.delete(key(16, 63, 0));
+        removedBlocks.delete(coordinateKey(16, 63, 0));
         driver.currentEnvironment = { gameTime: 1_000n };
       }
     };
@@ -2760,7 +2823,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for shelter relocation")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for shelter relocation" }),
+              ),
           }),
         ),
       ),
@@ -2797,25 +2863,13 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
-    driver.entityResults = [skeleton(31, 12, 0), skeleton(32, 0, 12)];
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
     driver.entityQueryResolver = ({ selector }) =>
       driver.entityResults.filter(
         (entity) =>
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const dug = new Set<string>();
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
@@ -2828,10 +2882,10 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
       }
-      if (position.y < 64 && !dug.has(key(position))) {
+      if (position.y < 64 && !dug.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -2853,7 +2907,7 @@ describe("beat-game run lifecycle", () => {
     } as const;
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
-        dug.add(key(action.position));
+        dug.add(blockKey(action.position));
         // The bot drops into the hole it dug.
         driver.currentObservation = observation({
           counts,
@@ -2864,7 +2918,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -2904,7 +2958,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "4 seconds",
-            orElse: () => Effect.fail(new Error("Never sealed a shaft")),
+            orElse: () => Effect.fail(new ScenarioFailure({ message: "Never sealed a shaft" })),
           }),
         ),
       ),
@@ -2924,25 +2978,13 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.9, y: 64, z: 0.3 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
-    driver.entityResults = [skeleton(31, 12, 0), skeleton(32, 0, 12)];
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
     driver.entityQueryResolver = ({ selector }) =>
       driver.entityResults.filter(
         (entity) =>
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const dug = new Set<string>();
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
@@ -2955,10 +2997,10 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
       }
-      if (position.y < 64 && !dug.has(key(position))) {
+      if (position.y < 64 && !dug.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -2980,7 +3022,7 @@ describe("beat-game run lifecycle", () => {
     } as const;
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
-        dug.add(key(action.position));
+        dug.add(blockKey(action.position));
         const { x, z } = driver.currentObservation.player.position;
         // Off center, the bot keeps standing on the neighboring block.
         if (Math.abs(x - 0.5) <= 0.2 && Math.abs(z - 0.5) <= 0.2) {
@@ -2994,7 +3036,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3038,7 +3080,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "4 seconds",
-            orElse: () => Effect.fail(new Error("Never sealed a shaft")),
+            orElse: () => Effect.fail(new ScenarioFailure({ message: "Never sealed a shaft" })),
           }),
         ),
       ),
@@ -3056,25 +3098,13 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
-    driver.entityResults = [skeleton(31, 12, 0), skeleton(32, 0, 12)];
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
     driver.entityQueryResolver = ({ selector }) =>
       driver.entityResults.filter(
         (entity) =>
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3090,7 +3120,7 @@ describe("beat-game run lifecycle", () => {
         // Undiggable, so cover falls back to walls on open ground.
         return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3114,7 +3144,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3157,9 +3187,9 @@ describe("beat-game run lifecycle", () => {
             duration: "4 seconds",
             orElse: () =>
               Effect.fail(
-                new Error(
-                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
-                ),
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
               ),
           }),
         ),
@@ -3189,25 +3219,13 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
-    driver.entityResults = [skeleton(31, 12, 0), skeleton(32, 0, 12)];
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
     driver.entityQueryResolver = ({ selector }) =>
       driver.entityResults.filter(
         (entity) =>
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3223,7 +3241,7 @@ describe("beat-game run lifecycle", () => {
         // Undiggable, so cover falls back to walls on open ground.
         return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3247,7 +3265,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3293,9 +3311,9 @@ describe("beat-game run lifecycle", () => {
             duration: "4 seconds",
             orElse: () =>
               Effect.fail(
-                new Error(
-                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
-                ),
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
               ),
           }),
         ),
@@ -3325,19 +3343,8 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
     // Only a creeper is in view; the archer shoots from beyond the query range.
-    driver.entityResults = [{ ...skeleton(33, 8, 0), entityType: "minecraft:creeper" }];
+    driver.entityResults = [{ ...skeletonAt(33, 8, 0), entityType: "minecraft:creeper" }];
     driver.events = Stream.make({
       type: "bot-damaged",
       observedAt: new Date().toISOString(),
@@ -3351,7 +3358,6 @@ describe("beat-game run lifecycle", () => {
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3367,7 +3373,7 @@ describe("beat-game run lifecycle", () => {
         // Undiggable, so cover falls back to walls on open ground.
         return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3391,7 +3397,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3437,9 +3443,9 @@ describe("beat-game run lifecycle", () => {
             duration: "4 seconds",
             orElse: () =>
               Effect.fail(
-                new Error(
-                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
-                ),
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
               ),
           }),
         ),
@@ -3469,19 +3475,8 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
     // Only a creeper is in view; the archer shoots from beyond the query range.
-    driver.entityResults = [{ ...skeleton(33, 8, 0), entityType: "minecraft:creeper" }];
+    driver.entityResults = [{ ...skeletonAt(33, 8, 0), entityType: "minecraft:creeper" }];
     driver.events = Stream.make({
       type: "bot-damaged",
       observedAt: new Date().toISOString(),
@@ -3495,7 +3490,6 @@ describe("beat-game run lifecycle", () => {
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3511,7 +3505,7 @@ describe("beat-game run lifecycle", () => {
         // Undiggable, so cover falls back to walls on open ground.
         return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3535,7 +3529,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3581,9 +3575,9 @@ describe("beat-game run lifecycle", () => {
             duration: "4 seconds",
             orElse: () =>
               Effect.fail(
-                new Error(
-                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
-                ),
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
               ),
           }),
         ),
@@ -3613,29 +3607,17 @@ describe("beat-game run lifecycle", () => {
       position: { x: 0.5, y: 64, z: 0.5 },
       health: 16,
     });
-    const skeleton = (networkId: number, x: number, z: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType: "minecraft:skeleton",
-        position: { x, y: 64, z, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
     const zombie = {
-      ...skeleton(33, 3, 0),
+      ...skeletonAt(33, 3, 0),
       entityType: "minecraft:zombie",
     } as const;
-    driver.entityResults = [zombie, skeleton(31, 0, 12)];
+    driver.entityResults = [zombie, skeletonAt(31, 0, 12)];
     driver.entityQueryResolver = ({ selector }) =>
       driver.entityResults.filter(
         (entity) =>
           (selector.networkId === undefined || selector.networkId === entity.networkId) &&
           (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
       );
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3651,7 +3633,7 @@ describe("beat-game run lifecycle", () => {
         // Undiggable, so cover falls back to walls on open ground.
         return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3675,7 +3657,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3718,9 +3700,9 @@ describe("beat-game run lifecycle", () => {
             duration: "4 seconds",
             orElse: () =>
               Effect.fail(
-                new Error(
-                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
-                ),
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
               ),
           }),
         ),
@@ -3753,7 +3735,6 @@ describe("beat-game run lifecycle", () => {
       },
       position: { x: 0.5, y: 64, z: 0.5 },
     });
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3773,7 +3754,7 @@ describe("beat-game run lifecycle", () => {
           }),
         ];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3797,7 +3778,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3808,7 +3789,7 @@ describe("beat-game run lifecycle", () => {
         }
       }
       if (action.type === "dig-block") {
-        placed.delete(key(action.position));
+        placed.delete(blockKey(action.position));
       }
     };
 
@@ -3827,7 +3808,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "8 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for the enclosure to open")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for the enclosure to open" }),
+              ),
           }),
         ),
       ),
@@ -3858,7 +3842,6 @@ describe("beat-game run lifecycle", () => {
       },
       position: { x: 0.5, y: 64, z: 0.5 },
     });
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3871,7 +3854,7 @@ describe("beat-game run lifecycle", () => {
         dimension: center.dimension,
       };
       // As at a live shoreline, the west wall would stand over water.
-      if (key(position) === "-1:63:0" && !placed.has(key(position))) {
+      if (blockKey(position) === "-1:63:0" && !placed.has(blockKey(position))) {
         return [
           blockObservation(position, {
             blockId: "minecraft:water",
@@ -3889,7 +3872,7 @@ describe("beat-game run lifecycle", () => {
           }),
         ];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -3913,7 +3896,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -3924,7 +3907,7 @@ describe("beat-game run lifecycle", () => {
         }
       }
       if (action.type === "dig-block") {
-        placed.delete(key(action.position));
+        placed.delete(blockKey(action.position));
       }
     };
 
@@ -3943,7 +3926,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "8 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for the enclosure to open")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for the enclosure to open" }),
+              ),
           }),
         ),
       ),
@@ -3964,7 +3950,6 @@ describe("beat-game run lifecycle", () => {
       },
       position: { x: 0.5, y: 64, z: 0.5 },
     });
-    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
     const placed = new Set<string>();
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds !== undefined) {
@@ -3986,7 +3971,7 @@ describe("beat-game run lifecycle", () => {
       }
       // As on the live mountain, powder snow sits beside the roof. It is not
       // replaceable, but it has no collision.
-      if (key(position) === "-1:66:0") {
+      if (blockKey(position) === "-1:66:0") {
         return [
           blockObservation(position, {
             blockId: "minecraft:powder_snow",
@@ -3995,7 +3980,7 @@ describe("beat-game run lifecycle", () => {
           }),
         ];
       }
-      if (placed.has(key(position))) {
+      if (placed.has(blockKey(position))) {
         return [blockObservation(position, { blockId: "minecraft:dirt" })];
       }
       return [
@@ -4018,7 +4003,7 @@ describe("beat-game run lifecycle", () => {
     // The server refuses to place a block against powder snow.
     driver.actionResolver = (action) =>
       Effect.suspend(() => {
-        if (action.type === "place-block" && key(action.against) === "-1:66:0") {
+        if (action.type === "place-block" && blockKey(action.against) === "-1:66:0") {
           return Effect.fail(
             new BeatGameDriverError({
               operation: "act.place-block",
@@ -4036,7 +4021,7 @@ describe("beat-game run lifecycle", () => {
       if (action.type === "place-block") {
         const offset = faceOffsets[action.face];
         placed.add(
-          key({
+          blockKey({
             x: action.against.x + offset.x,
             y: action.against.y + offset.y,
             z: action.against.z + offset.z,
@@ -4047,7 +4032,7 @@ describe("beat-game run lifecycle", () => {
         }
       }
       if (action.type === "dig-block") {
-        placed.delete(key(action.position));
+        placed.delete(blockKey(action.position));
       }
     };
 
@@ -4066,7 +4051,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "8 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for the enclosure to open")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for the enclosure to open" }),
+              ),
           }),
         ),
       ),
@@ -4363,7 +4351,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for shelter digging")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for shelter digging" }),
+              ),
           }),
         ),
       ),
@@ -5023,12 +5014,11 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (
-                recoveryAttempts === 0 &&
-                !driver.actions.some((action) => action.type === "dig-block")
-              ) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(
+                () =>
+                  recoveryAttempts === 0 &&
+                  !driver.actions.some((action) => action.type === "dig-block"),
+              );
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -5211,9 +5201,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveryAttempts === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveryAttempts === 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -5278,9 +5266,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveryAttempts === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveryAttempts === 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -5816,11 +5802,7 @@ describe("beat-game run lifecycle", () => {
             checkpointStore: store,
             strategy: { observationPollMs: 1 },
           });
-          yield* Effect.gen(function* () {
-            while (subscriptions < 2) {
-              yield* Effect.sleep(10);
-            }
-          }).pipe(Effect.timeout("5 seconds"));
+          yield* sleepWhile(() => subscriptions < 2, 10).pipe(Effect.timeout("5 seconds"));
           yield* Effect.sleep(10);
           yield* PubSub.publish(driverEvents, {
             type: "bot-died",
@@ -5908,9 +5890,7 @@ describe("beat-game run lifecycle", () => {
 
           driver.currentObservation = observation({ counts: {} });
           const observationsBeforeRespawn = observationCount;
-          while (observationCount === observationsBeforeRespawn) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => observationCount === observationsBeforeRespawn);
           driver.currentObservation = observation({
             observedAt: secondDeathObservedAt,
             position: secondDeathPosition,
@@ -6144,10 +6124,7 @@ describe("beat-game run lifecycle", () => {
                 counts: replacementInventory,
               });
               let attempts = 2_000;
-              while (!corpsePathInterrupted && attempts > 0) {
-                attempts -= 1;
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => !corpsePathInterrupted && attempts-- > 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -6227,7 +6204,11 @@ describe("beat-game run lifecycle", () => {
               Effect.timeoutOrElse({
                 duration: "2 seconds",
                 orElse: () =>
-                  Effect.fail(new Error("Timed out waiting for the environmental escape")),
+                  Effect.fail(
+                    new ScenarioFailure({
+                      message: "Timed out waiting for the environmental escape",
+                    }),
+                  ),
               }),
             ),
           ),
@@ -6312,7 +6293,10 @@ describe("beat-game run lifecycle", () => {
             }).pipe(
               Effect.timeoutOrElse({
                 duration: "2 seconds",
-                orElse: () => Effect.fail(new Error("Timed out waiting for the fire escape")),
+                orElse: () =>
+                  Effect.fail(
+                    new ScenarioFailure({ message: "Timed out waiting for the fire escape" }),
+                  ),
               }),
             ),
           ),
@@ -6379,15 +6363,16 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (!escaped) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => !escaped);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }).pipe(
               Effect.timeoutOrElse({
                 duration: "2 seconds",
-                orElse: () => Effect.fail(new Error("Timed out waiting for the lava escape")),
+                orElse: () =>
+                  Effect.fail(
+                    new ScenarioFailure({ message: "Timed out waiting for the lava escape" }),
+                  ),
               }),
             ),
           ),
@@ -6782,9 +6767,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveries === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveries === 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -7666,7 +7649,7 @@ describe("beat-game run lifecycle", () => {
             checkpointStore: store,
             strategy: { observationPollMs: 1 },
           });
-          const phaseChange = yield* run.events.pipe(
+          const phaseChangeEvent = yield* run.events.pipe(
             Stream.filter(
               (event) =>
                 event.type === "phase-changed" && event.current === BeatGamePhase.PREPARE_OVERWORLD,
@@ -7675,7 +7658,7 @@ describe("beat-game run lifecycle", () => {
             Effect.timeout("2 seconds"),
           );
           yield* run.stop;
-          return phaseChange;
+          return phaseChangeEvent;
         }),
       ),
     );
@@ -8670,7 +8653,10 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("Timed out waiting for pocket recovery")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "Timed out waiting for pocket recovery" }),
+              ),
           }),
         ),
       ),
@@ -8802,7 +8788,11 @@ describe("beat-game run lifecycle", () => {
                 Effect.timeoutOrElse({
                   duration: "2 seconds",
                   orElse: () =>
-                    Effect.fail(new Error("Timed out waiting for aquatic corpse provisioning")),
+                    Effect.fail(
+                      new ScenarioFailure({
+                        message: "Timed out waiting for aquatic corpse provisioning",
+                      }),
+                    ),
                 }),
               );
               yield* run.stop;
@@ -9159,9 +9149,7 @@ describe("beat-game run lifecycle", () => {
               "minecraft:wooden_sword": 1,
             },
           });
-          while (!atBreathingPocket || driver.currentObservation.player.air < 300) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !atBreathingPocket || driver.currentObservation.player.air < 300);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }).pipe(Effect.timeout("5 seconds")),
@@ -11205,7 +11193,11 @@ describe("beat-game run lifecycle", () => {
               Effect.timeoutOrElse({
                 duration: "5 seconds",
                 orElse: () =>
-                  Effect.fail(new Error("Timed out waiting for the urgent cod drop pickup")),
+                  Effect.fail(
+                    new ScenarioFailure({
+                      message: "Timed out waiting for the urgent cod drop pickup",
+                    }),
+                  ),
               }),
             ),
           ),
@@ -11876,7 +11868,11 @@ describe("beat-game run lifecycle", () => {
                 Effect.timeoutOrElse({
                   duration: "5 seconds",
                   orElse: () =>
-                    Effect.fail(new Error("The bounded corpse food search did not finish")),
+                    Effect.fail(
+                      new ScenarioFailure({
+                        message: "The bounded corpse food search did not finish",
+                      }),
+                    ),
                 }),
               );
               yield* run.stop;
@@ -12401,7 +12397,11 @@ describe("beat-game run lifecycle", () => {
                 Effect.timeoutOrElse({
                   duration: "5 seconds",
                   orElse: () =>
-                    Effect.fail(new Error("Food preparation stopped inside the threshold")),
+                    Effect.fail(
+                      new ScenarioFailure({
+                        message: "Food preparation stopped inside the threshold",
+                      }),
+                    ),
                 }),
               );
               yield* run.stop;
@@ -12821,7 +12821,7 @@ describe("beat-game run lifecycle", () => {
           Effect.flatMap((run) =>
             Effect.gen(function* () {
               const event = yield* run.events.pipe(
-                Stream.filter((event) => event.type === "items-recovered"),
+                Stream.filter((candidate) => candidate.type === "items-recovered"),
                 Stream.runHead,
               );
               yield* run.stop;
@@ -12962,12 +12962,13 @@ describe("beat-game run lifecycle", () => {
                       position: secondDeathPosition,
                       counts: { "minecraft:stone_sword": 1 },
                     });
-                    return;
+                    return undefined;
                   }
                   driver.currentObservation = observation({
                     position: originalDeathPosition,
                     counts: { "minecraft:iron_ingot": 7 },
                   });
+                  return undefined;
                 }),
             },
           });
@@ -13041,9 +13042,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveries < 2) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveries < 2);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -13122,9 +13121,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveries < 2) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveries < 2);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -13560,9 +13557,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (recoveries < 3) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => recoveries < 3);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -13916,9 +13911,8 @@ describe("beat-game run lifecycle", () => {
     );
     expect(sprintLooks.length).toBeGreaterThanOrEqual(2);
     const firstSprintLook = sprintLooks[0];
-    if (firstSprintLook?.type === "look") {
-      expect(Math.abs(Math.abs(firstSprintLook.yaw) - 90)).toBeGreaterThanOrEqual(45);
-    }
+    assert(firstSprintLook?.type === "look");
+    expect(Math.abs(Math.abs(firstSprintLook.yaw) - 90)).toBeGreaterThanOrEqual(45);
     expect(driver.tasks.filter((task) => task.type === "flee")).toHaveLength(1);
     expect(driver.currentObservation.player.health).toBe(20);
   }, 10_000);
@@ -13984,11 +13978,10 @@ describe("beat-game run lifecycle", () => {
     expect(escapeLooks).toHaveLength(3);
     expect(escapeLooks[1]).toEqual(expect.objectContaining({ type: "look" }));
     expect(escapeLooks[2]).toEqual(expect.objectContaining({ type: "look" }));
-    if (escapeLooks[1]?.type === "look" && escapeLooks[2]?.type === "look") {
-      expect(Math.abs(escapeLooks[1].yaw - escapeLooks[2].yaw)).toBeGreaterThanOrEqual(45);
-      expect(-Math.sin((escapeLooks[1].yaw * Math.PI) / 180)).toBeLessThan(-0.2);
-      expect(-Math.sin((escapeLooks[2].yaw * Math.PI) / 180)).toBeLessThan(-0.2);
-    }
+    assert(escapeLooks[1]?.type === "look" && escapeLooks[2]?.type === "look");
+    expect(Math.abs(escapeLooks[1].yaw - escapeLooks[2].yaw)).toBeGreaterThanOrEqual(45);
+    expect(-Math.sin((escapeLooks[1].yaw * Math.PI) / 180)).toBeLessThan(-0.2);
+    expect(-Math.sin((escapeLooks[2].yaw * Math.PI) / 180)).toBeLessThan(-0.2);
     expect(driver.surfaceQueries.length).toBeGreaterThanOrEqual(2);
     expect(
       driver.actions.filter((action) => action.type === "set-movement" && action.forward === true),
@@ -14128,9 +14121,7 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          while (!fleeCompleted) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !fleeCompleted);
           yield* run.stop;
         }),
       ),
@@ -15254,9 +15245,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (escapes === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => escapes === 0);
               yield* Effect.sleep(250);
               const result = interruptedEscapes;
               yield* run.stop;
@@ -15573,9 +15562,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (escapes < 2) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => escapes < 2);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -19205,10 +19192,7 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           let attempts = 5_000;
-          while (directSprints < 2 && attempts > 0) {
-            attempts -= 1;
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => directSprints < 2 && attempts-- > 0);
           yield* run.stop;
         }),
       ),
@@ -19546,17 +19530,6 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:stone_sword": 1 };
     driver.currentObservation = observation({ counts });
-    const mob = (networkId: number, entityType: string, x: number) =>
-      ({
-        connectionEpoch: "epoch-1",
-        networkId,
-        entityType,
-        position: { x, y: 64, z: 0, dimension: "minecraft:overworld" },
-        velocity: { x: 0, y: 0, z: 0 },
-        alive: true,
-        health: 20,
-        observedAt: "2026-01-01T00:00:00.000Z",
-      }) as const;
     const skeleton = mob(61, "minecraft:skeleton", 3);
     const zombie = mob(62, "minecraft:zombie", 1.5);
     driver.entityResults = [skeleton];
@@ -19602,7 +19575,9 @@ describe("beat-game run lifecycle", () => {
                 duration: "5 seconds",
                 orElse: () =>
                   Effect.fail(
-                    new Error(`Never turned on the zombie: ${JSON.stringify(attackTargets())}`),
+                    new ScenarioFailure({
+                      message: `Never turned on the zombie: ${JSON.stringify(attackTargets())}`,
+                    }),
                   ),
               }),
             ),
@@ -19672,9 +19647,9 @@ describe("beat-game run lifecycle", () => {
                 duration: "5 seconds",
                 orElse: () =>
                   Effect.fail(
-                    new Error(
-                      `Never turned to fight: ${driver.actions.filter((action) => action.type === "attack-entity").length} knockbacks`,
-                    ),
+                    new ScenarioFailure({
+                      message: `Never turned to fight: ${driver.actions.filter((action) => action.type === "attack-entity").length} knockbacks`,
+                    }),
                   ),
               }),
             ),
@@ -20528,9 +20503,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (interruptedEscapes === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => interruptedEscapes === 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -20694,7 +20667,10 @@ describe("beat-game run lifecycle", () => {
             }).pipe(
               Effect.timeoutOrElse({
                 duration: "8 seconds",
-                orElse: () => Effect.fail(new Error("Timed out waiting for drowned evasion")),
+                orElse: () =>
+                  Effect.fail(
+                    new ScenarioFailure({ message: "Timed out waiting for drowned evasion" }),
+                  ),
               }),
             ),
           ),
@@ -20781,9 +20757,7 @@ describe("beat-game run lifecycle", () => {
                 position: { x: 13 },
               });
               driver.entityResults = [];
-              while (interruptedDefensiveAttacks === 0) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => interruptedDefensiveAttacks === 0);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -23134,9 +23108,7 @@ describe("beat-game run lifecycle", () => {
                 health: 3,
                 position: { x: 0, y: 51, z: 0 },
               });
-              while (responseAir === undefined) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => responseAir === undefined);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -25734,20 +25706,6 @@ describe("beat-game run lifecycle", () => {
       z: 0,
       dimension: start.dimension,
     } as const;
-    const standVolume = (stand: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-    ];
     const sources = [loneSource, ...poolSources];
     driver.currentObservation = observation({
       position: start,
@@ -25780,7 +25738,7 @@ describe("beat-game run lifecycle", () => {
         );
       }
       if (radius === 4.9 && Object.keys(selector).length === 0) {
-        return standVolume(center.x < 10 ? loneStand : poolStand);
+        return standVolumeAt(center.x < 10 ? loneStand : poolStand);
       }
       return [];
     };
@@ -25889,20 +25847,6 @@ describe("beat-game run lifecycle", () => {
       z: 1,
       dimension: source.dimension,
     } as const;
-    const standVolume = (stand: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-    ];
     const sightlineWall = Array.from({ length: 5 }, (_, index) =>
       blockObservation({
         x: 1,
@@ -25953,7 +25897,7 @@ describe("beat-game run lifecycle", () => {
         ];
       }
       return radius === 4.9 && Object.keys(selector).length === 0
-        ? [...standVolume(blockedStand), ...standVolume(clearStand), ...sightlineWall]
+        ? [...standVolumeAt(blockedStand), ...standVolumeAt(clearStand), ...sightlineWall]
         : [];
     };
     driver.recipeResolver = (resultItemId) => [
@@ -26308,20 +26252,6 @@ describe("beat-game run lifecycle", () => {
         "minecraft:water_bucket": 1,
       },
     });
-    const standVolume = (stand: BeatGameBlockPosition) => [
-      blockObservation(stand, {
-        blockId: "minecraft:air",
-        replaceable: true,
-      }),
-      blockObservation(
-        { ...stand, y: stand.y + 1 },
-        {
-          blockId: "minecraft:air",
-          replaceable: true,
-        },
-      ),
-      blockObservation({ ...stand, y: stand.y - 1 }),
-    ];
     driver.blockQueryResolver = ({ center, radius, selector }) => {
       if (
         selector.blockIds?.includes("minecraft:lava") === true &&
@@ -26331,8 +26261,8 @@ describe("beat-game run lifecycle", () => {
       }
       if (radius === 4.9 && Object.keys(selector).length === 0) {
         return Math.floor(center.x) === blockedSource.position.x
-          ? standVolume(blockedStand)
-          : standVolume(openStand);
+          ? standVolumeAt(blockedStand)
+          : standVolumeAt(openStand);
       }
       return [];
     };
@@ -27547,14 +27477,19 @@ describe("beat-game run lifecycle", () => {
           yield* Effect.promise(() => relocated).pipe(
             Effect.timeoutOrElse({
               duration: "5 seconds",
-              orElse: () => Effect.fail(new Error("Timed out waiting for relocation")),
+              orElse: () =>
+                Effect.fail(new ScenarioFailure({ message: "Timed out waiting for relocation" })),
             }),
           );
           yield* Effect.promise(() => searchContinued).pipe(
             Effect.timeoutOrElse({
               duration: "5 seconds",
               orElse: () =>
-                Effect.fail(new Error("Timed out waiting for lava search continuation")),
+                Effect.fail(
+                  new ScenarioFailure({
+                    message: "Timed out waiting for lava search continuation",
+                  }),
+                ),
             }),
           );
           yield* run.stop;
@@ -28205,7 +28140,7 @@ describe("beat-game run lifecycle", () => {
               portalStrategy: "CAST",
             },
           });
-          const events = yield* run.events.pipe(
+          const recordedEvents = yield* run.events.pipe(
             Stream.takeUntilEffect(() =>
               store
                 .load(runId)
@@ -28223,7 +28158,7 @@ describe("beat-game run lifecycle", () => {
           );
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
-          return events;
+          return recordedEvents;
         }),
       ),
     );
@@ -28925,11 +28860,7 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          yield* Effect.gen(function* () {
-            while (attempts < 2) {
-              yield* Effect.sleep(1);
-            }
-          }).pipe(Effect.timeout("5 seconds"));
+          yield* sleepWhile(() => attempts < 2).pipe(Effect.timeout("5 seconds"));
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }),
@@ -31658,14 +31589,14 @@ describe("beat-game run lifecycle", () => {
           const run = yield* beatGameWithDriver(driver, {
             strategy: { observationPollMs: 1 },
           });
-          const firstFailure = yield* run.events.pipe(
+          const firstFailureEvent = yield* run.events.pipe(
             Stream.filter(
               (event) => event.type === "action-failed" && event.action === "satisfy:food-supply",
             ),
             Stream.runHead,
             Effect.timeout("5 seconds"),
           );
-          const repeatedImmediately = yield* Effect.race(
+          const repeated = yield* Effect.race(
             run.events.pipe(
               Stream.filter(
                 (event) =>
@@ -31678,7 +31609,7 @@ describe("beat-game run lifecycle", () => {
             Effect.sleep(100).pipe(Effect.as(false)),
           );
           yield* run.stop;
-          return [firstFailure, repeatedImmediately] as const;
+          return [firstFailureEvent, repeated] as const;
         }),
       ),
     );
@@ -31962,9 +31893,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (foodQueries < 4) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => foodQueries < 4);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -32504,7 +32433,8 @@ describe("beat-game run lifecycle", () => {
           ),
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The food hunt never explored")),
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "The food hunt never explored" })),
           }),
         ),
       ),
@@ -32645,7 +32575,11 @@ describe("beat-game run lifecycle", () => {
                 Effect.timeoutOrElse({
                   duration: "5 seconds",
                   orElse: () =>
-                    Effect.fail(new Error("Distant exploration stopped making progress")),
+                    Effect.fail(
+                      new ScenarioFailure({
+                        message: "Distant exploration stopped making progress",
+                      }),
+                    ),
                 }),
               );
               yield* run.stop;
@@ -32935,9 +32869,9 @@ describe("beat-game run lifecycle", () => {
                   duration: "2 seconds",
                   orElse: () =>
                     Effect.fail(
-                      new Error(
-                        `Surface path did not start; tasks: ${JSON.stringify(driver.tasks)}`,
-                      ),
+                      new ScenarioFailure({
+                        message: `Surface path did not start; tasks: ${JSON.stringify(driver.tasks)}`,
+                      }),
                     ),
                 }),
               );
@@ -34110,9 +34044,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (!collectingDrop) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => !collectingDrop);
               yield* Effect.sleep(200);
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
@@ -35751,7 +35683,7 @@ describe("beat-game run lifecycle", () => {
       Effect.sync(() => {
         driver.paths.push({ position, radius, policy });
         if (surfaceRecoveryAttempted) {
-          return false;
+          return;
         }
         surfaceRecoveryAttempted = true;
         driver.currentObservation = {
@@ -36384,7 +36316,6 @@ describe("beat-game run lifecycle", () => {
         blockLight: 0,
       },
     ];
-    const key = (position: BeatGameBlockPosition) => `${position.x}:${position.y}:${position.z}`;
     const replaceableSupports = new Set<string>();
     for (let rise = 1; rise <= 3; rise += 1) {
       replaceableSupports.add(`${rise}:${rise - 1}:0`);
@@ -36403,7 +36334,7 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const positionKey = key(position);
+      const positionKey = blockPositionKey(position);
       if (placedBlocks.has(positionKey)) {
         return [
           blockObservation(position, {
@@ -36434,7 +36365,7 @@ describe("beat-game run lifecycle", () => {
     };
     driver.actionObserver = (action) => {
       if (action.type === "dig-block") {
-        clearedBlocks.add(key(action.position));
+        clearedBlocks.add(blockPositionKey(action.position));
         return;
       }
       if (action.type !== "place-block") {
@@ -36461,7 +36392,7 @@ describe("beat-game run lifecycle", () => {
           expected.z -= 1;
           break;
       }
-      placedBlocks.add(key(expected));
+      placedBlocks.add(blockPositionKey(expected));
     };
     driver.pathResolver = (position, radius, policy) => {
       const record = Effect.sync(() => {
@@ -36556,7 +36487,6 @@ describe("beat-game run lifecycle", () => {
         blockLight: 0,
       },
     ];
-    const key = (position: BeatGameBlockPosition) => `${position.x}:${position.y}:${position.z}`;
     const replaceableSupports = new Set<string>();
     for (let rise = 1; rise <= 3; rise += 1) {
       replaceableSupports.add(`${rise}:${rise - 1}:0`);
@@ -36575,7 +36505,7 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      const positionKey = key(position);
+      const positionKey = blockPositionKey(position);
       if (placedBlocks.has(positionKey)) {
         return [
           blockObservation(position, {
@@ -36618,7 +36548,7 @@ describe("beat-game run lifecycle", () => {
         return;
       }
       if (action.type === "dig-block") {
-        clearedBlocks.add(key(action.position));
+        clearedBlocks.add(blockPositionKey(action.position));
         return;
       }
       if (action.type !== "place-block") {
@@ -36649,7 +36579,7 @@ describe("beat-game run lifecycle", () => {
           expected.z -= 1;
           break;
       }
-      placedBlocks.add(key(expected));
+      placedBlocks.add(blockPositionKey(expected));
     };
     driver.pathResolver = (position, radius, policy) => {
       const record = Effect.sync(() => {
@@ -37120,6 +37050,7 @@ describe("beat-game run lifecycle", () => {
       }
       return [];
     };
+    let collectionStart: unknown;
     driver.taskResolver = (task) =>
       Effect.sync(() => {
         driver.tasks.push(task);
@@ -37139,11 +37070,11 @@ describe("beat-game run lifecycle", () => {
           });
         }
         if (task.type === "collect-blocks") {
-          expect(task.blockIds).toEqual(["minecraft:stone"]);
-          expect(task.count).toBe(32);
-          expect(task.avoidSubmergedTargets).toBe(true);
-          expect(driver.taskPolicies.at(-1)?.avoidFluids).toBe(true);
-          expect(driver.currentObservation.inventory.counts["minecraft:wooden_pickaxe"]).toBe(1);
+          collectionStart = {
+            task,
+            avoidFluids: driver.taskPolicies.at(-1)?.avoidFluids,
+            woodenPickaxes: driver.currentObservation.inventory.counts["minecraft:wooden_pickaxe"],
+          };
           resolveCollection();
         }
         return {};
@@ -37160,6 +37091,12 @@ describe("beat-game run lifecycle", () => {
         }),
       ),
     );
+
+    expect(collectionStart).toMatchObject({
+      task: { blockIds: ["minecraft:stone"], count: 32, avoidSubmergedTargets: true },
+      avoidFluids: true,
+      woodenPickaxes: 1,
+    });
 
     expect(
       driver.tasks.map((task) =>
@@ -37499,9 +37436,7 @@ describe("beat-game run lifecycle", () => {
               "minecraft:raw_iron": 10,
             },
           });
-          while (!collectionInterrupted) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !collectionInterrupted);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }),
@@ -38028,9 +37963,7 @@ describe("beat-game run lifecycle", () => {
               "minecraft:cobblestone": 32,
             },
           });
-          while (!collectionInterrupted) {
-            yield* Effect.sleep(1);
-          }
+          yield* sleepWhile(() => !collectionInterrupted);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
         }),
@@ -38099,6 +38032,7 @@ describe("beat-game run lifecycle", () => {
           ]
         : [];
     };
+    let ironCollectionStart: unknown;
     let resolveIronCollection!: () => void;
     const ironCollectionStarted = new Promise<void>((resolve) => {
       resolveIronCollection = resolve;
@@ -38115,8 +38049,10 @@ describe("beat-game run lifecycle", () => {
         });
       }
       if (task.type === "collect-blocks" && task.blockIds.includes("minecraft:iron_ore")) {
-        expect(task.avoidSubmergedTargets).toBe(true);
-        expect(driver.taskPolicies.at(-1)?.avoidFluids).toBe(true);
+        ironCollectionStart = {
+          avoidSubmergedTargets: task.avoidSubmergedTargets,
+          avoidFluids: driver.taskPolicies.at(-1)?.avoidFluids,
+        };
         resolveIronCollection();
         return Effect.never;
       }
@@ -38134,6 +38070,8 @@ describe("beat-game run lifecycle", () => {
         }),
       ),
     );
+
+    expect(ironCollectionStart).toEqual({ avoidSubmergedTargets: true, avoidFluids: true });
 
     expect(
       driver.tasks.map((task) =>
@@ -38686,7 +38624,7 @@ describe("beat-game run lifecycle", () => {
               observationPollMs: 1,
             },
           });
-          const failure = yield* run.events.pipe(
+          const failureEvent = yield* run.events.pipe(
             Stream.filter(
               (event) =>
                 event.type === "action-failed" &&
@@ -38695,7 +38633,7 @@ describe("beat-game run lifecycle", () => {
             Stream.runHead,
             Effect.timeout("5 seconds"),
           );
-          return failure;
+          return failureEvent;
         }),
       ),
     );
@@ -40812,7 +40750,10 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.timeoutOrElse({
             duration: "5 seconds",
-            orElse: () => Effect.fail(new Error("The bot never walked toward the portal")),
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({ message: "The bot never walked toward the portal" }),
+              ),
           }),
         ),
       ),
@@ -41997,13 +41938,9 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(Result.isFailure(exit)).toBe(true);
-    if (Result.isFailure(exit)) {
-      expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
-      expect(exit.failure._tag).toBe("BeatGameCancelled");
-      if (exit.failure._tag === "BeatGameCancelled") {
-        expect(exit.failure.reason).toBe("stopped");
-      }
-    }
+    assert(Result.isFailure(exit));
+    expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
+    assert(exit.failure._tag === "BeatGameCancelled");
+    expect(exit.failure.reason).toBe("stopped");
   });
 });

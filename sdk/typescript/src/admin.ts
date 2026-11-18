@@ -139,11 +139,10 @@ export class SoulFireAdmin {
     username: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.updateUsername", (signal) =>
         this.#client.updateSelfUsername({ username }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -151,20 +150,18 @@ export class SoulFireAdmin {
     email: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.updateEmail", (signal) =>
         this.#client.updateSelfEmail({ email }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
   public invalidateOwnSessions(options?: CallOptions): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.invalidateOwnSessions", (signal) =>
         this.#client.invalidateSelfSessions({}, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -180,11 +177,10 @@ export class SoulFireAdmin {
     config: ServerConfig,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.updateServerConfig", (signal) =>
         this.#server.updateServerConfig({ config }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -192,11 +188,10 @@ export class SoulFireAdmin {
     request: Input<typeof ServerUpdateConfigEntryRequestSchema>,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.setServerConfigEntry", (signal) =>
         this.#server.updateServerConfigEntry(request, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -234,11 +229,10 @@ export class SoulFireAdmin {
     userId: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.deleteUser", (signal) =>
         this.#users.deleteUser({ id: userId }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -246,11 +240,10 @@ export class SoulFireAdmin {
     request: Input<typeof UpdateUserRequestSchema>,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.updateUser", (signal) =>
         this.#users.updateUser(request, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -258,11 +251,10 @@ export class SoulFireAdmin {
     userId: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.invalidateUserSessions", (signal) =>
         this.#users.invalidateSessions({ id: userId }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -303,14 +295,13 @@ export class SoulFireAdmin {
     request: UserInput<typeof DeleteUserPluginPermissionGrantRequestSchema>,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.deleteUserPluginPermissionGrant", (signal) =>
         this.#users.deleteUserPluginPermissionGrant(
           { ...request, userId },
           withSignal(options, signal),
         ),
       ),
-      () => undefined,
     );
   }
 
@@ -458,11 +449,10 @@ export class SoulFireAdmin {
     scriptId: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.deleteScript", (signal) =>
         this.#scripts.deleteScript({ instanceId, scriptId }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 
@@ -485,11 +475,10 @@ export class SoulFireAdmin {
     scriptId: string,
     options?: CallOptions,
   ): Effect.Effect<void, SoulFireOperationError> {
-    return Effect.map(
+    return Effect.asVoid(
       rpc("SoulFireAdmin.deactivateScript", (signal) =>
         this.#scripts.deactivateScript({ instanceId, scriptId }, withSignal(options, signal)),
       ),
-      () => undefined,
     );
   }
 

@@ -21,4 +21,4 @@ for (const entry of entries) {
   sizes.push(`${entry.pathname.split("/").at(-1)} ${output.contents.length}`);
 }
 
-console.log(`Verified browser-safe SDK bundles (${sizes.join(", ")} bytes).`);
+process.stdout.write(`Verified browser-safe SDK bundles (${sizes.join(", ")} bytes).\n`);

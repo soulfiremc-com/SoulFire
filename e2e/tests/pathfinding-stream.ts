@@ -58,7 +58,7 @@ export default {
           const frames = yield* Effect.tryPromise({
             try: async (signal) => {
               const controller = new AbortController();
-              const frames: PathfindProgress[] = [];
+              const received: PathfindProgress[] = [];
               let cancelled = false;
               try {
                 for await (const frame of service.goTo(
@@ -78,7 +78,7 @@ export default {
                     ]),
                   },
                 )) {
-                  frames.push(frame);
+                  received.push(frame);
                   const moving = (frame.position?.x ?? 0) > 4264;
                   if (name === "abort-first-frame" || (name === "abort-moving" && moving)) {
                     cancelled = true;
@@ -91,7 +91,7 @@ export default {
               } catch (error) {
                 if (!controller.signal.aborted) throw error;
               }
-              return frames;
+              return received;
             },
             catch: (error) => new CheckFailed({ message: `${name}: ${String(error)}` }),
           });

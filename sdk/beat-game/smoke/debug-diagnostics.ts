@@ -793,6 +793,8 @@ function explainDecision(
       return "The dragon-fight requirements are satisfied and the fight remains incomplete";
     case "exit-end":
       return "The dragon is defeated and the player remains in the End";
+    default:
+      return decision satisfies never;
   }
 }
 

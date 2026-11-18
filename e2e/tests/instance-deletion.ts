@@ -26,7 +26,7 @@ export default {
             const name = `Delete_${suffix}`;
             const instance = yield* Effect.acquireRelease(
               client.getOrCreateInstance(`e2e-delete-${suffix}`),
-              (instance) => instance.delete().pipe(Effect.ignore),
+              (created) => created.delete().pipe(Effect.ignore),
             );
             for (const namespace of settings) {
               for (const entry of namespace.entries) {
@@ -59,7 +59,7 @@ export default {
               "Deleted profile remains in the database",
             );
             yield* check(
-              directories.every((directory) => !existsSync(directory)),
+              directories.every((remaining) => !existsSync(remaining)),
               "Instance deletion left native client or object storage behind",
             );
             yield* eventually(
@@ -77,6 +77,7 @@ export default {
           }),
         );
       }
+      return undefined;
     }),
 } satisfies E2ETest;
 

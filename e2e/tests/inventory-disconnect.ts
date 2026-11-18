@@ -200,7 +200,8 @@ export default {
                 Effect.tap((state) =>
                   check(
                     state.slots.some(
-                      (slot) => slot.itemId === `minecraft:${item}` && slot.count === spec.merge,
+                      (candidate) =>
+                        candidate.itemId === `minecraft:${item}` && candidate.count === spec.merge,
                     ),
                     "The merge target did not reach the client",
                   ),

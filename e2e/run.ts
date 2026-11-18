@@ -91,6 +91,7 @@ const program = Effect.gen(function* () {
   yield* Console.log(`\n${selected.length - failed}/${selected.length} passed`);
   if (failed)
     return yield* new TestsFailed({ message: `${failed} of ${selected.length} tests failed` });
+  return undefined;
 });
 
 NodeRuntime.runMain(Effect.scoped(program));

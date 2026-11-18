@@ -23,34 +23,60 @@ const URGENT = {
   conflictPolicy: BotTaskConflictPolicy.SUSPEND_LOWER_PRIORITY,
 };
 
+const waitStatus = (task: Pick<SoulFireTask, "refresh">, status: BotTaskStatus) =>
+  eventually(
+    task
+      .refresh()
+      .pipe(
+        Effect.flatMap((snapshot) =>
+          check(snapshot.status === status, `Task did not reach status ${status}`),
+        ),
+      ),
+    "10 seconds",
+    "20 millis",
+  );
+const count = (item: string, expected: number) =>
+  eventually(
+    rcon(`clear ${BOT_NAME} ${item} 0`, { check: false }).pipe(
+      Effect.flatMap((text) =>
+        check(
+          expected === 0
+            ? text.includes("No items were found")
+            : text.includes(`Found ${expected} `),
+          `Vanilla ${item} count differs from ${expected}: ${text}`,
+        ),
+      ),
+    ),
+    "3 seconds",
+  );
+
 export default {
   name: "crafting-task-reconnect",
-  run: ({ bot }) =>
-    Effect.scoped(
+  run: ({ bot }) => {
+    const guardAt = (position: { x: number; y: number; z: number }, critical = false) =>
+      bot.tasks.guard(
+        position,
+        { entityTypes: ["minecraft:zombie"] },
+        {
+          ...URGENT,
+          priority: critical ? BotTaskPriority.CRITICAL : BotTaskPriority.HIGH,
+          completeWhenClear: false,
+          reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
+        },
+      );
+    const recipeFor = (item: string) =>
+      eventually(
+        bot.recipes.list({ resultItemId: item }).pipe(
+          Effect.map((response) => response.recipes[0]),
+          Effect.filterOrFail(
+            (recipe) => recipe !== undefined,
+            () => new CheckFailed({ message: "The crafting recipe did not load" }),
+          ),
+        ),
+        "5 seconds",
+      );
+    return Effect.scoped(
       Effect.gen(function* () {
-        const waitStatus = (task: Pick<SoulFireTask, "refresh">, status: BotTaskStatus) =>
-          eventually(
-            task
-              .refresh()
-              .pipe(
-                Effect.flatMap((snapshot) =>
-                  check(snapshot.status === status, `Task did not reach status ${status}`),
-                ),
-              ),
-            "10 seconds",
-            "20 millis",
-          );
-        const guardAt = (position: { x: number; y: number; z: number }, critical = false) =>
-          bot.tasks.guard(
-            position,
-            { entityTypes: ["minecraft:zombie"] },
-            {
-              ...URGENT,
-              priority: critical ? BotTaskPriority.CRITICAL : BotTaskPriority.HIGH,
-              completeWhenClear: false,
-              reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-            },
-          );
         const reconnect = Effect.fn(function* (guard: Pick<SoulFireTask, "refresh">) {
           const before = (yield* bot.world.player()).connectionEpoch;
           yield* bot.restart();
@@ -67,31 +93,6 @@ export default {
           );
           yield* waitStatus(guard, BotTaskStatus.RUNNING);
         });
-        const count = (item: string, expected: number) =>
-          eventually(
-            rcon(`clear ${BOT_NAME} ${item} 0`, { check: false }).pipe(
-              Effect.flatMap((text) =>
-                check(
-                  expected === 0
-                    ? text.includes("No items were found")
-                    : text.includes(`Found ${expected} `),
-                  `Vanilla ${item} count differs from ${expected}: ${text}`,
-                ),
-              ),
-            ),
-            "3 seconds",
-          );
-        const recipeFor = (item: string) =>
-          eventually(
-            bot.recipes.list({ resultItemId: item }).pipe(
-              Effect.map((response) => response.recipes[0]),
-              Effect.filterOrFail(
-                (recipe) => recipe !== undefined,
-                () => new CheckFailed({ message: "The crafting recipe did not load" }),
-              ),
-            ),
-            "5 seconds",
-          );
         yield* rcon(`gamemode creative ${BOT_NAME}`);
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -267,5 +268,6 @@ export default {
           );
         }
       }),
-    ),
+    );
+  },
 } satisfies E2ETest;

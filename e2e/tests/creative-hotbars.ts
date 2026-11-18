@@ -1,3 +1,4 @@
+import { Code } from "@connectrpc/connect";
 import { randomUUID } from "node:crypto";
 import type { SoulFireBot, SoulFireClient } from "@soulfiremc/sdk";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
@@ -84,10 +85,42 @@ const hotbarShortcut = (client: SoulFireClient, bot: SoulFireBot, activator: num
       new CheckFailed({ message: `Native hotbar shortcut failed: ${String(cause)}` }),
   });
 
+const openSaved = (target: SoulFireBot) =>
+  Effect.gen(function* () {
+    yield* target.openInventory().pipe(
+      Effect.retry({
+        schedule: Schedule.spaced("50 millis").pipe(Schedule.upTo({ duration: "2 seconds" })),
+        while: (error) =>
+          error._tag === "SoulFireRpcError" &&
+          error.code === Code.PermissionDenied &&
+          error.message.includes("leased"),
+      }),
+    );
+    const tab = (yield* target.inventoryState()).layout?.buttons.find(
+      (button) => button.iconItemId === "minecraft:bookshelf",
+    );
+    if (!tab) return yield* new CheckFailed({ message: "The Saved Hotbars tab is missing" });
+    yield* target.clickContainerButton(tab.buttonId);
+    yield* target.clickContainerButton(-2);
+    return undefined;
+  });
+const expectSaved = (target: SoulFireBot, item: string) =>
+  eventually(
+    target.inventoryState().pipe(
+      Effect.flatMap((state) =>
+        check(
+          state.slots.some((slot) => slot.slot === 36 && slot.itemId === item),
+          "The bot did not retain its own saved hotbar",
+        ),
+      ),
+    ),
+    "3 seconds",
+  );
+
 export default {
   name: "creative-hotbars",
-  run: ({ bot, client }) =>
-    Effect.gen(function* () {
+  run: ({ bot, client }) => {
+    return Effect.gen(function* () {
       const instance = client.instance(bot.instanceId);
       let otherId: string | undefined;
       yield* Effect.addFinalizer(() =>
@@ -105,36 +138,6 @@ export default {
       yield* rcon(`tp ${OTHER} 1882.5 64 0.5`);
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon(`gamemode creative ${OTHER}`);
-      const openSaved = (target: SoulFireBot) =>
-        Effect.gen(function* () {
-          yield* target.openInventory().pipe(
-            Effect.retry({
-              schedule: Schedule.spaced("50 millis").pipe(Schedule.upTo({ duration: "2 seconds" })),
-              while: (error) =>
-                error._tag === "SoulFireRpcError" &&
-                error.code === 7 &&
-                error.message.includes("leased"),
-            }),
-          );
-          const tab = (yield* target.inventoryState()).layout?.buttons.find(
-            (button) => button.iconItemId === "minecraft:bookshelf",
-          );
-          if (!tab) return yield* new CheckFailed({ message: "The Saved Hotbars tab is missing" });
-          yield* target.clickContainerButton(tab.buttonId);
-          yield* target.clickContainerButton(-2);
-        });
-      const expectSaved = (target: SoulFireBot, item: string) =>
-        eventually(
-          target.inventoryState().pipe(
-            Effect.flatMap((state) =>
-              check(
-                state.slots.some((slot) => slot.slot === 36 && slot.itemId === item),
-                "The bot did not retain its own saved hotbar",
-              ),
-            ),
-          ),
-          "3 seconds",
-        );
       yield* rcon(`item replace entity ${BOT_NAME} hotbar.0 with minecraft:diamond_sword`);
       yield* eventually(
         bot.inventoryState().pipe(
@@ -223,5 +226,6 @@ export default {
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),
       Effect.scoped,
-    ),
+    );
+  },
 } satisfies E2ETest;

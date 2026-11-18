@@ -313,7 +313,7 @@ export function collectNearbyDrops(
                     );
           const reached = yield* pickupRoute.pipe(
             Effect.as(true),
-            Effect.catch(() => Effect.succeed(false)),
+            Effect.orElseSucceed(() => false),
           );
           if (!reached) {
             attemptedDrops.add(dropKey);
@@ -617,9 +617,7 @@ export function excavateStaircase(
               .pipe(Effect.andThen(waitForVerticalSettlement(driver)));
       const stagingPosition = stagingObservation.player.position;
       if (stagingPosition.dimension !== options.from.dimension) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Changed dimensions while approaching the staircase"),
-        );
+        return yield* behaviorError(driver, "Changed dimensions while approaching the staircase");
       }
       const actualFrom: BeatGameBlockPosition = {
         x: Math.floor(stagingPosition.x),
@@ -653,7 +651,7 @@ export function excavateStaircase(
             )
             .pipe(Effect.result);
           if (handoff._tag === "Success") {
-            return;
+            return undefined;
           }
         }
         yield* ensureStaircaseSupport(driver, step);
@@ -676,14 +674,15 @@ export function excavateStaircase(
             displaced.player.position.y < step.y - 1
           ) {
             yield* driver.pathfind(options.to, 4, mergePathPolicy(options.path));
-            return;
+            return undefined;
           }
-          return yield* Effect.fail(traversal.failure);
+          return yield* traversal.failure;
         }
       }
       if (!samePosition(staircaseTo, options.to)) {
         yield* driver.pathfind(options.to, 2, mergePathPolicy(options.path));
       }
+      return undefined;
     }).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
   );
 }
@@ -1477,8 +1476,9 @@ export function buildNetherPortal(
     });
     const missing = missingPortalBlocks(frame, observed);
     if (missing.length > 0) {
-      return yield* Effect.fail(
-        behaviorError(driver, `Portal construction left ${missing.length} obsidian blocks missing`),
+      return yield* behaviorError(
+        driver,
+        `Portal construction left ${missing.length} obsidian blocks missing`,
       );
     }
     if (options.ignite ?? true) {
@@ -1583,7 +1583,7 @@ function ensurePortalFrameBlock(
       observed?.blockId === placement.itemId ||
       (placement.acceptsExistingSolid === true && observed !== undefined && !observed.replaceable)
     ) {
-      return;
+      return undefined;
     }
     const observation = yield* driver.observe;
     if (
@@ -1616,11 +1616,9 @@ function ensurePortalFrameBlock(
         50,
       );
       if (observed !== undefined && !observed.replaceable) {
-        return yield* Effect.fail(
-          behaviorError(
-            driver,
-            `Could not clear portal frame position ${positionKey(placement.target)}`,
-          ),
+        return yield* behaviorError(
+          driver,
+          `Could not clear portal frame position ${positionKey(placement.target)}`,
         );
       }
     }
@@ -1658,14 +1656,12 @@ function ensurePortalFrameBlock(
         50,
       );
       if (placed !== undefined && !placed.replaceable) {
-        return;
+        return undefined;
       }
     }
-    return yield* Effect.fail(
-      behaviorError(
-        driver,
-        `Could not place ${placement.itemId} at ${positionKey(placement.target)}`,
-      ),
+    return yield* behaviorError(
+      driver,
+      `Could not place ${placement.itemId} at ${positionKey(placement.target)}`,
     );
   });
 }
@@ -1729,16 +1725,15 @@ function waitForExactBlockState(
   delayMs: number,
 ): Effect.Effect<BeatGameBlockObservation | undefined, BeatGameDriverError> {
   return observeExactBlock(driver, position).pipe(
-    Effect.flatMap((block) => {
-      if (predicate(block) || attemptsRemaining <= 1) {
-        return Effect.succeed(block);
-      }
-      return Effect.sleep(delayMs).pipe(
-        Effect.andThen(
-          waitForExactBlockState(driver, position, predicate, attemptsRemaining - 1, delayMs),
+    Effect.filterOrElse(
+      (block) => predicate(block) || attemptsRemaining <= 1,
+      () =>
+        Effect.sleep(delayMs).pipe(
+          Effect.andThen(
+            waitForExactBlockState(driver, position, predicate, attemptsRemaining - 1, delayMs),
+          ),
         ),
-      );
-    }),
+    ),
   );
 }
 
@@ -1865,7 +1860,7 @@ export function enterPortal(
         maximumResults: 1,
       }))[0]?.position;
     if (target === undefined) {
-      return yield* Effect.fail(behaviorError(driver, "No Nether portal is observable"));
+      return yield* behaviorError(driver, "No Nether portal is observable");
     }
     const observedPortals = yield* driver.queryBlocks({
       center: target,
@@ -1886,7 +1881,7 @@ export function enterPortal(
       );
       if (entryOrigin.dimension !== observation.player.position.dimension) {
         yield* completePortalTransition(driver, observation.player.position.dimension);
-        return;
+        return undefined;
       }
       yield* Effect.sleep(NETHER_PORTAL_REENTRY_COOLDOWN_MS);
     }
@@ -1911,7 +1906,7 @@ export function enterPortal(
       ).pipe(Effect.result);
       if (directApproach._tag === "Success" && directApproach.success) {
         yield* completePortalTransition(driver, observation.player.position.dimension);
-        return;
+        return undefined;
       }
       if (directApproach._tag === "Failure") {
         const recoveryObservation = yield* driver.observe;
@@ -1923,7 +1918,7 @@ export function enterPortal(
             options.path,
           )
         ) {
-          return yield* Effect.fail(directApproach.failure);
+          return yield* directApproach.failure;
         }
         const destination = floorFeetPosition(approachTarget);
         const current = floorFeetPosition(recoveryObservation.player.position);
@@ -1946,7 +1941,7 @@ export function enterPortal(
             const staged = yield* waitForVerticalSettlement(driver);
             const stagedPosition = floorFeetPosition(staged.player.position);
             if (!isPortalStaircaseDepthSupported(stagedPosition, destination)) {
-              return yield* Effect.fail(directApproach.failure);
+              return yield* directApproach.failure;
             }
             yield* excavateStaircase(driver, {
               from: staircaseStartPosition(destination, stagedPosition),
@@ -1956,18 +1951,19 @@ export function enterPortal(
                 avoidFluids: true,
               },
             });
+            return undefined;
           }),
         );
         if (changedDimension) {
           yield* completePortalTransition(driver, observation.player.position.dimension);
-          return;
+          return undefined;
         }
       }
     }
     const crossingObservation = yield* driver.observe;
     if (crossingObservation.player.position.dimension !== observation.player.position.dimension) {
       yield* completePortalTransition(driver, observation.player.position.dimension);
-      return;
+      return undefined;
     }
     yield* ensurePortalApproachSupport(driver, crossingObservation.player.position, approachTarget);
     yield* driver
@@ -2005,11 +2001,13 @@ export function enterPortal(
       .pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore)));
     const enteredObservation = yield* driver.observe;
     if (enteredObservation.player.position.dimension === observation.player.position.dimension) {
-      return yield* Effect.fail(
-        behaviorError(driver, "The Nether portal did not change dimensions after entry"),
+      return yield* behaviorError(
+        driver,
+        "The Nether portal did not change dimensions after entry",
       );
     }
     yield* completePortalTransition(driver, observation.player.position.dimension);
+    return undefined;
   });
 }
 
@@ -2060,16 +2058,15 @@ export function throwEyeOfEnder(
       });
       const eye = observed.find(({ networkId }) => !previousIds.has(networkId)) ?? observed[0];
       if (eye === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The thrown eye of ender was not observed"),
-        );
+        return yield* behaviorError(driver, "The thrown eye of ender was not observed");
       }
       const direction =
         horizontalDirection(before.player.position, eye.position) ??
         horizontalDirection({ x: 0, z: 0 }, eye.velocity);
       if (direction === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The observed eye of ender did not provide a direction"),
+        return yield* behaviorError(
+          driver,
+          "The observed eye of ender did not provide a direction",
         );
       }
       return {
@@ -2157,8 +2154,9 @@ export function activateEndPortal(
         nonNegativeInteger(options.confirmationDelayMs ?? 250, "confirmationDelayMs"),
       );
       if (portal === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "End portal blocks were not observable after filling the frames"),
+        return yield* behaviorError(
+          driver,
+          "End portal blocks were not observable after filling the frames",
         );
       }
       return filledFrames;
@@ -2181,7 +2179,7 @@ export function enterEndPortal(
       const observation = yield* driver.observe;
       const initialDimension = observation.player.position.dimension;
       if (isEndDimension(initialDimension)) {
-        return;
+        return undefined;
       }
       const portals = yield* driver.queryBlocks({
         center: options.center ?? observation.player.position,
@@ -2190,9 +2188,7 @@ export function enterEndPortal(
         maximumResults: 16,
       });
       if (portals.length === 0) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The active End portal was not observable"),
-        );
+        return yield* behaviorError(driver, "The active End portal was not observable");
       }
       const portalCenter = centerOfBlocks(portals);
       const rimTarget = nearestEndPortalRim(observation.player.position, portals);
@@ -2246,6 +2242,7 @@ export function enterEndPortal(
         Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
       );
       yield* driver.waitForChunks(0, 60_000);
+      return undefined;
     }),
   );
 }
@@ -2374,8 +2371,9 @@ function ensureEndPortalRimReachable(
     }
     const material = staircaseSupportMaterial(yield* driver.observe);
     if (material === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "No solid block is available to build an End portal approach"),
+      return yield* behaviorError(
+        driver,
+        "No solid block is available to build an End portal approach",
       );
     }
 
@@ -2383,6 +2381,7 @@ function ensureEndPortalRimReachable(
       yield* ensureEndPortalApproachColumn(driver, step.support, playerY - 2, material);
       yield* driver.pathfind(step.feet, 0, pathPolicy);
     }
+    return undefined;
   });
 }
 
@@ -2408,9 +2407,7 @@ function ensureEndPortalApproachColumn(
     for (let y = tread.y; y >= minimumAnchorY; y -= 1) {
       const block = yield* queryExactBlock(driver, { ...tread, y });
       if (block === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not observe the End portal approach"),
-        );
+        return yield* behaviorError(driver, "Could not observe the End portal approach");
       }
       if (!block.replaceable && !isGravityAffectedBlock(block.blockId)) {
         anchor = block;
@@ -2418,16 +2415,14 @@ function ensureEndPortalApproachColumn(
       }
     }
     if (anchor === undefined) {
-      return yield* Effect.fail(behaviorError(driver, "Could not anchor the End portal approach"));
+      return yield* behaviorError(driver, "Could not anchor the End portal approach");
     }
 
     for (let y = anchor.position.y + 1; y <= tread.y; y += 1) {
       const target = { ...tread, y };
       const existing = yield* queryExactBlock(driver, target);
       if (existing === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not observe an End portal approach block"),
-        );
+        return yield* behaviorError(driver, "Could not observe an End portal approach block");
       }
       if (!existing.replaceable && !isGravityAffectedBlock(existing.blockId)) {
         continue;
@@ -2439,11 +2434,10 @@ function ensureEndPortalApproachColumn(
       yield* placeStaircaseBlock(driver, material, against, "up", target);
       const placed = yield* waitForExactBlock(driver, target, { replaceable: false }, 10, 50);
       if (placed === undefined || isGravityAffectedBlock(placed.blockId)) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not build a stable End portal approach"),
-        );
+        return yield* behaviorError(driver, "Could not build a stable End portal approach");
       }
     }
+    return undefined;
   });
 }
 
@@ -2462,11 +2456,11 @@ function nearestEndPortalRim(
   portals: readonly BeatGameBlockObservation[],
 ): BeatGameBlockPosition {
   const dimension = portals[0]?.position.dimension ?? position.dimension;
-  const minimumX = Math.min(...portals.map(({ position }) => position.x));
-  const maximumX = Math.max(...portals.map(({ position }) => position.x));
-  const minimumY = Math.min(...portals.map(({ position }) => position.y));
-  const minimumZ = Math.min(...portals.map(({ position }) => position.z));
-  const maximumZ = Math.max(...portals.map(({ position }) => position.z));
+  const minimumX = Math.min(...portals.map(({ position: portalPosition }) => portalPosition.x));
+  const maximumX = Math.max(...portals.map(({ position: portalPosition }) => portalPosition.x));
+  const minimumY = Math.min(...portals.map(({ position: portalPosition }) => portalPosition.y));
+  const minimumZ = Math.min(...portals.map(({ position: portalPosition }) => portalPosition.z));
+  const maximumZ = Math.max(...portals.map(({ position: portalPosition }) => portalPosition.z));
   const centerX = Math.floor((minimumX + maximumX) / 2);
   const centerZ = Math.floor((minimumZ + maximumZ) / 2);
   const candidates: readonly BeatGameBlockPosition[] = [
@@ -2535,7 +2529,7 @@ export function fightEnderDragon(
     );
     const initialObservation = yield* driver.observe;
     if ((initialObservation.inventory.counts["minecraft:dragon_egg"] ?? 0) > 0) {
-      return;
+      return undefined;
     }
     const encounter = yield* waitForDragonOrDefeatResult(
       driver,
@@ -2545,7 +2539,7 @@ export function fightEnderDragon(
       confirmationDelayMs,
     );
     if (encounter.defeated) {
-      return;
+      return undefined;
     }
     for (let pass = 0; pass < maximumCrystalPasses; pass += 1) {
       const observation = yield* driver.observe;
@@ -2586,9 +2580,7 @@ export function fightEnderDragon(
       1,
     );
     if (remainingCrystals.length > 0) {
-      return yield* Effect.fail(
-        behaviorError(driver, "End crystals remain after the configured attack passes"),
-      );
+      return yield* behaviorError(driver, "End crystals remain after the configured attack passes");
     }
     const dragons = yield* queryEndEntities(
       driver,
@@ -2622,7 +2614,7 @@ export function fightEnderDragon(
         confirmationAttempts,
         confirmationDelayMs,
       );
-      return;
+      return undefined;
     }
     yield* rangedAttack(driver, {
       target: dragon,
@@ -2665,6 +2657,7 @@ export function fightEnderDragon(
       confirmationAttempts,
       confirmationDelayMs,
     );
+    return undefined;
   });
 }
 
@@ -2965,14 +2958,15 @@ export function collectDragonEgg(
       const delayMs = nonNegativeInteger(options.confirmationDelayMs ?? 250, "confirmationDelayMs");
       const initialObservation = yield* driver.observe;
       if ((initialObservation.inventory.counts["minecraft:dragon_egg"] ?? 0) > 0) {
-        return;
+        return undefined;
       }
       const center = initialObservation.player.position;
       const searchRadius = options.searchRadius ?? 64;
       const initialEgg = (yield* queryDragonEggs(driver, center, searchRadius))[0];
       if (initialEgg === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The dragon egg was not observable after the dragon fight"),
+        return yield* behaviorError(
+          driver,
+          "The dragon egg was not observable after the dragon fight",
         );
       }
 
@@ -2993,8 +2987,9 @@ export function collectDragonEgg(
         delayMs,
       );
       if (movedEgg === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The dragon egg did not teleport away from the exit portal"),
+        return yield* behaviorError(
+          driver,
+          "The dragon egg did not teleport away from the exit portal",
         );
       }
 
@@ -3038,10 +3033,9 @@ export function collectDragonEgg(
         delayMs,
       );
       if (!collected) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The dragon egg did not enter the bot inventory"),
-        );
+        return yield* behaviorError(driver, "The dragon egg did not enter the bot inventory");
       }
+      return undefined;
     }),
   );
 }
@@ -3059,16 +3053,18 @@ function prepareDragonEggTorchSupport(
       observedEggSupport.replaceable ||
       !observedEggSupport.diggable
     ) {
-      return yield* Effect.fail(
-        behaviorError(driver, "The dragon egg did not land on a removable support block"),
+      return yield* behaviorError(
+        driver,
+        "The dragon egg did not land on a removable support block",
       );
     }
 
     const torchCell = yield* observeExactBlock(driver, torchPosition);
     if (torchCell !== undefined && !torchCell.replaceable) {
       if (!torchCell.diggable) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The block two spaces below the dragon egg cannot be removed"),
+        return yield* behaviorError(
+          driver,
+          "The block two spaces below the dragon egg cannot be removed",
         );
       }
       yield* driver.act({
@@ -3083,8 +3079,9 @@ function prepareDragonEggTorchSupport(
         50,
       );
       if (cleared?.replaceable !== true) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not clear space for the dragon egg collection torch"),
+        return yield* behaviorError(
+          driver,
+          "Could not clear space for the dragon egg collection torch",
         );
       }
     }
@@ -3093,11 +3090,9 @@ function prepareDragonEggTorchSupport(
     if (!isReliableDragonEggTorchSupport(observedTorchSupport)) {
       if (observedTorchSupport !== undefined && !observedTorchSupport.replaceable) {
         if (!observedTorchSupport.diggable) {
-          return yield* Effect.fail(
-            behaviorError(
-              driver,
-              "The dragon egg torch support cannot hold a torch or be replaced",
-            ),
+          return yield* behaviorError(
+            driver,
+            "The dragon egg torch support cannot hold a torch or be replaced",
           );
         }
         yield* driver.act({
@@ -3109,11 +3104,9 @@ function prepareDragonEggTorchSupport(
       const observation = yield* driver.observe;
       const material = staircaseSupportMaterial(observation);
       if (material === undefined) {
-        return yield* Effect.fail(
-          behaviorError(
-            driver,
-            "No stable block item is available to support the dragon egg torch",
-          ),
+        return yield* behaviorError(
+          driver,
+          "No stable block item is available to support the dragon egg torch",
         );
       }
       yield* placeStaircaseBlock(driver, material, eggSupport, "down", torchPosition);
@@ -3130,18 +3123,18 @@ function prepareDragonEggTorchSupport(
         50,
       );
       if (cleared?.replaceable !== true) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not reopen space above the dragon egg torch support"),
+        return yield* behaviorError(
+          driver,
+          "Could not reopen space above the dragon egg torch support",
         );
       }
       observedTorchSupport = yield* observeExactBlock(driver, torchSupport);
     }
 
     if (!isReliableDragonEggTorchSupport(observedTorchSupport)) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Could not construct a stable dragon egg torch support"),
-      );
+      return yield* behaviorError(driver, "Could not construct a stable dragon egg torch support");
     }
+    return undefined;
   });
 }
 
@@ -3169,7 +3162,7 @@ export function exitEnd(
       const observation = yield* driver.observe;
       const initialDimension = observation.player.position.dimension;
       if (!isEndDimension(initialDimension)) {
-        return;
+        return undefined;
       }
       const portals = yield* driver.queryBlocks({
         center: observation.player.position,
@@ -3179,7 +3172,7 @@ export function exitEnd(
       });
       const portal = portals[0];
       if (portal === undefined) {
-        return yield* Effect.fail(behaviorError(driver, "The End exit portal was not observable"));
+        return yield* behaviorError(driver, "The End exit portal was not observable");
       }
       const portalCenter = centerOfBlocks(portals);
       const rimTarget = nearestEndPortalRim(observation.player.position, portals);
@@ -3227,26 +3220,33 @@ export function exitEnd(
               forward: true,
               sprint: false,
             });
-            return yield* Effect.raceFirst(
-              waitForDimensionChange(driver, initialDimension, Math.max(10, delayMs)).pipe(
-                Effect.as("dimension" as const),
-              ),
-              Effect.sleep(END_EXIT_PORTAL_ENTRY_TIMEOUT_MS).pipe(Effect.as("timeout" as const)),
+            return yield* waitForDimensionChange(
+              driver,
+              initialDimension,
+              Math.max(10, delayMs),
+            ).pipe(
+              Effect.as("dimension" as const),
+              Effect.timeoutOrElse({
+                duration: END_EXIT_PORTAL_ENTRY_TIMEOUT_MS,
+                orElse: () => Effect.succeed("timeout" as const),
+              }),
             );
           }),
         );
       }).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore)));
       if (entryTransition === "dimension") {
-        return;
+        return undefined;
       }
 
       yield* driver.act({ type: "respawn" });
       const exited = yield* waitForDimensionExit(driver, attempts, delayMs);
       if (!exited) {
-        return yield* Effect.fail(
-          behaviorError(driver, "The bot remained in the End after entering the exit portal"),
+        return yield* behaviorError(
+          driver,
+          "The bot remained in the End after entering the exit portal",
         );
       }
+      return undefined;
     }),
   );
 }
@@ -3439,8 +3439,9 @@ function walkToPortalContact(
         return false;
       }
       if (distanceFromPortalPassage(position, passage) > 3) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Moved away from the Nether portal while approaching it"),
+        return yield* behaviorError(
+          driver,
+          "Moved away from the Nether portal while approaching it",
         );
       }
 
@@ -3459,9 +3460,7 @@ function walkToPortalContact(
       });
       yield* Effect.sleep(75);
     }
-    return yield* Effect.fail(
-      behaviorError(driver, "Could not make controlled contact with the Nether portal"),
-    );
+    return yield* behaviorError(driver, "Could not make controlled contact with the Nether portal");
   });
 }
 
@@ -3476,16 +3475,18 @@ function holdPortalContactUntilDimensionChange(
     const observation = yield* driver.observe;
     const position = observation.player.position;
     if (position.dimension !== initialDimension) {
-      return;
+      return undefined;
     }
     if (attempts <= 0) {
-      return yield* Effect.fail(
-        behaviorError(driver, "The Nether portal did not change dimensions while contact was held"),
+      return yield* behaviorError(
+        driver,
+        "The Nether portal did not change dimensions while contact was held",
       );
     }
     if (distanceFromPortalPassage(position, passage) > 3) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Moved away from the Nether portal while waiting for it to activate"),
+      return yield* behaviorError(
+        driver,
+        "Moved away from the Nether portal while waiting for it to activate",
       );
     }
 
@@ -3493,7 +3494,7 @@ function holdPortalContactUntilDimensionChange(
     if (!hasPortalEntryContact(position, passage)) {
       const changedDimension = yield* walkToPortalContact(driver, passage, initialDimension);
       if (changedDimension) {
-        return;
+        return undefined;
       }
     }
     yield* Effect.sleep(delayMs);
@@ -3504,6 +3505,7 @@ function holdPortalContactUntilDimensionChange(
       attempts - 1,
       delayMs,
     );
+    return undefined;
   });
 }
 
@@ -3574,9 +3576,9 @@ function leavePortalForReentry(
       }
       lastFailure = attempt.failure;
     }
-    return yield* Effect.fail(
+    return yield* (
       lastFailure ??
-        behaviorError(driver, "Could not step out of the Nether portal before re-entry"),
+      behaviorError(driver, "Could not step out of the Nether portal before re-entry")
     );
   });
 }
@@ -3589,8 +3591,9 @@ function completePortalTransition(
     yield* driver.waitForChunks(0, 60_000);
     const arrival = yield* driver.observe;
     if (arrival.player.position.dimension === initialDimension) {
-      return yield* Effect.fail(
-        behaviorError(driver, "The Nether portal transition did not reach another dimension"),
+      return yield* behaviorError(
+        driver,
+        "The Nether portal transition did not reach another dimension",
       );
     }
     const observedPortals = (yield* driver.queryBlocks({
@@ -3609,12 +3612,12 @@ function completePortalTransition(
       undefined,
     );
     if (nearestPortal === undefined) {
-      return;
+      return undefined;
     }
     const axis = resolvePortalAxis(nearestPortal.properties.axis, observedPortals);
     const passage = portalPassage(nearestPortal.position, axis, observedPortals);
     if (!hasPortalContact(arrival.player.position, passage)) {
-      return;
+      return undefined;
     }
     const exited = yield* leavePortalForReentry(
       driver,
@@ -3623,10 +3626,12 @@ function completePortalTransition(
       arrival.player.rotation,
     );
     if (exited.dimension !== arrival.player.position.dimension) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Stepping out of the destination portal crossed dimensions again"),
+      return yield* behaviorError(
+        driver,
+        "Stepping out of the destination portal crossed dimensions again",
       );
     }
+    return undefined;
   });
 }
 
@@ -3907,11 +3912,13 @@ function ensurePortalApproachSupport(
         maximumResults: 16,
       });
       if (!placed.some(({ position }) => samePosition(position, support))) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not place a safe support beside the Nether portal"),
+        return yield* behaviorError(
+          driver,
+          "Could not place a safe support beside the Nether portal",
         );
       }
     }
+    return undefined;
   });
 }
 
@@ -4222,9 +4229,7 @@ function ensureStaircaseSupport(
   return Effect.gen(function* () {
     const observedSupport = yield* queryExactBlock(driver, support);
     if (observedSupport === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Could not observe the next staircase support block"),
-      );
+      return yield* behaviorError(driver, "Could not observe the next staircase support block");
     }
     if (
       observedSupport.solid === true &&
@@ -4236,12 +4241,10 @@ function ensureStaircaseSupport(
 
     if (!observedSupport.replaceable) {
       if (!observedSupport.diggable) {
-        return yield* Effect.fail(
-          behaviorError(
-            driver,
-            "The next staircase support cannot be cleared or stood on",
-            "unsupported_opening",
-          ),
+        return yield* behaviorError(
+          driver,
+          "The next staircase support cannot be cleared or stood on",
+          "unsupported_opening",
         );
       }
       yield* driver.act({ type: "dig-block", position: support });
@@ -4253,47 +4256,37 @@ function ensureStaircaseSupport(
         50,
       );
       if (clearedSupport === undefined) {
-        return yield* Effect.fail(
-          behaviorError(driver, "Could not clear an unstable staircase support block"),
-        );
+        return yield* behaviorError(driver, "Could not clear an unstable staircase support block");
       }
     }
 
     const observation = yield* driver.observe;
     const material = staircaseSupportMaterial(observation);
     if (material === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "No solid block is available to bridge the staircase"),
-      );
+      return yield* behaviorError(driver, "No solid block is available to bridge the staircase");
     }
 
     const lowerAnchor = below(support);
     const observedLowerAnchor = yield* queryExactBlock(driver, lowerAnchor);
     if (observedLowerAnchor === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Could not observe the lower staircase support anchor"),
-      );
+      return yield* behaviorError(driver, "Could not observe the lower staircase support anchor");
     }
     if (
       observedLowerAnchor.solid !== true ||
       observedLowerAnchor.replaceable ||
       isGravityAffectedBlock(observedLowerAnchor.blockId)
     ) {
-      return yield* Effect.fail(
-        behaviorError(
-          driver,
-          "The next staircase support has no stable reachable lower anchor",
-          "unsupported_opening",
-        ),
+      return yield* behaviorError(
+        driver,
+        "The next staircase support has no stable reachable lower anchor",
+        "unsupported_opening",
       );
     }
 
     yield* placeStaircaseBlock(driver, material, lowerAnchor, "up", support);
     const placed = yield* waitForExactBlock(driver, support, { replaceable: false }, 10, 50);
     if (placed === undefined || isGravityAffectedBlock(placed.blockId)) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Could not place a safe staircase support block"),
-      );
+      return yield* behaviorError(driver, "Could not place a safe staircase support block");
     }
     return true;
   });
@@ -4306,14 +4299,13 @@ function digStaircaseBlockIfNeeded(
   return Effect.gen(function* () {
     const block = yield* queryExactBlock(driver, position);
     if (block === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Could not observe a staircase block before digging"),
-      );
+      return yield* behaviorError(driver, "Could not observe a staircase block before digging");
     }
     if (block.replaceable) {
-      return;
+      return undefined;
     }
     yield* driver.act({ type: "dig-block", position });
+    return undefined;
   });
 }
 
@@ -4397,8 +4389,9 @@ function walkPreparedStaircaseStepDirectly(
       currentBlock.y !== target.y + 1 ||
       horizontalDistance !== 1
     ) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Pathfinding failed outside a directly traversable staircase step"),
+      return yield* behaviorError(
+        driver,
+        "Pathfinding failed outside a directly traversable staircase step",
       );
     }
 
@@ -4412,6 +4405,7 @@ function walkPreparedStaircaseStepDirectly(
       sneak: false,
     });
     yield* settleOnStaircaseTread(driver, target);
+    return undefined;
   }).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore)));
 }
 
@@ -4481,7 +4475,7 @@ function clearBlockedStaircaseTreadFromAbove(
 }
 
 function isAvoidedFluidBlockId(blockId: string): boolean {
-  return AVOIDED_FLUID_BLOCK_IDS.includes(blockId as (typeof AVOIDED_FLUID_BLOCK_IDS)[number]);
+  return (AVOIDED_FLUID_BLOCK_IDS as readonly string[]).includes(blockId);
 }
 
 function waitForStaircaseLanding(
@@ -4803,10 +4797,9 @@ function ignitePortal(
       maximumResults: frame.interior.length,
     });
     if (!portals.some(({ position }) => samePosition(position, interior))) {
-      return yield* Effect.fail(
-        behaviorError(driver, "The Nether portal did not activate after ignition"),
-      );
+      return yield* behaviorError(driver, "The Nether portal did not activate after ignition");
     }
+    return undefined;
   });
   return acquireControl ? driver.withControl(program) : program;
 }
@@ -4912,18 +4905,17 @@ function castNetherPortalFromLavaPool(
       maximumResults: Math.max(1, requiredLavaSources),
     });
     if (lavaSources.length < requiredLavaSources) {
-      return yield* Effect.fail(
-        behaviorError(
-          driver,
-          `Portal casting needs ${requiredLavaSources} observable lava sources`,
-        ),
+      return yield* behaviorError(
+        driver,
+        `Portal casting needs ${requiredLavaSources} observable lava sources`,
       );
     }
     const frameKeys = new Set(frame.blocks.map(positionKey));
     const finalCastingStand = castingStands.at(-1);
     if (finalCastingStand === undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, "Portal casting has no stand for its remaining frame targets"),
+      return yield* behaviorError(
+        driver,
+        "Portal casting has no stand for its remaining frame targets",
       );
     }
     const finalCastingStandSupport = below(finalCastingStand);
@@ -5135,8 +5127,9 @@ function collectPortalCastingLava(
         maximumResults: Math.max(8, remainingTargets),
       });
       if (sources.length === 0) {
-        return yield* Effect.fail(
-          behaviorError(driver, "No live lava source remained for the next portal casting step"),
+        return yield* behaviorError(
+          driver,
+          "No live lava source remained for the next portal casting step",
         );
       }
       const source = yield* approachLiquidSourceFromSide(driver, observation, sources, {
@@ -5150,15 +5143,13 @@ function collectPortalCastingLava(
         ),
       );
       if (collected) {
-        return;
+        return undefined;
       }
     }
-    return yield* Effect.fail(
-      behaviorError(
-        driver,
-        `Lava sources changed during ${PORTAL_CASTING_LAVA_SOURCE_ATTEMPTS} consecutive portal casting approaches`,
-        "source-changed",
-      ),
+    return yield* behaviorError(
+      driver,
+      `Lava sources changed during ${PORTAL_CASTING_LAVA_SOURCE_ATTEMPTS} consecutive portal casting approaches`,
+      "source-changed",
     );
   });
 }
@@ -5171,13 +5162,11 @@ function collectApproachedPortalCastingLavaSource(
     const observation = yield* driver.observe;
     const obstruction = yield* portalCastingLavaSightline(driver, observation, source.position);
     if (obstruction !== undefined && !samePosition(obstruction.position, source.position)) {
-      return yield* Effect.fail(
-        behaviorError(
-          driver,
-          `Could not safely collect the portal casting lava source through ${
-            obstruction.blockId
-          } at ${positionKey(obstruction.position)}`,
-        ),
+      return yield* behaviorError(
+        driver,
+        `Could not safely collect the portal casting lava source through ${
+          obstruction.blockId
+        } at ${positionKey(obstruction.position)}`,
       );
     }
     const sourceCenter = blockCenter(source.position);
@@ -5191,14 +5180,12 @@ function collectApproachedPortalCastingLavaSource(
       maximumResults: 1,
     });
     if (!liveSource.some(({ position }) => samePosition(position, source.position))) {
-      return yield* Effect.fail(
-        behaviorError(
-          driver,
-          `The portal casting lava source at ${positionKey(
-            source.position,
-          )} changed while the bot approached it`,
-          "source-changed",
-        ),
+      return yield* behaviorError(
+        driver,
+        `The portal casting lava source at ${positionKey(
+          source.position,
+        )} changed while the bot approached it`,
+        "source-changed",
       );
     }
     yield* driver.act({
@@ -5222,12 +5209,13 @@ function collectApproachedPortalCastingLavaSource(
     for (let poll = 0; poll < PORTAL_CASTING_LAVA_COLLECTION_POLLS; poll += 1) {
       const current = yield* driver.observe;
       if ((current.inventory.counts["minecraft:lava_bucket"] ?? 0) > 0) {
-        return;
+        return undefined;
       }
       yield* Effect.sleep(50);
     }
-    return yield* Effect.fail(
-      behaviorError(driver, `The lava source at ${positionKey(source.position)} was not collected`),
+    return yield* behaviorError(
+      driver,
+      `The lava source at ${positionKey(source.position)} was not collected`,
     );
   });
 }
@@ -5290,7 +5278,7 @@ function recoverPortalCastingWaterBucket(
     for (let attempt = 0; attempt < PORTAL_CASTING_WATER_RECOVERY_ATTEMPTS; attempt += 1) {
       const current = yield* driver.observe;
       if ((current.inventory.counts["minecraft:water_bucket"] ?? 0) > 0) {
-        return;
+        return undefined;
       }
       const nearby = yield* driver.queryBlocks({
         center: blockCenter(expectedWater),
@@ -5342,20 +5330,18 @@ function recoverPortalCastingWaterBucket(
       for (let poll = 0; poll < PORTAL_CASTING_LAVA_COLLECTION_POLLS; poll += 1) {
         const observed = yield* driver.observe;
         if ((observed.inventory.counts["minecraft:water_bucket"] ?? 0) > 0) {
-          return;
+          return undefined;
         }
         yield* Effect.sleep(50);
       }
     }
-    return yield* Effect.fail(
-      behaviorError(
-        driver,
-        lastSource === undefined
-          ? "The portal casting water bucket is missing and no nearby source remains"
-          : `The water source at ${positionKey(lastSource.position)} was not collected${
-              lastFailure === undefined ? "" : `: ${lastFailure.message}`
-            }`,
-      ),
+    return yield* behaviorError(
+      driver,
+      lastSource === undefined
+        ? "The portal casting water bucket is missing and no nearby source remains"
+        : `The water source at ${positionKey(lastSource.position)} was not collected${
+            lastFailure === undefined ? "" : `: ${lastFailure.message}`
+          }`,
     );
   });
 }
@@ -5426,8 +5412,9 @@ function ensurePortalCastingSupports(
     }
     const firstMissing = missing[0];
     if (firstMissing !== undefined) {
-      return yield* Effect.fail(
-        behaviorError(driver, `Portal casting support is missing at ${positionKey(firstMissing)}`),
+      return yield* behaviorError(
+        driver,
+        `Portal casting support is missing at ${positionKey(firstMissing)}`,
       );
     }
     return uniquePositions(scaffold);
@@ -5534,11 +5521,11 @@ function leavePortalCastingScaffoldCells(
         (position) => samePosition(position, playerFeet) || samePosition(position, playerHead),
       )
     ) {
-      return;
+      return undefined;
     }
     const center = scaffold[0];
     if (center === undefined) {
-      return;
+      return undefined;
     }
     const blocks = yield* driver.queryBlocks({
       center: blockCenter(center),
@@ -5595,11 +5582,12 @@ function leavePortalCastingScaffoldCells(
         })
         .pipe(Effect.result);
       if (reached._tag === "Success") {
-        return;
+        return undefined;
       }
     }
-    return yield* Effect.fail(
-      behaviorError(driver, "Could not leave the temporary portal casting scaffold cells"),
+    return yield* behaviorError(
+      driver,
+      "Could not leave the temporary portal casting scaffold cells",
     );
   });
 }
@@ -5641,8 +5629,9 @@ function useBucketToward(
     };
     const distance = Math.sqrt(distanceSquared(currentEyePosition, targetCenter));
     if (distance > LIQUID_INTERACTION_REACH) {
-      return yield* Effect.fail(
-        behaviorError(driver, `The liquid source at ${positionKey(target)} is out of reach`),
+      return yield* behaviorError(
+        driver,
+        `The liquid source at ${positionKey(target)} is out of reach`,
       );
     }
     const targeted = (yield* driver.raycast({
@@ -5671,11 +5660,13 @@ function useBucketToward(
             samePosition(sourceOnlySightlineIsClear.position, target))
         ))
     ) {
-      return yield* Effect.fail(
-        behaviorError(driver, `The liquid source at ${positionKey(target)} is not targeted`),
+      return yield* behaviorError(
+        driver,
+        `The liquid source at ${positionKey(target)} is not targeted`,
       );
     }
     yield* driver.act({ type: "use-item", hand: "main" });
+    return undefined;
   });
 }
 
@@ -5780,10 +5771,11 @@ function retryPortalBucketPlacement(
         yield* recoverPortalCastingWaterBucket(driver, target, path);
       }
     } else if (!retryWithFilledBucket) {
-      return yield* Effect.fail(failure);
+      return yield* failure;
     }
     yield* Effect.sleep(100);
     yield* placeBucketOnTopOf(driver, support, itemIds, path, attemptsRemaining - 1);
+    return undefined;
   });
 }
 
@@ -5824,7 +5816,7 @@ function exposePortalBucketSupport(
         includeFluids: false,
       })).block;
       if (obstruction === undefined || samePosition(obstruction.position, support)) {
-        return;
+        return undefined;
       }
       if (
         !obstruction.diggable ||
@@ -5832,13 +5824,11 @@ function exposePortalBucketSupport(
         isPortalCastingPlayerStabilityBlock(observation.player.position, obstruction.position) ||
         clearedBlocks === PORTAL_CASTING_LAVA_SIGHT_CLEARING_BLOCKS
       ) {
-        return yield* Effect.fail(
-          behaviorError(
-            driver,
-            `Could not expose portal bucket support through ${
-              obstruction.blockId
-            } at ${positionKey(obstruction.position)}`,
-          ),
+        return yield* behaviorError(
+          driver,
+          `Could not expose portal bucket support through ${
+            obstruction.blockId
+          } at ${positionKey(obstruction.position)}`,
         );
       }
       const tool = preferredPortalDigTool(observation);
@@ -5860,14 +5850,13 @@ function exposePortalBucketSupport(
         50,
       );
       if (cleared !== undefined && !cleared.replaceable) {
-        return yield* Effect.fail(
-          behaviorError(
-            driver,
-            `Could not clear portal bucket sightline at ${positionKey(obstruction.position)}`,
-          ),
+        return yield* behaviorError(
+          driver,
+          `Could not clear portal bucket sightline at ${positionKey(obstruction.position)}`,
         );
       }
     }
+    return undefined;
   });
 }
 
@@ -5929,11 +5918,9 @@ function clearPortalCastingCells(
           continue;
         }
         if (!block.diggable) {
-          return yield* Effect.fail(
-            behaviorError(
-              driver,
-              `Portal casting cell is not diggable at ${positionKey(position)}`,
-            ),
+          return yield* behaviorError(
+            driver,
+            `Portal casting cell is not diggable at ${positionKey(position)}`,
           );
         }
         yield* driver.pathfind(position, 3, mergePathPolicy(path));
@@ -5954,11 +5941,13 @@ function clearPortalCastingCells(
           50,
         );
         if (block !== undefined && !block.replaceable) {
-          return yield* Effect.fail(
-            behaviorError(driver, `Could not clear portal casting cell ${positionKey(position)}`),
+          return yield* behaviorError(
+            driver,
+            `Could not clear portal casting cell ${positionKey(position)}`,
           );
         }
       }
+      return undefined;
     }).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
   );
 }
@@ -5985,6 +5974,8 @@ function primitiveActionPosition(
     case "toss-items":
     case "use-item":
       return undefined;
+    default:
+      return action satisfies never;
   }
 }
 
@@ -6241,8 +6232,8 @@ function craftItemDependencies(
                 resolved = true;
                 break;
               }
-              const unresolved = craftability.missing.find((candidate) =>
-                sameItemAlternatives(candidate.itemIds, missing.itemIds),
+              const unresolved = craftability.missing.find((missingItem) =>
+                sameItemAlternatives(missingItem.itemIds, missing.itemIds),
               );
               if (unresolved === undefined) {
                 resolved = true;
@@ -6295,13 +6286,13 @@ function craftItemDependencies(
         ...(options.path === undefined ? {} : { path: options.path }),
       });
     }
-    return yield* Effect.fail(
+    return yield* (
       lastFailure ??
-        behaviorError(
-          driver,
-          `No known recipe can currently produce ${resultItemId}`,
-          "resource-exhausted",
-        ),
+      behaviorError(
+        driver,
+        `No known recipe can currently produce ${resultItemId}`,
+        "resource-exhausted",
+      )
     );
   });
 }

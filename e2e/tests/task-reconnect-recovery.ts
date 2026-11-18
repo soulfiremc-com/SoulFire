@@ -59,8 +59,8 @@ export default {
             bot.world
               .player()
               .pipe(
-                Effect.tap((player) =>
-                  check(!epochs.has(player.connectionEpoch), "Old connection"),
+                Effect.tap((current) =>
+                  check(!epochs.has(current.connectionEpoch), "Old connection"),
                 ),
               ),
             "30 seconds",

@@ -42,10 +42,15 @@ function clickedSlot(event: RawPacketEvent): number {
   return (bytes[offset]! << 8) | bytes[offset + 1]!;
 }
 
+const pause = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 export default {
   name: "inventory-move-packets",
-  run: ({ bot, client }) =>
-    Effect.scoped(
+  run: ({ bot, client }) => {
+    return Effect.scoped(
       Effect.gen(function* () {
         const forced = (yield* rcon("forceload query 4256 0", { check: false })).includes(
           "not marked",
@@ -66,6 +71,7 @@ export default {
         yield* placeBot(bot, { x: 4264.5, y: 64, z: 8.5 });
         yield* rcon(`gamemode survival ${BOT_NAME}`);
         const run = Effect.runPromiseWith(yield* Effect.context());
+
         yield* Effect.tryPromise({
           try: async () => {
             const events: RawPacketEvent[] = [];
@@ -90,10 +96,6 @@ export default {
                   streamError = cause instanceof Error ? cause : new Error(String(cause));
               }
             })();
-            const pause = (ms: number) =>
-              new Promise<void>((resolve) => {
-                setTimeout(resolve, ms);
-              });
             const marker = async () => {
               const start = events.length;
               const slot = markerSlot;
@@ -349,5 +351,6 @@ export default {
           catch: (cause) => new CheckFailed({ message: String(cause) }),
         });
       }),
-    ),
+    );
+  },
 } satisfies E2ETest;

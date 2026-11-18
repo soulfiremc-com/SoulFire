@@ -211,16 +211,14 @@ export function approachLiquidSourceFromSide(
         }
       }
     }
-    return yield* Effect.fail(
-      new BeatGameDriverError({
-        operation: "approach-liquid-source",
-        code: "unreachable",
-        retryable: true,
-        message: `Could not reach, excavate, or target a safe side-on stand beside ${
-          nearbySources.length
-        } nearby liquid source${nearbySources.length === 1 ? "" : "s"}`,
-      }),
-    );
+    return yield* new BeatGameDriverError({
+      operation: "approach-liquid-source",
+      code: "unreachable",
+      retryable: true,
+      message: `Could not reach, excavate, or target a safe side-on stand beside ${
+        nearbySources.length
+      } nearby liquid source${nearbySources.length === 1 ? "" : "s"}`,
+    });
   });
 }
 

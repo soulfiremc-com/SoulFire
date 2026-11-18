@@ -9,6 +9,7 @@ export default {
   name: "protocol-reconnect",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context());
       const service = client.service(BotProtocolService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const observed = yield* Effect.tryPromise({
@@ -61,7 +62,7 @@ export default {
           try {
             await watching;
             clearTimeout(readyTimer);
-            await Effect.runPromise(bot.restart());
+            await runPromise(bot.restart());
             await stream;
             return information && encoded;
           } finally {

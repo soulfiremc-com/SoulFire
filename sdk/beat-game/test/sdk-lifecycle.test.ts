@@ -9,6 +9,7 @@ it("interrupts beat-game setup before the first SDK observation arrives", () =>
       Effect.gen(function* () {
         const started = yield* Deferred.make<void>();
         let active = 0;
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake implements only the bot members beatGame reads
         const bot = {
           id: "bot",
           instanceId: "instance",

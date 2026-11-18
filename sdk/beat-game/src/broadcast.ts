@@ -17,15 +17,15 @@ export class ReplayBroadcast<A> {
       const queue = yield* Queue.unbounded<A, Cause.Done>();
       const ended = yield* this.#mutex.withPermits(1)(
         Effect.gen({ self: this }, function* () {
-          const ended = this.#ended;
-          if (!ended) {
+          const alreadyEnded = this.#ended;
+          if (!alreadyEnded) {
             this.#subscribers.add(queue);
           }
           yield* Queue.offerAll(queue, this.#history);
-          if (ended) {
+          if (alreadyEnded) {
             yield* Queue.end(queue);
           }
-          return ended;
+          return alreadyEnded;
         }),
       );
       if (!ended) {

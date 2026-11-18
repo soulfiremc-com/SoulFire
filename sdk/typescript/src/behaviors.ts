@@ -56,10 +56,7 @@ export function sequence(
   ...behaviors: readonly BotBehavior<unknown, unknown, unknown>[]
 ): BotBehavior<readonly unknown[], unknown, unknown> {
   return defineBehavior((bot) =>
-    Effect.all(
-      behaviors.map((behavior) => behavior.run(bot)),
-      { concurrency: 1 },
-    ),
+    Effect.forEach(behaviors, (behavior) => behavior.run(bot), { concurrency: 1 }),
   );
 }
 
@@ -75,10 +72,9 @@ export function parallel(
   options: ParallelOptions = {},
 ): BotBehavior<readonly unknown[], unknown, unknown> {
   return defineBehavior((bot) =>
-    Effect.all(
-      behaviors.map((behavior) => behavior.run(bot)),
-      { concurrency: options.concurrency ?? "unbounded" },
-    ),
+    Effect.forEach(behaviors, (behavior) => behavior.run(bot), {
+      concurrency: options.concurrency ?? "unbounded",
+    }),
   );
 }
 
@@ -184,12 +180,10 @@ export function until<A, E, R, E2 = never, R2 = never>(
         const done = yield* Effect.isEffect(decision) ? decision : Effect.succeed(decision);
         if (done) return result;
       }
-      return yield* Effect.fail(
-        new SoulFireBehaviorError({
-          behavior: "until",
-          message: `Predicate remained false after ${maximumIterations} iterations`,
-        }),
-      );
+      return yield* new SoulFireBehaviorError({
+        behavior: "until",
+        message: `Predicate remained false after ${maximumIterations} iterations`,
+      });
     }),
   );
 }

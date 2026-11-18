@@ -35,6 +35,8 @@ export function durableSkillKindForDecision(
     case "prepare-equipment":
     case "retreat":
       return undefined;
+    default:
+      return decision satisfies never;
   }
 }
 

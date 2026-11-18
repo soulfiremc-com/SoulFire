@@ -605,6 +605,8 @@ function valueToUnknown(value: Value | undefined): unknown {
       return value.kind.value.values.map(valueToUnknown);
     case undefined:
       return undefined;
+    default:
+      return value.kind satisfies never;
   }
 }
 
@@ -617,16 +619,9 @@ function deepEqual(left: unknown, right: unknown): boolean {
       left.length === right.length && left.every((value, index) => deepEqual(value, right[index]))
     );
   }
-  if (
-    typeof left === "object" &&
-    left !== null &&
-    typeof right === "object" &&
-    right !== null &&
-    !Array.isArray(left) &&
-    !Array.isArray(right)
-  ) {
+  if (isRecord(left) && isRecord(right)) {
     const leftEntries = Object.entries(left);
-    const rightRecord = right as Record<string, unknown>;
+    const rightRecord = right;
     return (
       leftEntries.length === Object.keys(rightRecord).length &&
       leftEntries.every(
@@ -675,4 +670,8 @@ function taskReport<Result extends DescMessage | undefined>(
         outcome.status === "rejected",
     ),
   };
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
