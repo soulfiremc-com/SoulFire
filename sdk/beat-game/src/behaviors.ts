@@ -3578,7 +3578,7 @@ function leavePortalForReentry(
     }
     return yield* (
       lastFailure ??
-      behaviorError(driver, "Could not step out of the Nether portal before re-entry")
+        behaviorError(driver, "Could not step out of the Nether portal before re-entry")
     );
   });
 }
@@ -6288,11 +6288,11 @@ function craftItemDependencies(
     }
     return yield* (
       lastFailure ??
-      behaviorError(
-        driver,
-        `No known recipe can currently produce ${resultItemId}`,
-        "resource-exhausted",
-      )
+        behaviorError(
+          driver,
+          `No known recipe can currently produce ${resultItemId}`,
+          "resource-exhausted",
+        )
     );
   });
 }
