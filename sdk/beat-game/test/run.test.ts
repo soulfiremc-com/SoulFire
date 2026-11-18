@@ -5395,6 +5395,93 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions.some((action) => action.type === "dig-block")).toBe(false);
   });
 
+  it("shelters instead of walking unarmed to a guarded fresh corpse at night", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const observedAt = new Date().toISOString();
+    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, {
+      runId: "guarded-night-recovery-run",
+      teamId: "guarded-night-recovery-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            deathPositions: [
+              {
+                key: `death:${observedAt}`,
+                value: {
+                  x: 24,
+                  y: 64,
+                  z: -12,
+                  dimension: "minecraft:overworld",
+                  inventoryCounts: { "minecraft:iron_pickaxe": 1 },
+                },
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentEnvironment = { gameTime: 16_000n };
+    // The zombie that killed the bot still stands beside its drops, out of
+    // reach of the respawned bot.
+    const zombie = { ...skeletonAt(77, 24, -12), entityType: "minecraft:zombie" };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      selector.categories?.includes(2) === true &&
+      origin !== undefined &&
+      Math.hypot(origin.x - zombie.position.x, origin.z - zombie.position.z) <= radius
+        ? [zombie]
+        : [];
+    let recoveryAttempts = 0;
+    const startedActions: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "guarded-night-recovery-run",
+          team: { teamId: "guarded-night-recovery-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            recoverDeath: () =>
+              Effect.sync(() => {
+                recoveryAttempts += 1;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* run.events.pipe(
+                Stream.runForEach((event) =>
+                  event.type === "action-started"
+                    ? Effect.sync(() => {
+                        startedActions.push(event.action);
+                      })
+                    : Effect.void,
+                ),
+                Effect.forkScoped,
+              );
+              yield* sleepWhile(
+                () => recoveryAttempts === 0 && !startedActions.includes("survive:night-shelter"),
+              );
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(recoveryAttempts).toBe(0);
+    expect(startedActions).toContain("survive:night-shelter");
+  });
+
   it("restores an unloaded pending corpse despite partial replacement inventory", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

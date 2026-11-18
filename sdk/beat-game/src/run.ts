@@ -218,6 +218,7 @@ const DEATH_RECOVERY_PICKAXE_DURABILITY_BUFFER = 24;
 const DEATH_RECOVERY_PICKAXE_DURABILITY_PER_DESCENT_LEVEL = 1;
 const CORPSE_DROP_INSPECTION_DISTANCE = 32;
 const CORPSE_DROP_MATCH_RADIUS = 16;
+const CORPSE_GUARD_RADIUS = 16;
 const DEATH_RECOVERY_PREPARATION_STAGING_DISTANCE = 256;
 const EMERGENCY_ARMAMENT_LOG_COUNT = 2;
 const DEATH_RECOVERY_BOOTSTRAP_LOG_COUNT = 12;
@@ -1346,7 +1347,10 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
       const urgentCorpseRecovery =
         observation.player.dead &&
         !liveObservation.player.dead &&
-        isRecentDeathObservation(observation.observedAt);
+        isRecentDeathObservation(observation.observedAt) &&
+        !(yield* hasGuardedCorpseAtNight(state, liveObservation).pipe(
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        ));
       const nightShelterNeeded = urgentCorpseRecovery
         ? false
         : yield* shouldTakeNightShelter(state, liveObservation, {
@@ -1476,7 +1480,10 @@ function shouldTakeNightShelter(
     if (!isHostileNight(environment.gameTime)) {
       return false;
     }
-    if (yield* hasVisibleValuableCorpseDrops(state, observation)) {
+    if (
+      !(yield* hasGuardedCorpseAtNight(state, observation)) &&
+      (yield* hasVisibleValuableCorpseDrops(state, observation))
+    ) {
       return false;
     }
     // Cover only protects work that stays under it. A restarted run sat in
@@ -17394,6 +17401,40 @@ function inspectNearbyCorpseDrops(
         drops.filter(({ itemId }) => itemId !== undefined && corpseItemIds.has(itemId)),
       ),
     );
+}
+
+// A live run respawned at night with nothing, walked back to the mobs that
+// had just killed it, and died twice more. Without a weapon, a corpse with
+// hostiles beside it waits for the morning.
+function hasGuardedCorpseAtNight(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  if (state.driver.environment === undefined || hasMeleeWeapon(observation)) {
+    return Effect.succeed(false);
+  }
+  return Effect.gen(function* () {
+    const environment = yield* state.driver.environment!;
+    if (!isHostileNight(environment.gameTime)) {
+      return false;
+    }
+    const pendingDeaths = yield* Ref.get(state.pendingDeaths);
+    for (const pendingDeath of pendingDeaths) {
+      if (pendingDeath.position.dimension !== observation.player.position.dimension) {
+        continue;
+      }
+      const nearby = yield* state.driver.queryEntities({
+        origin: pendingDeath.position,
+        radius: CORPSE_GUARD_RADIUS,
+        selector: { categories: [2], alive: true },
+        maximumResults: 8,
+      });
+      if (nearby.some(isCurrentlyHostileMob)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 function hasVisibleValuableCorpseDrops(
