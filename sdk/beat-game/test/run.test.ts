@@ -5130,7 +5130,8 @@ describe("beat-game run lifecycle", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      return selector.blockIds?.includes("minecraft:water") === true
+      // The ocean fills every block up to its surface at y 63.
+      return selector.blockIds?.includes("minecraft:water") === true || position.y <= 62
         ? [
             blockObservation(position, {
               blockId: "minecraft:water",
@@ -24739,6 +24740,142 @@ describe("beat-game run lifecycle", () => {
     expect(releaseIndex).toBeGreaterThan(digIndex);
     expect(driver.paths).toHaveLength(0);
     expect(driver.currentObservation.player.position.y).toBe(64);
+  }, 15_000);
+
+  it("stops climbing at the water line under open sky beside a raised bridge", async () => {
+    const driver = new FakeBeatGameDriver();
+    // The only dry column is a bridge one block above the water line, so
+    // the surface sits higher than a swimmer can rise.
+    driver.surfaceColumns = [
+      {
+        x: 1,
+        z: 0,
+        loaded: true,
+        surfaceY: 64,
+        blockId: "minecraft:cobblestone",
+        biomeId: "minecraft:ocean",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    let swimming = false;
+    driver.blockQueryResolver = (query) => {
+      const position = {
+        x: Math.floor(query.center.x),
+        y: Math.floor(query.center.y),
+        z: Math.floor(query.center.z),
+        dimension: query.center.dimension,
+      };
+      if (query.selector.blockIds?.includes("minecraft:water") === true) {
+        return position.y <= 62
+          ? [
+              blockObservation(position, {
+                blockId: "minecraft:water",
+                diggable: false,
+                replaceable: true,
+              }),
+            ]
+          : [];
+      }
+      if (query.selector.blockIds === undefined) {
+        return [
+          blockObservation(position, {
+            blockId: position.y <= 62 ? "minecraft:water" : "minecraft:air",
+            diggable: false,
+            replaceable: true,
+          }),
+        ];
+      }
+      return [];
+    };
+    // Each swimming route drags the bot back under before it fails.
+    const sinkBelowTheWaterLine = () => {
+      const current = driver.currentObservation;
+      driver.currentObservation = {
+        ...current,
+        player: { ...current.player, position: { ...current.player.position, y: 61.75 } },
+      };
+    };
+    // Once in the water, each gathering attempt drags the bot under and fails.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (swimming) {
+          sinkBelowTheWaterLine();
+        }
+      }).pipe(Effect.andThen(swimming ? Effect.fail(noRoute(task.type)) : Effect.never));
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        sinkBelowTheWaterLine();
+      }).pipe(Effect.andThen(Effect.fail(noRoute("pathfind"))));
+    let ascending = false;
+    driver.actionObserver = (action) => {
+      if (action.type === "set-movement" && action.jump === true && action.forward !== true) {
+        ascending = true;
+      }
+      if (action.type === "reset-movement") {
+        ascending = false;
+      }
+    };
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (!ascending) {
+          return driver.currentObservation;
+        }
+        const current = driver.currentObservation;
+        driver.currentObservation = {
+          ...current,
+          player: {
+            ...current.player,
+            air: 300,
+            position: {
+              ...current.player.position,
+              // The swimmer floats at the water line and rises no further.
+              y: Math.min(63.04, current.player.position.y + 1),
+            },
+          },
+        };
+        return driver.currentObservation;
+      });
+    const failures: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+            yield* Effect.sleep(1);
+          }
+          swimming = true;
+          driver.currentObservation = observation({
+            air: 100,
+            position: { x: 0.5, y: 61.75, z: 0.5 },
+          });
+          yield* Effect.sleep(3_000);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("10 seconds")),
+      ),
+    );
+
+    expect(
+      failures.filter(
+        (detail) => detail.includes("could not rise") || detail.includes("remained below"),
+      ),
+    ).toEqual([]);
   }, 15_000);
 
   it("keeps climbing a deep aquifer after surface pathfinding fails", async () => {

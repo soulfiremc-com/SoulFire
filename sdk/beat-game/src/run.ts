@@ -7334,6 +7334,16 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
           });
         }
       }
+      // A swimmer cannot rise above the water line. A live bot floated
+      // under open sky beside its own bridge, whose top set the surface
+      // height, and failed this climb for minutes. With nothing overhead and
+      // air at its head, it has already surfaced.
+      if (
+        obstruction === undefined &&
+        (yield* hasBreathableHeadSpace(state.driver, observation.player.position))
+      ) {
+        return undefined;
+      }
       const rose = yield* swimUpOneLevel(state, observation.player.position.y);
       if (!rose) {
         return yield* new BeatGameDriverError({
@@ -12900,10 +12910,43 @@ function needsOverworldSurfaceRecovery(
         selectSurfaceColumn(columns, position) ??
         selectSwimmableSurfaceEscapeColumns(columns, position, 1)[0],
     ),
-    Effect.map(
-      (surface) => surface !== undefined && surface.surfaceY - Math.floor(position.y) >= 2,
+    Effect.flatMap((surface) =>
+      surface === undefined || surface.surfaceY - Math.floor(position.y) < 2
+        ? Effect.succeed(false)
+        : isUnderCover(state.driver, position, surface.surfaceY),
     ),
   );
+}
+
+// The nearest dry column can stand higher than a swimmer without covering
+// it. A live bot swam at the water line beside its own bridge, took the
+// bridge top as the surface, and spent minutes trying to climb out of open
+// water.
+function isUnderCover(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+  surfaceY: number,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    if (
+      !(yield* isPlayerInFluid(driver, position)) ||
+      !(yield* hasBreathableHeadSpace(driver, position))
+    ) {
+      return true;
+    }
+    for (let y = Math.floor(position.y + 1.62) + 1; y <= surfaceY + 1; y += 1) {
+      const block = yield* queryExactBlock(driver, {
+        x: Math.floor(position.x),
+        y,
+        z: Math.floor(position.z),
+        dimension: position.dimension,
+      });
+      if (block !== undefined && !block.replaceable) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 function returnToOverworldSurface(
