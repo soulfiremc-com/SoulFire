@@ -123,6 +123,8 @@ describe("beat-game requirements", () => {
       "pickaxe",
       "water-bucket",
       "ignition",
+      "chestplate",
+      "helmet",
     ]);
   });
 

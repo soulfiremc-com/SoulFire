@@ -110,6 +110,17 @@ const FAST_COOKED_FOOD_PRIORITY = 101;
 const FAST_READY_SHIELD_PRIORITY = 113;
 const DRAGON_BED_COUNT = 4;
 
+export const CHESTPLATE_ITEM_IDS = [
+  "minecraft:iron_chestplate",
+  "minecraft:diamond_chestplate",
+  "minecraft:netherite_chestplate",
+];
+export const HELMET_ITEM_IDS = [
+  "minecraft:iron_helmet",
+  "minecraft:diamond_helmet",
+  "minecraft:netherite_helmet",
+];
+
 export const LOG_ITEM_IDS = [
   "minecraft:oak_log",
   "minecraft:spruce_log",
@@ -191,6 +202,11 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
       103,
     ),
     itemRequirement("shield", ["minecraft:shield"], () => 1, 102),
+    // The bot lost most fights against zombies and skeletons with no armor
+    // at all. A chestplate and helmet take a third off every hit for 13 iron.
+    // They come last, once everything else for the Nether is ready.
+    itemRequirement("chestplate", CHESTPLATE_ITEM_IDS, () => 1, 55),
+    itemRequirement("helmet", HELMET_ITEM_IDS, () => 1, 54),
     itemRequirement("pickaxe", ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"], () => 1, 68),
     itemRequirement("water-bucket", ["minecraft:water_bucket"], () => 1, 65),
     itemRequirement(
@@ -378,7 +394,13 @@ function portalRequirements(
 ): readonly BeatGameRequirementDefinition[] {
   const survivalRequirements = REQUIREMENTS[BeatGamePhase.PREPARE_OVERWORLD]
     .filter(
-      ({ key }) => key !== "iron" && key !== "water-bucket" && key !== "ignition" && key !== "bed",
+      ({ key }) =>
+        key !== "iron" &&
+        key !== "water-bucket" &&
+        key !== "ignition" &&
+        key !== "bed" &&
+        key !== "chestplate" &&
+        key !== "helmet",
     )
     .map((definition) => {
       if (definition.key === "logs") {

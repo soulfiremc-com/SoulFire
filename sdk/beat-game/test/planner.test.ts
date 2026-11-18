@@ -569,6 +569,8 @@ describe("beat-game planner", () => {
           "minecraft:water_bucket": 1,
           "minecraft:flint_and_steel": 1,
           "minecraft:shield": 1,
+          "minecraft:iron_chestplate": 1,
+          "minecraft:iron_helmet": 1,
         },
       }),
       strategy: defaultBeatGameStrategy,
@@ -593,6 +595,8 @@ describe("beat-game planner", () => {
       "minecraft:water_bucket": 1,
       "minecraft:flint_and_steel": 1,
       "minecraft:shield": 1,
+      "minecraft:iron_chestplate": 1,
+      "minecraft:iron_helmet": 1,
     };
     const base = checkpoint(BeatGamePhase.PREPARE_OVERWORLD);
 

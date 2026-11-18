@@ -22162,6 +22162,40 @@ describe("beat-game run lifecycle", () => {
     expect(eatIndex === -1 || eatIndex > ascentIndex).toBe(true);
   }, 10_000);
 
+  it("wears armor it carries", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:iron_chestplate": 1, "minecraft:iron_helmet": 1 },
+    });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.actions.filter((action) => action.type === "equip-item").length < 2) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("3 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({
+      type: "equip-item",
+      selector: { itemIds: ["minecraft:iron_chestplate"] },
+      equipmentSlot: "chest",
+    });
+    expect(driver.actions).toContainEqual({
+      type: "equip-item",
+      selector: { itemIds: ["minecraft:iron_helmet"] },
+      equipmentSlot: "head",
+    });
+  });
+
   it("keeps working through the air dips of swimming at the surface", async () => {
     const driver = new FakeBeatGameDriver();
     driver.blockQueryResolver = (query) =>
@@ -34422,6 +34456,8 @@ describe("beat-game run lifecycle", () => {
       "minecraft:lava_bucket": 1,
       "minecraft:flint_and_steel": 1,
       "minecraft:shield": 1,
+      "minecraft:iron_chestplate": 1,
+      "minecraft:iron_helmet": 1,
       "minecraft:obsidian": 10,
       "minecraft:blaze_rod": 7,
       "minecraft:ender_pearl": 14,

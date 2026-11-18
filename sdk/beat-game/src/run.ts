@@ -103,6 +103,8 @@ import {
   BED_COLORS,
   BED_ITEM_IDS,
   BED_SHEEP_SEARCH_PURPOSE,
+  CHESTPLATE_ITEM_IDS,
+  HELMET_ITEM_IDS,
   COOKED_FOOD_ITEM_IDS,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
@@ -1333,6 +1335,11 @@ function runLoop(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> 
       }
       if (checkpoint.planner.phase === BeatGamePhase.COMPLETE) {
         return yield* completeRun(state);
+      }
+      if (!observation.player.dead) {
+        yield* wearCarriedArmor(state, observation).pipe(
+          Effect.catchTag("BeatGameDriverError", () => Effect.void),
+        );
       }
       const decision = decideBeatGameAction({
         checkpoint,
@@ -9106,6 +9113,10 @@ function satisfyRequirementFromWorld(
       return ensureIgnition(state, observation);
     case "shield":
       return craftWithTable(state, observation, "minecraft:shield", 1);
+    case "chestplate":
+      return craftIronArmor(state, observation, "minecraft:iron_chestplate", 8);
+    case "helmet":
+      return craftIronArmor(state, observation, "minecraft:iron_helmet", 5);
     case "blaze-rods":
       if (
         isNether(observation.player.position.dimension) &&
@@ -14631,6 +14642,51 @@ function barterWithPiglin(
         }
       }
     }).pipe(Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
+  );
+}
+
+function craftIronArmor(
+  state: RunState,
+  observation: BeatGameObservation,
+  itemId: string,
+  ironCost: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  const iron = observation.inventory.counts["minecraft:iron_ingot"] ?? 0;
+  return iron < ironCost
+    ? satisfyIronRequirement(state, observation, ironCost - iron)
+    : craftWithTable(state, observation, itemId, 1).pipe(
+        Effect.andThen(state.driver.observe),
+        Effect.flatMap((current) => wearCarriedArmor(state, current)),
+      );
+}
+
+const ARMOR_SLOTS = [
+  { slot: "head", itemIds: HELMET_ITEM_IDS },
+  { slot: "chest", itemIds: CHESTPLATE_ITEM_IDS },
+] as const;
+
+// Armor only helps while worn. It is crafted into the inventory and comes
+// back from a corpse there too.
+function wearCarriedArmor(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.forEach(
+    ARMOR_SLOTS,
+    ({ slot, itemIds }) => {
+      if (observation.player.equipment[slot] !== undefined) {
+        return Effect.void;
+      }
+      const carried = itemIds.find((itemId) => (observation.inventory.counts[itemId] ?? 0) > 0);
+      return carried === undefined
+        ? Effect.void
+        : state.driver.act({
+            type: "equip-item",
+            selector: { itemIds: [carried] },
+            equipmentSlot: slot,
+          });
+    },
+    { discard: true },
   );
 }
 
