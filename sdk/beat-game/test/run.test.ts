@@ -3456,6 +3456,150 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("takes cover from tridents whose thrower is out of sight", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:dirt": 16, "minecraft:stone_sword": 1 },
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 16,
+    });
+    const skeleton = (networkId: number, x: number, z: number) =>
+      ({
+        connectionEpoch: "epoch-1",
+        networkId,
+        entityType: "minecraft:skeleton",
+        position: { x, y: 64, z, dimension: "minecraft:overworld" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      }) as const;
+    // Only a creeper is in view; the archer shoots from beyond the query range.
+    driver.entityResults = [{ ...skeleton(33, 8, 0), entityType: "minecraft:creeper" }];
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: new Date().toISOString(),
+      amount: 3,
+      health: 13,
+      damageType: "minecraft:trident",
+    } as const).pipe(Stream.concat(Stream.never));
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const key = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (position.y === 63) {
+        // Undiggable, so cover falls back to walls on open ground.
+        return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
+      }
+      if (placed.has(key(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          key({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    // The live bot fled for ninety seconds and kept taking arrows.
+    let fleeing = false;
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          fleeing = true;
+        }
+      }).pipe(Effect.andThen(task.type === "flee" ? Effect.sleep(20) : Effect.void));
+    let health = 16;
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (fleeing && health > 6) {
+          health -= 3;
+        }
+        driver.currentObservation = {
+          ...driver.currentObservation,
+          player: { ...driver.currentObservation.player, health },
+        };
+        return driver.currentObservation;
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size < 10) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () =>
+              Effect.fail(
+                new Error(
+                  `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                ),
+              ),
+          }),
+        ),
+      ),
+    );
+
+    expect(placed).toEqual(
+      new Set([
+        "1:64:0",
+        "-1:64:0",
+        "0:64:1",
+        "0:64:-1",
+        "1:65:0",
+        "-1:65:0",
+        "0:65:1",
+        "0:65:-1",
+        "1:66:0",
+        "0:66:0",
+      ]),
+    );
+  });
+
   it("walls itself in when a zombie leads archers it cannot escape", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
