@@ -28,7 +28,7 @@ After 0.2 is available:
 - Move its first live bot view and event subscription to `BotSession`.
 - Use high-level administration and instance APIs where they cover the UI
   operation, while retaining generated services for wire-level screens.
-- Run Biome, TypeScript, web, Electron, and packaging checks against the
+- Run Oxlint, oxfmt, TypeScript, web, Electron, and packaging checks against the
   published artifact.
 
 Completion means SoulFireClient exercises the same installed package that
@@ -121,7 +121,7 @@ reflection.
   tests.
 
 Completion means all supported call shapes behave consistently in Node.js,
-  browsers, Bun, Deno, async Python, and sync Python.
+browsers, Bun, Deno, async Python, and sync Python.
 
 ## Register task payloads with the HTTP/JSON protobuf marshaller
 

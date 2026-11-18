@@ -1,12 +1,18 @@
 {
-  "plugins": ["typescript", "effecttsgo"],
-  "categories": {
-    "correctness": "error"
-  },
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
   "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest", "effecttsgo"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
   "options": {
-    "typeAware": true
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "env": {
+    "builtin": true,
+    "node": true
   },
   "ignorePatterns": [
     "**/dist/**",
@@ -21,8 +27,41 @@
     "sdk/reference/.source/**"
   ],
   "rules": {
+    "effecttsgo/abort-controller-in-effect": "off",
+    "effecttsgo/all-of-map-to-for-each": "off",
     "effecttsgo/any-unknown-in-error-context": "off",
+    "effecttsgo/catch-conditional-refail-to-catch-if": "off",
+    "effecttsgo/catch-to-ignore": "off",
+    "effecttsgo/catch-to-or-else-succeed": "off",
+    "effecttsgo/effect-map-void": "off",
+    "effecttsgo/effect-succeed-with-undefined": "off",
+    "effecttsgo/flat-map-conditional-to-filter-or-fail": "off",
+    "effecttsgo/flat-map-to-tap": "off",
+    "effecttsgo/global-error-in-effect-catch": "off",
+    "effecttsgo/global-error-in-effect-failure": "off",
+    "effecttsgo/lazy-effect": "off",
+    "effecttsgo/on-exit-failure-to-on-error": "off",
+    "effecttsgo/option-match-to-from-option": "off",
+    "effecttsgo/race-first-with-sleep-to-timeout": "off",
+    "effecttsgo/run-effect-inside-effect": "off",
+    "effecttsgo/run-of-exit-to-run-exit": "off",
+    "effecttsgo/strict-effect-provide": "off",
+    "effecttsgo/timeout-catch-tag-to-timeout-or-else": "off",
+    "effecttsgo/unnecessary-effect-gen": "off",
+    "effecttsgo/unnecessary-fail-yieldable-error": "off",
+    "effecttsgo/unnecessary-pipe-chain": "off",
     "effecttsgo/unsafe-effect-type-assertion": "off",
-    "effecttsgo/strict-effect-provide": "off"
+    "effecttsgo/unstable-api-usage": "off",
+    "eslint/no-shadow": "off",
+    "eslint/no-underscore-dangle": "off",
+    "eslint/no-unmodified-loop-condition": "off",
+    "promise/always-return": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-generated-empty-object-type": "off",
+    "typescript/no-unsafe-enum-assignment": "off",
+    "typescript/no-unsafe-enum-comparison": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "vitest/no-conditional-expect": "off"
   }
 }

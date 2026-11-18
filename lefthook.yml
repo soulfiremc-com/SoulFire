@@ -6,7 +6,7 @@ pre-commit:
   jobs:
     - name: lint
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
-      run: bunx --no-install oxlint --type-aware --fix --no-error-on-unmatched-pattern {staged_files}
+      run: bunx --no-install oxlint --fix --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     - name: format
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,css,scss,md,mdx,yml,yaml,toml}"
