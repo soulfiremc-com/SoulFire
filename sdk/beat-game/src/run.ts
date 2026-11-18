@@ -781,6 +781,7 @@ export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
 const RANGED_COVER_HEALTH = 8;
+const RECENT_ARROW_HIT_MS = 5_000;
 const CREEPER_ESCAPE_SPRINT_MS = 2_500;
 const CREEPER_ESCAPE_SPRINT_SEGMENT_MS = 350;
 const CREEPER_ESCAPE_MINIMUM_SEGMENT_DISTANCE = 0.5;
@@ -5052,7 +5053,14 @@ function takeCoverFromRangedFire(
   return Effect.gen(function* () {
     // A live run fled a zombie with two skeletons behind it and died to
     // their arrows, so any archer nearby counts, not only the one escaped.
+    // Arrows also came from skeletons beyond the entity query range, so a
+    // recent arrow hit counts as an archer too.
+    const lastDamage = yield* Ref.get(state.lastDamage);
+    const recentArrowHit =
+      lastDamage?.damageType === "minecraft:arrow" &&
+      Date.now() - Date.parse(lastDamage.observedAt) <= RECENT_ARROW_HIT_MS;
     const archerNearby =
+      recentArrowHit ||
       PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType) ||
       (yield* state.driver.queryEntities({
         origin: observation.player.position,
