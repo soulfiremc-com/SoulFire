@@ -3248,12 +3248,18 @@ function executeDecision(
             // With keepInventory nothing drops, so a corpse walk would only
             // search for items the bot already carries.
             if (pendingDeath.recoverItems && keptInventoryThroughDeath(pendingDeath, respawned)) {
-              return yield* abandonPendingDeath(
-                state,
-                pendingDeath,
-                respawned,
-                "The bot kept its inventory through death",
-              );
+              // Nothing was lost, so this must not count as an inventory loss
+              // that restarts Overworld preparation. A live run carrying worn
+              // out tools was sent back to the first phase this way.
+              yield* emit(state, {
+                type: "items-recovered",
+                detail: "The bot kept its inventory through death",
+              });
+              return {
+                checkpoint: (checkpoint) =>
+                  forgetDeathPosition(checkpoint, pendingDeath.observedAt),
+                completedPendingDeath: pendingDeath.observedAt,
+              } satisfies ActionResult;
             }
             const safetyInterruptions = deathRecoverySafetyInterruptionCount(actionCheckpoint);
             if (
