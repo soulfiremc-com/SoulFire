@@ -195,6 +195,7 @@ const NETHER_EXPLORATION_MINIMUM_BUILDING_BLOCKS = 16;
 const NETHER_EXPLORATION_TARGET_BUILDING_BLOCKS = 64;
 const NETHER_EXPLORATION_PICKAXE_DURABILITY_RESERVE = 64;
 const NETHER_STONE_PICKAXE_BATCH = 3;
+const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
@@ -9914,7 +9915,9 @@ function craftNetherPickaxe(
   }
   return collectBlocksOrExplore(state, observation, {
     blockIds: NETHER_STEM_ITEM_IDS,
-    count: Math.ceil((planksNeeded(count) - planksAvailable) / 4),
+    // Spare stems pay for the next batch. A live bot used its last wood on
+    // pickaxes and then spent an hour without any in a basalt delta.
+    count: Math.ceil((planksNeeded(count) - planksAvailable) / 4) + NETHER_STEM_RESERVE,
     progressItemIds: NETHER_STEM_ITEM_IDS,
     purpose: "find-nether-stems",
     avoidFluids: true,

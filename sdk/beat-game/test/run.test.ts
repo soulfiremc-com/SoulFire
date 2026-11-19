@@ -1533,12 +1533,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     // A crafting table, two more sticks and two wooden pickaxes need 12
-    // planks, and the bot carries the wood for 5.
+    // planks, and the bot carries the wood for 5. It takes four spare stems
+    // for the next pickaxes.
     expect(driver.tasks).toEqual([
       objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:crimson_stem", "minecraft:warped_stem"],
-        count: 2,
+        count: 6,
       }),
     ]);
   });
