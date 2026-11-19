@@ -262,6 +262,21 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("goes back to the Overworld for food when hunger is urgent in the Nether", () => {
+    // As in a live run whose bot carried only raw pork it could not cook.
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES),
+      observation: observation({
+        food: 10,
+        dimension: "minecraft:the_nether",
+        counts: { "minecraft:porkchop": 3 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "return-through-portal" });
+  });
+
   it("crafts a wooden sword as soon as enough wood is available", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
