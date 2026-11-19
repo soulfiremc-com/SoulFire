@@ -15652,6 +15652,64 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("raises its shield instead of blind-sprinting from a closing creeper", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 6,
+      food: 13,
+      equipment: { offhand: "minecraft:shield" },
+      counts: { "minecraft:shield": 1 },
+    });
+    const distantCreeper = {
+      connectionEpoch: "epoch-1",
+      networkId: 42,
+      entityType: "minecraft:creeper",
+      position: { x: 8, y: 64, z: 0, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:01.000Z",
+    } as const;
+    const closingCreeper = {
+      ...distantCreeper,
+      position: { ...distantCreeper.position, x: 5 },
+      observedAt: "2026-01-01T00:00:02.000Z",
+    } as const;
+    driver.entityResults = [distantCreeper];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          driver.entityResults = [closingCreeper];
+        }
+      }).pipe(Effect.andThen(task.type === "flee" ? Effect.never : Effect.void));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (
+            !driver.actions.some(
+              (action) =>
+                (action.type === "use-item" && action.hand === "off") ||
+                (action.type === "set-movement" && action.sprint === true),
+            )
+          ) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({ type: "use-item", hand: "off" });
+    expect(driver.actions).not.toContainEqual(
+      objectContaining({ type: "set-movement", sprint: true }),
+    );
+  }, 10_000);
+
   it("lets an occluded creeper flee route finish planning", async () => {
     const driver = new FakeBeatGameDriver();
     const creeper = {

@@ -5948,6 +5948,16 @@ function knockBackAndSprintAway(
       distance <= CREEPER_EMERGENCY_REEVASION_RADIUS &&
       escapeThreats.length === 1 &&
       nearbyLava.length === 0;
+    // A blind sprint takes no account of drops. A live bot ran off a
+    // 46-block cave drop this way, so a raised shield takes the blast instead.
+    if (
+      direction === undefined &&
+      emergencyBlindCreeperSprint &&
+      (observation.inventory.counts["minecraft:shield"] ?? 0) > 0
+    ) {
+      yield* blockCreeperExplosion(state, observation, threat);
+      return true;
+    }
     return yield* state.driver.withControl(
       Effect.gen(function* () {
         if (
