@@ -19,10 +19,14 @@ package com.soulfiremc.server.grpc;
 
 import com.soulfiremc.grpc.generated.LoginServiceGrpc;
 import com.soulfiremc.server.SoulFireServer;
+import com.soulfiremc.server.user.SoulFireUser;
 import com.soulfiremc.server.util.RPCConstants;
 import io.grpc.*;
+import org.jooq.exception.DataAccessException;
 
+import java.sql.SQLTransientException;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class JwtServerInterceptor implements ServerInterceptor {
   private final SoulFireServer soulFireServer;
@@ -54,7 +58,20 @@ public final class JwtServerInterceptor implements ServerInterceptor {
     } else if (!value.startsWith("Bearer ") && !value.startsWith("Basic ")) {
       status = Status.UNAUTHENTICATED.withDescription("Unknown authorization type");
     } else {
-      var user = soulFireServer.authSystem().authenticateByHeader(value, RPCConstants.API_AUDIENCE);
+      Optional<SoulFireUser> user;
+      try {
+        user = soulFireServer.authSystem().authenticateByHeader(value, RPCConstants.API_AUDIENCE);
+      } catch (DataAccessException e) {
+        if (!isTransientDatabaseFailure(e)) {
+          throw e;
+        }
+        // A busy database is worth a retry. Reporting it as UNKNOWN ended a
+        // live client run that had been going for hours.
+        serverCall.close(Status.UNAVAILABLE.withDescription("The database is busy").withCause(e), new Metadata());
+        return new ServerCall.Listener<>() {
+          // noop
+        };
+      }
       if (user.isPresent()) {
         // set client id into current context
         return Contexts.interceptCall(
@@ -78,5 +95,15 @@ public final class JwtServerInterceptor implements ServerInterceptor {
     return new ServerCall.Listener<>() {
       // noop
     };
+  }
+
+  /// Whether a database failure is temporary, such as a timed out wait for a pooled connection.
+  static boolean isTransientDatabaseFailure(Throwable error) {
+    for (var current = error; current != null; current = current.getCause()) {
+      if (current instanceof SQLTransientException) {
+        return true;
+      }
+    }
+    return false;
   }
 }
