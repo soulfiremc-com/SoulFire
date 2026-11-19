@@ -1,12 +1,14 @@
 import { type Cause, Effect, Queue, Semaphore, Stream } from "effect";
 
 export class ReplayBroadcast<A> {
+  private readonly replay: number;
   readonly #history: A[] = [];
   readonly #subscribers = new Set<Queue.Enqueue<A, Cause.Done>>();
   readonly #mutex = Semaphore.makeUnsafe(1);
   #ended = false;
 
-  public constructor(private readonly replay: number) {
+  public constructor(replay: number) {
+    this.replay = replay;
     if (!Number.isSafeInteger(replay) || replay < 0) {
       throw new RangeError("replay must be a non-negative safe integer");
     }

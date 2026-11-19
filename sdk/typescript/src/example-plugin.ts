@@ -12,13 +12,20 @@ import type { PluginApiDescriptor } from "./generated/soulfire/plugin_api_pb.js"
 import {
   SoulFireExtensionTypeId,
   type PluginCatalog,
+  type SoulFireExtension,
   type SoulFirePluginModule,
 } from "./plugins.js";
 
-export class ExamplePluginClient {
-  public readonly [SoulFireExtensionTypeId] = true;
+// isolatedDeclarations cannot emit a computed symbol key that a class declares,
+// so the extension marker comes from this explicitly typed base class.
+const SoulFireExtensionBase: new () => SoulFireExtension = class {
+  public readonly [SoulFireExtensionTypeId] = true as const;
+};
 
-  public constructor(private readonly client: Client<typeof ExamplePluginService>) {}
+export class ExamplePluginClient extends SoulFireExtensionBase {
+  public constructor(private readonly client: Client<typeof ExamplePluginService>) {
+    super();
+  }
 
   public echo(
     instanceId: string,

@@ -4,8 +4,10 @@ import { Effect, Layer, type Scope } from "effect";
 
 import { type SoulFireOptions } from "./client.js";
 import {
+  type SoulFireBot,
   type SoulFireClient,
   SoulFireConnectionError,
+  type SoulFireOperationError,
   SoulFireService,
   SoulFire as UniversalSoulFire,
 } from "./index.js";
@@ -58,6 +60,15 @@ function installLayer(
   return Layer.effect(SoulFireService, install(options));
 }
 
+function createBot(
+  options: ManagedBotOptions,
+): Effect.Effect<SoulFireBot, SoulFireConnectionError | SoulFireOperationError, Scope.Scope> {
+  return Effect.gen(function* () {
+    const client = yield* install(options.installation);
+    return yield* client.createBot(options);
+  });
+}
+
 /**
  * Node.js connection and managed installation helpers.
  *
@@ -72,17 +83,37 @@ function installLayer(
  * Minecraft address is separate from a remote client's gRPC-Web URL.
  * @category Connection
  */
-export const SoulFire = {
+export const SoulFire: {
+  readonly unauthenticated: typeof SoulFireClient.unauthenticated;
+  readonly connectManaged: typeof SoulFireClient.connectManaged;
+  readonly connectWithHttpClient: (
+    options: SoulFireOptions,
+  ) => Effect.Effect<SoulFireClient, SoulFireConnectionError, Scope.Scope | HttpClient.HttpClient>;
+  readonly layerWithHttpClient: (
+    options: SoulFireOptions,
+  ) => Layer.Layer<SoulFireService, SoulFireConnectionError, HttpClient.HttpClient>;
+  readonly connect: (
+    options: SoulFireOptions,
+  ) => Effect.Effect<SoulFireClient, SoulFireConnectionError, Scope.Scope>;
+  readonly layer: (
+    options: SoulFireOptions,
+  ) => Layer.Layer<SoulFireService, SoulFireConnectionError>;
+  readonly install: (
+    options?: SoulFireInstallOptions,
+  ) => Effect.Effect<SoulFireClient, SoulFireConnectionError, Scope.Scope>;
+  readonly installLayer: (
+    options?: SoulFireInstallOptions,
+  ) => Layer.Layer<SoulFireService, SoulFireConnectionError>;
+  readonly createBot: (
+    options: ManagedBotOptions,
+  ) => Effect.Effect<SoulFireBot, SoulFireConnectionError | SoulFireOperationError, Scope.Scope>;
+} = {
   ...UniversalSoulFire,
   connect,
   layer,
   install,
   installLayer,
-  createBot: (options: ManagedBotOptions) =>
-    Effect.gen(function* () {
-      const client = yield* install(options.installation);
-      return yield* client.createBot(options);
-    }),
+  createBot,
 } as const;
 
 function connectionOptions(

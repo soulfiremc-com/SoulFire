@@ -18,13 +18,12 @@ export interface JsonFileCheckpointStoreOptions {
 }
 
 export class JsonFileBeatGameCheckpointStore implements BeatGameCheckpointStore {
+  private readonly directory: string;
   readonly #lockTimeoutMs: number;
   readonly #staleLockMs: number;
 
-  public constructor(
-    private readonly directory: string,
-    options: JsonFileCheckpointStoreOptions = {},
-  ) {
+  public constructor(directory: string, options: JsonFileCheckpointStoreOptions = {}) {
+    this.directory = directory;
     this.#lockTimeoutMs = positiveInteger(options.lockTimeoutMs ?? 5_000, "lockTimeoutMs");
     this.#staleLockMs = positiveInteger(options.staleLockMs ?? 30_000, "staleLockMs");
   }

@@ -3,7 +3,8 @@
   "compilerOptions": {
     "lib": ["DOM", "ESNext"],
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "erasableSyntaxOnly": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"]
 }

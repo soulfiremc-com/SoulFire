@@ -52,7 +52,7 @@ export class SoulFireChat {
     private readonly botId: string,
     private readonly client: Client<typeof ChatService>,
     private readonly actionOptions: (options?: CallOptions) => CallOptions | undefined,
-    private readonly eventStream?: BotEventStream,
+    private readonly eventStream?: BotEventStream | undefined,
   ) {}
 
   /**

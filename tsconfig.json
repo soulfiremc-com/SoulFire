@@ -13,7 +13,10 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "types": ["node"],
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["scripts/**/*.ts"],
   "exclude": ["node_modules", ".repos"]

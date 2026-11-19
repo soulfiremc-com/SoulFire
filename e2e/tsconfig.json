@@ -4,7 +4,8 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "erasableSyntaxOnly": true
   },
   "include": ["*.ts", "tests/**/*.ts"]
 }

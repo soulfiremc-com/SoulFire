@@ -243,7 +243,7 @@ export class SoulFireFleetTaskGroup<Result extends DescMessage | undefined = und
 export class SoulFireFleet {
   public constructor(
     private readonly instance: SoulFireInstance,
-    private readonly capabilities?: CapabilitySet,
+    private readonly capabilities?: CapabilitySet | undefined,
   ) {}
 
   public select(
