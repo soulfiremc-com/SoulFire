@@ -4844,6 +4844,338 @@ describe("beat-game behavior programs", () => {
     expect(driver.activeControlScopes).toBe(0);
   });
 
+  it("scoops lava left in a casting cell before digging beside it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const origin = {
+      x: 0,
+      y: -52,
+      z: 0,
+      dimension: "minecraft:overworld",
+    };
+    const frame = createNetherPortalFrame(origin);
+    const target = [...frame.blocks].toSorted(
+      (left, right) => left.y - right.y || left.x - right.x || left.z - right.z,
+    )[0];
+    if (target === undefined) {
+      throw new Error("Expected a portal frame target");
+    }
+    const water = { ...target, z: target.z - 1 };
+    const misplacedLava = { ...target, x: target.x + 1, z: target.z + 1 };
+    const interior = frame.interior[0];
+    const replaceableInterior = frame.interior[1];
+    if (interior === undefined || replaceableInterior === undefined) {
+      throw new Error("Expected portal interior blocks");
+    }
+    const castingStand = {
+      ...origin,
+      x: origin.x + 1,
+      y: origin.y + 1,
+      z: origin.z - 2,
+    };
+    const blocks = new Map(
+      frame.blocks.map((position) => [
+        framePositionKey(position),
+        blockObservation(position, { blockId: "minecraft:obsidian" }),
+      ]),
+    );
+    // A failed cast left its lava source in the casting cell.
+    blocks.set(
+      framePositionKey(target),
+      blockObservation(target, {
+        blockId: "minecraft:lava",
+        properties: { level: "0" },
+        replaceable: true,
+      }),
+    );
+    let strayLava = true;
+    let dugBesideStrayLava = false;
+    blocks.set(
+      framePositionKey(water),
+      blockObservation(water, { blockId: "minecraft:deepslate" }),
+    );
+    blocks.set(
+      framePositionKey(interior),
+      blockObservation(interior, { blockId: "minecraft:deepslate" }),
+    );
+    const liquidSightObstruction = {
+      ...origin,
+      x: origin.x + 1,
+      y: origin.y + 1,
+      z: origin.z - 1,
+    };
+
+    blocks.set(
+      framePositionKey(replaceableInterior),
+      blockObservation(replaceableInterior, {
+        blockId: "minecraft:cave_air",
+        replaceable: true,
+      }),
+    );
+    for (const support of [
+      { ...target, y: target.y - 1 },
+      { ...water, y: water.y - 1 },
+      { ...castingStand, y: castingStand.y - 1 },
+    ]) {
+      const isWaterSupport =
+        framePositionKey(support) ===
+        framePositionKey({
+          ...water,
+          y: water.y - 1,
+        });
+      blocks.set(
+        framePositionKey(support),
+        blockObservation(
+          support,
+          isWaterSupport
+            ? {
+                blockId: "minecraft:crafting_table",
+                interactive: true,
+              }
+            : { blockId: "minecraft:deepslate" },
+        ),
+      );
+    }
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:bucket": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:lava_bucket": 1,
+        "minecraft:water_bucket": 1,
+      },
+      position: origin,
+    });
+    let conversionPending = false;
+    let conversionQueries = 0;
+    let misplacedLavaAvailable = false;
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:lava") === true && strayLava) {
+        return [required(blocks.get(framePositionKey(target)), "the stray lava")];
+      }
+      if (selector.blockIds?.includes("minecraft:lava") === true) {
+        return misplacedLavaAvailable
+          ? [required(blocks.get(framePositionKey(misplacedLava)), "the misplaced lava")]
+          : [];
+      }
+      if (selector.blockIds?.includes("minecraft:obsidian") === true) {
+        return [...blocks.values()].filter(({ blockId }) => blockId === "minecraft:obsidian");
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (conversionPending && framePositionKey(position) === framePositionKey(target)) {
+        conversionQueries += 1;
+        if (conversionQueries >= 3) {
+          conversionPending = false;
+          blocks.set(
+            framePositionKey(target),
+            blockObservation(target, {
+              blockId: "minecraft:obsidian",
+            }),
+          );
+        }
+      }
+      return [
+        blocks.get(framePositionKey(position)) ??
+          blockObservation(position, {
+            blockId: "minecraft:air",
+            replaceable: true,
+          }),
+      ];
+    };
+    let selectedItemId = "";
+    let pendingLavaTarget: typeof target | undefined;
+    let misplacedLavaPlacements = 0;
+    let rejectedLavaPlacement = false;
+    let rejectedWaterPickup = false;
+    const updateInventory = (update: (counts: Record<string, number>) => void) => {
+      const counts = { ...driver.currentObservation.inventory.counts };
+      update(counts);
+      driver.currentObservation = observation({
+        counts,
+        position: driver.currentObservation.player.position,
+        rotation: driver.currentObservation.player.rotation,
+      });
+    };
+    driver.raycastResolver = ({ includeFluids }) => {
+      if (blocks.has(framePositionKey(liquidSightObstruction))) {
+        return {
+          block: required(
+            blocks.get(framePositionKey(liquidSightObstruction)),
+            "the liquid sight obstruction",
+          ),
+          distance: 1,
+        };
+      }
+      if (includeFluids !== true) {
+        return { distance: 2 };
+      }
+      if (strayLava) {
+        return {
+          block: required(blocks.get(framePositionKey(target)), "the stray lava"),
+          distance: 2,
+        };
+      }
+      const liquid = misplacedLavaAvailable
+        ? blocks.get(framePositionKey(misplacedLava))
+        : blocks.get(framePositionKey(water));
+      return liquid === undefined ? { distance: 2 } : { block: liquid, distance: 2 };
+    };
+    driver.actionObserver = (action) => {
+      if (action.type === "select-item") {
+        selectedItemId = action.selector.itemIds?.[0] ?? "";
+        return;
+      }
+      if (action.type === "look") {
+        driver.currentObservation = observation({
+          counts: driver.currentObservation.inventory.counts,
+          position: driver.currentObservation.player.position,
+          rotation: {
+            yaw: action.yaw,
+            pitch: action.pitch,
+          },
+        });
+        return;
+      }
+      if (action.type === "dig-block") {
+        const offset =
+          Math.abs(action.position.x - target.x) +
+          Math.abs(action.position.y - target.y) +
+          Math.abs(action.position.z - target.z);
+        if (strayLava && offset <= 2) {
+          dugBesideStrayLava = true;
+        }
+        blocks.delete(framePositionKey(action.position));
+        return;
+      }
+      if (action.type !== "use-item" && action.type !== "interact-block") {
+        return;
+      }
+      if (selectedItemId === "minecraft:lava_bucket") {
+        updateInventory((counts) => {
+          delete counts["minecraft:lava_bucket"];
+          counts["minecraft:bucket"] = (counts["minecraft:bucket"] ?? 0) + 1;
+        });
+        if (misplacedLavaPlacements === 0) {
+          misplacedLavaPlacements += 1;
+          misplacedLavaAvailable = true;
+          blocks.set(
+            framePositionKey(misplacedLava),
+            blockObservation(misplacedLava, {
+              blockId: "minecraft:lava",
+              properties: { level: "0" },
+              replaceable: true,
+            }),
+          );
+          return;
+        }
+        pendingLavaTarget = target;
+        blocks.set(
+          framePositionKey(target),
+          blockObservation(target, {
+            blockId: "minecraft:lava",
+            replaceable: true,
+          }),
+        );
+        return;
+      }
+      if (selectedItemId === "minecraft:water_bucket" && pendingLavaTarget !== undefined) {
+        if (action.type === "interact-block" && action.sneaking !== true) {
+          return;
+        }
+        updateInventory((counts) => {
+          delete counts["minecraft:water_bucket"];
+          counts["minecraft:bucket"] = (counts["minecraft:bucket"] ?? 0) + 1;
+        });
+        conversionPending = true;
+        blocks.set(
+          framePositionKey(water),
+          blockObservation(water, {
+            blockId: "minecraft:water",
+            properties: { level: "0" },
+            replaceable: true,
+          }),
+        );
+        return;
+      }
+      if (selectedItemId === "minecraft:bucket" && strayLava) {
+        updateInventory((counts) => {
+          counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
+          counts["minecraft:lava_bucket"] = (counts["minecraft:lava_bucket"] ?? 0) + 1;
+        });
+        strayLava = false;
+        blocks.delete(framePositionKey(target));
+        return;
+      }
+      if (selectedItemId === "minecraft:bucket") {
+        if (misplacedLavaAvailable) {
+          updateInventory((counts) => {
+            counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
+            counts["minecraft:lava_bucket"] = 1;
+          });
+          misplacedLavaAvailable = false;
+          blocks.delete(framePositionKey(misplacedLava));
+          return;
+        }
+        updateInventory((counts) => {
+          counts["minecraft:bucket"] = Math.max(0, (counts["minecraft:bucket"] ?? 0) - 1);
+          counts["minecraft:water_bucket"] = 1;
+        });
+        blocks.delete(framePositionKey(water));
+      }
+    };
+    driver.actionResolver = (action) => {
+      if (
+        action.type === "use-item" &&
+        selectedItemId === "minecraft:lava_bucket" &&
+        !rejectedLavaPlacement
+      ) {
+        rejectedLavaPlacement = true;
+        return Effect.fail(
+          new BeatGameDriverError({
+            operation: "act",
+            code: "failed_precondition",
+            retryable: false,
+            message: "The held item could not be used",
+          }),
+        );
+      }
+      if (
+        action.type === "use-item" &&
+        selectedItemId === "minecraft:bucket" &&
+        !strayLava &&
+        !misplacedLavaAvailable &&
+        !rejectedWaterPickup
+      ) {
+        rejectedWaterPickup = true;
+        return Effect.fail(
+          new BeatGameDriverError({
+            operation: "act",
+            code: "failed_precondition",
+            retryable: false,
+            message: "The held item could not be used",
+          }),
+        );
+      }
+      return Effect.sync(() => {
+        driver.actionObserver(action);
+        return {};
+      });
+    };
+
+    await Effect.runPromise(
+      castNetherPortal(driver, {
+        origin,
+        ignite: false,
+      }),
+    );
+
+    expect(strayLava).toBe(false);
+    expect(dugBesideStrayLava).toBe(false);
+  });
+
   it("refuses an undiggable portal interior without starting a dig", async () => {
     const driver = new FakeBeatGameDriver();
     const origin = {

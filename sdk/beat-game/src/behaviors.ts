@@ -4888,6 +4888,11 @@ function castNetherPortalFromLavaPool(
       return frame;
     }
     const castingStands = targets.map((target) => portalCastingStand(frame, target));
+    yield* takeBackPortalCastingLava(
+      driver,
+      uniquePositions(targets.flatMap((target) => [target, castingWaterPosition(frame, target)])),
+      options.path,
+    );
     yield* clearPortalInterior(driver, frame, options.path);
     yield* clearPortalCastingCells(
       driver,
@@ -5907,6 +5912,39 @@ function portalCastingStand(
     z: frame.origin.z + (frame.axis === "z" ? 1 : -2),
     dimension: frame.origin.dimension,
   };
+}
+
+// A failed cast leaves its lava source in the casting cell, and a live bot
+// dug a block beside it and burned to death. The sources go back into the
+// bucket before anything near them is opened.
+function takeBackPortalCastingLava(
+  driver: BeatGameDriver,
+  positions: readonly BeatGameBlockPosition[],
+  path?: Partial<BeatGamePathPolicy>,
+): Effect.Effect<void, BeatGameDriverError> {
+  return driver.withControl(
+    Effect.forEach(
+      positions,
+      (position) =>
+        Effect.gen(function* () {
+          const block = yield* observeExactBlock(driver, position);
+          if (block?.blockId !== "minecraft:lava" || block.properties["level"] !== "0") {
+            return;
+          }
+          const observation = yield* driver.observe;
+          if ((observation.inventory.counts["minecraft:bucket"] ?? 0) === 0) {
+            return;
+          }
+          yield* driver.pathfind(position, 3, {
+            ...mergePathPolicy(path),
+            allowMining: false,
+            avoidFluids: true,
+          });
+          yield* collectApproachedPortalCastingLavaSource(driver, block);
+        }),
+      { discard: true },
+    ).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
+  );
 }
 
 function clearPortalCastingCells(
