@@ -339,17 +339,16 @@ describe("SoulFire", () => {
             "Echo",
             { instanceId: "instance-id", message: "reflective" },
           );
-          const ticks = Array.from(
-            yield* Stream.runCollect(
-              Stream.map(
-                plugin.stream("soulfire.plugin.example.v1.ExamplePluginService", "WatchTicks", {
-                  instanceId: "instance-id",
-                  count: 3,
-                }),
-                (tick) => tick.json,
-              ),
+          const collected = yield* Stream.runCollect(
+            Stream.map(
+              plugin.stream("soulfire.plugin.example.v1.ExamplePluginService", "WatchTicks", {
+                instanceId: "instance-id",
+                count: 3,
+              }),
+              (tick) => tick.json,
             ),
           );
+          const ticks = Array.from(collected);
           expect(response).toMatchObject({
             typeName: "soulfire.plugin.example.v1.EchoResponse",
             json: { message: "reflective" },
@@ -386,7 +385,8 @@ describe("SoulFire", () => {
           expect(requests).toEqual(["POST /soulfire.v1.SdkService/Handshake"]);
           expect(response.status).toBe(201);
           expect(response.headers.get("X-Test")).toBe("effect-platform");
-          expect(yield* Effect.promise(() => response.text())).toBe("ok");
+          const body1 = yield* Effect.promise(() => response.text());
+          expect(body1).toBe("ok");
         }),
       ),
     ));

@@ -7,7 +7,16 @@ import {
   FarmCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+  required,
+} from "../harness.ts";
 
 const CROPS = [4263, 4266, 4270, 4274, 4277];
 
@@ -178,7 +187,7 @@ export default {
                 result.reason === FarmCompletionReason.HARVEST_LIMIT_REACHED &&
                   result.cropsHarvested === maximumHarvests &&
                   result.cropsReplanted === maximumHarvests,
-                `Reconnect changed the finite farm result: ${JSON.stringify(result)}`,
+                `Reconnect changed the finite farm result: ${encodeJson(result)}`,
               );
               const crops = [];
               for (const x of CROPS) {
@@ -188,7 +197,14 @@ export default {
                 });
                 crops.push({ x, expected, matches: actual === "Test passed" });
               }
-              yield* Console.log(JSON.stringify({ pendingReplant, epochs, result, crops }));
+              yield* Console.log(
+                encodeJson({
+                  pendingReplant,
+                  epochs,
+                  result,
+                  crops,
+                }),
+              );
               yield* check(
                 crops.every((crop) => crop.matches),
                 "Reconnect changed extra crops or skipped a pending replant",

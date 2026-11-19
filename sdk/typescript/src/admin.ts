@@ -1,7 +1,7 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import { createClient, type CallOptions, type Client, type Transport } from "@connectrpc/connect";
 import { Effect, Stream } from "effect";
-import { type SoulFireOperationError } from "./errors.js";
+import type { SoulFireOperationError } from "./errors.js";
 import { rpc, rpcStream, withSignal } from "./transport.js";
 
 import type { Timestamp } from "@bufbuild/protobuf/wkt";

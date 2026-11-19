@@ -7,7 +7,16 @@ import {
   ExcavateCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+  required,
+} from "../harness.ts";
 
 export default {
   name: "excavation-task-reconnect",
@@ -169,7 +178,14 @@ export default {
                   })) === "Test passed",
                 );
               }
-              yield* Console.log(JSON.stringify({ maximumBlocks, epochs, result, world }));
+              yield* Console.log(
+                encodeJson({
+                  maximumBlocks,
+                  epochs,
+                  result,
+                  world,
+                }),
+              );
               yield* check(
                 result.blocksBroken === expectedCount &&
                   result.blocksSkipped === 70 &&

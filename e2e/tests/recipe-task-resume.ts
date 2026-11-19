@@ -98,7 +98,7 @@ export default {
               "3 seconds",
               "20 millis",
             );
-            const completed = yield* high.result({ call: { timeoutMs: 30000 } });
+            const completed = yield* high.result({ call: { timeoutMs: 30_000 } });
             yield* check(
               completed.outputs.length === 1 && completed.outputs[0]?.count === 1,
               "The higher priority recipe did not collect its output",
@@ -110,7 +110,7 @@ export default {
               );
             }
           }
-          const completed = yield* low.result({ call: { timeoutMs: 30000 } });
+          const completed = yield* low.result({ call: { timeoutMs: 30_000 } });
           yield* check(
             completed.outputs.length === (brewing ? brewCount : 1) &&
               completed.outputs.every((item) => item.count === 1),

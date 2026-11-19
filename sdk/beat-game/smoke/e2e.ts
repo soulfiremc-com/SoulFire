@@ -47,7 +47,20 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { Cause, Data, Duration, Effect, Exit, Fiber, Ref, Schedule, Scope, Stream } from "effect";
+import {
+  DateTime,
+  Schema,
+  Cause,
+  Clock,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Ref,
+  Schedule,
+  Scope,
+  Stream,
+} from "effect";
 import { pruneArtifactRuns } from "./artifact-retention.ts";
 import { BoundedLog } from "./bounded-log.ts";
 import {
@@ -67,10 +80,14 @@ import {
   type SmokeActivePathTrace,
 } from "./debug-diagnostics.ts";
 
-class SmokeFailure extends Data.TaggedError("SmokeFailure")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+class SmokeFailure extends Schema.TaggedError<SmokeFailure, { readonly brand: unique symbol }>()(
+  "SmokeFailure",
+  {
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Unknown),
+  },
+) {}
 
 // oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const execFile = promisify(execFileCallback);
@@ -109,7 +126,7 @@ const debugApiEnabled = debugApiEvalEnabled || booleanEnvironment("SOULFIRE_E2E_
 const debugApiPort = positiveIntegerEnvironment("SOULFIRE_E2E_DEBUG_PORT", 25_566);
 const debugApiTimelineEntries = positiveIntegerEnvironment(
   "SOULFIRE_E2E_DEBUG_TIMELINE_ENTRIES",
-  4_000,
+  4000,
 );
 const debugBlockQueryResultLimit = 32;
 const verboseOutput = booleanEnvironment("SOULFIRE_E2E_VERBOSE", false);
@@ -124,7 +141,7 @@ const minecraftPort = 25_565;
 const attachedMinecraftContainer = optionalEnvironment("SOULFIRE_E2E_MINECRAFT_CONTAINER");
 const timeoutMs = positiveIntegerEnvironment(
   "SOULFIRE_E2E_TIMEOUT_MS",
-  smokeMode === "controlled" ? 45 * 60 * 1_000 : 8 * 60 * 60 * 1_000,
+  smokeMode === "controlled" ? 45 * 60 * 1000 : 8 * 60 * 60 * 1000,
 );
 const artifactLogMaximumBytes = positiveIntegerEnvironment(
   "SOULFIRE_E2E_ARTIFACT_LOG_MAX_BYTES",
@@ -604,7 +621,7 @@ const program = Effect.scoped(
     } else {
       yield* environmentSession.waitFor(
         (_event, state) => state.environment.gameTime !== undefined,
-        { timeoutMs: 5_000 },
+        { timeoutMs: 5000 },
       );
       yield* record("environment-observed", {
         gameTime: environmentSession.state.environment.gameTime,
@@ -720,14 +737,15 @@ const program = Effect.scoped(
       details: Readonly<Record<string, unknown>>,
       execute: () => ReturnType<typeof baseDriver.pathfind>,
     ) =>
-      Effect.suspend(() => {
+      Clock.clockWith((clock) => {
         pathAttempts += 1;
         const pathId = randomUUID();
-        const startedAt = new Date().toISOString();
+        const startedAt = DateTime.formatIso(DateTime.makeUnsafe(clock.currentTimeMillisUnsafe()));
         const owner = currentDebugActionContext();
         let trace: SmokeActivePathTrace | undefined;
         return Effect.gen(function* () {
-          const fiberId = String(yield* Effect.fiberId);
+          const currentFiberId = yield* Effect.fiberId;
+          const fiberId = String(currentFiberId);
           const observation = yield* baseDriver.observe;
           trace = {
             pathId,
@@ -750,7 +768,7 @@ const program = Effect.scoped(
           }).pipe(Effect.orDie);
           yield* execute();
           const player = yield* bot.world.player().pipe(Effect.orDie);
-          const completedAt = new Date().toISOString();
+          const completedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
           lastPathOutcome = {
             pathId,
             status: "completed",
@@ -963,10 +981,11 @@ const program = Effect.scoped(
       ) =>
         Effect.suspend(() => {
           const operationId = randomUUID();
-          const startedAt = new Date().toISOString();
           const owner = currentDebugActionContext();
           return Effect.gen(function* () {
-            const fiberId = String(yield* Effect.fiberId);
+            const startedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+            const currentFiberId1 = yield* Effect.fiberId;
+            const fiberId = String(currentFiberId1);
             yield* record("task-started", {
               operationId,
               startedAt,
@@ -1007,10 +1026,11 @@ const program = Effect.scoped(
       act: (action: Parameters<typeof baseDriver.act>[0]) =>
         Effect.suspend(() => {
           const operationId = randomUUID();
-          const startedAt = new Date().toISOString();
           const owner = currentDebugActionContext();
           return Effect.gen(function* () {
-            const fiberId = String(yield* Effect.fiberId);
+            const startedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+            const currentFiberId2 = yield* Effect.fiberId;
+            const fiberId = String(currentFiberId2);
             yield* record("primitive-started", {
               operationId,
               startedAt,
@@ -1169,7 +1189,7 @@ const program = Effect.scoped(
             "Detect stalled paths, frozen task progress, repeated replans, and path failure loops with supporting live context",
           execute: () =>
             Effect.gen(function* () {
-              const capturedAt = new Date().toISOString();
+              const capturedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
               const [snapshot, observation, finalPlayer] = yield* Effect.all(
                 [run.snapshot, driver.observe, bot.world.player()],
                 { concurrency: "unbounded" },
@@ -1207,7 +1227,7 @@ const program = Effect.scoped(
                   entityRadius: 48,
                   surfaceRadius: 12,
                   startedAt: capturedAt,
-                  completedAt: new Date().toISOString(),
+                  completedAt: yield* DateTime.now.pipe(Effect.map(DateTime.formatIso)),
                   blocks,
                   entities,
                   surface,
@@ -1267,7 +1287,7 @@ const program = Effect.scoped(
               const [snapshot, observation] = yield* Effect.all([run.snapshot, driver.observe], {
                 concurrency: "unbounded",
               });
-              const capturedAt = new Date().toISOString();
+              const capturedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
               const origin = observation.player.position;
               const [blocks, entities, surface] = yield* Effect.all(
                 [
@@ -1303,12 +1323,13 @@ const program = Effect.scoped(
                   entityRadius: 48,
                   surfaceRadius: 12,
                   startedAt: capturedAt,
-                  completedAt: new Date().toISOString(),
+                  completedAt: yield* DateTime.now.pipe(Effect.map(DateTime.formatIso)),
                   blocks,
                   entities,
                   surface,
                 }),
               );
+              const result = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
               return {
                 run: {
                   runId: snapshot.checkpoint.runId,
@@ -1348,7 +1369,7 @@ const program = Effect.scoped(
                       : buildSmokeActivePathDiagnostics(
                           activePathTrace,
                           observation.player.position,
-                          new Date().toISOString(),
+                          result,
                         ),
                   taskRoute: latestSmokeTaskRoute(),
                   lastOutcome: lastPathOutcome,
@@ -1730,7 +1751,7 @@ const startMinecraftFixture = Effect.suspend(() => {
       yield* docker(serverArguments);
       yield* waitForMinecraftServer(containerName);
       if (fixtureConfiguration.keepInventory) {
-        yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1_000);
+        yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1000);
         // Paper keeps game rules per world, and the console sets them only in
         // the Overworld. A run that died in the Nether lost its inventory.
         for (const dimension of ["overworld", "the_nether", "the_end"]) {
@@ -1777,7 +1798,7 @@ const startMinecraftFixture = Effect.suspend(() => {
       fixtureConfiguration.image,
     ]);
     yield* waitForMinecraftServer(containerName);
-    yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1_000);
+    yield* poll(rcon(containerName, "list"), "Minecraft RCON readiness", 120, 1000);
     const port = yield* publishedMinecraftPort(containerName);
     yield* rcon(containerName, "gamerule keep_inventory true");
     yield* rcon(containerName, "gamerule mob_griefing false");
@@ -2094,13 +2115,13 @@ async function stopProcess(pid: number): Promise<void> {
   if (!isProcessRunning(pid) || !signalProcess(pid, "SIGTERM")) {
     return;
   }
-  if (await waitForProcessExit(pid, 5_000)) {
+  if (await waitForProcessExit(pid, 5000)) {
     return;
   }
   if (!signalProcess(pid, "SIGKILL")) {
     return;
   }
-  if (!(await waitForProcessExit(pid, 2_000))) {
+  if (!(await waitForProcessExit(pid, 2000))) {
     throw new Error(`SoulFire process ${pid} did not stop`);
   }
 }
@@ -2296,7 +2317,7 @@ function controlEndEncounter(
         });
       }),
       Effect.ignore,
-      Effect.andThen(Effect.sleep(1_000)),
+      Effect.andThen(Effect.sleep(1000)),
     );
     return yield* Effect.forever(tick);
   });
@@ -2350,7 +2371,7 @@ function waitForMinecraftServer(containerName: string): Effect.Effect<CommandRes
     ),
     "Minecraft server readiness",
     300,
-    1_000,
+    1000,
   );
 }
 
@@ -2477,7 +2498,7 @@ function captureSmokeDiagnostics(
     const historyLimit = yield* debugRequest(
       () => optionalDebugInteger(request, "historyLimit", 1, 200) ?? 40,
     );
-    const startedAt = new Date().toISOString();
+    const startedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
     const [snapshot, observation] = yield* Effect.all(
       [options.run.snapshot, options.driver.observe],
       { concurrency: "unbounded" },
@@ -2502,7 +2523,7 @@ function captureSmokeDiagnostics(
       { concurrency: "unbounded" },
     );
     const finalPlayer = yield* options.bot.world.player();
-    const completedAt = new Date().toISOString();
+    const completedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
     const planner = snapshot.checkpoint.planner;
     const finalPosition = finalPlayer.position ?? origin;
     const nextIfReplanned = decideBeatGameAction({
@@ -2966,7 +2987,7 @@ function parseDebugEntityQuery(input: unknown): BeatGameQueryEntities {
     ...(request["origin"] === undefined
       ? {}
       : { origin: debugPosition(request["origin"], "origin") }),
-    radius: debugNumber(request, "radius", 0, 1_024),
+    radius: debugNumber(request, "radius", 0, 1024),
     selector: debugEntitySelector(request["selector"]),
     ...(request["maximumResults"] === undefined
       ? {}
@@ -3036,12 +3057,12 @@ function parseDebugPathPlan(input: unknown): Readonly<{
       ...(suppliedPolicy["minimumY"] === undefined
         ? {}
         : {
-            minimumY: debugInteger(suppliedPolicy, "minimumY", -2_048, 2_048),
+            minimumY: debugInteger(suppliedPolicy, "minimumY", -2048, 2048),
           }),
       ...(suppliedPolicy["maximumY"] === undefined
         ? {}
         : {
-            maximumY: debugInteger(suppliedPolicy, "maximumY", -2_048, 2_048),
+            maximumY: debugInteger(suppliedPolicy, "maximumY", -2048, 2048),
           }),
       ...(suppliedPolicy["additionalPlaceItemIds"] === undefined
         ? {}
@@ -3079,11 +3100,8 @@ function captureSmokeActivePath(
         new SmokeDebugRequestError("The bot player has no current position", 409),
       );
     }
-    const diagnostics = buildSmokeActivePathDiagnostics(
-      trace,
-      player.position,
-      new Date().toISOString(),
-    );
+    const observedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    const diagnostics = buildSmokeActivePathDiagnostics(trace, player.position, observedAt);
     if (!options.includePlan) {
       return {
         ...diagnostics,
@@ -3144,7 +3162,7 @@ function latestSmokeTaskRoute() {
 }
 
 function pathfinderOptions(policy: BeatGamePathPolicy) {
-  const timeoutSeconds = Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000));
+  const timeoutSeconds = Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1000));
   return {
     allowMining: policy.allowMining,
     allowPlacing: policy.allowPlacing,
@@ -3403,8 +3421,9 @@ function record(
   kind: string,
   value: Readonly<Record<string, unknown>>,
 ): Effect.Effect<void, Error> {
-  return Effect.suspend(() => {
-    const entry = { observedAt: new Date().toISOString(), kind, ...value };
+  return Effect.gen(function* () {
+    const observedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    const entry = { observedAt, kind, ...value };
     if (!debugTimelineOmittedKinds.has(kind)) {
       debugTimeline.append(entry);
     }
@@ -3412,7 +3431,7 @@ function record(
     if (verboseOutput) {
       process.stdout.write(`${line}\n`);
     }
-    return fromPromise(`record ${kind}`, () => eventLog.append(`${line}\n`));
+    return yield* fromPromise(`record ${kind}`, () => eventLog.append(`${line}\n`));
   });
 }
 

@@ -1,6 +1,14 @@
 import { Console, Effect } from "effect";
 import { CollectBlocksCompletionReason } from "@soulfiremc/sdk/generated/soulfire/task_pb";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 export default {
   name: "collection-submerged-candidates",
@@ -129,7 +137,7 @@ export default {
           "Collection disturbed the contained water",
         );
         yield* Console.log(
-          JSON.stringify({
+          encodeJson({
             result,
             dry,
             remaining: remaining.blocks.length,

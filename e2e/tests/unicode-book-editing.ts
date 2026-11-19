@@ -3,6 +3,7 @@ import { Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -94,7 +95,7 @@ export default {
                   height: 480,
                   maxFps: 15,
                 },
-                { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) },
+                { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15_000)]) },
               )) {
                 const send = (events: ReturnType<typeof key> | ReturnType<typeof text>) =>
                   pov.input({
@@ -149,8 +150,8 @@ export default {
         );
         const item = yield* read;
         yield* check(
-          item.includes(`raw: ${JSON.stringify(test.expected)}`),
-          `${test.name}: expected ${JSON.stringify(test.expected)}, got ${item}`,
+          item.includes(`raw: ${encodeJson(test.expected)}`),
+          `${test.name}: expected ${encodeJson(test.expected)}, got ${item}`,
         );
       }
     }),

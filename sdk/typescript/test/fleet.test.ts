@@ -104,7 +104,8 @@ describe("SoulFireFleet", () => {
             AutoRespawnTaskResultSchema,
             { concurrency: 1 },
           );
-          const events = Array.from(yield* Stream.runCollect(group.events()));
+          const collected = yield* Stream.runCollect(group.events());
+          const events = Array.from(collected);
           const report = yield* group.results();
           yield* soulfire.close();
           expect(maximumActive).toBe(1);
@@ -123,7 +124,7 @@ describe("SoulFireFleet", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const cancelled: string[] = [];
-          const waiting = yield* Deferred.make<void>();
+          const waiting = yield* Deferred.make<undefined>();
           const soulfire = yield* SoulFire.unauthenticated({
             baseUrl: "https://soulfire.example.com",
             transport: fleetTransport({

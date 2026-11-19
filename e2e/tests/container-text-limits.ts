@@ -14,13 +14,13 @@ import { nativeInput } from "../native-input.ts";
 
 const ANVIL = { x: 4263, y: 64, z: 8 };
 const cases = [
-  { input: "A".repeat(50) + "B", expected: "A".repeat(50) },
-  { input: "A".repeat(49) + "🙂B", expected: "A".repeat(49) },
-  { input: "A".repeat(48) + "🙂B", expected: "A".repeat(48) + "🙂" },
+  { input: `${"A".repeat(50)}B`, expected: "A".repeat(50) },
+  { input: `${"A".repeat(49)}🙂B`, expected: "A".repeat(49) },
+  { input: `${"A".repeat(48)}🙂B`, expected: `${"A".repeat(48)}🙂` },
   { input: "雪🙂界", expected: "雪🙂界" },
   { input: "§cOrange\u0000\t\r\n\u001F\u007F雪🙂", expected: "cOrange雪🙂" },
-  { input: "§".repeat(10) + "A".repeat(50) + "B", expected: "A".repeat(50) },
-  { input: "§".repeat(10) + "A".repeat(49) + "🙂B", expected: "A".repeat(49) },
+  { input: `${"§".repeat(10) + "A".repeat(50)}B`, expected: "A".repeat(50) },
+  { input: `${"§".repeat(10) + "A".repeat(49)}🙂B`, expected: "A".repeat(49) },
 ];
 
 export default {
@@ -29,7 +29,8 @@ export default {
     Effect.scoped(
       Effect.gen(function* () {
         const service = client.service(BotService);
-        const run = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const run = Effect.runPromiseWith(effectContext);
         const scope = { instanceId: bot.instanceId, botId: bot.id };
         const setText = (menuId: string, fieldId: string, text: string) =>
           Effect.tryPromise({

@@ -23,16 +23,17 @@ export default {
   name: "creative-inventory-isolation",
   run: ({ bot, client }) => {
     return Effect.gen(function* () {
-      const run = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const run = Effect.runPromiseWith(effectContext);
       const instance = client.instance(bot.instanceId);
-      let otherId: string | undefined;
+      const cleanup: { otherId?: string } = {};
       yield* Effect.addFinalizer(() =>
-        otherId === undefined
+        cleanup.otherId === undefined
           ? Effect.void
-          : instance.removeAccounts([otherId]).pipe(Effect.ignore),
+          : instance.removeAccounts([cleanup.otherId]).pipe(Effect.ignore),
       );
       const other = yield* instance.getOrCreateBot(OTHER, { readyTimeoutMs: 30_000 });
-      otherId = other.id;
+      cleanup.otherId = other.id;
       yield* rcon("forceload add 1728 -16 1760 16");
       yield* rcon("fill 1742 63 -2 1748 63 2 stone");
       yield* rcon("fill 1742 64 -2 1748 67 2 air");

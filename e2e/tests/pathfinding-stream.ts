@@ -75,7 +75,7 @@ export default {
                     signal: AbortSignal.any([
                       signal,
                       controller.signal,
-                      AbortSignal.timeout(15000),
+                      AbortSignal.timeout(15_000),
                     ]),
                   },
                 )) {

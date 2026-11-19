@@ -7,7 +7,16 @@ import {
   BreedCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+  required,
+} from "../harness.ts";
 
 const TAG = "sf_e2e_breed_reconnect";
 
@@ -210,7 +219,15 @@ export default {
               yield* guard.cancel("Resume breeding");
               const result = yield* task.result({ call: { timeoutMs: 30_000 } });
               const after = yield* love;
-              yield* Console.log(JSON.stringify({ partialPair, epochs, before, after, result }));
+              yield* Console.log(
+                encodeJson({
+                  partialPair,
+                  epochs,
+                  before,
+                  after,
+                  result,
+                }),
+              );
               yield* check(
                 result.reason === BreedCompletionReason.PAIR_LIMIT_REACHED &&
                   result.pairsStarted === options.maximumPairs &&

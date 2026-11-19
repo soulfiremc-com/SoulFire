@@ -1,4 +1,4 @@
-import { Context, Data, Deferred, Effect, Exit } from "effect";
+import { Context, Deferred, Effect, Exit, Schema } from "effect";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   cleanup,
@@ -34,9 +34,12 @@ describe("Effect behavior combinators", () => {
             }),
           );
           const never = defineBehavior<number>(() => Effect.never);
-          expect(yield* sequence(first, second).run(effectBot)).toEqual([1, "two"]);
-          expect(yield* retry(unstable, { attempts: 3 }).run(effectBot)).toBe(3);
-          expect(yield* race(never, first).run(effectBot)).toBe(1);
+          const result = yield* sequence(first, second).run(effectBot);
+          expect(result).toEqual([1, "two"]);
+          const retried = yield* retry(unstable, { attempts: 3 }).run(effectBot);
+          expect(retried).toBe(3);
+          const raceWinner = yield* race(never, first).run(effectBot);
+          expect(raceWinner).toBe(1);
         }),
       ),
     ));
@@ -73,8 +76,10 @@ describe("Effect behavior combinators", () => {
         const workflow = until(action, (result) => Effect.succeed(result % 2 === 0), {
           maximumIterations: 2,
         });
-        expect(yield* workflow.run(effectBot)).toBe(2);
-        expect(yield* workflow.run(effectBot)).toBe(4);
+        const firstRun = yield* workflow.run(effectBot);
+        expect(firstRun).toBe(2);
+        const secondRun = yield* workflow.run(effectBot);
+        expect(secondRun).toBe(4);
         const failure = yield* Effect.flip(
           until(action, () => false, { maximumIterations: 2 }).run(effectBot),
         );
@@ -86,7 +91,7 @@ describe("Effect behavior combinators", () => {
   it("releases the losing behavior when a race succeeds", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
+        const started = yield* Deferred.make<undefined>();
         let released = false;
         const loser = defineBehavior(() =>
           Effect.acquireUseRelease(
@@ -99,14 +104,19 @@ describe("Effect behavior combinators", () => {
           ),
         );
         const winner = defineBehavior(() => Deferred.await(started).pipe(Effect.as(1)));
-        expect(yield* race(loser, winner).run(effectBot)).toBe(1);
+        const result = yield* race(loser, winner).run(effectBot);
+        expect(result).toBe(1);
         expect(released).toBe(true);
       }),
     ));
 });
 
 class Counter extends Context.Service<Counter, { readonly value: number }>()("test/Counter") {}
-class CustomFailure extends Data.TaggedError("CustomFailure") {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+class CustomFailure extends Schema.TaggedError<CustomFailure, { readonly brand: unique symbol }>()(
+  "CustomFailure",
+  {},
+) {}
 
 it("preserves custom behavior errors and required services through composition", () => {
   const dependent = defineBehavior(() =>

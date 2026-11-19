@@ -24,7 +24,7 @@ export class JsonFileBeatGameCheckpointStore implements BeatGameCheckpointStore 
 
   public constructor(directory: string, options: JsonFileCheckpointStoreOptions = {}) {
     this.directory = directory;
-    this.#lockTimeoutMs = positiveInteger(options.lockTimeoutMs ?? 5_000, "lockTimeoutMs");
+    this.#lockTimeoutMs = positiveInteger(options.lockTimeoutMs ?? 5000, "lockTimeoutMs");
     this.#staleLockMs = positiveInteger(options.staleLockMs ?? 30_000, "staleLockMs");
   }
 

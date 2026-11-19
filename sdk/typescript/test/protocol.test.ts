@@ -71,16 +71,15 @@ describe("SoulFireProtocol", () => {
           const protocol = soulfire.instance("instance-id").bot("bot-id").protocol;
           const info = yield* protocol.info();
           const schemas = yield* protocol.schemas(PacketDirection.CLIENTBOUND);
-          const events = Array.from(
-            yield* Stream.runCollect(
-              protocol.packets({
-                directions: [PacketDirection.CLIENTBOUND],
-                names: ["minecraft:game_event"],
-                includeEncodedPacket: true,
-                maximumEncodedBytes: 128,
-              }),
-            ),
+          const collected = yield* Stream.runCollect(
+            protocol.packets({
+              directions: [PacketDirection.CLIENTBOUND],
+              names: ["minecraft:game_event"],
+              includeEncodedPacket: true,
+              maximumEncodedBytes: 128,
+            }),
           );
+          const events = Array.from(collected);
           const sent = yield* protocol.send(new Uint8Array([1, 2]), {
             expectedName: "minecraft:game_event",
           });

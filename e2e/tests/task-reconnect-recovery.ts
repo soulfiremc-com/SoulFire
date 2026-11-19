@@ -54,7 +54,7 @@ export default {
         const epochs = new Set([(yield* bot.world.player()).connectionEpoch]);
         for (let cycle = 0; cycle < 3; cycle++) {
           yield* bot.restart();
-          yield* bot.connect({ readyTimeoutMs: 30000 });
+          yield* bot.connect({ readyTimeoutMs: 30_000 });
           const player = yield* eventually(
             bot.world
               .player()
@@ -122,7 +122,7 @@ export default {
         );
         yield* paused.cancel("Cancel before the replacement connection exists");
         yield* bot.start();
-        yield* bot.connect({ readyTimeoutMs: 30000 });
+        yield* bot.connect({ readyTimeoutMs: 30_000 });
         yield* eventually(
           bot.world
             .player()

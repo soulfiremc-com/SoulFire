@@ -3,6 +3,7 @@ import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -45,14 +46,15 @@ export default {
   name: "dialog-scroll-capture",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       yield* rcon("forceload add 2496 0 2511 15");
       yield* rcon("fill 2496 63 0 2511 63 15 stone");
       yield* placeBot(bot, { x: 2504.5, y: 64, z: 8.5 });
       yield* rcon(`scoreboard objectives add ${OBJECTIVE} trigger`, { check: false });
       yield* resetScore;
       yield* rcon(
-        `dialog show ${BOT_NAME} ${JSON.stringify({
+        `dialog show ${BOT_NAME} ${encodeJson({
           type: "multi_action",
           title: "Scroll QA",
           pause: false,

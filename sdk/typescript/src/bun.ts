@@ -2,7 +2,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import { Effect, Layer, type Scope } from "effect";
 
-import { type SoulFireOptions } from "./client.js";
+import type { SoulFireOptions } from "./client.js";
 import {
   type SoulFireBot,
   type SoulFireClient,

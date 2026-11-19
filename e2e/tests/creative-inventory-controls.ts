@@ -17,7 +17,8 @@ export default {
   name: "creative-inventory-controls",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const run = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const run = Effect.runPromiseWith(effectContext);
       yield* rcon("forceload add 1776 -16 1808 16");
       yield* rcon("fill 1782 63 -2 1788 63 2 stone");
       yield* rcon("fill 1782 64 -2 1788 67 2 air");
@@ -183,12 +184,13 @@ export default {
           ),
           "5 seconds",
         );
-      yield* check(
-        Result.isFailure(yield* Effect.result(bot.clickInventory(54))),
-        "An out-of-range creative slot was accepted",
+      const outcome = yield* Effect.result(bot.clickInventory(54));
+      yield* check(Result.isFailure(outcome), "An out-of-range creative slot was accepted");
+      const invalidHotbarSwap = yield* Effect.result(
+        bot.clickInventory(0, ClickType.SWAP_HOTBAR, 9),
       );
       yield* check(
-        Result.isFailure(yield* Effect.result(bot.clickInventory(0, ClickType.SWAP_HOTBAR, 9))),
+        Result.isFailure(invalidHotbarSwap),
         "An invalid hotbar destination was accepted",
       );
       yield* bot.clickContainerButton(buildingTab.buttonId);
@@ -203,10 +205,8 @@ export default {
         (current) => current.slots.find((slot) => slot.slot === 0)?.itemId === first,
         "The previous creative page did not restore its first row",
       );
-      yield* check(
-        Result.isFailure(yield* Effect.result(search("nether star"))),
-        "A hidden creative search field accepted text",
-      );
+      const hiddenSearch = yield* Effect.result(search("nether star"));
+      yield* check(Result.isFailure(hiddenSearch), "A hidden creative search field accepted text");
       yield* bot.clickContainerButton(inventoryTab.buttonId);
       yield* stateCheck(
         (current) =>
@@ -218,8 +218,9 @@ export default {
           current.layout.regions.every((region) => region.startIndex >= 5),
         "The creative inventory tab lost its native slot indices or exposes hidden crafting slots",
       );
+      const hiddenSlotClick = yield* Effect.result(bot.clickInventory(0));
       yield* check(
-        Result.isFailure(yield* Effect.result(bot.clickInventory(0))),
+        Result.isFailure(hiddenSlotClick),
         "A hidden creative crafting slot was accepted",
       );
       yield* bot.inventory.move({ sourceSlot: 37, destinationSlot: 9, count: 16 });

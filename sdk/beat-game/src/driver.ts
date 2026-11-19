@@ -559,8 +559,8 @@ const pathOptions = (policy: BeatGamePathPolicy) => ({
   maximumFallDistance: policy.maxFallDistance,
   ...(policy.maxParkourGap === undefined ? {} : { maximumParkourGap: policy.maxParkourGap }),
   smoothCamera: policy.smoothCamera ?? false,
-  timeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
-  searchTimeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1_000)),
+  timeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1000)),
+  searchTimeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1000)),
 });
 
 export function makeSoulFireBeatGameDriver(

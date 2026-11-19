@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { Cause, Data, Effect, Exit, Option, type Scope } from "effect";
+import { Schema, Cause, Effect, Exit, Option, type Scope } from "effect";
 
 const DEFAULT_MAXIMUM_BODY_BYTES = 1024 * 1024;
 
@@ -76,10 +76,13 @@ export class SmokeDebugTimeline {
   }
 }
 
-class SmokeDebugListenError extends Data.TaggedError("SmokeDebugListenError")<{
-  readonly message: string;
-}> {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+class SmokeDebugListenError extends Schema.TaggedError<
+  SmokeDebugListenError,
+  { readonly brand: unique symbol }
+>()("SmokeDebugListenError", { message: Schema.String }) {}
 
+// oxlint-disable-next-line effecttsgo/extends-native-error -- Preserve the HTTP handler's error identity and constructor.
 export class SmokeDebugRequestError extends Error {
   public readonly status: number;
 
@@ -182,9 +185,9 @@ function listen(server: Server, port: number): Effect.Effect<AddressInfo, Error>
 }
 
 function close(server: Server): Effect.Effect<void> {
-  return Effect.callback<void>((resume) => {
+  return Effect.callback<undefined>((resume) => {
     server.close(() => {
-      resume(Effect.void);
+      resume(Effect.undefined);
     });
     server.closeIdleConnections();
     server.closeAllConnections();

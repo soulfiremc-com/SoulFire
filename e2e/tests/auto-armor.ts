@@ -1,5 +1,13 @@
 import { Effect, Result } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 const UPGRADES = [
   {
@@ -71,14 +79,14 @@ export default {
           const recommendation = yield* bot.inventory.bestArmor(upgrade.slot);
           yield* check(
             recommendation?.slot?.slot === 10,
-            `Inventory recommendations disagreed with ${upgrade.best}: ${JSON.stringify(recommendation)}`,
+            `Inventory recommendations disagreed with ${upgrade.best}: ${encodeJson(recommendation)}`,
           );
           if (mode === "task") {
             const task = yield* bot.tasks.autoArmor({
               checkIntervalTicks: 1,
               completeWhenNoUpgrade: true,
             });
-            const result = yield* task.result({ call: { timeoutMs: 10000 } });
+            const result = yield* task.result({ call: { timeoutMs: 10_000 } });
             if (result.equips !== 1)
               failures.push(`${mode}/${upgrade.slot} reported ${result.equips} upgrades`);
           } else {

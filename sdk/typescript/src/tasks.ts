@@ -1633,7 +1633,7 @@ export class SoulFireTasks {
         maximumFailedCasts = 0,
         rod,
         castTimeoutTicks = 100,
-        biteTimeoutTicks = 12000,
+        biteTimeoutTicks = 12_000,
         completeWhenNoRod = true,
         restoreSelectedSlot = true,
         ...taskOptions
@@ -1665,7 +1665,7 @@ export class SoulFireTasks {
           maximumFailedCasts = 0,
           rod,
           castTimeoutTicks = 100,
-          biteTimeoutTicks = 12000,
+          biteTimeoutTicks = 12_000,
           completeWhenNoRod = false,
           restoreSelectedSlot = true,
           ...taskOptions

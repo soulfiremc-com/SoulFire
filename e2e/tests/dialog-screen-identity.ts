@@ -1,7 +1,15 @@
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Effect } from "effect";
-import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  CheckFailed,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+} from "../harness.ts";
 
 const OBJECTIVE = "sf_dialog_id";
 
@@ -20,7 +28,7 @@ export default {
       const show = (title: string, value: string) =>
         Effect.gen(function* () {
           yield* rcon(
-            `dialog show ${BOT_NAME} ${JSON.stringify({
+            `dialog show ${BOT_NAME} ${encodeJson({
               type: "multi_action",
               title,
               pause: false,

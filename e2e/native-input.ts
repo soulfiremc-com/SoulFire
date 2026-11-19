@@ -67,15 +67,15 @@ export const nativeInput = (
       const screenOpen = () => latest?.screenOpen;
       const heartbeat = setInterval(() => {
         if (latest)
-          void send().catch((error) => {
+          void send().catch((error: unknown) => {
             streamError = error instanceof Error ? error : new Error(String(error));
           });
       }, 500);
       try {
-        const deadline = Date.now() + 10_000;
+        const deadline = performance.now() + 10_000;
         while (!screenOpen()) {
           if (streamError) throw streamError;
-          if (Date.now() > deadline) throw new Error("The native inventory did not render");
+          if (performance.now() > deadline) throw new Error("The native inventory did not render");
           await new Promise((resolve) => {
             setTimeout(resolve, 25);
           });
@@ -96,10 +96,10 @@ export const nativeInput = (
             ),
           escape: async () => {
             await send([], true);
-            const escapeDeadline = Date.now() + 5000;
+            const escapeDeadline = performance.now() + 5000;
             while (screenOpen() !== false) {
               if (streamError) throw streamError;
-              if (Date.now() > escapeDeadline)
+              if (performance.now() > escapeDeadline)
                 throw new Error("Escape did not return to the game view");
               await new Promise((resolve) => {
                 setTimeout(resolve, 25);

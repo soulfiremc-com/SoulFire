@@ -167,7 +167,7 @@ describe("smoke spatial diagnostics", () => {
     expect(diagnostics).toMatchObject({
       status: "active",
       pathId: "path-1",
-      elapsedMs: 1_250,
+      elapsedMs: 1250,
       displacementFromOrigin: 6,
       distanceToGoal: 2,
     });
@@ -572,7 +572,7 @@ describe("smoke stuck diagnostics", () => {
       currentAction: "recover-death",
       activePath: {
         pathId: "exploration-3",
-        elapsedMs: 8_000,
+        elapsedMs: 8000,
         displacementFromOrigin: 12,
         distanceToGoal: 4,
       },
@@ -608,7 +608,7 @@ describe("smoke stuck diagnostics", () => {
       currentAction: "satisfy:logs",
       activePath: {
         pathId: "path-2",
-        elapsedMs: 8_000,
+        elapsedMs: 8000,
         displacementFromOrigin: 7,
         distanceToGoal: 3,
       },
@@ -632,7 +632,7 @@ describe("smoke stuck diagnostics", () => {
     expect(diagnostics).toMatchObject({
       status: "progressing",
       findings: [],
-      lastProgressAgeMs: 1_000,
+      lastProgressAgeMs: 1000,
     });
   });
 
@@ -660,7 +660,7 @@ describe("smoke stuck diagnostics", () => {
         startedAt: "2026-08-03T10:00:00.000Z",
         ageMs: 120_000,
       },
-      lastProgressAgeMs: 5_000,
+      lastProgressAgeMs: 5000,
     });
   });
 

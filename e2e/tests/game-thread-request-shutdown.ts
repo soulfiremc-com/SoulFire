@@ -7,7 +7,8 @@ export default {
   run: ({ bot }) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const runPromise = Effect.runPromiseWith(effectContext);
         const control = { polling: true };
         let slowestRequestMs = 0;
         let requests = 0;

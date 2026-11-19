@@ -14,7 +14,7 @@ describe("observation scopes", () => {
         Effect.gen(function* () {
           const requests: Parameters<BotEventStreamFactory>[0][] = [];
           let active = 0;
-          const resumed = yield* Deferred.make<void>();
+          const resumed = yield* Deferred.make<undefined>();
           const session = yield* BotSession.open((request) =>
             Stream.unwrap(
               Effect.acquireRelease(
@@ -76,7 +76,7 @@ describe("observation scopes", () => {
       Effect.scoped(
         Effect.gen(function* () {
           let attempts = 0;
-          const resumed = yield* Deferred.make<void>();
+          const resumed = yield* Deferred.make<undefined>();
           const session = yield* BotSession.open(() =>
             Stream.suspend(() => {
               attempts += 1;
@@ -107,7 +107,7 @@ describe("observation scopes", () => {
       Effect.scoped(
         Effect.gen(function* () {
           let active = 0;
-          const started = yield* Deferred.make<void>();
+          const started = yield* Deferred.make<undefined>();
           const open = BotSession.open(() =>
             Stream.unwrap(
               Effect.acquireRelease(
@@ -135,7 +135,7 @@ describe("observation scopes", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const release = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<undefined>();
           const failure = rpcError("watch", new ConnectError("revoked", Code.PermissionDenied));
           const session = yield* BotSession.open(() =>
             Stream.concat(
@@ -146,8 +146,10 @@ describe("observation scopes", () => {
           const waiter = yield* session.once("stateDelta").pipe(Effect.forkScoped);
           yield* Effect.yieldNow;
           yield* Deferred.succeed(release, undefined);
-          expect(yield* Fiber.join(waiter).pipe(Effect.flip)).toBe(failure);
-          expect(yield* session.once("stateDelta").pipe(Effect.flip)).toBe(failure);
+          const joined = yield* Fiber.join(waiter).pipe(Effect.flip);
+          expect(joined).toBe(failure);
+          const result = yield* session.once("stateDelta").pipe(Effect.flip);
+          expect(result).toBe(failure);
         }),
       ),
     ));

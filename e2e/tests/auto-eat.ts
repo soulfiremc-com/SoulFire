@@ -22,7 +22,8 @@ export default {
         value: { kind: { case: "boolValue", value: enabled } },
       });
     return Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       const previousDifficulty = (yield* rcon("difficulty"))
         .match(/difficulty is (Peaceful|Easy|Normal|Hard)/u)?.[1]
         ?.toLowerCase();
@@ -103,7 +104,7 @@ export default {
                         height: 480,
                         maxFps: 15,
                       },
-                      { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
+                      { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]) },
                     )) {
                       await runPromise(giveFood);
                       await runPromise(
@@ -156,7 +157,7 @@ export default {
                   new CheckFailed({ message: `POV control takeover failed: ${String(cause)}` }),
               });
             }
-            const result = yield* task.result({ call: { timeoutMs: 10000 } });
+            const result = yield* task.result({ call: { timeoutMs: 10_000 } });
             if (result.mealsEaten !== 1)
               failures.push(`${item} task reported ${result.mealsEaten} meals`);
           } else {

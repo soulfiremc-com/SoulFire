@@ -153,7 +153,7 @@ export default {
           } else {
             yield* rcon(`tp @e[tag=${TAG}] 3684.5 64 8.5`);
           }
-          const result = yield* task.result({ call: { timeoutMs: 10000 } });
+          const result = yield* task.result({ call: { timeoutMs: 10_000 } });
           yield* check(
             result.reason === RangedAttackCompletionReason.SHOT_LIMIT_REACHED &&
               result.shotsReleased === 1,

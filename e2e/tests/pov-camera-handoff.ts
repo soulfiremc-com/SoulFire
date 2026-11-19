@@ -3,6 +3,7 @@ import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generate
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -21,7 +22,8 @@ export default {
   run: ({ bot, client }) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const runPromise = Effect.runPromiseWith(effectContext);
         yield* rcon("forceload add 3440 0 3487 15");
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -72,7 +74,7 @@ export default {
               restoreSelectedSlot: false,
             });
             yield* Effect.addFinalizer(() => attack.cancel("test cleanup").pipe(Effect.ignore));
-            if (mode === "completed-attack") yield* attack.result({ call: { timeoutMs: 10000 } });
+            if (mode === "completed-attack") yield* attack.result({ call: { timeoutMs: 10_000 } });
             else {
               yield* eventually(
                 serverPosition.pipe(
@@ -114,7 +116,7 @@ export default {
                     height: 180,
                     maxFps: 15,
                   },
-                  { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
+                  { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]) },
                 )) {
                   if (frame.screenOpen) continue;
                   const input = (
@@ -150,7 +152,7 @@ export default {
                     Math.abs(yawDelta(retained, moved)) > 1
                   )
                     throw new Error(
-                      `${mode} overrode manual POV rotation: ${JSON.stringify({ before, moved, retained })}`,
+                      `${mode} overrode manual POV rotation: ${encodeJson({ before, moved, retained })}`,
                     );
                   await input([], false);
                   await input();

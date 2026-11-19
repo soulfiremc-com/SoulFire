@@ -1,7 +1,7 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import type { CallOptions, Client } from "@connectrpc/connect";
 import { Effect, Stream } from "effect";
-import { type SoulFireOperationError } from "./errors.js";
+import type { SoulFireOperationError } from "./errors.js";
 import { rpc, withSignal } from "./transport.js";
 
 import type { ItemSelectorSchema } from "./generated/soulfire/inventory_pb.js";

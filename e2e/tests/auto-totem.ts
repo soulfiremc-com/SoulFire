@@ -54,7 +54,7 @@ export default {
           "5 seconds",
           "5 millis",
         );
-        const result = yield* task.result({ call: { timeoutMs: 10000 } });
+        const result = yield* task.result({ call: { timeoutMs: 10_000 } });
         yield* check(result.equips === 2, "The consumed totem was omitted from the equip count");
         yield* eventually(
           rcon(`execute if items entity ${BOT_NAME} weapon.offhand minecraft:totem_of_undying`, {

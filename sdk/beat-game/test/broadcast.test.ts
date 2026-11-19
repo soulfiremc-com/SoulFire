@@ -8,8 +8,8 @@ describe("replay broadcasts", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const broadcast = new ReplayBroadcast<number>(2);
-          const started = yield* Deferred.make<void>();
-          const release = yield* Deferred.make<void>();
+          const started = yield* Deferred.make<undefined>();
+          const release = yield* Deferred.make<undefined>();
           yield* broadcast.publish(1);
           const reader = yield* broadcast.stream.pipe(
             Stream.tap(() =>
@@ -25,8 +25,10 @@ describe("replay broadcasts", () => {
           yield* broadcast.publish(4);
           yield* Deferred.succeed(release, undefined);
 
-          expect(yield* Fiber.join(reader)).toEqual([1, 2, 3]);
-          expect(yield* Stream.runCollect(broadcast.stream)).toEqual([2, 3]);
+          const joined = yield* Fiber.join(reader);
+          expect(joined).toEqual([1, 2, 3]);
+          const collected = yield* Stream.runCollect(broadcast.stream);
+          expect(collected).toEqual([2, 3]);
         }),
       ),
     ));
@@ -39,7 +41,8 @@ describe("replay broadcasts", () => {
         yield* broadcast.end();
         yield* broadcast.end();
 
-        expect(yield* Stream.runCollect(broadcast.stream)).toEqual([]);
+        const collected1 = yield* Stream.runCollect(broadcast.stream);
+        expect(collected1).toEqual([]);
       }),
     ));
 });

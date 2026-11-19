@@ -481,7 +481,7 @@ describe("SoulFireBot", () => {
           });
           const chunks = yield* bot.waitForChunks({
             radiusChunks: 2,
-            timeoutMs: 12000,
+            timeoutMs: 12_000,
           });
           expect(sign).toMatchObject({
             instanceId: "instance-id",
@@ -511,7 +511,7 @@ describe("SoulFireBot", () => {
             instanceId: "instance-id",
             botId: "bot-id",
             radiusChunks: 2,
-            timeoutMs: 12000,
+            timeoutMs: 12_000,
           });
           expect(chunks.loadedChunks).toBe(25);
         }),

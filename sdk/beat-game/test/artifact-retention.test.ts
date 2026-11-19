@@ -23,8 +23,8 @@ describe("pruneArtifactRuns", () => {
     const oldDirectory = path.join(rootDirectory, "old");
     const recentDirectory = path.join(rootDirectory, "recent");
     await Promise.all([mkdir(currentDirectory), mkdir(oldDirectory), mkdir(recentDirectory)]);
-    await utimes(oldDirectory, new Date(1_000), new Date(1_000));
-    await utimes(recentDirectory, new Date(2_000), new Date(2_000));
+    await utimes(oldDirectory, new Date(1000), new Date(1000));
+    await utimes(recentDirectory, new Date(2000), new Date(2000));
 
     const removed = await pruneArtifactRuns({
       rootDirectory,

@@ -79,7 +79,8 @@ export default {
         yield* rcon("fill 4260 63 4 4268 63 12 stone");
         yield* placeBot(bot, { x: 4264.5, y: 64, z: 8.5 });
         yield* rcon(`gamemode survival ${BOT_NAME}`);
-        const run = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const run = Effect.runPromiseWith(effectContext);
 
         yield* Effect.tryPromise({
           try: async () => {

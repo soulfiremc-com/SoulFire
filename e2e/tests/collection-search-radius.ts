@@ -1,6 +1,14 @@
 import { Console, Effect } from "effect";
 import { CollectBlocksCompletionReason } from "@soulfiremc/sdk/generated/soulfire/task_pb";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 export default {
   name: "collection-search-radius",
@@ -107,7 +115,7 @@ export default {
                 physical === "Test passed";
               outcomes.push(passed);
               yield* Console.log(
-                JSON.stringify({
+                encodeJson({
                   name: entry.name,
                   radius: entry.radius,
                   position,

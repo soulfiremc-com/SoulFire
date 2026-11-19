@@ -7,7 +7,16 @@ import {
   BotTaskStatus,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+  required,
+} from "../harness.ts";
 
 const STATION = { x: 4263, y: 64, z: 8 };
 const BLOCK = "4263 64 8";
@@ -170,7 +179,7 @@ export default {
                   const recovered = yield* task.refresh();
                   yield* check(
                     recovered.status !== BotTaskStatus.FAILED,
-                    `Recipe failed during recovery: ${JSON.stringify(recovered.failure)}`,
+                    `Recipe failed during recovery: ${encodeJson(recovered.failure)}`,
                   );
                   yield* check(
                     (yield* start()).id === task.id,
@@ -315,7 +324,15 @@ export default {
                     (yield* rcon(`data get entity ${BOT_NAME} Score`)) === scoreBefore,
                   "The recipe fixture changed saved XP or score",
                 );
-                yield* Console.log(JSON.stringify({ kind, phase, epochs, result, actual }));
+                yield* Console.log(
+                  encodeJson({
+                    kind,
+                    phase,
+                    epochs,
+                    result,
+                    actual,
+                  }),
+                );
               }),
             );
           }

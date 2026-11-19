@@ -7,7 +7,7 @@ import {
   ContainerTransferTaskResultSchema,
   MaintainLoadoutTaskResultSchema,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { CheckFailed, check, type E2ETest, eventually, rcon, required } from "../harness.ts";
 
 const NAMES = ["FleetE2EA", "FleetE2EB"];
@@ -36,9 +36,13 @@ export default {
           NAMES.every((name) => !online.includes(name)),
           "Fixture bots already online",
         );
+        const port = yield* Config.String("SOULFIRE_E2E_MINECRAFT_PORT").pipe(
+          Config.withDefault("25566"),
+          Effect.orDie,
+        );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-shared-container-confirm", {
-            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
+            server: `127.0.0.1:${port}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -58,7 +62,7 @@ export default {
           });
         }
         const bots = yield* Effect.forEach(NAMES, (name) =>
-          instance.getOrCreateBot(name, { readyTimeoutMs: 60000 }),
+          instance.getOrCreateBot(name, { readyTimeoutMs: 60_000 }),
         );
         const forced = (yield* rcon("forceload query 4256 0", { check: false })).includes(
           "not marked",
@@ -118,10 +122,11 @@ export default {
             "10 seconds",
             "100 millis",
           );
-          yield* bot.waitForChunks({ radiusChunks: 2, timeoutMs: 10000 });
+          yield* bot.waitForChunks({ radiusChunks: 2, timeoutMs: 10_000 });
         }
         const service = client.service(InventoryService);
-        const run = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const run = Effect.runPromiseWith(effectContext);
         for (const mode of ["inventory", "task", "loadout"] as const) {
           // Two independent controls, repeated full/partial withdrawals, then two
           // depositors competing for the only available stack in a full chest.
@@ -220,7 +225,7 @@ export default {
                                   },
                                 ),
                               );
-                        const state = await run(task.wait({ call: { timeoutMs: 15000 } }));
+                        const state = await run(task.wait({ call: { timeoutMs: 15_000 } }));
                         if (state.status === BotTaskStatus.FAILED) {
                           if ((await run(bot.inventory.snapshot())).containerId > 0)
                             throw new Error("A failed shared task left its container open");
@@ -293,10 +298,12 @@ export default {
             );
             for (const bot of bots) yield* bot.closeContainer();
             yield* Effect.sleep("300 millis");
-            let retained = materialCount(yield* rcon("data get block 4263 64 8 Items"));
+            const output = yield* rcon("data get block 4263 64 8 Items");
+            let retained = materialCount(output);
             let completed = 0;
             for (const [index, name] of NAMES.entries()) {
-              const inventory = materialCount(yield* rcon(`data get entity ${name} Inventory`));
+              const output2 = yield* rcon(`data get entity ${name} Inventory`);
+              const inventory = materialCount(output2);
               retained += inventory;
               const result = results.find((value) => value.index === index);
               if (result?.completed) {

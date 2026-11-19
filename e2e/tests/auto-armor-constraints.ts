@@ -56,7 +56,7 @@ export default {
         maximumEquips: 1,
         completeWhenNoUpgrade: true,
       });
-      const blockedResult = yield* blocked.result({ call: { timeoutMs: 10000 } });
+      const blockedResult = yield* blocked.result({ call: { timeoutMs: 10_000 } });
       yield* check(
         (yield* rcon(`execute if items entity ${BOT_NAME} armor.head minecraft:leather_helmet`, {
           check: false,
@@ -70,7 +70,7 @@ export default {
         maximumEquips: 1,
         completeWhenNoUpgrade: true,
       });
-      const creativeResult = yield* creative.result({ call: { timeoutMs: 10000 } });
+      const creativeResult = yield* creative.result({ call: { timeoutMs: 10_000 } });
       yield* check(
         creativeResult.equips === 1,
         "Creative mode did not permit the bound armor replacement",
@@ -111,7 +111,7 @@ export default {
         checkIntervalTicks: 1,
         completeWhenNoUpgrade: true,
       });
-      const fullResult = yield* full.result({ call: { timeoutMs: 10000 } });
+      const fullResult = yield* full.result({ call: { timeoutMs: 10_000 } });
       yield* check(
         fullResult.equips === 1,
         `Full inventory armor task reported ${fullResult.equips} upgrades`,

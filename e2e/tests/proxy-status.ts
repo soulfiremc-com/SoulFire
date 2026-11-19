@@ -5,14 +5,18 @@ import { create, fromJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { ProxyProtoSchema, ProxyProto_Type } from "@soulfiremc/sdk/generated/soulfire/common_pb";
 import { ProxyCheckService } from "@soulfiremc/sdk/generated/soulfire/proxy-check_pb";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { CheckFailed, check, type E2ETest } from "../harness.ts";
 
 export default {
   name: "proxy-status",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const targetPort = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566);
+      const result = yield* Config.String("SOULFIRE_E2E_MINECRAFT_PORT").pipe(
+        Config.withDefault("25566"),
+        Effect.orDie,
+      );
+      const targetPort = Number(result);
       const sockets = new Set<net.Socket>();
       let requests = 0;
       let rejectConnection = false;
@@ -137,7 +141,7 @@ export default {
                   }),
                 ],
               },
-              { timeoutMs: 10000 },
+              { timeoutMs: 10_000 },
             )) {
               if (response.data.case === "single") results.push(response.data.value.valid);
             }

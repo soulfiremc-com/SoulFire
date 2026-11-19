@@ -5,7 +5,7 @@ import { operationError, type SoulFireOperationError } from "./errors.js";
 import { rpc, withSignal } from "./transport.js";
 import { itemSelector } from "./selectors.js";
 
-import { type BlockPositionSchema } from "./generated/soulfire/common_pb.js";
+import type { BlockPositionSchema } from "./generated/soulfire/common_pb.js";
 import {
   InventoryArea,
   InventoryRecommendationKind,
@@ -455,15 +455,11 @@ export class SoulFireInventory {
           withSignal(this.actionOptions(options.call), signal),
         ),
       );
-      return new SoulFireContainer(
-        scope,
-        this.client,
-        this.actionOptions,
-        yield* Effect.try({
-          try: () => requireContainer(response),
-          catch: (cause) => operationError("SoulFireInventory.open", cause),
-        }),
-      );
+      const result = yield* Effect.try({
+        try: () => requireContainer(response),
+        catch: (cause) => operationError("SoulFireInventory.open", cause),
+      });
+      return new SoulFireContainer(scope, this.client, this.actionOptions, result);
     });
   }
 

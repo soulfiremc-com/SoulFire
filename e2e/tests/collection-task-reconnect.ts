@@ -7,7 +7,16 @@ import {
   CollectBlocksCompletionReason,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon, required } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+  required,
+} from "../harness.ts";
 
 export default {
   name: "collection-task-reconnect",
@@ -207,7 +216,14 @@ export default {
                   })) === "Test passed",
                 );
               }
-              yield* Console.log(JSON.stringify({ partial, epochs, result, world }));
+              yield* Console.log(
+                encodeJson({
+                  partial,
+                  epochs,
+                  result,
+                  world,
+                }),
+              );
               yield* check(
                 result.blocksBroken === expectedCount &&
                   result.reason === CollectBlocksCompletionReason.TARGET_REACHED &&
@@ -217,9 +233,10 @@ export default {
               let conservation;
               yield* eventually(
                 Effect.gen(function* () {
-                  const inventory = Number(
-                    yield* bot.inventory.count({ selector: { itemIds: ["minecraft:dirt"] } }),
-                  );
+                  const dirtCount = yield* bot.inventory.count({
+                    selector: { itemIds: ["minecraft:dirt"] },
+                  });
+                  const inventory = Number(dirtCount);
                   const dropped = yield* rcon(
                     "execute as @e[type=item,x=4260,y=-200,z=4,dx=18,dy=300,dz=8] run data get entity @s Item.count",
                     { check: false },
@@ -237,7 +254,7 @@ export default {
                 "5 seconds",
                 "100 millis",
               );
-              yield* Console.log(JSON.stringify({ partial, conservation }));
+              yield* Console.log(encodeJson({ partial, conservation }));
               const replay = yield* bot.tasks.collectBlocks("minecraft:dirt", options);
               yield* check(
                 replay.id === collection.id &&

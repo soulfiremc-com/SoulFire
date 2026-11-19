@@ -1,17 +1,17 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import type { CallOptions, Client } from "@connectrpc/connect";
 import { Effect, Stream } from "effect";
-import { type SoulFireOperationError } from "./errors.js";
+import type { SoulFireOperationError } from "./errors.js";
 import { rpc, rpcStream, withSignal } from "./transport.js";
 
-import {
-  type BotService,
-  type BotPovFrame,
-  type BotRenderPovRequestSchema,
-  type BotRenderPovResponse,
-  type BotWatchPovRequestSchema,
-  type BotWorldMapRequestSchema,
-  type BotWorldMapResponse,
+import type {
+  BotService,
+  BotPovFrame,
+  BotRenderPovRequestSchema,
+  BotRenderPovResponse,
+  BotWatchPovRequestSchema,
+  BotWorldMapRequestSchema,
+  BotWorldMapResponse,
 } from "./generated/soulfire/bot_pb.js";
 
 type BotScoped<T extends DescMessage> = Omit<
@@ -60,7 +60,8 @@ export class SoulFireCamera {
     call?: CallOptions,
   ): Effect.Effect<Uint8Array, SoulFireOperationError> {
     return Effect.gen({ self: this }, function* () {
-      return decodeCameraImage(yield* this.capture(options, call));
+      const image = yield* this.capture(options, call);
+      return decodeCameraImage(image);
     });
   }
 

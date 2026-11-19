@@ -241,7 +241,9 @@ describe("named bot setup", () => {
           const bot = yield* client.createBot({ server: "localhost:25565", username: "Builder" });
           expect(bot.state.player?.health).toBe(20);
           expect(fixture.subscriptions).toBe(1);
-          expect(yield* bot.observe()).toBe(yield* bot.observe());
+          const observation = yield* bot.observe();
+          const observation1 = yield* bot.observe();
+          expect(observation).toBe(observation1);
           expect(fixture.instanceRequests[0]).toMatchObject({
             name: "localhost:25565",
             server: "localhost:25565",
@@ -351,8 +353,8 @@ describe("named bot setup", () => {
   it.each([undefined, Code.Unavailable])(
     "settles pending deletion before cleanup (%s)",
     async (deleteError) => {
-      const entered = Deferred.makeUnsafe<void>();
-      const proceed = Deferred.makeUnsafe<void>();
+      const entered = Deferred.makeUnsafe<undefined>();
+      const proceed = Deferred.makeUnsafe<undefined>();
       const fixture = server({
         ...(deleteError === undefined ? {} : { deleteError }),
         beforeDelete: () =>
@@ -399,8 +401,8 @@ describe("named bot setup", () => {
   );
 
   it("keeps cleanup ownership when instance deletion is interrupted", async () => {
-    const entered = Deferred.makeUnsafe<void>();
-    const proceed = Deferred.makeUnsafe<void>();
+    const entered = Deferred.makeUnsafe<undefined>();
+    const proceed = Deferred.makeUnsafe<undefined>();
     const fixture = server({
       beforeDelete: () =>
         Effect.runPromise(
@@ -427,8 +429,8 @@ describe("named bot setup", () => {
   });
 
   it("recognizes confirmed deletion while a cleanup stop is in flight", async () => {
-    const entered = Deferred.makeUnsafe<void>();
-    const proceed = Deferred.makeUnsafe<void>();
+    const entered = Deferred.makeUnsafe<undefined>();
+    const proceed = Deferred.makeUnsafe<undefined>();
     const fixture = server({
       cleanupError: Code.PermissionDenied,
       beforeStop: () =>

@@ -9,7 +9,8 @@ export default {
   name: "protocol-reconnect",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       const service = client.service(BotProtocolService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const observed = yield* Effect.tryPromise({
@@ -26,7 +27,7 @@ export default {
           }, 5000);
           const timer = setTimeout(() => {
             abort.abort();
-          }, 15000);
+          }, 15_000);
           // The stream below sets these flags while the outer code awaits it.
           const seen = { information: false, encoded: false };
           const stream = (async () => {
@@ -76,7 +77,7 @@ export default {
         catch: (cause) =>
           new CheckFailed({ message: `Reconnect observation failed: ${String(cause)}` }),
       });
-      yield* bot.connect({ readyTimeoutMs: 15000 });
+      yield* bot.connect({ readyTimeoutMs: 15_000 });
       yield* check(
         observed,
         "Packet observation lost the new connection's encoded configuration packets",

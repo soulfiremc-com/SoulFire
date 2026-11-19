@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect, Result } from "effect";
 import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
@@ -208,7 +209,7 @@ export default {
         ),
         "5 seconds",
       );
-      const clipboard = crypto.randomUUID();
+      const clipboard = randomUUID();
       yield* show({
         type: "notice",
         title: "Clipboard QA",

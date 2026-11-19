@@ -144,7 +144,7 @@ export default {
                     );
                     yield* task.cancel("finish the unbounded farming cycle");
                   }
-                  const terminal = yield* task.wait({ call: { timeoutMs: 15000 } });
+                  const terminal = yield* task.wait({ call: { timeoutMs: 15_000 } });
                   yield* check(
                     terminal.status ===
                       (provider === "farm" ? BotTaskStatus.CANCELLED : BotTaskStatus.COMPLETED),

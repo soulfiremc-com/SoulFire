@@ -63,7 +63,7 @@ export function makeEffectHttpClientFetch(client: HttpClient.HttpClient): typeof
       void Effect.runPromise(transfer, {
         signal: effectController.signal,
       })
-        .catch((cause) => {
+        .catch((cause: unknown) => {
           if (!responseResolved) {
             reject(cause instanceof Error ? cause : new Error(String(cause)));
             return;

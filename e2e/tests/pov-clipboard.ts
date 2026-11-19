@@ -3,6 +3,7 @@ import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -135,7 +136,7 @@ export default {
                 const actual = await read();
                 if (actual !== test.expected)
                   throw new Error(
-                    `${test.name}: expected ${JSON.stringify(test.expected)}, got ${JSON.stringify(actual)}`,
+                    `${test.name}: expected ${encodeJson(test.expected)}, got ${encodeJson(actual)}`,
                   );
               }
               return;

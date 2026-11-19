@@ -37,7 +37,7 @@ import type {
 } from "./driver.js";
 
 const NETHER_PORTAL_REENTRY_COOLDOWN_MS = 10_500;
-const END_EXIT_PORTAL_ENTRY_TIMEOUT_MS = 1_500;
+const END_EXIT_PORTAL_ENTRY_TIMEOUT_MS = 1500;
 const MAXIMUM_ATTACK_NEAREST_RADIUS = 128;
 const MAXIMUM_OPEN_SPACE_HANDOFF_DEPTH = 8;
 // Item positions are continuous while path nodes are block-aligned. This
@@ -61,7 +61,7 @@ const PORTAL_CASTING_LAVA_SOURCE_ATTEMPTS = 8;
 const PORTAL_CASTING_WATER_RECOVERY_ATTEMPTS = 3;
 const PORTAL_CASTING_BUCKET_FACE_AIM_HEIGHT = 1 / 64;
 const PORTAL_CASTING_SUPPORT_SCAFFOLD_RADIUS = 4.9;
-const PORTAL_CASTING_SUPPORT_SCAFFOLD_MAXIMUM_RESULTS = 1_000;
+const PORTAL_CASTING_SUPPORT_SCAFFOLD_MAXIMUM_RESULTS = 1000;
 const PORTAL_STAIRCASE_MINIMUM_DEPTH = 2;
 const PORTAL_STAIRCASE_MAXIMUM_DEPTH = 64;
 const PORTAL_SUPPORT_INTERACTION_REACH = 4.5;
@@ -216,7 +216,7 @@ export function collectNearbyDrops(
         // Drop collection is cleanup, so it must not consume the resources it
         // is trying to collect just to stand closer to an item entity.
         allowPlacing: false,
-        maxSearchTimeMs: Math.min(requestedPath.maxSearchTimeMs, 5_000),
+        maxSearchTimeMs: Math.min(requestedPath.maxSearchTimeMs, 5000),
       };
       const attemptedDrops = new Set<string>();
       const pickupAttempts = new Map<string, number>();
@@ -2285,7 +2285,7 @@ function climbEndPortalRim(
     yield* waitForEndPortalRim(driver, rim, 150, 10);
   }).pipe(
     Effect.timeoutOrElse({
-      duration: 5_000,
+      duration: 5000,
       orElse: () => Effect.fail(behaviorError(driver, "Could not climb onto the End portal rim")),
     }),
     Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
@@ -2373,7 +2373,8 @@ function ensureEndPortalRimReachable(
     ) {
       yield* driver.pathfind(retreat, 1, pathPolicy);
     }
-    const material = staircaseSupportMaterial(yield* driver.observe);
+    const observation = yield* driver.observe;
+    const material = staircaseSupportMaterial(observation);
     if (material === undefined) {
       return yield* behaviorError(
         driver,

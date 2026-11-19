@@ -70,7 +70,7 @@ export default {
           selectBestWeapon: false,
         });
         yield* Effect.addFinalizer(() => task.cancel("test cleanup").pipe(Effect.ignore));
-        const result = yield* task.result({ call: { timeoutMs: 10000 } });
+        const result = yield* task.result({ call: { timeoutMs: 10_000 } });
         yield* check(
           result.attacks === 1 &&
             result.reason === AttackEntityCompletionReason.ATTACK_LIMIT_REACHED,

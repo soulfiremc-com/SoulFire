@@ -3,6 +3,7 @@ import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -109,7 +110,8 @@ export default {
   name: "dialog-text-limits",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const service = client.service(BotService);
       const read = Effect.tryPromise({
@@ -119,7 +121,7 @@ export default {
       const show = (title: string, initial: string, limit: number, multiline: boolean) =>
         Effect.gen(function* () {
           yield* rcon(
-            `dialog show ${BOT_NAME} ${JSON.stringify({
+            `dialog show ${BOT_NAME} ${encodeJson({
               type: "multi_action",
               title,
               pause: false,
@@ -155,7 +157,7 @@ export default {
           const pov = client.service(PovService);
           const stream = pov.watch(
             { ...scope, sessionId, width: 640, height: 480, maxFps: 15 },
-            { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30000)]) },
+            { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30_000)]) },
           );
           const frames = stream[Symbol.asyncIterator]();
           let sequence = 0n;
@@ -195,7 +197,7 @@ export default {
                       const actual = input?.case === "text" ? input.value.initial : undefined;
                       return check(
                         actual === test.expected,
-                        `${test.name}: expected ${JSON.stringify(test.expected)}, got ${JSON.stringify(actual)}`,
+                        `${test.name}: expected ${encodeJson(test.expected)}, got ${encodeJson(actual)}`,
                       );
                     }),
                   ),

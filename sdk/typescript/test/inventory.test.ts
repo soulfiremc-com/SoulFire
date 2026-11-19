@@ -214,8 +214,10 @@ it("normalizes item IDs and tags and rejects malformed selectors before sending"
   );
   await Effect.runPromise(
     Effect.gen(function* () {
-      expect(yield* inventory.count("oak_log")).toBe(8n);
-      expect(yield* inventory.count("#logs")).toBe(8n);
+      const count1 = yield* inventory.count("oak_log");
+      expect(count1).toBe(8n);
+      const count2 = yield* inventory.count("#logs");
+      expect(count2).toBe(8n);
       const error = yield* inventory.count("#").pipe(Effect.flip);
       expect(error._tag).toBe("SoulFireValidationError");
     }),

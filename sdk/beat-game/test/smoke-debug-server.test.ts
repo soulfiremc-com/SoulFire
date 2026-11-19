@@ -71,7 +71,7 @@ describe("smoke debug server", () => {
                 ...authorization(),
                 "content-type": "application/json",
               },
-              body: JSON.stringify({ radius: 8 }),
+              body: '{"radius":8}',
             }),
           );
           const acceptedBody: unknown = yield* Effect.promise(() => accepted.json());

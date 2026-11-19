@@ -32,8 +32,20 @@
   ],
   "rules": {
     "effecttsgo/any-unknown-in-error-context": "off",
+    "effecttsgo/crypto-random-uuid-in-effect": "error",
+    "effecttsgo/extends-native-error": "error",
+    "effecttsgo/global-console-in-effect": "error",
+    "effecttsgo/global-date-in-effect": "error",
+    "effecttsgo/global-fetch-in-effect": "error",
+    "effecttsgo/global-json-in-effect": "error",
+    "effecttsgo/global-random-in-effect": "error",
+    "effecttsgo/global-timers-in-effect": "error",
+    "effecttsgo/prefer-schema-over-json": "error",
+    "effecttsgo/prefer-schema-tagged-error": "error",
+    "effecttsgo/process-env-in-effect": "error",
     "effecttsgo/strict-effect-provide": "off",
     "effecttsgo/unsafe-effect-type-assertion": "off",
+    "effecttsgo/yield-in-call-argument": "error",
     "eslint/array-callback-return": "error",
     "eslint/eqeqeq": [
       "error",
@@ -42,18 +54,22 @@
         "null": "ignore"
       }
     ],
+    "eslint/logical-assignment-operators": "error",
     "eslint/max-classes-per-file": "off",
     "eslint/max-depth": "off",
     "eslint/max-lines": "off",
     "eslint/max-lines-per-function": "off",
     "eslint/max-nested-callbacks": "off",
+    "eslint/no-alert": "error",
     "eslint/no-await-in-loop": "off",
     "eslint/no-console": "error",
     "eslint/no-fallthrough": "error",
     "eslint/no-inline-comments": "off",
     "eslint/no-loop-func": "error",
     "eslint/no-negated-condition": "off",
+    "eslint/no-param-reassign": "error",
     "eslint/no-promise-executor-return": "error",
+    "eslint/no-script-url": "error",
     "eslint/no-self-compare": "error",
     "eslint/no-shadow": "error",
     "eslint/no-throw-literal": "error",
@@ -67,11 +83,17 @@
     "eslint/no-useless-assignment": "error",
     "eslint/no-useless-call": "error",
     "eslint/no-warning-comments": "off",
+    "eslint/object-shorthand": "error",
+    "eslint/prefer-const": "error",
+    "eslint/prefer-object-has-own": "error",
+    "eslint/prefer-template": "error",
     "eslint/require-await": "off",
     "import/max-dependencies": "off",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "oxc/no-accumulating-spread": "error",
+    "oxc/no-barrel-file": "error",
+    "oxc/no-map-spread": "error",
     "promise/always-return": "error",
     "promise/catch-or-return": "error",
     "typescript/array-type": "error",
@@ -91,11 +113,16 @@
     "typescript/consistent-type-exports": "error",
     "typescript/consistent-type-imports": "error",
     "typescript/no-deprecated": "error",
+    "typescript/no-dynamic-delete": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-generated-empty-object-type": "error",
+    "typescript/no-import-type-side-effects": "error",
     "typescript/no-inferrable-types": "error",
+    "typescript/no-invalid-void-type": "error",
     "typescript/no-misused-promises": "error",
+    "typescript/no-misused-spread": "error",
     "typescript/no-non-null-assertion": "error",
+    "typescript/no-redundant-type-constituents": "error",
     "typescript/no-unnecessary-condition": [
       "error",
       {
@@ -124,23 +151,65 @@
     "typescript/return-await": "error",
     "typescript/strict-boolean-expressions": "off",
     "typescript/switch-exhaustiveness-check": "error",
+    "typescript/use-unknown-in-catch-callback-variable": "error",
     "unicorn/consistent-function-scoping": "error",
+    "unicorn/error-message": "error",
     "unicorn/no-abusive-eslint-disable": "error",
+    "unicorn/no-document-cookie": "error",
     "unicorn/no-negated-condition": "off",
     "unicorn/no-useless-switch-case": "off",
     "unicorn/no-useless-undefined": "off",
+    "unicorn/numeric-separators-style": "error",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-array-flat-map": "error",
     "unicorn/prefer-at": "error",
     "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-optional-catch-binding": "error",
+    "unicorn/prefer-response-static-json": "error",
     "unicorn/prefer-set-has": "error",
+    "unicorn/prefer-string-raw": "error",
     "unicorn/prefer-string-replace-all": "error",
+    "unicorn/prefer-structured-clone": "error",
     "unicorn/prefer-top-level-await": "error",
     "unicorn/switch-case-braces": "error",
+    "unicorn/text-encoding-identifier-case": "error",
+    "unicorn/throw-new-error": "error",
     "vitest/no-conditional-expect": "error",
     "vitest/no-conditional-in-test": "off"
   },
   "overrides": [
+    {
+      "files": ["sdk/beat-game/test/smoke-debug-server.test.ts"],
+      "rules": { "effecttsgo/global-fetch-in-effect": "off" }
+    },
+    {
+      "files": [
+        "e2e/native-input.ts",
+        "e2e/tests/pov-audio-lifecycle.ts",
+        "e2e/tests/pov-audio.ts",
+        "e2e/tests/protocol-reconnect.ts"
+      ],
+      "rules": { "effecttsgo/global-timers-in-effect": "off" }
+    },
+    {
+      "files": [
+        "sdk/typescript/src/browser.ts",
+        "sdk/typescript/src/bun.ts",
+        "sdk/typescript/src/node.ts"
+      ],
+      "rules": { "oxc/no-barrel-file": "off" }
+    },
+    {
+      "files": [
+        "sdk/typescript/src/actions.ts",
+        "sdk/typescript/src/connection.ts",
+        "sdk/typescript/src/errors.ts",
+        "sdk/typescript/src/fleet.ts",
+        "sdk/typescript/src/inventory.ts",
+        "sdk/typescript/src/plugins.ts"
+      ],
+      "rules": { "effecttsgo/extends-native-error": "off" }
+    },
     {
       "files": [
         "sdk/typescript/src/platform.ts",

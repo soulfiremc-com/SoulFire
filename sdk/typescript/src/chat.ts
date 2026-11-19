@@ -5,12 +5,12 @@ import { operationError, rpcError, type SoulFireOperationError } from "./errors.
 import { rpc, withSignal } from "./transport.js";
 
 import { requireCompletedAction } from "./actions.js";
-import {
-  type BotEventFilterSchema,
-  type BotActionResult,
-  type BotChatEvent,
-  type BotEvent,
-  type ChatSource,
+import type {
+  BotEventFilterSchema,
+  BotActionResult,
+  BotChatEvent,
+  BotEvent,
+  ChatSource,
 } from "./generated/soulfire/bot_live_pb.js";
 import type { ChatService, TabCompleteResponse } from "./generated/soulfire/chat_pb.js";
 

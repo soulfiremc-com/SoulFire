@@ -154,7 +154,7 @@ export default {
               if (completes) {
                 yield* fishing.cancel("let breeding execute");
                 yield* fishing.wait({ call: { timeoutMs: 5000 } });
-                const result = yield* breeding.result({ call: { timeoutMs: 15000 } });
+                const result = yield* breeding.result({ call: { timeoutMs: 15_000 } });
                 yield* check(
                   result.reason === BreedCompletionReason.PAIR_LIMIT_REACHED &&
                     result.pairsStarted === 1 &&

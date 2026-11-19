@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Cause, Console, Data, Effect, Result } from "effect";
+import { Schema, Cause, Console, Effect, Result } from "effect";
 import {
   E2E_DIR,
   type E2ETest,
@@ -22,7 +22,13 @@ import {
   stopMinecraft,
 } from "./harness.ts";
 
-class TestsFailed extends Data.TaggedError("TestsFailed")<{ readonly message: string }> {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+class TestsFailed extends Schema.TaggedError<TestsFailed, { readonly brand: unique symbol }>()(
+  "TestsFailed",
+  {
+    message: Schema.String,
+  },
+) {}
 
 const { values: flags, positionals: names } = parseArgs({
   allowPositionals: true,

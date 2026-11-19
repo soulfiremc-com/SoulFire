@@ -1,7 +1,7 @@
 import { fromBinary } from "@bufbuild/protobuf";
 import { BrewTaskResultSchema } from "@soulfiremc/sdk/generated/soulfire/recipe_pb";
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { CheckFailed, check, type E2ETest, eventually, present, rcon } from "../harness.ts";
 
 const NAMES = ["SharedBrewA", "SharedBrewB"];
@@ -12,9 +12,13 @@ export default {
   run: ({ client }) =>
     Effect.scoped(
       Effect.gen(function* () {
+        const port = yield* Config.String("SOULFIRE_E2E_MINECRAFT_PORT").pipe(
+          Config.withDefault("25566"),
+          Effect.orDie,
+        );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-shared-brewing", {
-            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
+            server: `127.0.0.1:${port}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -176,7 +180,8 @@ export default {
                 }
               }
               for (const x of STATIONS) {
-                retainedBottles += countBottles(yield* rcon(`data get block ${x} 64 8 Items`));
+                const output = yield* rcon(`data get block ${x} 64 8 Items`);
+                retainedBottles += countBottles(output);
               }
               yield* check(completed >= (round === 0 ? 2 : 1), "No actor finished brewing");
               yield* check(retainedBottles === 2, "Contested brewing lost or duplicated a bottle");

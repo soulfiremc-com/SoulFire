@@ -74,9 +74,10 @@ describe("SoulFireCamera", () => {
             includeDebugTrace: true,
           });
           const bytes = yield* camera.captureBytes({ width: 320, height: 180 });
-          const frames = Array.from(
-            yield* Stream.runCollect(camera.frames({ intervalMs: 250, includeHud: false })),
+          const collected = yield* Stream.runCollect(
+            camera.frames({ intervalMs: 250, includeHud: false }),
           );
+          const frames = Array.from(collected);
           const map = yield* camera.worldMap({
             centerX: 4,
             centerZ: 8,

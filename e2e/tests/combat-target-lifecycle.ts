@@ -1,6 +1,7 @@
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -79,7 +80,7 @@ export default {
         const after = yield* serverPosition;
         yield* check(
           Math.hypot(after.x - before.x, after.z - before.z) < 0.05,
-          `The bot kept moving while its target was unavailable: ${JSON.stringify({ before, after })}`,
+          `The bot kept moving while its target was unavailable: ${encodeJson({ before, after })}`,
         );
         yield* check(
           (yield* task.refresh()).status === BotTaskStatus.RUNNING,

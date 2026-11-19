@@ -76,7 +76,8 @@ export default {
         const put = (item: string, destination: number, count = 1) =>
           Effect.gen(function* () {
             yield* rcon(`give ${BOT_NAME} ${item} ${count}`);
-            yield* bot.clickInventory(yield* itemSlot(item));
+            const slot = yield* itemSlot(item);
+            yield* bot.clickInventory(slot);
             yield* bot.clickInventory(destination);
           });
 
@@ -167,7 +168,8 @@ export default {
           if (spec.equipment) yield* put(spec.equipment, 1);
           if (spec.columns) yield* put("diamond", 1 + spec.columns * 3, 7);
           yield* rcon(`give ${BOT_NAME} bread`);
-          yield* bot.clickInventory(yield* itemSlot("bread"));
+          const slot1 = yield* itemSlot("bread");
+          yield* bot.clickInventory(slot1);
           yield* bot.closeContainer();
           yield* eventually(
             rcon(`data get entity ${BOT_NAME} Inventory`).pipe(

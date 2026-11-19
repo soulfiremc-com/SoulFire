@@ -32,7 +32,8 @@ export default {
   name: "recipe-book-search",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       yield* rcon("forceload add 1552 -16 1584 16");
       yield* rcon("fill 1566 63 -2 1571 63 2 stone");
       yield* rcon("fill 1566 64 -2 1571 67 2 air");
@@ -78,7 +79,7 @@ export default {
           try {
             for await (const frame of pov.watch(
               { ...scope, sessionId, width: 1280, height: 720, maxFps: 15 },
-              { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) },
+              { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15_000)]) },
             )) {
               if (!frame.screenOpen) continue;
               const input = (

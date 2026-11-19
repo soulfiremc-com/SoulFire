@@ -97,7 +97,7 @@ export default {
             yield* task.cancel("Cancel while charging");
             yield* task.wait({ call: { timeoutMs: 5000 } });
           } else {
-            const result = yield* task.result({ call: { timeoutMs: 10000 } });
+            const result = yield* task.result({ call: { timeoutMs: 10_000 } });
             yield* check(
               result.shotsReleased === (mode === "empty" ? 0 : 1) &&
                 result.reason ===

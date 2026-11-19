@@ -21,7 +21,8 @@ export default {
     const setting = (key: string, value: boolean | { min: number; max: number }) =>
       instance.setConfigEntry({ namespace: "anti-afk", key, value: fromJson(ValueSchema, value) });
     return Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon("forceload add 2080 0 2111 31");
       yield* rcon("fill 2080 63 0 2110 63 30 stone");

@@ -109,7 +109,7 @@ export default {
               `tp @e[tag=${TAG}] ${unavailable ? 4500.5 : away ? 4274.5 : 4276.5} 64 8.5`,
             );
           }
-          const terminal = yield* task.wait({ call: { timeoutMs: 10000 } });
+          const terminal = yield* task.wait({ call: { timeoutMs: 10_000 } });
           if (unavailable && !name.startsWith("composite")) {
             yield* check(
               terminal.status === BotTaskStatus.FAILED && terminal.failure?.code === "not_found",

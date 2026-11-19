@@ -93,7 +93,7 @@ export function installLocalServer(
     const runDirectory = path.join(directory, "server");
     yield* installIO("install.mkdir", () => mkdir(runDirectory, { recursive: true }));
     const port = options.port ?? (yield* installIO("install.port", () => findAvailablePort()));
-    if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
+    if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
       return yield* Effect.fail(
         operationError(
           "install.port",
@@ -190,19 +190,19 @@ function waitForServerReady(
   output: readline.Interface,
   errors: readline.Interface,
 ): Effect.Effect<void, SoulFireOperationError> {
-  return Effect.callback<void, SoulFireOperationError>((resume) => {
+  return Effect.callback<undefined, SoulFireOperationError>((resume) => {
     const cleanup = () => {
       output.off("line", onLine);
       errors.off("line", onLine);
       child.off("error", onError);
       child.off("exit", onExit);
     };
-    const finish = (result: Effect.Effect<void, SoulFireOperationError>) => {
+    const finish = (result: Effect.Effect<undefined, SoulFireOperationError>) => {
       cleanup();
       resume(result);
     };
     const onLine = (line: string) => {
-      if (line.includes("Finished loading!")) finish(Effect.void);
+      if (line.includes("Finished loading!")) finish(Effect.undefined);
     };
     const onError = (cause: Error) => {
       finish(Effect.fail(operationError("install.ready", cause)));
@@ -229,9 +229,9 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
   return Effect.suspend(() => {
     if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null)
       return Effect.void;
-    return Effect.callback<void>((resume) => {
+    return Effect.callback<undefined>((resume) => {
       const onExit = () => {
-        resume(Effect.void);
+        resume(Effect.undefined);
       };
       child.once("exit", onExit);
       child.kill("SIGTERM");
@@ -240,13 +240,13 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
       Effect.timeoutOrElse({
         duration: 5000,
         orElse: () =>
-          Effect.callback<void>((resume) => {
+          Effect.callback<undefined>((resume) => {
             if (child.exitCode !== null || child.signalCode !== null) {
-              resume(Effect.void);
+              resume(Effect.undefined);
               return undefined;
             }
             const onExit = () => {
-              resume(Effect.void);
+              resume(Effect.undefined);
             };
             child.once("exit", onExit);
             child.kill("SIGKILL");
@@ -258,7 +258,7 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
 }
 
 function createRootApiToken(secretKey: Buffer): string {
-  const issuedAt = Math.floor(Date.now() / 1_000);
+  const issuedAt = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const claims = Buffer.from(
     JSON.stringify({

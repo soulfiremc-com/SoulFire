@@ -1441,7 +1441,8 @@ describe("SoulFireTasks", () => {
             createClient(BotLiveService, transport),
             createClient(BotTaskService, transport),
           );
-          const updates = Array.from(yield* Stream.runCollect(bot.tasks.run(GoToTaskSchema, {})));
+          const collected = yield* Stream.runCollect(bot.tasks.run(GoToTaskSchema, {}));
+          const updates = Array.from(collected);
           expect(updates).toHaveLength(1);
           expect(started?.disconnectPolicy).toBe(BotTaskDisconnectPolicy.CANCEL_WITH_CALL);
         }),

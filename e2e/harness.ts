@@ -9,10 +9,14 @@ import { create } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import type { SoulFireBot, SoulFireClient, SoulFireOperationError } from "@soulfiremc/sdk";
 import { SoulFire } from "@soulfiremc/sdk/node";
-import { Console, Data, Duration, Effect, Schedule, Semaphore } from "effect";
+import { Schema, Console, Duration, Effect, Schedule, Semaphore } from "effect";
 
 // oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const execFileAsync = promisify(execFile);
+
+const encodeJsonValue = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+export const encodeJson = (input: unknown): string | undefined =>
+  input === undefined ? undefined : encodeJsonValue(input);
 
 export const E2E_DIR = import.meta.dirname;
 const REPO_DIR = path.dirname(E2E_DIR);
@@ -20,13 +24,23 @@ const REPO_DIR = path.dirname(E2E_DIR);
 // ---- errors ----------------------------------------------------------------------------------
 
 /** A command (docker, RCON) that couldn't run, or whose output says it failed. */
-export class CommandFailed extends Data.TaggedError("CommandFailed")<{
-  readonly command: string;
-  readonly message: string;
-}> {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+export class CommandFailed extends Schema.TaggedError<
+  CommandFailed,
+  { readonly brand: unique symbol }
+>()("CommandFailed", {
+  command: Schema.String,
+  message: Schema.String,
+}) {}
 
 /** Something a test or the setup expected didn't happen. */
-export class CheckFailed extends Data.TaggedError("CheckFailed")<{ readonly message: string }> {}
+// oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
+export class CheckFailed extends Schema.TaggedError<
+  CheckFailed,
+  { readonly brand: unique symbol }
+>()("CheckFailed", {
+  message: Schema.String,
+}) {}
 
 export type TestError = CommandFailed | CheckFailed | SoulFireOperationError;
 
@@ -81,7 +95,7 @@ const IMAGE = "itzg/minecraft-server:2026.3.2-java25";
 /** SoulFire's native version, so the bot needs no protocol translation. */
 export const MINECRAFT_VERSION = "26.3";
 /** Not 25565, so a server someone runs for play keeps its port. */
-const MINECRAFT_PORT = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566);
+const MINECRAFT_PORT = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25_566);
 /** A flat world of one air layer: nothing exists that a test didn't build. */
 const VOID_WORLD = JSON.stringify({
   layers: [{ block: "minecraft:air", height: 1 }],
@@ -298,7 +312,7 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
       javaArgs: ["-Xms1G", "-Xmx4G"],
       startupTimeoutMs: 180_000,
       onLog: (line) => {
-        appendFileSync(logFile, line + "\n");
+        appendFileSync(logFile, `${line}\n`);
       },
     }),
   );

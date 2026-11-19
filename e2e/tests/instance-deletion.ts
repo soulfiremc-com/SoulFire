@@ -97,7 +97,7 @@ async function deleteInstanceWithScripts(client: SoulFireClient, instance: SoulF
   const abort = new AbortController();
   const stream = scripts.activateScript(
     { instanceId: instance.id, scriptId: active.script.id },
-    { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]) },
+    { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]) },
   );
   const events = stream[Symbol.asyncIterator]();
   try {

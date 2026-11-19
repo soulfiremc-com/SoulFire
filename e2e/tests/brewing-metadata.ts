@@ -1,5 +1,5 @@
 import type { InventorySlot } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
-import { Effect } from "effect";
+import { Equal, Effect } from "effect";
 import {
   BOT_NAME,
   CheckFailed,
@@ -153,7 +153,7 @@ export default {
       );
       yield* check(
         books.every((b) => b.tooltipLines.length > 1) &&
-          JSON.stringify(books[0]?.tooltipLines) !== JSON.stringify(books[1]?.tooltipLines),
+          !Equal.equals(books[0]?.tooltipLines, books[1]?.tooltipLines),
         "Enchanted books lost their distinct native enchantment details",
       );
     }).pipe(Effect.ensuring(bot.closeContainer().pipe(Effect.ignore))),

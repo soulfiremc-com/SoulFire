@@ -1,5 +1,5 @@
 import { BotRuntimeState } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { check, type E2ETest, eventually, rcon, required } from "../harness.ts";
 
 const NAMES = ["FleetE2EA", "FleetE2EB", "FleetE2EC"];
@@ -9,9 +9,13 @@ export default {
   run: ({ client }) =>
     Effect.scoped(
       Effect.gen(function* () {
+        const port = yield* Config.String("SOULFIRE_E2E_MINECRAFT_PORT").pipe(
+          Config.withDefault("25566"),
+          Effect.orDie,
+        );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-fleet", {
-            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
+            server: `127.0.0.1:${port}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );

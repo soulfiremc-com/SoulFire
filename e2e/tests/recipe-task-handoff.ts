@@ -125,7 +125,7 @@ export default {
             `Cancelling queued ${kind} stopped the owner brew`,
           );
         }
-        const brewed = yield* owner.result({ call: { timeoutMs: 25000 } });
+        const brewed = yield* owner.result({ call: { timeoutMs: 25_000 } });
         yield* check(
           brewed.outputs.length === 1 &&
             brewed.outputs[0]?.potion?.potionId === "minecraft:awkward",
@@ -140,7 +140,7 @@ export default {
         );
         const craft = yield* bot.tasks.craft(recipe.recipeId);
         yield* Effect.addFinalizer(() => craft.cancel("test cleanup").pipe(Effect.ignore));
-        const crafted = yield* craft.result({ call: { timeoutMs: 10000 } });
+        const crafted = yield* craft.result({ call: { timeoutMs: 10_000 } });
         yield* check(
           crafted.crafted === 1 && crafted.result?.itemId === "minecraft:oak_planks",
           "An active crafting task did not produce planks",
@@ -150,7 +150,7 @@ export default {
           fuel: { itemIds: ["minecraft:coal"] },
         });
         yield* Effect.addFinalizer(() => smelt.cancel("test cleanup").pipe(Effect.ignore));
-        const smelted = yield* smelt.result({ call: { timeoutMs: 20000 } });
+        const smelted = yield* smelt.result({ call: { timeoutMs: 20_000 } });
         yield* check(
           smelted.outputs.some(
             (item) => item.itemId === "minecraft:iron_ingot" && item.count === 1,

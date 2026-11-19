@@ -85,7 +85,7 @@ export default {
           if (mode === "sdk-shield") yield* nativeItem("weapon.offhand", "shield");
           yield* bot.clickInventory(10);
           if (task) {
-            const result = yield* task.result({ call: { timeoutMs: 10000 } });
+            const result = yield* task.result({ call: { timeoutMs: 10_000 } });
             yield* check(result.equips === 1, "Auto Totem did not confirm exactly one equip");
           }
           yield* eventually(nativeItem("weapon.offhand", "totem_of_undying"), "5 seconds");

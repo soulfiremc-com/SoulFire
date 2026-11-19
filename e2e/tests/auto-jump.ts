@@ -25,7 +25,8 @@ export default {
         value: fromJson(ValueSchema, value),
       });
     return Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context());
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       yield* rcon(`gamemode creative ${BOT_NAME}`);
       yield* rcon("forceload add 2016 0");
       yield* rcon("fill 2016 63 0 2020 63 4 stone");

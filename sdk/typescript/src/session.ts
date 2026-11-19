@@ -37,8 +37,8 @@ import type {
 } from "./generated/soulfire/domain_pb.js";
 
 const DEFAULT_RECONNECT_DELAY_MS = 250;
-const MAX_RECONNECT_DELAY_MS = 5_000;
-const SUBSCRIBER_BUFFER_SIZE = 1_024;
+const MAX_RECONNECT_DELAY_MS = 5000;
+const SUBSCRIBER_BUFFER_SIZE = 1024;
 
 export interface BotSessionState {
   /**
@@ -152,7 +152,7 @@ export class BotSession {
 
   private constructor(
     private readonly eventsHub: PubSub.PubSub<Exit.Exit<BotEvent, SoulFireOperationError>>,
-    private readonly ready: Deferred.Deferred<void, SoulFireOperationError>,
+    private readonly ready: Deferred.Deferred<undefined, SoulFireOperationError>,
     private readonly scope: Scope.Closeable,
   ) {}
 
@@ -165,7 +165,7 @@ export class BotSession {
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
       const events =
         yield* PubSub.sliding<Exit.Exit<BotEvent, SoulFireOperationError>>(SUBSCRIBER_BUFFER_SIZE);
-      const ready = yield* Deferred.make<void, SoulFireOperationError>();
+      const ready = yield* Deferred.make<undefined, SoulFireOperationError>();
       const session = new BotSession(events, ready, scope);
       yield* Scope.addFinalizer(scope, PubSub.shutdown(events));
       yield* session.consume(stream, options).pipe(

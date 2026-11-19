@@ -1,18 +1,18 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import type { CallOptions, Client } from "@connectrpc/connect";
 import type { Effect } from "effect";
-import { type SoulFireOperationError } from "./errors.js";
+import type { SoulFireOperationError } from "./errors.js";
 import { rpc, withSignal } from "./transport.js";
 
-import {
-  type RegistryService,
-  type GetRegistryEntryRequestSchema,
-  type GetRegistryEntryResponse,
-  type GetRegistryIdentityResponse,
-  type ListRegistryEntriesRequestSchema,
-  type ListRegistryEntriesResponse,
-  type ListRegistryTagsRequestSchema,
-  type ListRegistryTagsResponse,
+import type {
+  RegistryService,
+  GetRegistryEntryRequestSchema,
+  GetRegistryEntryResponse,
+  GetRegistryIdentityResponse,
+  ListRegistryEntriesRequestSchema,
+  ListRegistryEntriesResponse,
+  ListRegistryTagsRequestSchema,
+  ListRegistryTagsResponse,
 } from "./generated/soulfire/registry_pb.js";
 
 type RegistryRequest<T extends DescMessage> = Omit<

@@ -1,5 +1,15 @@
 import type { SoulFireBot } from "@soulfiremc/sdk";
-import { Clock, Deferred, Effect, Fiber, Ref, Semaphore, Stream, type Scope } from "effect";
+import {
+  DateTime,
+  Clock,
+  Deferred,
+  Effect,
+  Fiber,
+  Ref,
+  Semaphore,
+  Stream,
+  type Scope,
+} from "effect";
 
 import {
   acquire,
@@ -149,10 +159,10 @@ const WORKSTATION_APPROACH_RADIUS = 1.5;
 const WORKSTATION_PORTAL_CLEARANCE = 2;
 const WORKSTATION_PORTAL_RETREAT_DISTANCE = 6;
 const WORKSTATION_REUSE_MAX_VERTICAL_DISTANCE = 8;
-const WORKSTATION_REUSE_MAX_SEARCH_TIME_MS = 5_000;
+const WORKSTATION_REUSE_MAX_SEARCH_TIME_MS = 5000;
 const WORKSTATION_REUSE_TIMEOUT_MS = 12_000;
 const FURNACE_RECLAIM_TIMEOUT = "15 seconds";
-const SHORE_PATH_MAX_SEARCH_TIME_MS = 5_000;
+const SHORE_PATH_MAX_SEARCH_TIME_MS = 5000;
 const SHORE_PATH_TIMEOUT_MS = 10_000;
 const DRY_SURFACE_APPROACH_RADIUS = 0.75;
 const FURNACE_RECOVERY_RADIUS = 12;
@@ -160,13 +170,13 @@ const NEARBY_REQUIREMENT_DROP_RADIUS = 12;
 const NEARBY_REQUIREMENT_DROP_MAXIMUM_VERTICAL_DISTANCE = 6;
 const URGENT_FOOD_DROP_MAXIMUM_VERTICAL_DISTANCE = NEARBY_REQUIREMENT_DROP_RADIUS;
 const RESOURCE_COLLECTION_RESERVED_SLOTS = 3;
-const REQUIREMENT_NO_PROGRESS_REPLAN_DELAY_MS = 1_000;
+const REQUIREMENT_NO_PROGRESS_REPLAN_DELAY_MS = 1000;
 const LOCAL_NAVIGATION_RECOVERY_MINIMUM_DISTANCE = 3;
-const LOCAL_NAVIGATION_RECOVERY_MAX_SEARCH_TIME_MS = 5_000;
+const LOCAL_NAVIGATION_RECOVERY_MAX_SEARCH_TIME_MS = 5000;
 const LOCAL_NAVIGATION_RECOVERY_TIMEOUT_MS = 15_000;
 const DRY_SHAFT_RECOVERY_MAXIMUM_RISE = 16;
 const SURFACE_RECOVERY_MAXIMUM_STAIR_SEGMENTS = 384;
-const SURFACE_RECOVERY_DIRECT_PATH_SEARCH_TIMEOUT_MS = 2_000;
+const SURFACE_RECOVERY_DIRECT_PATH_SEARCH_TIMEOUT_MS = 2000;
 const SURFACE_RECOVERY_DIRECT_PATH_EXECUTION_TIMEOUT_MS = 60_000;
 const SURFACE_RECOVERY_DIRECT_PATH_CANDIDATES = 2;
 const DRY_SHAFT_RECOVERY_STEP_RADIUS = 0.35;
@@ -204,7 +214,7 @@ const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 const REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS = 16;
 const REMEMBERED_PORTAL_ROUTE_FAILURE_PENALTY = 0.25;
 const REMEMBERED_PORTAL_ROUTE_STALL_PENALTY = 0.5;
-const REMEMBERED_PORTAL_REPLAN_DELAY_MS = 1_000;
+const REMEMBERED_PORTAL_REPLAN_DELAY_MS = 1000;
 const MAX_SAFE_DEATH_RECOVERY_FAILURES = 3;
 // A fast run gives up on a corpse after one failed preparation: rebuilding
 // the kit is faster than the hours a distant recovery can take.
@@ -440,7 +450,7 @@ const INVENTORY_DISCARD_POCKET_DEPTH = 2;
 // Reaches every block that touches the pocket, including the ones behind it.
 const INVENTORY_DISCARD_POCKET_LAVA_CLEARANCE = 2.5;
 const INVENTORY_DISCARD_SITE_DISTANCE = 6;
-const INVENTORY_DISCARD_ESCAPE_MAX_SEARCH_TIME_MS = 3_000;
+const INVENTORY_DISCARD_ESCAPE_MAX_SEARCH_TIME_MS = 3000;
 const LOW_VALUE_DEATH_RECOVERY_ITEM_IDS = new Set([
   ...DISPOSABLE_DEATH_RECOVERY_ITEM_IDS,
   "minecraft:acacia_sapling",
@@ -472,7 +482,7 @@ const FURNACE_FUEL_SEARCH_RADIUS = 16;
 const HUNT_ATTACK_APPROACH_RADIUS = 24;
 const AQUATIC_HUNT_ATTACK_APPROACH_RADIUS = 4;
 const HUNT_UNREACHABLE_TARGET_RETRY_DISTANCE = 4;
-const HUNT_NEARBY_UNREACHABLE_RETRY_DELAY_MS = 5_000;
+const HUNT_NEARBY_UNREACHABLE_RETRY_DELAY_MS = 5000;
 const HUNT_DISTANT_UNREACHABLE_RETRY_DELAY_MS = 15_000;
 const AQUATIC_HUNT_VERTICAL_ROUTE_COST = 4;
 const AQUATIC_HUNT_HEALTH_ROUTE_COST = 16;
@@ -530,7 +540,7 @@ const FISHING_PREFERRED_CAST_HORIZONTAL_DISTANCE = 3;
 const FISHING_MAXIMUM_DOWNWARD_CAST_PITCH = 30;
 const MAXIMUM_LIQUID_SIGHT_CLEARING_BLOCKS = 4;
 const LAVA_RETREAT_DISTANCE = 8;
-const LAVA_EMERGENCY_SPRINT_MS = 1_500;
+const LAVA_EMERGENCY_SPRINT_MS = 1500;
 const LAVA_ESCAPE_LEDGE_SEARCH_RADIUS = 12;
 const LAVA_ESCAPE_MAXIMUM_SWIMMABLE_RISE = 8;
 const LAVA_ESCAPE_MAXIMUM_LEDGE_DROP = 1;
@@ -551,8 +561,8 @@ const DEEP_LAVA_DESCENT_STEP = 12;
 const PORTAL_CASTING_ADDITIONAL_LAVA_SOURCE_COUNT = NETHER_PORTAL_FRAME_OBSIDIAN_COUNT - 1;
 const EXPLORATION_REANCHOR_DISTANCE = 16;
 const EXPLORATION_FRONTIER_LIMIT = 64;
-const EXPLORATION_DEATH_DISPLACEMENT_WINDOW_MS = 10 * 60 * 1_000;
-const EXPLORATION_MAXIMUM_SEARCH_TIME_MS = 5_000;
+const EXPLORATION_DEATH_DISPLACEMENT_WINDOW_MS = 10 * 60 * 1000;
+const EXPLORATION_MAXIMUM_SEARCH_TIME_MS = 5000;
 const EXPLORATION_MAXIMUM_EXPANDED_STATES = 12_000;
 const EXPLORATION_MINIMUM_PROGRESS_DISTANCE = 4;
 const EXPLORATION_TARGET_REACHED_RADIUS = 6;
@@ -810,8 +820,8 @@ const DEFENSIVE_PURSUIT_MAX_DISTANCE = 12;
 const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
-const EMERGENCY_ESCAPE_SPRINT_MS = 1_250;
-const RANGED_ESCAPE_SPRINT_MS = 2_500;
+const EMERGENCY_ESCAPE_SPRINT_MS = 1250;
+const RANGED_ESCAPE_SPRINT_MS = 2500;
 const RANGED_ESCAPE_MINIMUM_AWAY_ALIGNMENT = 0;
 const FAST_PURSUER_ADDITIONAL_DIRECT_ESCAPE_ATTEMPTS = 2;
 const EMERGENCY_ESCAPE_FLUID_PROJECTION_DISTANCE = 2;
@@ -827,14 +837,14 @@ const RANGED_COVER_WAIT_MS = 15_000;
 const COVER_MELEE_EXCLUSION_RADIUS = 6;
 const ENDERMAN_COVER_WAIT_MS = 30_000;
 const RANGED_COVER_HEALTH = 8;
-const RECENT_ARROW_HIT_MS = 5_000;
+const RECENT_ARROW_HIT_MS = 5000;
 const PROJECTILE_DAMAGE_TYPES = new Set(["minecraft:arrow", "minecraft:trident"]);
-const CREEPER_ESCAPE_SPRINT_MS = 2_500;
+const CREEPER_ESCAPE_SPRINT_MS = 2500;
 const CREEPER_ESCAPE_SPRINT_SEGMENT_MS = 350;
 const CREEPER_ESCAPE_MINIMUM_SEGMENT_DISTANCE = 0.5;
 const CREEPER_ESCAPE_MINIMUM_AWAY_ALIGNMENT = 0.25;
 const CREEPER_ESCAPE_SURFACE_PROJECTION_DISTANCE = 18;
-const CREEPER_FUSE_DURATION_MS = 1_500;
+const CREEPER_FUSE_DURATION_MS = 1500;
 const CREEPER_ESCAPE_REACTION_MARGIN_MS = 300;
 const CREEPER_SPRINT_BLOCKS_PER_SECOND = 5.6;
 const CREEPER_BLAST_SAFE_DISTANCE = 6;
@@ -842,15 +852,15 @@ const CHARGED_CREEPER_BLAST_SAFE_DISTANCE = 12;
 const CREEPER_SHIELD_POLL_MS = 50;
 const CREEPER_SHIELD_MAXIMUM_POLLS = 40;
 const EMERGENCY_ESCAPE_LAVA_CHECK_RADIUS = 4;
-const DRIVER_EVENTS_RESUBSCRIBE_DELAY_MS = 1_000;
+const DRIVER_EVENTS_RESUBSCRIBE_DELAY_MS = 1000;
 const NIGHT_SHELTER_START_TICK = 13_000n;
-const NIGHT_SHELTER_END_TICK = 1_000n;
+const NIGHT_SHELTER_END_TICK = 1000n;
 const NIGHT_SHELTER_DEPTH = 3;
 const SHAFT_CENTER_TOLERANCE = 0.2;
-const SHAFT_CENTER_TIMEOUT_MS = 2_000;
+const SHAFT_CENTER_TIMEOUT_MS = 2000;
 const NIGHT_SHELTER_MINIMUM_SURFACE_COVER = 8;
 const NIGHT_SHELTER_DEEP_SURFACE_COVER = 32;
-const NIGHT_SHELTER_POLL_MS = 1_000;
+const NIGHT_SHELTER_POLL_MS = 1000;
 const NIGHT_SHELTER_DESCENT_ATTEMPTS = 30;
 const NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS = 3;
 // A hostile night lasts 12,000 ticks, which is 10 minutes at 20 ticks per second.
@@ -872,7 +882,7 @@ const NIGHT_SHELTER_BLOCK_ITEM_IDS = [
   ...PLANK_ITEM_IDS,
   ...LOG_ITEM_IDS,
 ] as const;
-const DEATH_OBSERVATION_DEDUPLICATION_WINDOW_MS = 5_000;
+const DEATH_OBSERVATION_DEDUPLICATION_WINDOW_MS = 5000;
 const BAREHANDED_DEFENSE_MINIMUM_HEALTH = 18;
 const MELEE_DISENGAGE_HEALTH = 16;
 const LETHAL_MELEE_DISENGAGE_HEALTH = 7;
@@ -882,9 +892,9 @@ const CAUGHT_MELEE_COMMIT_MINIMUM_HEALTH = MELEE_DISENGAGE_HEALTH;
 const MAXIMUM_KNOCKBACK_ESCAPES = 2;
 const THREAT_ESCAPE_SAFE_DISTANCE = 24;
 const SINGLE_THREAT_MAXIMUM_ESCAPES = 4;
-const DURABLE_DEATH_RECOVERY_WINDOW_MS = 8 * 60 * 60 * 1_000;
+const DURABLE_DEATH_RECOVERY_WINDOW_MS = 8 * 60 * 60 * 1000;
 const KEPT_INVENTORY_MINIMUM_SHARE = 0.8;
-const DROPPED_ITEM_LOADED_LIFETIME_MS = 5 * 60 * 1_000;
+const DROPPED_ITEM_LOADED_LIFETIME_MS = 5 * 60 * 1000;
 const CHAINED_DEATH_RESPAWN_BASE_COOLDOWN_MS = 60_000;
 const CHAINED_DEATH_RESPAWN_MAXIMUM_COOLDOWN_MS = 8 * 60_000;
 const RENEWABLE_DEATH_RECOVERY_MAX_DISTANCE = 64;
@@ -905,7 +915,7 @@ const AIR_ESCAPE_ASCENT_PROGRESS_EPSILON = 0.05;
 const AIR_ESCAPE_OPEN_COLUMN_SEARCH_RADIUS = 4;
 const AIR_ESCAPE_BREATHING_POCKET_SEARCH_RADIUS = 8;
 const AIR_ESCAPE_BREATHING_POCKET_CANDIDATES = 16;
-const AIR_ESCAPE_BREATHING_POCKET_PATH_TIMEOUT_MS = 4_000;
+const AIR_ESCAPE_BREATHING_POCKET_PATH_TIMEOUT_MS = 4000;
 const AIR_ESCAPE_BREATHING_POCKET_PATH_RESERVE_TICKS =
   AIR_ESCAPE_CRITICAL_AIR_TICKS + Math.ceil(AIR_ESCAPE_BREATHING_POCKET_PATH_TIMEOUT_MS / 50);
 const FALL_CLUTCH_TRIGGER_VELOCITY = -0.7;
@@ -956,7 +966,7 @@ interface RunState {
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
   readonly paused: Ref.Ref<boolean>;
-  readonly stopped: Deferred.Deferred<void>;
+  readonly stopped: Deferred.Deferred<undefined>;
   readonly checkpointMutex: Semaphore.Semaphore;
   readonly eventMutex: Semaphore.Semaphore;
   readonly events: ReplayBroadcast<BeatGameEvent>;
@@ -1017,6 +1027,7 @@ export function beatGameWithDriver(
   options: BeatGameOptions = {},
 ): Effect.Effect<BeatGameRun, BeatGameError, Scope.Scope> {
   return Effect.gen(function* () {
+    // oxlint-disable-next-line effecttsgo/crypto-random-uuid-in-effect -- Keep cryptographically generated identifiers across supported runtimes.
     const runId = options.runId ?? crypto.randomUUID();
     const teamId = options.team?.teamId ?? runId;
     const store = options.checkpointStore ?? new InMemoryBeatGameCheckpointStore();
@@ -1080,7 +1091,7 @@ export function beatGameWithDriver(
     >(stored.memory.explorationFrontiers ?? {});
     const checkedRecoveryContainers = yield* Ref.make<ReadonlySet<string>>(new Set());
     const paused = yield* Ref.make(false);
-    const stopped = yield* Deferred.make<void>();
+    const stopped = yield* Deferred.make<undefined>();
     const checkpointMutex = yield* Semaphore.make(1);
     const eventMutex = yield* Semaphore.make(1);
     const events = new ReplayBroadcast<BeatGameEvent>(128);
@@ -1111,7 +1122,7 @@ export function beatGameWithDriver(
       events,
       snapshots,
       sequence,
-      startedAtMs: Date.now(),
+      startedAtMs: yield* Clock.currentTimeMillis,
     };
     yield* publishSnapshot(state);
     yield* emit(
@@ -1245,6 +1256,7 @@ export function beatGameTeamWithDrivers(
     return Effect.die(new RangeError("beatGameTeamWithDrivers needs at least one driver"));
   }
   return Effect.gen(function* () {
+    // oxlint-disable-next-line effecttsgo/crypto-random-uuid-in-effect -- Keep cryptographically generated identifiers across supported runtimes.
     const teamId = options.teamId ?? crypto.randomUUID();
     const store = options.checkpointStore ?? new InMemoryBeatGameCheckpointStore();
     const coordinator = options.coordinator ?? new InMemoryBeatGameCoordinator();
@@ -1855,7 +1867,7 @@ function findNightBedPlacementSites(
       center: blockCenter(origin),
       radius: NIGHT_BED_PLACEMENT_SEARCH_RADIUS + 4,
       selector: {},
-      maximumResults: 4_096,
+      maximumResults: 4096,
     })
     .pipe(
       Effect.map((blocks) => {
@@ -1932,9 +1944,9 @@ function findNightBedPlacementSites(
 
 function waitForMorningAfterBed(state: RunState): Effect.Effect<boolean, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const deadline = Date.now() + NIGHT_BED_MORNING_TIMEOUT_MS;
+    const deadline = (yield* Clock.currentTimeMillis) + NIGHT_BED_MORNING_TIMEOUT_MS;
     let daylightConfirmations = 0;
-    while (Date.now() < deadline) {
+    while ((yield* Clock.currentTimeMillis) < deadline) {
       const environment = yield* observeEnvironment(state);
       daylightConfirmations =
         environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
@@ -2579,7 +2591,7 @@ function digAndSealNightShelter(
           ...state.strategy.path,
           allowMining: false,
           allowPlacing: false,
-          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1_000),
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1000),
         })
         .pipe(
           Effect.timeoutOrElse({ duration: SHAFT_CENTER_TIMEOUT_MS, orElse: () => Effect.void }),
@@ -2724,14 +2736,19 @@ function encloseNightShelterInPlace(
   }));
   const roofCorner = { ...roof, x: roof.x + 1 };
   return Effect.gen(function* () {
-    if (!isSolid(yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 1 }))) {
+    const floorBlock = yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 1 });
+    if (!isSolid(floorBlock)) {
       return undefined;
     }
     // The roof can only be placed against a neighbor, so open ground needs
     // one block beside it first.
     let roofSupported = false;
     for (const position of roofRing) {
-      roofSupported ||= isSolid(yield* queryExactBlock(state.driver, position));
+      const ringBlock = yield* queryExactBlock(state.driver, position);
+      if (isSolid(ringBlock)) {
+        roofSupported = true;
+        break;
+      }
     }
     const targets = [
       ...ENCLOSURE_SIDES.map((side) => ({ ...feet, x: feet.x + side.x, z: feet.z + side.z })),
@@ -2766,10 +2783,11 @@ function encloseNightShelterInPlace(
         // The server can still refuse a support it cannot see, so each solid
         // neighbor is tried in turn.
         for (const support of supports) {
-          if (
-            body.some((cell) => samePosition(cell, support.against)) ||
-            !isSolid(yield* queryExactBlock(state.driver, support.against))
-          ) {
+          if (body.some((cell) => samePosition(cell, support.against))) {
+            continue;
+          }
+          const supportBlock = yield* queryExactBlock(state.driver, support.against);
+          if (!isSolid(supportBlock)) {
             continue;
           }
           const placement = yield* state.driver
@@ -2792,7 +2810,8 @@ function encloseNightShelterInPlace(
             continue;
           }
           for (let attempt = 0; attempt < 20; attempt += 1) {
-            if (isSolid(yield* queryExactBlock(state.driver, target))) {
+            const block = yield* queryExactBlock(state.driver, target);
+            if (isSolid(block)) {
               return true;
             }
             yield* Effect.sleep(100);
@@ -2807,12 +2826,11 @@ function encloseNightShelterInPlace(
             // A wall over water or a drop has nothing to hold it, so the bot
             // first fills the open space below it.
             const below = { ...target, y: target.y - 1 };
-            if (
-              body.some((cell) => samePosition(cell, below)) ||
-              isSolid(yield* queryExactBlock(state.driver, below)) ||
-              !(yield* placeAt(below)) ||
-              !(yield* placeAt(target))
-            ) {
+            if (body.some((cell) => samePosition(cell, below))) {
+              return false;
+            }
+            const blockBelow = yield* queryExactBlock(state.driver, below);
+            if (isSolid(blockBelow) || !(yield* placeAt(below)) || !(yield* placeAt(target))) {
               return false;
             }
           }
@@ -3203,17 +3221,17 @@ function runDecisionWithRetry(
 }
 
 function executeDecision(
-  state: RunState,
+  originalState: RunState,
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
   observation: BeatGameObservation,
   actionCheckpoint: BeatGameCheckpoint,
 ): Effect.Effect<ActionResult, BeatGameError> {
-  state = {
-    ...state,
+  const state = {
+    ...originalState,
     driver: withTaskIdempotency(
-      state.driver,
+      originalState.driver,
       actionCheckpoint.planner.currentActionId ?? crypto.randomUUID(),
-      new Date(Date.now() + state.strategy.actionTimeoutMs),
+      new Date(Date.now() + originalState.strategy.actionTimeoutMs),
       stableFingerprint({
         connectionEpoch: observation.player.connectionEpoch,
         playerRevision: observation.player.revision.toString(),
@@ -4844,7 +4862,7 @@ function shouldShieldCreeperExplosion(
       ? CHARGED_CREEPER_BLAST_SAFE_DISTANCE
       : CREEPER_BLAST_SAFE_DISTANCE;
   const requiredSprintMs =
-    (Math.max(0, safeDistance - currentDistance) / CREEPER_SPRINT_BLOCKS_PER_SECOND) * 1_000;
+    (Math.max(0, safeDistance - currentDistance) / CREEPER_SPRINT_BLOCKS_PER_SECOND) * 1000;
   return remainingFuseMs <= requiredSprintMs + CREEPER_ESCAPE_REACTION_MARGIN_MS;
 }
 
@@ -5033,7 +5051,7 @@ function escapeFromTarget(
   const escapePath = {
     ...state.strategy.path,
     sprint: true,
-    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3_000),
+    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3000),
   };
   return Effect.gen(function* () {
     const observation = yield* state.driver.observe;
@@ -5344,7 +5362,7 @@ function takeCoverFromRangedFire(
     const recentArrowHit =
       lastDamage?.damageType !== undefined &&
       PROJECTILE_DAMAGE_TYPES.has(lastDamage.damageType) &&
-      Date.now() - Date.parse(lastDamage.observedAt) <= RECENT_ARROW_HIT_MS;
+      (yield* Clock.currentTimeMillis) - Date.parse(lastDamage.observedAt) <= RECENT_ARROW_HIT_MS;
     const archerNearby =
       recentArrowHit ||
       PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType) ||
@@ -8401,7 +8419,7 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_attack",
   "minecraft:mob_projectile",
 ]);
-const RECENT_ATTACK_MS = 3_000;
+const RECENT_ATTACK_MS = 3000;
 
 // Piglins leave a player who wears gold alone, but they still report
 // themselves aggressive while they hunt hoglins. A live bot in gold boots
@@ -8664,7 +8682,7 @@ function defendAgainstSingleTarget(
     allowMining: false,
     allowPlacing: false,
     avoidFluids: !isRangedTarget,
-    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3_000),
+    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3000),
   };
   return state.driver.observe.pipe(
     Effect.flatMap((observation) => {
@@ -8896,7 +8914,7 @@ function extinguishFire(
         allowPlacing: false,
         avoidFluids: false,
         maxFallDistance: Math.min(state.strategy.path.maxFallDistance, 1),
-        maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 5_000),
+        maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 5000),
       })
       .pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
     yield* Effect.sleep(100);
@@ -8978,7 +8996,7 @@ function stepOffBurningGround(
           allowMining: false,
           allowPlacing: false,
           maxFallDistance: 1,
-          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1_000),
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1000),
         })
         .pipe(
           Effect.as(true),
@@ -9137,7 +9155,7 @@ function retreatAndRecover(
       state.strategy.path.maxFallDistance,
       MAXIMUM_DAMAGE_FREE_FALL_DISTANCE,
     ),
-    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3_000),
+    maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3000),
   };
   const fleeFromNearbyNeutralThreat = state.driver.observe.pipe(
     Effect.flatMap((observation) => {
@@ -9693,7 +9711,7 @@ function satisfyRequirementFromWorld(
             stationaryBlockIds: new Set(["minecraft:spawner"]),
             placeKind: "FORTRESS",
             scanRadius: Math.min(64, state.strategy.blockSearchRadius),
-            maximumResults: 2_048,
+            maximumResults: 2048,
           },
         },
       );
@@ -11109,7 +11127,8 @@ function fillLiquidBucket(
     let current = observation;
     if (liquid === "lava" && (yield* isPlayerInLava(state.driver, current.player.position))) {
       yield* escapeLava(state, current);
-      yield* extinguishFire(state, yield* state.driver.observe);
+      const escaped = yield* state.driver.observe;
+      yield* extinguishFire(state, escaped);
       return undefined;
     }
     if ((observation.inventory.counts["minecraft:bucket"] ?? 0) === 0) {
@@ -11519,7 +11538,7 @@ function pathfindToReachableWaterSource(
 ): Effect.Effect<BeatGameBlockObservation | undefined, BeatGameDriverError> {
   return Effect.gen(function* () {
     const checkpoint = yield* Ref.get(state.checkpoint);
-    const now = Date.now();
+    const now = yield* Clock.currentTimeMillis;
     const rememberedUnreachable = new Set(
       checkpoint.memory.unreachable
         .filter(({ expiresAt }) => expiresAt === undefined || Date.parse(expiresAt) > now)
@@ -11742,7 +11761,8 @@ function preparePortalCastingLavaPool(
   requiredLavaSources = PORTAL_CASTING_ADDITIONAL_LAVA_SOURCE_COUNT,
 ): Effect.Effect<PortalLavaPoolPreparation, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const abandonedLava = abandonedPortalLavaSites(yield* Ref.get(state.checkpoint));
+    const currentCheckpoint = yield* Ref.get(state.checkpoint);
+    const abandonedLava = abandonedPortalLavaSites(currentCheckpoint);
     const sources = (yield* state.driver.queryBlocks({
       center: observation.player.position,
       radius: state.strategy.blockSearchRadius,
@@ -11971,7 +11991,7 @@ function findStableResourceSearchStaircaseOrigin(
             allowMining: false,
             allowPlacing: false,
             avoidFluids: true,
-            maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 5_000),
+            maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 5000),
           },
         )
         .pipe(Effect.result);
@@ -12649,7 +12669,7 @@ function huntOrExplore(
         }
         stationaryStructureTarget = stationaryEvidence;
       }
-      const now = Date.now();
+      const now = yield* Clock.currentTimeMillis;
       const rememberedUnreachableTargets = new Map(
         checkpoint.memory.unreachable
           .filter(({ expiresAt }) => expiresAt === undefined || Date.parse(expiresAt) > now)
@@ -13021,7 +13041,7 @@ function huntOrExplore(
         botId: checkpoint.botId,
         key: targetKey,
         purpose,
-        ttlMs: Math.max(state.strategy.claimTtlMs, state.strategy.actionTimeoutMs + 5_000),
+        ttlMs: Math.max(state.strategy.claimTtlMs, state.strategy.actionTimeoutMs + 5000),
       });
       if (claim === undefined) {
         continue;
@@ -13037,7 +13057,11 @@ function huntOrExplore(
         botId: checkpoint.botId,
         position: target.position,
         observedAt: target.observedAt,
-        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        expiresAt: yield* DateTime.now.pipe(
+          Effect.map((observedTime) =>
+            DateTime.formatIso(DateTime.add(observedTime, { minutes: 2 })),
+          ),
+        ),
         confidence: 1,
         metadata: {
           entityType: target.entityType,
@@ -13736,7 +13760,8 @@ function escapeEnvironmentalDamage(
         (yield* isPlayerInLava(state.driver, burning.player.position)))
     ) {
       yield* escapeLava(state, burning);
-      yield* extinguishFire(state, yield* state.driver.observe);
+      const escaped = yield* state.driver.observe;
+      yield* extinguishFire(state, escaped);
       return;
     }
     // Drowned throw tridents from under the water where the bot cannot see
@@ -15287,7 +15312,7 @@ function barterWithPiglin(
           networkId: piglin.networkId,
           hand: "main",
         });
-        yield* Effect.sleep(6_500);
+        yield* Effect.sleep(6500);
         const drops = yield* state.driver.queryEntities({
           origin: piglin.position,
           radius: 12,
@@ -15845,8 +15870,7 @@ function ensureInventorySpace(
       let itemCountReduced = false;
       for (let attempt = 0; attempt < 8; attempt += 1) {
         current = yield* state.driver.observe;
-        itemCountReduced =
-          itemCountReduced || (current.inventory.counts[itemId] ?? 0) < itemCountBefore;
+        itemCountReduced ||= (current.inventory.counts[itemId] ?? 0) < itemCountBefore;
         if (
           current.inventory.emptyPlayerSlots === undefined ||
           (itemCountReduced &&
@@ -16384,7 +16408,7 @@ function constructPortalWithDurableObservation(
     Effect.gen(function* () {
       const workspace = yield* Ref.make(plan.workspace);
       yield* Effect.forever(
-        Effect.sleep(1_000).pipe(
+        Effect.sleep(1000).pipe(
           Effect.andThen(Ref.get(workspace)),
           Effect.flatMap((current) => observeCompletedPortalWorkspace(state, current, plan.frame)),
           Effect.flatMap((current) => Ref.set(workspace, current)),
@@ -16454,8 +16478,9 @@ function reservePortalWorkspace(
       current = yield* state.driver.observe;
     }
     const frame = yield* resolvePortalBuildFrame(state.driver, current);
-    const now = new Date().toISOString();
+    const now = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
     const workspace: BeatGamePortalWorkspace = {
+      // oxlint-disable-next-line effecttsgo/crypto-random-uuid-in-effect -- Keep cryptographically generated identifiers across supported runtimes.
       workspaceId: `${checkpoint.activeSkill?.skillId ?? crypto.randomUUID()}:portal`,
       origin: frame.origin,
       axis: frame.axis,
@@ -16797,7 +16822,8 @@ function enterKnownPortal(
 ): Effect.Effect<boolean, BeatGameError | BeatGameDriverError> {
   return Effect.gen(function* () {
     const attemptedPortalAreas: BeatGamePosition[] = [];
-    const resumableWorkspace = latestResumablePortalWorkspace(yield* Ref.get(state.checkpoint));
+    const currentCheckpoint = yield* Ref.get(state.checkpoint);
+    const resumableWorkspace = latestResumablePortalWorkspace(currentCheckpoint);
     const nearby = yield* state.driver.queryBlocks({
       center: observation.player.position,
       radius: 48,
@@ -17574,7 +17600,7 @@ function advancePhase(state: RunState, phase: BeatGamePhase): Effect.Effect<void
 
 function completeRun(state: RunState): Effect.Effect<BeatGameResult, BeatGameError> {
   return Effect.gen(function* () {
-    const completedAt = new Date().toISOString();
+    const completedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
     const finalCheckpoint = yield* persist(state, (checkpoint) => ({
       ...checkpoint,
       planner: withoutCurrentAction({
@@ -17597,7 +17623,7 @@ function completeRun(state: RunState): Effect.Effect<BeatGameResult, BeatGameErr
       instanceId: finalCheckpoint.instanceId,
       botId: finalCheckpoint.botId,
       completedAt,
-      durationMs: Date.now() - state.startedAtMs,
+      durationMs: (yield* Clock.currentTimeMillis) - state.startedAtMs,
       finalCheckpoint,
     };
   });
@@ -18405,11 +18431,8 @@ function enterDeathRecoveryDimension(
       },
     });
     const refreshedCheckpoint = yield* Ref.get(state.checkpoint);
-    const entry = yield* enterKnownPortal(
-      state,
-      refreshedCheckpoint,
-      yield* state.driver.observe,
-    ).pipe(
+    const portalObservation = yield* state.driver.observe;
+    const entry = yield* enterKnownPortal(state, refreshedCheckpoint, portalObservation).pipe(
       Effect.map((entered) =>
         entered ? { type: "entered" as const } : { type: "missing" as const },
       ),
@@ -19003,7 +19026,7 @@ function persist(
     Effect.uninterruptible(
       Effect.gen(function* () {
         const current = yield* Ref.get(state.checkpoint);
-        const now = new Date().toISOString();
+        const now = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
         const updated = update(current);
         const next: BeatGameCheckpoint = {
           ...updated,
@@ -19134,7 +19157,7 @@ function emit(state: RunState, input: EventInput): Effect.Effect<void> {
       const event = {
         ...input,
         sequence,
-        timestamp: new Date().toISOString(),
+        timestamp: yield* DateTime.now.pipe(Effect.map(DateTime.formatIso)),
         runId: checkpoint.runId,
         instanceId: checkpoint.instanceId,
         botId: checkpoint.botId,
@@ -19196,7 +19219,7 @@ function claimAction(
         botId: checkpoint.botId,
         key: capacity === 1 ? baseKey : `${baseKey}:${slot}`,
         purpose: decision.action,
-        ttlMs: Math.max(state.strategy.claimTtlMs, state.strategy.actionTimeoutMs + 5_000),
+        ttlMs: Math.max(state.strategy.claimTtlMs, state.strategy.actionTimeoutMs + 5000),
       });
       if (claim !== undefined) {
         break;
@@ -19589,7 +19612,7 @@ function requirementCollectionBuffer(requirementKey: string): number {
 }
 
 function backoffDuration(attempt: number): number {
-  return Math.min(5_000, 250 * 2 ** Math.max(0, attempt - 1));
+  return Math.min(5000, 250 * 2 ** Math.max(0, attempt - 1));
 }
 
 function resolvePortalBuildFrame(
@@ -19850,11 +19873,11 @@ function withTaskIdempotency(
 
 function stableFingerprint(value: unknown): string {
   const source = JSON.stringify(value);
-  let hash = 0xcbf29ce484222325n;
+  let hash = 0xcb_f2_9c_e4_84_22_23_25n;
   for (let index = 0; index < source.length; index += 1) {
     // oxlint-disable-next-line unicorn/prefer-code-point -- the fingerprint hashes UTF-16 code units; code points would change existing idempotency keys
     hash ^= BigInt(source.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    hash = BigInt.asUintN(64, hash * 0x1_00_00_00_01_b3n);
   }
   return hash.toString(16).padStart(16, "0");
 }

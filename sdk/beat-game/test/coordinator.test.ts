@@ -88,7 +88,7 @@ describe("in-memory beat-game coordination", () => {
         botId: "bot-a",
         key: "fortress:1",
         purpose: "search",
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     );
     expect(first).toBeDefined();
@@ -100,7 +100,7 @@ describe("in-memory beat-game coordination", () => {
           botId: "bot-b",
           key: "fortress:1",
           purpose: "search",
-          ttlMs: 1_000,
+          ttlMs: 1000,
         }),
       ),
     ).toBeUndefined();
@@ -113,7 +113,7 @@ describe("in-memory beat-game coordination", () => {
         botId: "bot-b",
         key: "fortress:1",
         purpose: "search",
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     );
     expect(second?.fencingToken).toBeGreaterThan(first?.fencingToken ?? 0);

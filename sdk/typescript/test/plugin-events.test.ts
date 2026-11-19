@@ -29,14 +29,13 @@ describe("plugin events", () => {
             request = value;
           });
           const catalog = new PluginCatalog(transport, [pluginDescriptor()]);
-          const events = Array.from(
-            yield* Stream.runCollect(
-              catalog.typedEvents("example", TickSchema, {
-                instanceId: "instance-id",
-                afterSequence: 40n,
-              }),
-            ),
+          const collected = yield* Stream.runCollect(
+            catalog.typedEvents("example", TickSchema, {
+              instanceId: "instance-id",
+              afterSequence: 40n,
+            }),
           );
+          const events = Array.from(collected);
           expect(request).toMatchObject({
             pluginIds: ["example"],
             typeUrls: [tickTypeUrl],
@@ -64,7 +63,8 @@ describe("plugin events", () => {
             createRegistry(file_soulfire_plugin_example_v1_example),
             transport,
           );
-          const events = Array.from(yield* Stream.runCollect(plugin.events()));
+          const collected1 = yield* Stream.runCollect(plugin.events());
+          const events = Array.from(collected1);
           expect(events[1]?.message).toMatchObject({
             typeName: "soulfire.plugin.example.v1.Tick",
             json: { sequence: 42 },

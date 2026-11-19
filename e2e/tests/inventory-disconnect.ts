@@ -2,6 +2,7 @@ import { Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import { BotRuntimeState } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   check,
   type E2ETest,
@@ -299,7 +300,7 @@ export default {
               } else {
                 yield* check(
                   held === expectedAmount,
-                  `Inventory return mismatch: ${JSON.stringify(spec)}; held ${held}, expected ${expectedAmount}`,
+                  `Inventory return mismatch: ${encodeJson(spec)}; held ${held}, expected ${expectedAmount}`,
                 );
               }
             }),

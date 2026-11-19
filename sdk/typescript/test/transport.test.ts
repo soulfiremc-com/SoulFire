@@ -89,8 +89,10 @@ describe("RPC interruption", () => {
             }
           })(),
         );
-        const first = Array.from(yield* source.pipe(Stream.take(1), Stream.runCollect));
-        const second = Array.from(yield* source.pipe(Stream.take(1), Stream.runCollect));
+        const result = yield* source.pipe(Stream.take(1), Stream.runCollect);
+        const first = Array.from(result);
+        const result1 = yield* source.pipe(Stream.take(1), Stream.runCollect);
+        const second = Array.from(result1);
         expect(first).toEqual([1]);
         expect(second).toEqual([2]);
         expect(closed).toBe(2);

@@ -1,7 +1,15 @@
 // The bot walks along a straight line of blocks, one block wide, and stops on its last block.
 import { goals } from "@soulfiremc/sdk";
 import { Effect } from "effect";
-import { blockOf, check, type E2ETest, placeBot, rcon, serverPosition } from "../harness.ts";
+import {
+  encodeJson,
+  blockOf,
+  check,
+  type E2ETest,
+  placeBot,
+  rcon,
+  serverPosition,
+} from "../harness.ts";
 
 /** Where the bot starts (feet). The line is the row of blocks under it, going +x. */
 const START = { x: 100, y: 64, z: 0 };
@@ -23,10 +31,11 @@ export default {
       const route = yield* bot.pathfinder.goTo(goals.block(goal), { path: { timeoutSeconds: 30 } });
       yield* route.result();
 
-      const at = blockOf(yield* serverPosition);
+      const position = yield* serverPosition;
+      const at = blockOf(position);
       yield* check(
         at.x === goal.x && at.y === goal.y && at.z === goal.z,
-        `route done, but the bot is at ${JSON.stringify(at)}, not ${JSON.stringify(goal)}`,
+        `route done, but the bot is at ${encodeJson(at)}, not ${encodeJson(goal)}`,
       );
     }),
 } satisfies E2ETest;

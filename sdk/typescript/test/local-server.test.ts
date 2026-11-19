@@ -72,7 +72,7 @@ describe("managed process scopes", () => {
             installLocalServer({
               ...options,
               javaArgs: [fixture, "pending"],
-              startupTimeoutMs: 10000,
+              startupTimeoutMs: 10_000,
               onLog: (line) => {
                 if (line.startsWith("spawned:")) markStarted(Number(line.slice(8)));
               },
@@ -98,7 +98,8 @@ describe("managed process scopes", () => {
                 installLocalServer({
                   ...options,
                   javaArgs: [fixture, mode],
-                  startupTimeoutMs: mode === "pending" ? 200 : 2000,
+                  // Allow the fixture to report its PID before testing the timeout.
+                  startupTimeoutMs: mode === "pending" ? 1000 : 2000,
                   onLog: (line) => {
                     if (line.startsWith("spawned:")) pid = Number(line.slice(8));
                   },

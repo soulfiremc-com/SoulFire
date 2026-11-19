@@ -548,7 +548,7 @@ describe("beat-game behavior programs", () => {
         radius: 1.25,
         policy: objectContaining({
           allowPlacing: false,
-          maxSearchTimeMs: 5_000,
+          maxSearchTimeMs: 5000,
         }),
       }),
     ]);
@@ -1226,7 +1226,7 @@ describe("beat-game behavior programs", () => {
         },
         radius: 1.25,
         policy: objectContaining({
-          maxSearchTimeMs: 5_000,
+          maxSearchTimeMs: 5000,
         }),
       },
     ]);

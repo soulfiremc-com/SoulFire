@@ -1,6 +1,14 @@
 import { FarmCompletionReason } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 export default {
   name: "farming-harvest-limit",
@@ -68,7 +76,7 @@ export default {
                 replant: name !== "no-replant",
               });
               yield* Effect.addFinalizer(() => task.cancel("test cleanup").pipe(Effect.ignore));
-              const result = yield* task.result({ call: { timeoutMs: 15000 } });
+              const result = yield* task.result({ call: { timeoutMs: 15_000 } });
               yield* check(
                 result.reason ===
                   (name === "missing-seeds"
@@ -76,7 +84,7 @@ export default {
                     : FarmCompletionReason.HARVEST_LIMIT_REACHED) &&
                   result.cropsHarvested === maximumHarvests &&
                   result.cropsReplanted === (replants ? maximumHarvests : 0),
-                `${name} ended before its full crop cycle: ${JSON.stringify(result)}`,
+                `${name} ended before its full crop cycle: ${encodeJson(result)}`,
               );
               for (const x of [4265, 4266]) {
                 const expected =

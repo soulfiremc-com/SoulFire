@@ -121,16 +121,16 @@ describe("SoulFireAdmin", () => {
             granted: false,
           });
           const metrics = yield* soulfire.admin.instanceMetrics("instance-id");
-          const logs = Array.from(yield* Stream.runCollect(soulfire.admin.logs({})));
+          const collected = yield* Stream.runCollect(soulfire.admin.logs({}));
+          const logs = Array.from(collected);
           const scripts = yield* soulfire.admin.scripts("instance-id");
-          const dryRun = Array.from(
-            yield* Stream.runCollect(
-              soulfire.admin.dryRunScript("instance-id", {
-                scriptId: "script-id",
-                triggerNodeId: "trigger-id",
-              }),
-            ),
+          const collected1 = yield* Stream.runCollect(
+            soulfire.admin.dryRunScript("instance-id", {
+              scriptId: "script-id",
+              triggerNodeId: "trigger-id",
+            }),
           );
+          const dryRun = Array.from(collected1);
           yield* soulfire.close();
           expect(client.username).toBe("operator");
           expect(token).toBe("secret-token");

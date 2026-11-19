@@ -1,16 +1,16 @@
 import type { DescMessage, MessageInitShape } from "@bufbuild/protobuf";
 import type { CallOptions, Client } from "@connectrpc/connect";
 import { Effect, Stream } from "effect";
-import { type SoulFireOperationError } from "./errors.js";
+import type { SoulFireOperationError } from "./errors.js";
 import { rpc, rpcStream, withSignal } from "./transport.js";
 
-import {
-  type BotProtocolService,
-  type BotProtocolInfo,
-  type PacketDirection,
-  type PacketSchema,
-  type RawPacketEvent,
-  type WatchPacketsRequestSchema,
+import type {
+  BotProtocolService,
+  BotProtocolInfo,
+  PacketDirection,
+  PacketSchema,
+  RawPacketEvent,
+  WatchPacketsRequestSchema,
 } from "./generated/soulfire/protocol_pb.js";
 
 type BotScoped<T extends DescMessage> = Omit<

@@ -106,7 +106,7 @@ export default {
             );
             yield* check(rejected.startsWith("Test passed"), rejected);
             yield* changeMode("survival");
-            const result = yield* task.result({ call: { timeoutMs: 10000 } });
+            const result = yield* task.result({ call: { timeoutMs: 10_000 } });
             yield* check(result.equips === 1, "The accepted equip was not counted exactly once");
             yield* eventually(
               rcon(`execute if items entity ${BOT_NAME} ${target} minecraft:${item}`, {
@@ -187,7 +187,7 @@ export default {
           "5 seconds",
           "5 millis",
         );
-        const result = yield* wearing.result({ call: { timeoutMs: 10000 } });
+        const result = yield* wearing.result({ call: { timeoutMs: 10_000 } });
         yield* check(
           result.equips === 1,
           "Armor wear prevented a successful equip from being counted",

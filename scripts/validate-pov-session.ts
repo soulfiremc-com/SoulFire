@@ -62,7 +62,7 @@ const sleep = (ms: number) =>
     setTimeout(resolve, ms);
   });
 async function until(check: () => boolean, message: string) {
-  const deadline = performance.now() + 15000;
+  const deadline = performance.now() + 15_000;
   while (!check()) {
     if (streamError) throw streamError;
     assert.ok(performance.now() < deadline, message);
@@ -162,13 +162,13 @@ try {
   await until(() => !!latest, "No first frame");
   heartbeat = setInterval(() => {
     if (!busy)
-      void input().catch((error) => {
+      void input().catch((error: unknown) => {
         streamError = error instanceof Error ? error : new Error(String(error));
       });
   }, 500);
   if (mode === "transition") {
     await writeFile(`${output}/transition-ready`, "");
-    const deadline = performance.now() + 60000;
+    const deadline = performance.now() + 60_000;
     while (
       (await bots.getBotInfo({ instanceId, botId })).liveState?.dimension !== "minecraft:the_nether"
     ) {
@@ -450,7 +450,7 @@ try {
     );
     assert.ok(frameCount > 10, "Continuous frame delivery");
     // Keep the stream alive beyond the HTTP server's normal request timeout.
-    await sleep(11000);
+    await sleep(11_000);
     assert.equal(streamError, undefined, "An active session must not hit the ordinary RPC timeout");
     await saveFrame("interactive-world-settled");
     clearInterval(heartbeat);

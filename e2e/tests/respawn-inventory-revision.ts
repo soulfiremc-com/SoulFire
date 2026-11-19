@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { InventoryService } from "@soulfiremc/sdk/generated/soulfire/inventory_pb";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 import { nativeInput } from "../native-input.ts";
 
@@ -15,9 +15,13 @@ export default {
           !(yield* rcon("list")).includes(NAME),
           "The respawn fixture bot is already online",
         );
+        const port = yield* Config.String("SOULFIRE_E2E_MINECRAFT_PORT").pipe(
+          Config.withDefault("25566"),
+          Effect.orDie,
+        );
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance("e2e-respawn-revision", {
-            server: `127.0.0.1:${process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25566}`,
+            server: `127.0.0.1:${port}`,
           }),
           (owned) => owned.delete().pipe(Effect.ignore),
         );
@@ -36,7 +40,7 @@ export default {
             value: { kind: { case: "boolValue", value: false } },
           });
         }
-        const bot = yield* instance.getOrCreateBot(NAME, { readyTimeoutMs: 60000 });
+        const bot = yield* instance.getOrCreateBot(NAME, { readyTimeoutMs: 60_000 });
         const forced = (yield* rcon("forceload query 4256 0", { check: false })).includes(
           "not marked",
         );
@@ -93,7 +97,8 @@ export default {
         // Players push each other, so the shared bot must not stand where this bot respawns.
         yield* rcon(`tp ${BOT_NAME} 2.5 64 2.5`);
         const service = client.service(InventoryService);
-        const run = Effect.runPromiseWith(yield* Effect.context());
+        const effectContext = yield* Effect.context();
+        const run = Effect.runPromiseWith(effectContext);
         for (const native of [false, true, false, true]) {
           yield* rcon(`gamemode survival ${NAME}`);
           yield* rcon(`tp ${NAME} 4264.5 64 8.5`);
@@ -111,7 +116,7 @@ export default {
             "10 seconds",
             "100 millis",
           );
-          yield* bot.waitForChunks({ radiusChunks: 2, timeoutMs: 10000 });
+          yield* bot.waitForChunks({ radiusChunks: 2, timeoutMs: 10_000 });
           const before = yield* bot.inventory.snapshot();
           yield* rcon(`kill ${NAME}`);
           yield* eventually(

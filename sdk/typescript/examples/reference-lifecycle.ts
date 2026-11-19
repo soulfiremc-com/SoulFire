@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { DateTime, Effect, Stream } from "effect";
 import { SoulFire } from "../src/node.js";
 
 // Use the SoulFire gRPC-Web address here, not the Minecraft address.
@@ -29,10 +29,11 @@ export const collectWithTaskHandle = Effect.scoped(
       server: "localhost:25565",
       username: "Builder",
     });
+    const now = yield* DateTime.now;
     const task = yield* bot.tasks.collectBlocks([], {
       tags: ["minecraft:logs"],
       count: 16,
-      deadline: new Date(Date.now() + 120_000),
+      deadline: DateTime.toDateUtc(DateTime.add(now, { minutes: 2 })),
     });
     yield* Effect.logInfo(`Accepted task ${task.id}`);
     const result = yield* task.result();

@@ -1,6 +1,14 @@
 import { BlockFace, Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import { Console, Effect } from "effect";
-import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import {
+  encodeJson,
+  BOT_NAME,
+  CheckFailed,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+} from "../harness.ts";
 
 const END = "execute in minecraft:the_end run";
 const DRAGON = "@e[type=ender_dragon,limit=1]";
@@ -110,7 +118,14 @@ export default {
         yield* Effect.sleep("1 second");
         const dragonAfter = yield* dragonNumber("Health");
         const botAfter = yield* botHealth;
-        yield* Console.log(JSON.stringify({ dragonBefore, dragonAfter, botBefore, botAfter }));
+        yield* Console.log(
+          encodeJson({
+            dragonBefore,
+            dragonAfter,
+            botBefore,
+            botAfter,
+          }),
+        );
         yield* check(
           dragonAfter < dragonBefore - 20,
           "One bed did not hurt the perched dragon badly",
