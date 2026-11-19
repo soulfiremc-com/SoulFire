@@ -14271,11 +14271,16 @@ function findNearestTreeColumn(
   }
   return state.driver.sampleSurface(position, TREE_SURVEY_RADIUS, TREE_SURVEY_SAMPLE_STEP).pipe(
     Effect.map((columns) => {
+      // Logs within the block search radius are already collected directly,
+      // so leaves there without them (bushes, leftover canopy) are dead
+      // ends. A live bot shuttled between two such patches for minutes.
       const nearest = columns
         .filter(
           (column) =>
             column.loaded &&
             column.surfaceY !== undefined &&
+            surfaceHorizontalDistanceSquared(column, position) >
+              state.strategy.blockSearchRadius ** 2 &&
             (column.blockId?.endsWith("_leaves") === true ||
               column.blockId?.endsWith("_log") === true),
         )

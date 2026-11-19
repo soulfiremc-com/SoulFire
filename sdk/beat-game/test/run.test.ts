@@ -10321,6 +10321,8 @@ describe("beat-game run lifecycle", () => {
         ? [
             grassColumn(40, 0),
             grassColumn(0, -40),
+            // A leafy bush with no logs sits close by to the east.
+            { ...grassColumn(10, 0), surfaceY: 64, blockId: "minecraft:oak_leaves" },
             { ...grassColumn(-100, 100), surfaceY: 70, blockId: "minecraft:oak_leaves" },
           ]
         : [
