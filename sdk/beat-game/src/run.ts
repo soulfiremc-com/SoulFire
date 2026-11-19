@@ -3994,10 +3994,16 @@ function executeDecision(
           result.airEscapePosition === undefined && result.fallClutchPosition === undefined
             ? response.pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void))
             : response;
-        const protectedResponse =
+        const fallProtectedResponse =
           interruptedForSafety && result.fallClutchPosition === undefined
             ? protectFromFatalFall(state, handledResponse)
             : handledResponse;
+        const protectedResponse =
+          interruptedForSafety &&
+          result.environmentalEscapePosition === undefined &&
+          result.airEscapePosition === undefined
+            ? protectFromLava(state, fallProtectedResponse)
+            : fallProtectedResponse;
         return protectedResponse.pipe(
           Effect.flatMap(() =>
             decision.type === "recover-death" && interruptedForSafety
@@ -4459,6 +4465,41 @@ function protectFromFatalFall(
     response,
     monitorDangerousFall(state).pipe(Effect.flatMap(() => performWaterBucketFallClutch(state))),
   );
+}
+
+// A live bot fleeing a hoglin ran into lava and kept fleeing and fighting
+// while it burned, because nothing watched for lava during the response.
+function protectFromLava(
+  state: RunState,
+  response: Effect.Effect<void, BeatGameDriverError>,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.raceFirst(
+    response,
+    monitorBurningInLava(state).pipe(Effect.flatMap((burning) => escapeLava(state, burning))),
+  );
+}
+
+function monitorBurningInLava(
+  state: RunState,
+): Effect.Effect<BeatGameObservation, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    for (;;) {
+      const observed = yield* state.driver.observe.pipe(Effect.result);
+      if (
+        observed._tag === "Success" &&
+        !observed.success.player.dead &&
+        observed.success.player.fireTicks > 0
+      ) {
+        const inLava = yield* isPlayerInLava(state.driver, observed.success.player.position).pipe(
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        );
+        if (inLava) {
+          return observed.success;
+        }
+      }
+      yield* Effect.sleep(FALL_CLUTCH_POLL_MS);
+    }
+  });
 }
 
 function monitorDangerousFall(

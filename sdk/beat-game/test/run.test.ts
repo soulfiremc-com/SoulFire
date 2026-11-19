@@ -16024,6 +16024,69 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("escapes lava it runs into while fleeing", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({ health: 6, food: 13 });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 43,
+        entityType: "minecraft:creeper",
+        position: { x: 8, y: 64, z: 0, dimension: "minecraft:overworld" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    const lava = { burning: false };
+    driver.blockQueryResolver = ({ center, selector }) =>
+      lava.burning && selector.blockIds?.includes("minecraft:lava") === true
+        ? [
+            blockObservation(
+              {
+                x: Math.floor(center.x),
+                y: 64,
+                z: Math.floor(center.z),
+                dimension: center.dimension,
+              },
+              { blockId: "minecraft:lava" },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          // As in a live run: the flee route dropped the bot into lava.
+          lava.burning = true;
+          driver.currentObservation = observation({ health: 6, food: 13, fireTicks: 200 });
+        }
+      }).pipe(Effect.andThen(task.type === "flee" ? Effect.never : Effect.void));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.actions.some((action) => action.type === "look" && action.pitch === -20)) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "flee" }));
+    expect(driver.actions).toContainEqual({
+      type: "set-movement",
+      forward: true,
+      jump: true,
+      sprint: true,
+    });
+  }, 10_000);
+
   it("raises its shield instead of blind-sprinting from a closing creeper", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
