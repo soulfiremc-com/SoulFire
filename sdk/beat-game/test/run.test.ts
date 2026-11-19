@@ -1457,6 +1457,7 @@ describe("beat-game run lifecycle", () => {
       objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:crimson_stem", "minecraft:warped_stem"],
+        searchRadius: 128,
       }),
     );
     expect(explorations[0]).toMatchObject({ allowMining: true });

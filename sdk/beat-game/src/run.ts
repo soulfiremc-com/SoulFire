@@ -196,7 +196,8 @@ const NETHER_EXPLORATION_TARGET_BUILDING_BLOCKS = 64;
 const NETHER_EXPLORATION_PICKAXE_DURABILITY_RESERVE = 64;
 const NETHER_STONE_PICKAXE_BATCH = 3;
 // The farthest a block search reaches, and within the Nether view distance.
-const NETHER_FORTRESS_SCAN_RADIUS = 128;
+// Fortresses and Nether forests are far apart, so their searches use it.
+const NETHER_WIDE_SEARCH_RADIUS = 128;
 const DISCOVERY_MAXIMUM_HOP = 64;
 const WOODEN_PICKAXE_MAXIMUM_DURABILITY = 59;
 const EXPLORATION_MAXIMUM_LEG_DISTANCE = 32;
@@ -9750,7 +9751,7 @@ function satisfyRequirementFromWorld(
             anchorBlockIds: new Set(NETHER_FORTRESS_BLOCK_IDS),
             stationaryBlockIds: new Set(["minecraft:spawner"]),
             placeKind: "FORTRESS",
-            scanRadius: NETHER_FORTRESS_SCAN_RADIUS,
+            scanRadius: NETHER_WIDE_SEARCH_RADIUS,
             maximumResults: 2048,
           },
         },
@@ -9917,6 +9918,9 @@ function craftNetherPickaxe(
     progressItemIds: NETHER_STEM_ITEM_IDS,
     purpose: "find-nether-stems",
     avoidFluids: true,
+    // Nether forests are far apart. A live bot without wood searched the floor
+    // of a basalt delta in 24-block hops for half an hour.
+    searchRadius: NETHER_WIDE_SEARCH_RADIUS,
     // The Nether has no surface to walk along. A live bot in a basalt
     // delta could not leave its cave without digging and looped for an hour.
     preferSurfaceExploration: false,
@@ -10957,6 +10961,9 @@ function collectBlocksOrExplore(
     readonly avoidFluids?: boolean;
     readonly path?: BeatGameStrategy["path"];
     readonly explorationTarget?: BeatGamePosition;
+    /// How far each collection attempt looks, and how far each exploration
+    /// hop moves. Defaults to the strategy's block search radius.
+    readonly searchRadius?: number;
     readonly prepareAttempt?: (
       observation: BeatGameObservation,
     ) => Effect.Effect<void, BeatGameDriverError>;
@@ -10967,6 +10974,12 @@ function collectBlocksOrExplore(
       (total, itemId) => total + (current.inventory.counts[itemId] ?? 0),
       0,
     );
+  const searchRadius = options.searchRadius ?? state.strategy.blockSearchRadius;
+  // A wider search hops as far as one collection attempt looks; the default
+  // keeps the usual half-radius hops.
+  const frontierScanRadius = options.searchRadius === undefined ? searchRadius : 2 * searchRadius;
+  const frontierMaximumHop =
+    options.searchRadius === undefined ? DISCOVERY_MAXIMUM_HOP : searchRadius;
   return Effect.gen(function* () {
     let current = observation;
     const targetCount = countItems(observation) + options.count;
@@ -11041,7 +11054,7 @@ function collectBlocksOrExplore(
         blockIds: options.blockIds,
         ...(options.tags === undefined ? {} : { tags: options.tags }),
         count: targetCount - beforeAttempt,
-        searchRadius: state.strategy.blockSearchRadius,
+        searchRadius,
         avoidSubmergedTargets: options.avoidSubmergedTargets ?? false,
         requireLineOfSight: options.requireLineOfSight ?? false,
         ...(options.requireSurfaceTargets === true &&
@@ -11110,9 +11123,12 @@ function collectBlocksOrExplore(
                 state,
                 playerPosition,
                 options.purpose,
-                state.strategy.blockSearchRadius,
+                frontierScanRadius,
                 frontierPath,
                 preferSurfaceExploration,
+                true,
+                0,
+                frontierMaximumHop,
               )
             : pathfindExplorationTarget(
                 state,
@@ -11129,11 +11145,12 @@ function collectBlocksOrExplore(
                         state,
                         playerPosition,
                         `${options.purpose}-detour`,
-                        state.strategy.blockSearchRadius,
+                        frontierScanRadius,
                         frontierPath,
                         preferSurfaceExploration,
                         false,
                         explorationDetourRotation(playerPosition, directedTarget),
+                        frontierMaximumHop,
                       )
                     : Effect.fail(error),
                 ),
