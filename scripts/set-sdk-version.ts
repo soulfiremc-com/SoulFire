@@ -3,24 +3,18 @@ import { readFile, writeFile } from "node:fs/promises";
 const version = process.argv[2];
 
 if (!version) {
-  throw new Error("Usage: node scripts/set-sdk-version.mjs <version>");
+  throw new Error("Usage: bun scripts/set-sdk-version.ts <version>");
 }
 
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version)) {
   throw new Error(`Invalid SDK version: ${version}`);
 }
 
-/** @param {string} path */
-async function updateJsonVersion(path) {
+async function updateJsonVersion(path: string): Promise<void> {
   await replaceVersion(path, /^  "version": "[^"]+",$/mu, `  "version": "${version}",`);
 }
 
-/**
- * @param {string} path
- * @param {RegExp} pattern
- * @param {string} replacement
- */
-async function replaceVersion(path, pattern, replacement) {
+async function replaceVersion(path: string, pattern: RegExp, replacement: string): Promise<void> {
   const contents = await readFile(path, "utf8");
   const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
   const matches = contents.match(new RegExp(pattern.source, flags));

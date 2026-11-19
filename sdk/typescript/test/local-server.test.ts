@@ -6,7 +6,7 @@ import { Effect, Exit, Fiber } from "effect";
 import { describe, expect, it } from "vitest";
 import { installLocalServer } from "../src/local-server.js";
 
-const fixture = fileURLToPath(new URL("./fixtures/managed-server.cjs", import.meta.url));
+const fixture = fileURLToPath(new URL("./fixtures/managed-server.ts", import.meta.url));
 
 function temporaryInstall() {
   return Effect.acquireRelease(

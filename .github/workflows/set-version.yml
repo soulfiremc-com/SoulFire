@@ -53,7 +53,7 @@ jobs:
       - name: "Set SDK Version"
         if: inputs.update_sdk
         run: |
-          node scripts/set-sdk-version.mjs "${INPUTS_VERSION}"
+          bun scripts/set-sdk-version.ts "${INPUTS_VERSION}"
           bun install --lockfile-only --frozen-lockfile --ignore-scripts
         env:
           INPUTS_VERSION: ${{ inputs.version }}

@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 
 const entries = [new URL("../src/browser.ts", import.meta.url)];
-const sizes = [];
+const sizes: string[] = [];
 
 for (const entry of entries) {
   const result = await build({

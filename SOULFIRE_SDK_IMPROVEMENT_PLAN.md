@@ -823,10 +823,7 @@ const logs = await bot.world.findBlocks({
   origin: bot.state.position,
   radius: 96,
   selector: {
-    anyOf: [
-      { tag: "minecraft:logs" },
-      { blockId: "minecraft:bamboo" },
-    ],
+    anyOf: [{ tag: "minecraft:logs" }, { blockId: "minecraft:bamboo" }],
     properties: { axis: "y" },
     diggable: true,
   },
@@ -1167,10 +1164,7 @@ Add a read-only `PlanPath` API that returns:
 SDK:
 
 ```ts
-const goal = goals.compositeAny([
-  goals.near(villageCenter, 8),
-  goals.follow(villager, 3),
-]);
+const goal = goals.compositeAny([goals.near(villageCenter, 8), goals.follow(villager, 3)]);
 
 const plan = await bot.pathfinder.plan(goal, movements.safe());
 const task = await bot.pathfinder.goto(goal, movements.safe());
@@ -1718,15 +1712,9 @@ import { skyBlockPlugin } from "@example/soulfire-skyblock";
 const readIslandState = Effect.scoped(
   Effect.gen(function* () {
     const soulfire = yield* SoulFire.connect(options);
-    const skyblock = yield* soulfire.plugins.require(
-      skyBlockPlugin,
-      "^2.0.0",
-    );
+    const skyblock = yield* soulfire.plugins.require(skyBlockPlugin, "^2.0.0");
 
-    return yield* skyblock
-      .instance(instanceId)
-      .bot(botId)
-      .getIslandState();
+    return yield* skyblock.instance(instanceId).bot(botId).getIslandState();
   }),
 );
 ```
@@ -1746,10 +1734,7 @@ Advanced users can call a generated service directly:
 
 ```ts
 const getIslandState = Effect.gen(function* () {
-  const client = yield* soulfire.plugins.service(
-    "skyblock",
-    SkyBlockService,
-  );
+  const client = yield* soulfire.plugins.service("skyblock", SkyBlockService);
 
   return yield* client.getIslandState({ instanceId, botId });
 });
@@ -1763,11 +1748,10 @@ Unknown plugins remain callable:
 const callUnknownPlugin = Effect.gen(function* () {
   const plugin = yield* soulfire.plugins.get("skyblock");
 
-  return yield* plugin.call(
-    "soulfire.plugin.skyblock.v1.SkyBlockService",
-    "GetIslandState",
-    { instanceId, botId },
-  );
+  return yield* plugin.call("soulfire.plugin.skyblock.v1.SkyBlockService", "GetIslandState", {
+    instanceId,
+    botId,
+  });
 });
 ```
 
@@ -1962,11 +1946,7 @@ export const skyBlockPlugin = defineSoulFirePlugin({
 
     return {
       instance(instanceId: string) {
-        return new SkyBlockInstanceClient(
-          context.soulfire,
-          service,
-          instanceId,
-        );
+        return new SkyBlockInstanceClient(context.soulfire, service, instanceId);
       },
     };
   },
@@ -2055,7 +2035,7 @@ Every mineflayer API entry receives one status:
 
 Keep the pinned machine-readable audit in
 `docs/mineflayer-parity.json`. Validate it against the current official
-Mineflayer API headings with `scripts/validate-mineflayer-parity.mjs`. Publish
+Mineflayer API headings with `scripts/validate-mineflayer-parity.ts`. Publish
 the human-readable migration guide in `./soulfiremc.com` and update both
 artifacts whenever the upstream API heading digest changes.
 
@@ -2203,10 +2183,7 @@ Combinators:
 await behaviors.sequence(
   bot.tasks.collectBlocks({ selector: { tags: ["minecraft:logs"] }, count: 16 }),
   bot.tasks.craft({ result: "minecraft:crafting_table", count: 1 }),
-  behaviors.retry(
-    bot.tasks.build({ schematic: shelter }),
-    { attempts: 3 },
-  ),
+  behaviors.retry(bot.tasks.build({ schematic: shelter }), { attempts: 3 }),
 );
 ```
 

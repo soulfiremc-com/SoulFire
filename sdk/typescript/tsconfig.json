@@ -14,14 +14,7 @@
     "noUncheckedIndexedAccess": true,
     "strict": true,
     "target": "ES2023",
-    "verbatimModuleSyntax": true,
-    "allowJs": true
+    "verbatimModuleSyntax": true
   },
-  "include": [
-    "src/**/*.ts",
-    "test/**/*.ts",
-    "examples/**/*.ts",
-    "scripts/**/*.mjs",
-    "test/fixtures/**/*.cjs"
-  ]
+  "include": ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts", "scripts/**/*.ts"]
 }

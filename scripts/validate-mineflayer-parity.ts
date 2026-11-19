@@ -54,11 +54,10 @@ for (const heading of headings) {
     }
     return rule.regex !== undefined && new RegExp(rule.regex, "u").test(heading);
   });
-  if (matches.length === 0) {
+  const [firstMatch] = matches;
+  if (firstMatch === undefined) {
     throw new Error(`No parity rule covers ${JSON.stringify(heading)}`);
   }
-
-  const firstMatch = matches[0];
   if (firstMatch.status === "native" && firstMatch.regex === ".*") {
     continue;
   }

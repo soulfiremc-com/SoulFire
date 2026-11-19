@@ -1,6 +1,6 @@
 # Beat-game live smoke worker
 
-`run-live.mjs` runs the packed SoulFire SDK and beat-game package in a separate
+`run-live.ts` runs the packed SoulFire SDK and beat-game package in a separate
 Node.js process. It is intentionally outside the package tarball so the smoke
 test proves that a normal consumer can install and use the published entry
 points.

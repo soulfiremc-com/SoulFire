@@ -17,8 +17,7 @@ for (const directory of generatedDirectories) {
 }
 await updateJsrExports();
 
-/** @param {string} directory */
-async function formatGeneratedDirectory(directory) {
+async function formatGeneratedDirectory(directory: string): Promise<void> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const filePath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
@@ -41,8 +40,7 @@ async function formatGeneratedDirectory(directory) {
   }
 }
 
-/** @param {string} fileName */
-function isGeneratedSource(fileName) {
+function isGeneratedSource(fileName: string): boolean {
   return (
     fileName.endsWith("_connect.py") ||
     fileName.endsWith("_pb2.py") ||
@@ -51,32 +49,29 @@ function isGeneratedSource(fileName) {
   );
 }
 
-async function updateJsrExports() {
+async function updateJsrExports(): Promise<void> {
   const jsrPath = path.join(repositoryRoot, "sdk/typescript/jsr.json");
   const jsr = Schema.decodeSync(JsrConfig)(await readFile(jsrPath, "utf8"));
   const generatedRoot = path.join(repositoryRoot, "sdk/typescript/src/generated");
   const generated = await generatedTypeScriptModules(generatedRoot);
-  jsr.exports = {
-    ".": "./src/index.ts",
-    "./platform": "./src/platform.ts",
-    ...Object.fromEntries(
-      generated.map((modulePath) => [
-        `./generated/${modulePath.replace(/_pb\.ts$/u, "_pb")}`,
-        `./src/generated/${modulePath}`,
-      ]),
-    ),
+  const updated = {
+    ...jsr,
+    exports: {
+      ".": "./src/index.ts",
+      "./platform": "./src/platform.ts",
+      ...Object.fromEntries(
+        generated.map((modulePath) => [
+          `./generated/${modulePath.replace(/_pb\.ts$/u, "_pb")}`,
+          `./src/generated/${modulePath}`,
+        ]),
+      ),
+    },
   };
-  await writeFile(jsrPath, `${JSON.stringify(jsr, null, 2)}\n`);
+  await writeFile(jsrPath, `${JSON.stringify(updated, null, 2)}\n`);
 }
 
-/**
- * @param {string} directory
- * @param {string} [relative]
- * @returns {Promise<string[]>}
- */
-async function generatedTypeScriptModules(directory, relative = "") {
-  /** @type {string[]} */
-  const modules = [];
+async function generatedTypeScriptModules(directory: string, relative = ""): Promise<string[]> {
+  const modules: string[] = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const entryRelative = path.posix.join(relative, entry.name);
     if (entry.isDirectory()) {

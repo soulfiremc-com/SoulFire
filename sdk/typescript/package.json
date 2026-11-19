@@ -65,8 +65,8 @@
   "scripts": {
     "build": "bun run clean && tsc -p tsconfig.build.json",
     "check": "bun run typecheck && bun run test && bun run build && bun run check:browser",
-    "check:browser": "node scripts/check-browser-bundle.mjs",
-    "clean": "node scripts/clean-dist.mjs",
+    "check:browser": "node scripts/check-browser-bundle.ts",
+    "clean": "node scripts/clean-dist.ts",
     "prepack": "bun run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

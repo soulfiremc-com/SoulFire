@@ -17,7 +17,7 @@ on:
       - "sdk/beat-game/**"
       - "sdk/reference/**"
       - "proto/**"
-      - "scripts/format-generated-sdks.mjs"
+      - "scripts/format-generated-sdks.ts"
       - "sdk/python/**"
       - "sdk/typescript/**"
   pull_request:
@@ -36,7 +36,7 @@ on:
       - "sdk/beat-game/**"
       - "sdk/reference/**"
       - "proto/**"
-      - "scripts/format-generated-sdks.mjs"
+      - "scripts/format-generated-sdks.ts"
       - "sdk/python/**"
       - "sdk/typescript/**"
 

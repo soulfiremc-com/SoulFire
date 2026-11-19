@@ -43,9 +43,10 @@ await Effect.runPromise(
       const checkpointStore = new JsonFileBeatGameCheckpointStore(
         configuration.checkpointDirectory,
       );
+      const [onlyBot, ...otherBots] = bots;
       const run =
-        bots.length === 1
-          ? yield* beatGame(bots[0], {
+        onlyBot !== undefined && otherBots.length === 0
+          ? yield* beatGame(onlyBot, {
               runId: configuration.runId,
               checkpointStore,
               team: { teamId: configuration.teamId },
@@ -106,8 +107,7 @@ await Effect.runPromise(
   ),
 );
 
-/** @param {string} name */
-function requiredEnvironment(name) {
+function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) {
     throw new Error(`${name} is required`);
@@ -115,8 +115,7 @@ function requiredEnvironment(name) {
   return value;
 }
 
-/** @param {string} name */
-function commaSeparatedEnvironment(name) {
+function commaSeparatedEnvironment(name: string): string[] {
   const values = requiredEnvironment(name)
     .split(",")
     .map((value) => value.trim())
@@ -127,20 +126,12 @@ function commaSeparatedEnvironment(name) {
   return values;
 }
 
-/**
- * @param {string} name
- * @param {string} fallback
- */
-function environment(name, fallback) {
+function environment(name: string, fallback: string): string {
   const value = process.env[name]?.trim();
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
-/**
- * @param {string} name
- * @param {boolean} fallback
- */
-function booleanEnvironment(name, fallback) {
+function booleanEnvironment(name: string, fallback: boolean): boolean {
   const value = process.env[name]?.trim().toLowerCase();
   if (value === undefined || value.length === 0) {
     return fallback;
@@ -154,8 +145,7 @@ function booleanEnvironment(name, fallback) {
   throw new Error(`${name} must be true or false`);
 }
 
-/** @param {string} name */
-function optionalPositiveIntegerEnvironment(name) {
+function optionalPositiveIntegerEnvironment(name: string): number | undefined {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) {
     return undefined;
@@ -167,14 +157,8 @@ function optionalPositiveIntegerEnvironment(name) {
   return number;
 }
 
-/** @param {unknown} value */
-function jsonLine(value) {
-  return JSON.stringify(
-    value,
-    /**
-     * @param {string} _
-     * @param {unknown} nestedValue
-     */
-    (_, nestedValue) => (typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue),
+function jsonLine(value: unknown): string {
+  return JSON.stringify(value, (_: string, nestedValue: unknown) =>
+    typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
   );
 }

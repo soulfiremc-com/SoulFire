@@ -11,8 +11,7 @@ const forbidden = [
 ];
 
 const files = await collect(sourceRoot);
-/** @type {string[]} */
-const violations = [];
+const violations: string[] = [];
 
 for (const file of files) {
   const source = await readFile(file, "utf8");
@@ -27,15 +26,10 @@ if (violations.length > 0) {
   throw new Error(`Beat-game package crossed the public SDK boundary:\n${violations.join("\n")}`);
 }
 
-/**
- * @param {URL} directoryUrl
- * @returns {Promise<string[]>}
- */
-async function collect(directoryUrl) {
+async function collect(directoryUrl: URL): Promise<string[]> {
   const directory = directoryUrl.pathname;
   const entries = await readdir(directory, { withFileTypes: true });
-  /** @type {string[]} */
-  const results = [];
+  const results: string[] = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {

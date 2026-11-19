@@ -42,9 +42,9 @@
   "scripts": {
     "build": "bun run clean && tsc -p tsconfig.build.json",
     "check": "bun run typecheck && bun run test && bun run build && bun run typecheck:smoke && bun run check:boundary && bun run check:browser",
-    "check:boundary": "node scripts/check-public-sdk-boundary.mjs",
-    "check:browser": "node scripts/check-browser-bundle.mjs",
-    "clean": "node scripts/clean-dist.mjs",
+    "check:boundary": "node scripts/check-public-sdk-boundary.ts",
+    "check:browser": "node scripts/check-browser-bundle.ts",
+    "clean": "node scripts/clean-dist.ts",
     "prepack": "bun run build",
     "smoke:e2e": "bun run --filter @soulfiremc/sdk build && bun run build && bun run typecheck:smoke && ../../gradlew -p ../.. :dedicated-launcher:uberJar && node --experimental-strip-types smoke/e2e.ts",
     "smoke:controlled": "SOULFIRE_E2E_CONTROLLED=true bun run smoke:e2e",
