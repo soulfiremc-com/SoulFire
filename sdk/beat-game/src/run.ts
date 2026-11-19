@@ -6690,8 +6690,13 @@ function shouldInterruptForMeal(
     return true;
   }
   // Raw food needs a furnace, and the planner does not cook on the way back
-  // to the Overworld, so interrupting the trip would only restart it.
-  if (decision.type === "return-through-portal") {
+  // to the Overworld or anywhere in the Nether, so interrupting would only
+  // restart the action. A live Nether search restarted every half second
+  // for half an hour while it carried only raw pork.
+  if (
+    decision.type === "return-through-portal" ||
+    isNether(observation.player.position.dimension)
+  ) {
     return false;
   }
   return (

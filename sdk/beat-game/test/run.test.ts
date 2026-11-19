@@ -1012,6 +1012,68 @@ describe("beat-game run lifecycle", () => {
     ).toMatchObject({ origin: { x: 0.5, z: 0.5 }, nextIndex: 3 });
   });
 
+  it("keeps searching the Nether while it carries only raw food", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "nether-raw-food-run";
+    const teamId = "nether-raw-food-team";
+    // As in a live run: hungry, but carrying only raw pork it cannot cook.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      food: 14,
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:porkchop": 3,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+    const failures: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (driver.xzPaths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(300);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(failures).not.toContain(
+      "Interrupted for replanning: hunger fell below the eating threshold",
+    );
+  });
+
   it("replenishes a depleted Nether building-block reserve before exploring", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
