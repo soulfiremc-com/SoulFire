@@ -492,6 +492,7 @@ describe("beat-game run lifecycle", () => {
       dimension: position.dimension,
       position,
       counts: {
+        "minecraft:golden_boots": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 64,
@@ -587,6 +588,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       dimension: "minecraft:the_nether",
       counts: {
+        "minecraft:golden_boots": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 64,
@@ -637,6 +639,7 @@ describe("beat-game run lifecycle", () => {
       dimension: "minecraft:the_nether",
       pathBuildingBlockCount: 2,
       counts: {
+        "minecraft:golden_boots": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:oak_log": 8,
         "minecraft:cobblestone": 2,
@@ -694,6 +697,7 @@ describe("beat-game run lifecycle", () => {
       dimension: "minecraft:the_nether",
       pathBuildingBlockCount: 64,
       counts: {
+        "minecraft:golden_boots": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:crafting_table": 1,
         "minecraft:ender_pearl": 14,
@@ -774,6 +778,97 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
   });
 
+  it("crafts and wears gold boots so piglins leave it alone in the Nether", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "nether-gold-boots-run";
+    const teamId = "nether-gold-boots-team";
+    const counts: Record<string, number> = {
+      "minecraft:cooked_beef": 16,
+      "minecraft:crafting_table": 1,
+      "minecraft:gold_ingot": 4,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:netherrack": 64,
+      "minecraft:oak_log": 8,
+      "minecraft:shield": 1,
+      "minecraft:stone_sword": 1,
+    };
+    const updateInventory = () => {
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_nether",
+        pathBuildingBlockCount: 64,
+        counts: { ...counts },
+      });
+    };
+    updateInventory();
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:golden_boots"
+        ? [
+            {
+              recipeId: "golden-boots",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 1,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 1, y: 64, z: 0, dimension: "minecraft:the_nether" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "craft" && task.recipeId === "golden-boots") {
+          counts["minecraft:gold_ingot"] = 0;
+          counts["minecraft:golden_boots"] = 1;
+          updateInventory();
+        }
+      });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.actions.some((action) => action.type === "equip-item")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("3 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({
+      type: "equip-item",
+      selector: { itemIds: ["minecraft:golden_boots"] },
+      equipmentSlot: "feet",
+    });
+  });
+
   it("collects Nether stems when a broken pickaxe cannot be paid for with carried wood", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
@@ -783,6 +878,7 @@ describe("beat-game run lifecycle", () => {
       dimension: "minecraft:the_nether",
       pathBuildingBlockCount: 64,
       counts: {
+        "minecraft:golden_boots": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:ender_pearl": 14,
         "minecraft:netherrack": 64,
@@ -36525,6 +36621,7 @@ describe("beat-game run lifecycle", () => {
       "minecraft:shield": 1,
       "minecraft:iron_chestplate": 1,
       "minecraft:iron_helmet": 1,
+      "minecraft:golden_boots": 1,
       "minecraft:obsidian": 10,
       "minecraft:blaze_rod": 7,
       "minecraft:ender_pearl": 14,

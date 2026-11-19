@@ -125,6 +125,8 @@ export const HELMET_ITEM_IDS = [
   "minecraft:netherite_helmet",
 ];
 
+export const BOOTS_ITEM_IDS = ["minecraft:golden_boots"];
+
 export const LOG_ITEM_IDS = [
   "minecraft:oak_log",
   "minecraft:spruce_log",
@@ -235,6 +237,8 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     ),
   ],
   [BeatGamePhase.COLLECT_NETHER_RESOURCES]: [
+    // Worn gold keeps piglins from attacking. Boots take the free armor slot.
+    itemRequirement("gold-boots", BOOTS_ITEM_IDS, () => 1, 110),
     itemRequirement(
       "blaze-rods",
       ["minecraft:blaze_rod"],

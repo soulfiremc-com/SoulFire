@@ -106,6 +106,7 @@ import {
   BED_SHEEP_SEARCH_PURPOSE,
   CHESTPLATE_ITEM_IDS,
   HELMET_ITEM_IDS,
+  BOOTS_ITEM_IDS,
   COOKED_FOOD_ITEM_IDS,
   CRITICAL_HUNGER_FOOD_LEVEL,
   EDIBLE_FOOD_ITEM_IDS,
@@ -9494,6 +9495,9 @@ function satisfyRequirementFromWorld(
         bufferedCollectionCount("ender-pearls", missing),
       );
     }
+    case "gold-boots": {
+      return craftGoldenBoots(state, observation);
+    }
     case "gold": {
       return collectBlocks(state.driver, {
         blockIds: [
@@ -15101,7 +15105,54 @@ function craftIronArmor(
 const ARMOR_SLOTS = [
   { slot: "head", itemIds: HELMET_ITEM_IDS },
   { slot: "chest", itemIds: CHESTPLATE_ITEM_IDS },
+  { slot: "feet", itemIds: BOOTS_ITEM_IDS },
 ] as const;
+
+const GOLDEN_BOOTS_GOLD_COST = 4;
+
+// Piglins leave a player alone while it wears any gold. A live run was shot
+// into lava by a piglin a minute after it entered the Nether.
+function craftGoldenBoots(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  const ingots = observation.inventory.counts["minecraft:gold_ingot"] ?? 0;
+  const nuggets = observation.inventory.counts["minecraft:gold_nugget"] ?? 0;
+  if (ingots >= GOLDEN_BOOTS_GOLD_COST) {
+    return craftWithTable(state, observation, "minecraft:golden_boots", 1).pipe(
+      Effect.andThen(state.driver.observe),
+      Effect.flatMap((current) => wearCarriedArmor(state, current)),
+    );
+  }
+  const missingNuggets = (GOLDEN_BOOTS_GOLD_COST - ingots) * 9;
+  // All ingots are crafted in one visit to the crafting table.
+  if (nuggets >= missingNuggets) {
+    return craftWithTable(
+      state,
+      observation,
+      "minecraft:gold_ingot",
+      GOLDEN_BOOTS_GOLD_COST - ingots,
+    );
+  }
+  if (
+    !hasMiningPickaxeReserve(
+      observation,
+      MINING_PICKAXE_ITEM_IDS,
+      NETHER_EXPLORATION_PICKAXE_DURABILITY_RESERVE,
+    )
+  ) {
+    return ensureNetherExplorationPickaxe(state, observation);
+  }
+  return collectBlocksOrExplore(state, observation, {
+    blockIds: ["minecraft:nether_gold_ore"],
+    // Each ore drops two to six nuggets.
+    count: Math.ceil((missingNuggets - nuggets) / 4),
+    progressItemIds: ["minecraft:gold_nugget"],
+    purpose: "find-nether-gold-ore",
+    preferSurfaceExploration: false,
+    path: state.strategy.path,
+  });
+}
 
 // Armor only helps while worn. It is crafted into the inventory and comes
 // back from a corpse there too.

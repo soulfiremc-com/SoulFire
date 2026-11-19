@@ -47,6 +47,15 @@ const ironRequirement = (counts: Readonly<Record<string, number>>) =>
     defaultBeatGameStrategy,
   ).find(({ key }) => key === "iron");
 
+const missingNetherKeys = (counts: Readonly<Record<string, number>>) =>
+  requirementsForPhase(
+    BeatGamePhase.COLLECT_NETHER_RESOURCES,
+    observation({ counts }).inventory,
+    fastBeatGameStrategy,
+  )
+    .filter(({ currentCount, targetCount }) => currentCount < targetCount)
+    .map(({ key }) => key);
+
 describe("beat-game requirements", () => {
   it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
     expect(keys(fastBeatGameStrategy)).toContainEqual({
@@ -89,6 +98,14 @@ describe("beat-game requirements", () => {
       order(fastBeatGameStrategy).indexOf("cobblestone") + 1,
     );
     expect(order(defaultBeatGameStrategy).slice(-2)).toEqual(["chestplate", "helmet"]);
+  });
+
+  it("gets gold boots before blaze rods in the Nether", () => {
+    expect(missingNetherKeys({})).toStrictEqual(["gold-boots", "blaze-rods", "ender-pearls"]);
+    expect(missingNetherKeys({ "minecraft:golden_boots": 1 })).toStrictEqual([
+      "blaze-rods",
+      "ender-pearls",
+    ]);
   });
 
   it("counts interchangeable item choices without double counting tags", () => {
