@@ -1619,6 +1619,9 @@ function failureCode(value: unknown): string | undefined {
 // can see, both of which change as it moves. Two live runs exited when a
 // placement face was occluded from the bot's eye.
 const PLACEMENT_NOT_READY_PREFIX = "FAILED_PRECONDITION: Block placement is not ready";
+// SoulFire reconnects a dropped bot on its own. A live run ended when its
+// Minecraft server restarted, though the bot would have come back.
+const BOT_OFFLINE_MESSAGE = "Bot is not online";
 
 function isRetryable(cause: unknown): boolean {
   if (typeof cause !== "object" || cause === null) {
@@ -1627,7 +1630,11 @@ function isRetryable(cause: unknown): boolean {
   if ("retryable" in cause && cause.retryable === true) {
     return true;
   }
-  if (cause instanceof Error && cause.message.startsWith(PLACEMENT_NOT_READY_PREFIX)) {
+  if (
+    cause instanceof Error &&
+    (cause.message.startsWith(PLACEMENT_NOT_READY_PREFIX) ||
+      cause.message.includes(BOT_OFFLINE_MESSAGE))
+  ) {
     return true;
   }
   if (

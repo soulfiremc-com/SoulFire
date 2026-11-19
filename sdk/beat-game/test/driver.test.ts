@@ -640,6 +640,31 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("retries while the bot is offline", async () => {
+    // As in a live run whose Minecraft server restarted: SoulFire reconnects
+    // the bot on its own, so the run should wait for it.
+    const cause = new SoulFireRpcError({
+      operation: "inventory.selectHotbar",
+      cause: new Error("Bot is not online: 9e195199-b8fb-37bf-b25d-a1c04310b121"),
+      code: Code.FailedPrecondition,
+      retryable: false,
+      message: "[failed_precondition] Bot is not online: 9e195199-b8fb-37bf-b25d-a1c04310b121",
+    });
+    const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:iron_pickaxe"] },
+        }),
+      ),
+    );
+
+    expect(error).toMatchObject({ code: "failed_precondition", retryable: true });
+  });
+
   it("reads the status of a failed bot action from its message", async () => {
     // As in a live run whose dig target was out of reach.
     const cause = new SoulFireActionError(
