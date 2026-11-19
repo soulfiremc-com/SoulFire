@@ -3260,6 +3260,124 @@ describe("beat-game run lifecycle", () => {
     expect(placed).toEqual(new Set(["0:63:0"]));
   });
 
+  it("walls in instead of digging a shaft beside a zombie under skeleton fire", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:cobblestone": 16, "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({
+      counts,
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 16,
+    });
+    // A zombie would keep hitting the bot through the seconds a shaft takes.
+    driver.entityResults = [
+      skeletonAt(31, 12, 0),
+      skeletonAt(32, 0, 12),
+      { ...skeletonAt(33, 3, 0), entityType: "minecraft:zombie", aggressive: true },
+    ];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const dug = new Set<string>();
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
+      }
+      if (position.y < 64 && !dug.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+        // The bot drops into the hole it dug.
+        driver.currentObservation = observation({
+          counts,
+          health: 16,
+          position: { x: 0.5, y: action.position.y, z: 0.5 },
+        });
+      }
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          blockKey({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () => Effect.fail(new ScenarioFailure({ message: "Never took cover" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(dug).toEqual(new Set());
+    expect(placed.size).toBeGreaterThan(0);
+  });
+
   it("walls in instead of digging into a cave under skeleton fire", async () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:cobblestone": 16, "minecraft:stone_sword": 1 };

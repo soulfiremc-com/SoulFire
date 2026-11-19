@@ -795,6 +795,7 @@ export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // Long enough for a skeleton without line of sight to lose interest and for
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
+const COVER_MELEE_EXCLUSION_RADIUS = 6;
 const ENDERMAN_COVER_WAIT_MS = 30_000;
 const RANGED_COVER_HEALTH = 8;
 const RECENT_ARROW_HIT_MS = 5_000;
@@ -5173,6 +5174,21 @@ function takeCoverFromRangedFire(
     if (!archerNearby) {
       return false;
     }
+    // Digging in takes seconds, and a melee mob that close keeps hitting the
+    // bot down the shaft. A live run dug in beside a zombie and was hit every
+    // second until it died. Walls go up in place without digging.
+    const closeMeleeHostile = (yield* state.driver.queryEntities({
+      origin: observation.player.position,
+      radius: COVER_MELEE_EXCLUSION_RADIUS,
+      selector: { categories: [2], alive: true },
+      maximumResults: 8,
+    })).some(
+      (entity) =>
+        isActiveMeleeHostile(entity) &&
+        !PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+        distanceSquared(observation.player.position, entity.position) <=
+          COVER_MELEE_EXCLUSION_RADIUS ** 2,
+    );
     // The supervisors that started this escape cancelled a live wall-in
     // halfway when the next arrow hit. Stop moving first, and let the few
     // placements finish.
@@ -5181,7 +5197,7 @@ function takeCoverFromRangedFire(
     // which the eyes cannot see from below, and a live run died while every
     // roof placement was refused. Digging down and sealing the shaft only
     // places against a shaft wall the eyes face, so it goes first.
-    const cover = yield* takeCoverInPlace(state);
+    const cover = yield* takeCoverInPlace(state, { allowShaft: !closeMeleeHostile });
     if (cover === undefined) {
       return false;
     }
@@ -5203,11 +5219,17 @@ function takeCoverFromRangedFire(
 
 // Digs down and seals the shaft, or walls the bot in where it stands. Both
 // keep out arrows, and a three-block-tall enderman cannot reach into either.
-function takeCoverInPlace(state: RunState): Effect.Effect<RangedCover | undefined> {
+function takeCoverInPlace(
+  state: RunState,
+  options: { readonly allowShaft?: boolean } = {},
+): Effect.Effect<RangedCover | undefined> {
   return state.driver.act({ type: "reset-movement" }).pipe(
     Effect.andThen(state.driver.observe),
     Effect.flatMap((current) =>
-      digAndSealNightShelter(state, current).pipe(
+      (options.allowShaft === false
+        ? Effect.undefined
+        : digAndSealNightShelter(state, current)
+      ).pipe(
         Effect.flatMap((seal): Effect.Effect<RangedCover | undefined, BeatGameDriverError> =>
           seal !== undefined
             ? Effect.succeed({ method: "sealed-shaft", placedBlocks: 1 } as const)
