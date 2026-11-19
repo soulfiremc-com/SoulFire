@@ -3029,6 +3029,95 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("answers a zombie that arrives while it digs its night shelter", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    const counts = { "minecraft:cobblestone": 16 };
+    driver.currentObservation = observation({
+      counts,
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    const dug = new Set<string>();
+    const placed = new Set<string>();
+    // A zombie walks up once the shaft is started.
+    const zombie = {
+      ...skeletonAt(77, 2.5, 0.5),
+      entityType: "minecraft:zombie",
+      aggressive: true,
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      dug.size > 0 &&
+      (selector.categories?.includes(2) === true ||
+        selector.networkId === zombie.networkId ||
+        selector.entityTypes?.includes(zombie.entityType) === true)
+        ? [zombie]
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
+      }
+      if (position.y < 64 && !dug.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+        driver.currentObservation = observation({
+          counts,
+          position: { x: 0.5, y: action.position.y, z: 0.5 },
+        });
+      }
+      if (action.type === "place-block") {
+        placed.add(blockKey(action.against));
+      }
+    };
+    // Digging by hand takes time; the live dig took seconds per block.
+    const resolveAction = driver.actionResolver;
+    driver.actionResolver = (action) =>
+      action.type === "dig-block"
+        ? Effect.sleep(300).pipe(Effect.andThen(resolveAction(action)))
+        : resolveAction(action);
+    const answered = () =>
+      driver.tasks.some((task) => task.type === "flee" || task.type === "attack-entity");
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          while (!answered() && placed.size === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(answered()).toBe(true);
+    expect(placed.size).toBe(0);
+  });
+
   it("digs in and seals the shaft when it cannot escape skeleton fire", async () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:cobblestone": 16, "minecraft:stone_sword": 1 };

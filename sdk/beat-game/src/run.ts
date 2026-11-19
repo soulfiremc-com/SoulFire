@@ -2076,9 +2076,24 @@ function shelterUntilMorning(
       y: playerBlock.y + 2,
     });
     const alreadyCovered = overhead !== undefined && !overhead.replaceable;
-    const sealPosition = alreadyCovered
-      ? undefined
-      : yield* digAndSealNightShelter(state, shelterObservation);
+    // The night shelter runs outside the action safety monitor, and digging a
+    // shaft by hand takes seconds per block. A live bot was hit by a zombie
+    // every second of its dig and died without a single threat check.
+    const construction = alreadyCovered
+      ? ({ type: "sealed", sealPosition: undefined } as const)
+      : yield* Effect.raceFirst(
+          digAndSealNightShelter(state, shelterObservation).pipe(
+            Effect.map((sealPosition) => ({ type: "sealed", sealPosition }) as const),
+          ),
+          waitForNightShelterTravelThreat(state).pipe(
+            Effect.map((threat) => ({ type: "threat", threat }) as const),
+          ),
+        );
+    if (construction.type === "threat") {
+      yield* respondToNightShelterTravelThreat(state, construction.threat);
+      return false;
+    }
+    const sealPosition = construction.sealPosition;
     if (!alreadyCovered && sealPosition === undefined) {
       yield* emit(state, {
         type: "diagnostic",
