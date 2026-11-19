@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@bufbuild/protobuf": "2.17.0",
+    "@connectrpc/connect": "2.3.0",
     "@effect/platform-node": "4.1.4",
     "@types/node": "26.6.6",
     "effect": "4.1.4",

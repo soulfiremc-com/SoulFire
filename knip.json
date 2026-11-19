@@ -1,0 +1,34 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts"],
+      "project": ["scripts/*.ts"],
+      "ignoreDependencies": ["@bufbuild/protoc-gen-es"],
+      "ignoreBinaries": ["ffmpeg"]
+    },
+    "e2e": {
+      "entry": ["tests/*.ts"],
+      "project": ["**/*.ts"]
+    },
+    "sdk/typescript": {
+      "entry": [
+        "src/{index,browser,bun,node,platform,cli,plugin-generator}.ts",
+        "examples/*.ts",
+        "test/**/*.test.ts"
+      ],
+      "project": ["{src,test,examples,scripts}/**/*.ts"],
+      "ignore": ["src/generated/**"]
+    },
+    "sdk/beat-game": {
+      "entry": ["src/{index,node}.ts", "smoke/{e2e,qualify,run-live}.ts", "test/**/*.test.ts"],
+      "project": ["{src,test,scripts,smoke}/**/*.ts"]
+    },
+    "sdk/reference": {
+      "entry": ["cloudflare.config.ts"],
+      "project": ["*.ts"],
+      "ignoreDependencies": ["typedoc"]
+    }
+  }
+}

@@ -6,6 +6,7 @@
       "name": "soulfire-sdk-reference",
       "devDependencies": {
         "@cloudflare/build-output-utils": "0.9.14",
+        "@cloudflare/config": "0.32.1",
         "cf": "1.0.0-beta.32",
         "typedoc": "0.28.20",
         "typescript": "6.0.3",
