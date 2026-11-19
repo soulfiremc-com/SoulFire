@@ -419,6 +419,17 @@ const standVolumeAt = (stand: BeatGameBlockPosition) => [
 const blockPositionKey = (position: BeatGameBlockPosition) =>
   `${position.x}:${position.y}:${position.z}`;
 
+// A death record from this many seconds ago that lists the carried items.
+function deathEntry(secondsAgo: number, inventoryCounts: Readonly<Record<string, number>>) {
+  const observedAt = new Date(Date.now() - secondsAgo * 1_000).toISOString();
+  return {
+    key: `death:${observedAt}`,
+    value: { x: 48, y: 64, z: -12, dimension: "minecraft:overworld", inventoryCounts },
+    observedAt,
+    confidence: 1,
+  };
+}
+
 // Whether a bot in this equipment fights or flees an aggressive piglin.
 async function piglinFight(equipment: Readonly<Record<string, string>>): Promise<boolean> {
   const driver = new FakeBeatGameDriver();
@@ -6361,6 +6372,140 @@ describe("beat-game run lifecycle", () => {
 
     expect(recovered).toBe("The bot kept its inventory through death");
     expect(driver.paths).not.toContainEqual(objectContaining({ position: deathPosition }));
+  });
+
+  it("forgets every recorded death once one death kept the inventory", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "kept-inventory-history-run";
+    const deathInventory = { "minecraft:iron_pickaxe": 1, "minecraft:shield": 1 };
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId,
+      teamId: "kept-inventory-history-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            // As in a live run: an older death record lists items the bot
+            // has used up since, so it alone no longer matches the inventory.
+            deathPositions: [
+              deathEntry(120, { "minecraft:arrow": 5 }),
+              deathEntry(60, deathInventory),
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({ dead: true, health: 0 });
+    const resolveTask = driver.taskResolver;
+    driver.taskResolver = (task, execution) =>
+      task.type === "auto-respawn"
+        ? Effect.sync(() => {
+            driver.tasks.push(task);
+            driver.currentObservation = observation({
+              counts: { ...deathInventory, "minecraft:cooked_beef": 8 },
+            });
+          })
+        : resolveTask(task, execution);
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId: "kept-inventory-history-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* run.events.pipe(
+                Stream.filter((candidate) => candidate.type === "items-recovered"),
+                Stream.runHead,
+              );
+              yield* Effect.sleep(100);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ).pipe(Effect.timeout("5 seconds")),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.memory.deathPositions).toStrictEqual([]);
+    expect(saved?.memory.keepsInventoryOnDeath).toBe(true);
+  });
+
+  it("does not restore deaths in a world that keeps inventories", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "keeps-inventory-restore-run";
+    const observedAt = new Date(Date.now() - 60 * 1_000).toISOString();
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId,
+      teamId: "keeps-inventory-restore-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            keepsInventoryOnDeath: true,
+            deathPositions: [
+              {
+                key: `death:${observedAt}`,
+                value: {
+                  x: 48,
+                  y: 64,
+                  z: -12,
+                  dimension: "minecraft:overworld",
+                  inventoryCounts: { "minecraft:oak_log": 5 },
+                },
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation();
+    const started: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId: "keeps-inventory-restore-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-started"
+                ? Effect.sync(() => {
+                    started.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (started.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(started).not.toContain("recover-death");
   });
 
   it("stays in its phase when it keeps a worn-out inventory through death", async () => {

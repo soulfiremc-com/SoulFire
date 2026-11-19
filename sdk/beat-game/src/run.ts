@@ -3268,7 +3268,19 @@ function executeDecision(
             let respawned = yield* observeDriverFresh(state);
             // With keepInventory nothing drops, so a corpse walk would only
             // search for items the bot already carries.
-            if (pendingDeath.recoverItems && keptInventoryThroughDeath(pendingDeath, respawned)) {
+            // Once one death kept the inventory, every death in this world
+            // does. A live bot that logged back in dead recorded its death a
+            // second time, and the older record then sent it after items it
+            // had used up since.
+            const pendingDeathsAfterRespawn = yield* Ref.get(state.pendingDeaths);
+            if (
+              pendingDeath.recoverItems &&
+              !respawned.player.dead &&
+              (actionCheckpoint.memory.keepsInventoryOnDeath === true ||
+                [pendingDeath, ...pendingDeathsAfterRespawn].some((death) =>
+                  keptInventoryThroughDeath(death, respawned),
+                ))
+            ) {
               // Nothing was lost, so this must not count as an inventory loss
               // that restarts Overworld preparation. A live run carrying worn
               // out tools was sent back to the first phase this way.
@@ -3276,9 +3288,24 @@ function executeDecision(
                 type: "items-recovered",
                 detail: "The bot kept its inventory through death",
               });
+              const forgottenDeaths = new Set(
+                pendingDeathsAfterRespawn.map(({ observedAt }) => observedAt),
+              );
+              yield* Ref.set(state.pendingDeaths, []);
               return {
-                checkpoint: (checkpoint) =>
-                  forgetDeathPosition(checkpoint, pendingDeath.observedAt),
+                checkpoint: (checkpoint) => {
+                  const forgotten = [
+                    ...forgottenDeaths,
+                    ...checkpoint.memory.deathPositions.map(({ observedAt }) => observedAt),
+                  ].reduce(
+                    (current, observedAt) => forgetDeathPosition(current, observedAt),
+                    checkpoint,
+                  );
+                  return {
+                    ...forgotten,
+                    memory: { ...forgotten.memory, keepsInventoryOnDeath: true },
+                  };
+                },
                 completedPendingDeath: pendingDeath.observedAt,
               } satisfies ActionResult;
             }
@@ -17788,6 +17815,9 @@ function restorePendingDeaths(
   checkpoint: BeatGameCheckpoint,
   observation: BeatGameObservation,
 ): readonly PendingDeath[] {
+  if (checkpoint.memory.keepsInventoryOnDeath === true && !observation.player.dead) {
+    return [];
+  }
   return checkpoint.memory.deathPositions.flatMap((entry) => {
     const { inventoryCounts, itemExpiresAt: _, ...position } = entry.value;
     if (

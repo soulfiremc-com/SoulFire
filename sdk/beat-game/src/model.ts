@@ -411,6 +411,9 @@ export interface BeatGameWorldMemory {
   readonly deathPositions: readonly BeatGameMemoryEntry<BeatGameDeathPosition>[];
   readonly explorationFrontiers?: Readonly<Record<string, BeatGameExplorationFrontier>>;
   readonly deathRecoveryFailures?: Readonly<Record<string, number>>;
+  /// Set once the bot carried its whole inventory through a death, which
+  /// means the world keeps inventories and no death ever drops items.
+  readonly keepsInventoryOnDeath?: boolean;
   readonly latestDeath?: BeatGameMemoryEntry<BeatGamePosition>;
   readonly strongholdEstimate?: BeatGamePosition;
 }

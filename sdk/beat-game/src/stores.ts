@@ -348,6 +348,12 @@ function worldMemory(value: unknown): void {
   if (memory["strongholdEstimate"] !== undefined) {
     position(memory["strongholdEstimate"], "checkpoint.memory.strongholdEstimate");
   }
+  if (
+    memory["keepsInventoryOnDeath"] !== undefined &&
+    typeof memory["keepsInventoryOnDeath"] !== "boolean"
+  ) {
+    throw new TypeError("checkpoint.memory.keepsInventoryOnDeath must be a boolean");
+  }
 }
 
 function durableSkill(value: unknown, name: string): void {
