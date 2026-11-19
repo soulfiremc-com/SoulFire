@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
+  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/strict.json"],
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest", "effecttsgo"],
   "categories": {
     "correctness": "error",
