@@ -510,6 +510,7 @@ const LAVA_ESCAPE_MAXIMUM_APPROACH_ATTEMPTS = 50;
 const IRON_SEARCH_Y = 16;
 const IRON_SEARCH_MAX_Y = 24;
 const IRON_SEARCH_DESCENT_STEP = 12;
+const COBBLESTONE_DIG_DESCENT_STEP = 8;
 const IRON_ORE_BLOCK_IDS = ["minecraft:iron_ore", "minecraft:deepslate_iron_ore"] as const;
 const RESOURCE_SEARCH_PICKAXE_DURABILITY_RESERVE = 64;
 const RESOURCE_DESCENT_PICKAXE_DURABILITY_RESERVE = 48;
@@ -9338,7 +9339,7 @@ function satisfyRequirementFromWorld(
         avoidFluids: true,
         prepareAttempt: (current) =>
           ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
-      });
+      }).pipe(Effect.andThen(digForCobblestoneWithoutProgress(state, observation)));
     case "bed":
     case "dragon-beds":
       return satisfyBedRequirement(state, observation);
@@ -10553,6 +10554,32 @@ function furnaceFuelCount(observation: BeatGameObservation): number {
 
 function bufferedCollectionCount(resource: BufferedResource, missing: number): number {
   return Math.max(1, missing) + RESOURCE_COLLECTION_BUFFERS[resource];
+}
+
+// Stone lies under nearly every surface, and digging it yields cobblestone.
+// On a coast where all visible stone is under water, a live bot made 48
+// collection attempts in 30 minutes without breaking a block.
+function digForCobblestoneWithoutProgress(
+  state: RunState,
+  before: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const current = yield* state.driver.observe;
+    if (
+      current.player.dead ||
+      (current.inventory.counts["minecraft:cobblestone"] ?? 0) >
+        (before.inventory.counts["minecraft:cobblestone"] ?? 0) ||
+      current.player.position.dimension !== "minecraft:overworld" ||
+      !hasMiningPickaxe(current)
+    ) {
+      return;
+    }
+    yield* excavateResourceSearchStaircase(
+      state,
+      current.player.position,
+      Math.floor(current.player.position.y) - COBBLESTONE_DIG_DESCENT_STEP,
+    );
+  });
 }
 
 function ensureMiningPickaxe(

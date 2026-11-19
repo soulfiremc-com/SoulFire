@@ -25936,6 +25936,70 @@ describe("beat-game run lifecycle", () => {
     expect(driver.currentObservation.player.air).toBe(300);
   }, 10_000);
 
+  it("digs down for stone when no collectable stone is in reach", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_sword": 1,
+        "minecraft:cooked_beef": 8,
+        "minecraft:stone_pickaxe": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    // All visible stone is under water, so every collection finds nothing.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      });
+    const dug = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        position.y < 64 && !dug.has(blockKey(position))
+          ? blockObservation(position, { blockId: "minecraft:stone" })
+          : blockObservation(position, {
+              blockId: "minecraft:air",
+              diggable: false,
+              replaceable: true,
+              solid: false,
+            }),
+      ];
+    };
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (![...dug].some((key) => Number(key.split(":")[1]) < 64)) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeout("5 seconds"),
+        ),
+      ),
+    );
+
+    expect([...dug].some((key) => Number(key.split(":")[1]) < 64)).toBe(true);
+  });
+
   it("keeps climbing a deep aquifer after surface pathfinding fails", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceColumns = [
