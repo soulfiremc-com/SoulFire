@@ -59,8 +59,10 @@ public final class Costs {
   public static final double SLIPPERY_FLOOR = 5;
   /// A step beside a drop into lava is one slip from death. Prefer a long detour.
   public static final double LAVA_EDGE = 20;
-  /// How far below the feet a sideways slip is checked for lava.
-  public static final int LAVA_EDGE_DROP = 3;
+  /// How far below the feet a sideways slip is checked for lava. A fall from
+  /// any height into lava is deadly: a live bot bridged six blocks above the
+  /// Nether lava sea, slipped and burned.
+  public static final int LAVA_EDGE_DROP = 16;
   /// Vertical climbables are slower than walking one horizontal block.
   public static final double CLIMB = 2;
   /// Falling 1 block takes ~5.63 ticks.
