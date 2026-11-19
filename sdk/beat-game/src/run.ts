@@ -413,6 +413,8 @@ const INVENTORY_EMPTY_SLOT_BUFFER = 2;
 const INVENTORY_EMPTY_SLOT_STABILITY_OBSERVATIONS = 12;
 const INVENTORY_DISCARD_ESCAPE_DISTANCE = 3;
 const INVENTORY_DISCARD_POCKET_DEPTH = 2;
+// Reaches every block that touches the pocket, including the ones behind it.
+const INVENTORY_DISCARD_POCKET_LAVA_CLEARANCE = 2.5;
 const INVENTORY_DISCARD_SITE_DISTANCE = 6;
 const INVENTORY_DISCARD_ESCAPE_MAX_SEARCH_TIME_MS = 3_000;
 const LOW_VALUE_DEATH_RECOVERY_ITEM_IDS = new Set([
@@ -15644,6 +15646,28 @@ function ensureInventorySpace(
           const pocketOriginX = Math.floor(discardSitePosition.x);
           const pocketOriginY = Math.floor(discardSitePosition.y);
           const pocketOriginZ = Math.floor(discardSitePosition.z);
+          // A live bot dug its pocket into a Nether wall with lava behind it
+          // and burned in the flow.
+          const lavaBehindPocket = yield* state.driver.queryBlocks({
+            center: {
+              x: pocketOriginX + 0.5 + pocketStepX * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
+              y: pocketOriginY + 1,
+              z: pocketOriginZ + 0.5 + pocketStepZ * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
+              dimension: discardSitePosition.dimension,
+            },
+            radius: INVENTORY_DISCARD_POCKET_LAVA_CLEARANCE,
+            selector: { blockIds: ["minecraft:lava"] },
+            maximumResults: 1,
+          });
+          if (lavaBehindPocket.length > 0) {
+            cleanupFailure = new BeatGameDriverError({
+              operation: "ensure-inventory-space",
+              code: "unreachable",
+              retryable: true,
+              message: "Lava lies behind the inventory discard pocket",
+            });
+            break;
+          }
           for (let distance = 1; distance <= INVENTORY_DISCARD_POCKET_DEPTH; distance += 1) {
             for (const yOffset of [1, 0]) {
               const position = {

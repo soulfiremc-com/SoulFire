@@ -430,6 +430,145 @@ function deathEntry(secondsAgo: number, inventoryCounts: Readonly<Record<string,
   };
 }
 
+// Counts the blocks a bot with a full inventory digs for its item discard
+// pocket before it heads for a nearby corpse.
+async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
+  const driver = new FakeBeatGameDriver();
+  const store = new InMemoryBeatGameCheckpointStore();
+  const deathPosition = { x: 4, y: 64, z: 0, dimension: "minecraft:overworld" };
+  const observedAt = new Date().toISOString();
+  const initial = checkpoint(BeatGamePhase.ENTER_NETHER, {
+    runId: "discard-pocket-run",
+    teamId: "discard-pocket-team",
+  });
+  await Effect.runPromise(
+    store.save(
+      {
+        ...initial,
+        memory: {
+          ...initial.memory,
+          deathPositions: [
+            {
+              key: `death:${observedAt}`,
+              value: { ...deathPosition, inventoryCounts: { "minecraft:diamond": 1 } },
+              observedAt,
+              confidence: 1,
+            },
+          ],
+        },
+      },
+      undefined,
+    ),
+  );
+  driver.currentObservation = observation({
+    counts: { "minecraft:stone_sword": 1, "minecraft:leaf_litter": 64 },
+    emptyPlayerSlots: 0,
+  });
+  driver.entityQueryResolver = (query) =>
+    query.selector.categories?.includes(6)
+      ? [
+          {
+            connectionEpoch: "epoch-1",
+            networkId: 91,
+            entityType: "minecraft:item",
+            itemId: "minecraft:diamond",
+            position: deathPosition,
+            velocity: { x: 0, y: 0, z: 0 },
+            alive: true,
+            health: 5,
+            observedAt,
+          },
+        ]
+      : [];
+  driver.blockQueryResolver = ({ center, radius, selector }) => {
+    if (selector.diggable === true) {
+      return [
+        blockObservation({
+          x: Math.floor(center.x),
+          y: Math.floor(center.y),
+          z: Math.floor(center.z),
+          dimension: center.dimension,
+        }),
+      ];
+    }
+    if (!lavaBehindWall || selector.blockIds?.includes("minecraft:lava") !== true) {
+      return [];
+    }
+    // Lava fills the wall three blocks out from where the bot stands, out of
+    // reach of its feet but right behind a two-block pocket.
+    const player = driver.currentObservation.player.position;
+    const offsetX = center.x - player.x;
+    const offsetZ = center.z - player.z;
+    const offset = Math.hypot(offsetX, offsetZ);
+    if (offset + radius < 2.5) {
+      return [];
+    }
+    const scale = offset === 0 ? 0 : 3 / offset;
+    return [
+      blockObservation(
+        {
+          x: Math.floor(player.x + offsetX * scale + (offset === 0 ? 3 : 0)),
+          y: Math.floor(center.y),
+          z: Math.floor(player.z + offsetZ * scale),
+          dimension: center.dimension,
+        },
+        { blockId: "minecraft:lava" },
+      ),
+    ];
+  };
+  let reachedCorpse = false;
+  driver.pathResolver = (position, radius, policy) =>
+    Effect.sync(() => {
+      driver.paths.push({ position, radius, policy });
+      if (position.x === deathPosition.x && position.z === deathPosition.z) {
+        reachedCorpse = true;
+        return;
+      }
+      const current = driver.currentObservation;
+      driver.currentObservation = observation({
+        counts: current.inventory.counts,
+        ...(current.inventory.emptyPlayerSlots === undefined
+          ? {}
+          : { emptyPlayerSlots: current.inventory.emptyPlayerSlots }),
+        position,
+        rotation: current.player.rotation,
+      });
+    }).pipe(Effect.andThen(reachedCorpse ? Effect.never : Effect.void));
+  driver.actionResolver = (action) =>
+    Effect.sync(() => {
+      const current = driver.currentObservation;
+      if (action.type === "toss-items") {
+        driver.currentObservation = observation({
+          counts: { "minecraft:stone_sword": 1 },
+          emptyPlayerSlots: 4,
+          position: current.player.position,
+          rotation: current.player.rotation,
+        });
+      }
+      return {};
+    });
+
+  await Effect.runPromise(
+    Effect.scoped(
+      beatGameWithDriver(driver, {
+        runId: "discard-pocket-run",
+        team: { teamId: "discard-pocket-team" },
+        checkpointStore: store,
+        strategy: { observationPollMs: 1 },
+      }).pipe(
+        Effect.flatMap((run) =>
+          Effect.gen(function* () {
+            yield* Effect.sleep(500);
+            yield* run.stop;
+            yield* run.awaitCompletion.pipe(Effect.result);
+          }),
+        ),
+      ),
+    ),
+  );
+  return driver.actions.filter((action) => action.type === "dig-block").length;
+}
+
 // Whether a bot in this equipment fights or flees an aggressive piglin.
 async function piglinFight(equipment: Readonly<Record<string, string>>): Promise<boolean> {
   const driver = new FakeBeatGameDriver();
@@ -11177,6 +11316,11 @@ describe("beat-game run lifecycle", () => {
       }),
     );
   });
+
+  it("does not dig its item discard pocket into a wall with lava behind it", async () => {
+    expect(await discardPocketDigs(false)).toBeGreaterThan(0);
+    expect(await discardPocketDigs(true)).toBe(0);
+  }, 20_000);
 
   it("clears inventory slots before collecting nearby corpse drops", async () => {
     const driver = new FakeBeatGameDriver();
