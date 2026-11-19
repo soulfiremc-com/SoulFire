@@ -3064,7 +3064,9 @@ function runDecisionWithRetry(
                   ),
                 );
                 yield* Effect.sleep(backoffDuration(number));
-                const fresh = yield* observeFresh(state);
+                // The bot can still be offline here. A live run ended when its
+                // server restarted and this observation failed.
+                const fresh = yield* observeWithRecovery(state);
                 if (actionObservedComplete(decision, fresh, state.strategy)) {
                   yield* persist(state, (checkpoint) => {
                     const completed = completeDurableSkill(

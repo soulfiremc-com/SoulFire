@@ -592,6 +592,16 @@ async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
   return driver.actions.filter((action) => action.type === "dig-block").length;
 }
 
+// The error SoulFire returns while a dropped bot reconnects.
+function botOfflineError(): BeatGameDriverError {
+  return new BeatGameDriverError({
+    operation: "observe",
+    code: "failed_precondition",
+    retryable: true,
+    message: "[failed_precondition] Bot is not online: bot-1",
+  });
+}
+
 // Whether a bot in this equipment fights or flees an aggressive piglin.
 async function piglinFight(equipment: Readonly<Record<string, string>>): Promise<boolean> {
   const driver = new FakeBeatGameDriver();
@@ -45083,6 +45093,58 @@ describe("beat-game run lifecycle", () => {
     assert(Result.isFailure(exit));
     expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
   }, 20_000);
+
+  it("waits for an offline bot after a failed attempt", async () => {
+    const driver = new FakeBeatGameDriver();
+    const online = observation();
+    const outage = { failedCommand: false, failedObservations: 0 };
+    // As in a live run whose server restarted: the bot dropped, its command
+    // failed, and it stayed offline for a few observations.
+    driver.observationResolver = () =>
+      outage.failedObservations > 0
+        ? Effect.suspend(() => {
+            outage.failedObservations -= 1;
+            return Effect.fail(botOfflineError());
+          })
+        : Effect.succeed(online);
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          outage.failedCommand
+            ? Effect.never
+            : Effect.suspend(() => {
+                outage.failedCommand = true;
+                outage.failedObservations = 3;
+                return Effect.fail(botOfflineError());
+              }),
+        ),
+      );
+
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "offline-retry-run",
+          team: { teamId: "offline-retry-team" },
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (driver.tasks.length < 2) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              return yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("10 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    assert(Result.isFailure(exit));
+    expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
+  }, 15_000);
 
   it("interrupts a blocked observation when the run is stopped", async () => {
     const driver = new FakeBeatGameDriver();
