@@ -275,6 +275,17 @@ describe("beat-game planner", () => {
     });
 
     expect(decision).toMatchObject({ type: "return-through-portal" });
+    expect(
+      decideBeatGameAction({
+        checkpoint: checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES),
+        observation: observation({
+          food: 10,
+          dimension: "minecraft:the_nether",
+          counts: { "minecraft:cooked_porkchop": 3 },
+        }),
+        strategy: defaultBeatGameStrategy,
+      }),
+    ).not.toMatchObject({ type: "return-through-portal" });
   });
 
   it("crafts a wooden sword as soon as enough wood is available", () => {

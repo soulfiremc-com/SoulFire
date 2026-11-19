@@ -138,10 +138,11 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
     observation.player.food <= URGENT_HUNGER_FOOD_LEVEL &&
     !needsOverworldForPreparation(phase, observation)
   ) {
-    // The Nether has almost nothing to eat. A live bot retried its food
-    // supply there hundreds of times, so a hungry bot without food goes back
-    // to the Overworld, as a wounded one does.
-    if (isNether(observation.player.position.dimension) && !hasFood(observation, strategy)) {
+    // The Nether has almost nothing to eat and nothing cooks raw food. A live
+    // bot retried its food supply there hundreds of times while it carried
+    // raw pork, so a hungry bot without ready food goes back to the
+    // Overworld, as a wounded one does.
+    if (isNether(observation.player.position.dimension) && !hasReadyFood(observation)) {
       return { type: "return-through-portal", action: "return-through-portal" };
     }
     const foodSupply = requirementsForPhase(
