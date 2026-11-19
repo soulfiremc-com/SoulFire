@@ -4,12 +4,12 @@ grpc = "1.85.1"
 protobuf = "4.36.2"
 reactor-netty = "1.3.8"
 reactor-core = "3.8.8"
-armeria = "1.43.0"
+armeria = "1.43.1"
 classtransform = "1.15.1"
 kyori = "5.2.0"
-jooq = "3.21.9"
-flyway = "13.12.2"
-stackanvil = "0.4.34"
+jooq = "3.21.10"
+flyway = "13.13.0"
+stackanvil = "0.5.3"
 
 [plugins]
 protobuf = "com.google.protobuf:0.10.1"
@@ -56,7 +56,7 @@ grpc-netty = { module = "io.grpc:grpc-netty", version.ref = "grpc" }
 grpc-inprocess = { module = "io.grpc:grpc-inprocess", version.ref = "grpc" }
 protobuf-bom = { module = "com.google.protobuf:protobuf-bom", version.ref = "protobuf" }
 protobuf-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
-netty-bom = "io.netty:netty-bom:4.2.20.Final"
+netty-bom = "io.netty:netty-bom:4.2.21.Final"
 armeria-bom = { module = "com.linecorp.armeria:armeria-bom", version.ref = "armeria" }
 armeria = { module = "com.linecorp.armeria:armeria" }
 armeria-grpc = { module = "com.linecorp.armeria:armeria-grpc" }
@@ -69,7 +69,7 @@ reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "react
 reactor-netty-core = { module = "io.projectreactor.netty:reactor-netty-core", version.ref = "reactor-netty" }
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "reactor-netty" }
 spark = "me.lucko:spark-common:1.10.142-SNAPSHOT"
-openai = "com.openai:openai-java:4.105.0"
+openai = "com.openai:openai-java:4.109.0"
 immutables-value = "org.immutables:value:2.12.3"
 immutables-gson = "org.immutables:gson:2.12.3"
 jooq-lib = { module = "org.jooq:jooq", version.ref = "jooq" }
