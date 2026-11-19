@@ -144,6 +144,10 @@ interface PreparedWorkstation {
 
 const WORKSTATION_REUSE_RADIUS = 32;
 const WORKSTATION_APPROACH_RADIUS = 1.5;
+// Vanilla closes any open menu while the player stands in a nether portal.
+// A workstation this close to one can put its user inside the portal.
+const WORKSTATION_PORTAL_CLEARANCE = 2;
+const WORKSTATION_PORTAL_RETREAT_DISTANCE = 6;
 const WORKSTATION_REUSE_MAX_VERTICAL_DISTANCE = 8;
 const WORKSTATION_REUSE_MAX_SEARCH_TIME_MS = 5_000;
 const WORKSTATION_REUSE_TIMEOUT_MS = 12_000;
@@ -15368,7 +15372,25 @@ function ensureWorkstation(
       ),
     );
     const existing = yield* findReusableWorkstations(state.driver, preparedObservation, blockId);
-    for (const candidate of existing) {
+    // A live bot crafted beside the portal it came through. Each craft closed
+    // at once, and the run ended after the retries ran out.
+    const nearbyPortals = (yield* state.driver.queryBlocks({
+      center: preparedObservation.player.position,
+      radius: WORKSTATION_REUSE_RADIUS + WORKSTATION_PORTAL_CLEARANCE,
+      selector: { blockIds: ["minecraft:nether_portal"] },
+      maximumResults: 128,
+    })).filter((portal) => portal.blockId === "minecraft:nether_portal");
+    const isBesidePortal = (position: BeatGamePosition) =>
+      nearbyPortals.some(
+        ({ position: portal }) =>
+          portal.dimension === position.dimension &&
+          Math.max(
+            Math.abs(portal.x - Math.floor(position.x)),
+            Math.abs(portal.y - Math.floor(position.y)),
+            Math.abs(portal.z - Math.floor(position.z)),
+          ) <= WORKSTATION_PORTAL_CLEARANCE,
+      );
+    for (const candidate of existing.filter(({ position }) => !isBesidePortal(position))) {
       const approached = yield* state.driver
         .pathfind(
           {
@@ -15414,7 +15436,28 @@ function ensureWorkstation(
         }
       }
     }
-    const current = yield* state.driver.observe;
+    let current = yield* state.driver.observe;
+    const nearestPortal = nearbyPortals
+      .filter(({ position }) => position.dimension === current.player.position.dimension)
+      .toSorted(
+        (left, right) =>
+          distanceSquared(left.position, current.player.position) -
+          distanceSquared(right.position, current.player.position),
+      )[0];
+    if (nearestPortal !== undefined && isBesidePortal(current.player.position)) {
+      yield* state.driver
+        .pathfind(
+          positionAwayFrom(
+            current.player.position,
+            blockCenter(nearestPortal.position),
+            WORKSTATION_PORTAL_RETREAT_DISTANCE,
+          ),
+          2,
+          { ...state.strategy.path, allowPlacing: false },
+        )
+        .pipe(Effect.ignore);
+      current = yield* state.driver.observe;
+    }
     const craftingTable =
       blockId === "minecraft:furnace"
         ? yield* ensureWorkstation(state, current, "minecraft:crafting_table")

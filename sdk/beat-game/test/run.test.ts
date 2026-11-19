@@ -1221,6 +1221,89 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("leaves a crafting table beside a portal and crafts away from it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "portal-workstation-run";
+    const teamId = "portal-workstation-team";
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:crafting_table": 1,
+        "minecraft:gold_ingot": 4,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:netherrack": 64,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    const nether = "minecraft:the_nether";
+    // As in a live run: the bot placed its table right beside the portal it
+    // came through, and standing at the table put it inside the portal.
+    const table = { x: 1, y: 64, z: 0, dimension: nether };
+    const portalBlocks = [
+      { x: 2, y: 64, z: 1, dimension: nether },
+      { x: 2, y: 65, z: 1, dimension: nether },
+      { x: 3, y: 64, z: 1, dimension: nether },
+      { x: 3, y: 65, z: 1, dimension: nether },
+    ];
+    driver.recipeResolver = (resultItemId) => [
+      {
+        recipeId: "golden-boots",
+        recipeType: "minecraft:crafting_shaped",
+        resultItemId,
+        resultCount: 1,
+        ingredients: [],
+      },
+    ];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 1,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [blockObservation(table, { blockId: "minecraft:crafting_table" })]
+        : query.selector.blockIds?.includes("minecraft:nether_portal") === true
+          ? portalBlocks.map((position) =>
+              blockObservation(position, { blockId: "minecraft:nether_portal" }),
+            )
+          : [];
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* Effect.sleep(300);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.paths).not.toContainEqual(
+      objectContaining({ position: objectContaining({ x: 1.5, z: 0.5 }) }),
+    );
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "craft", station: table }));
+    expect(
+      driver.paths.some(({ position }) => Math.hypot(position.x - 2.5, position.z - 1.5) >= 5),
+    ).toBe(true);
+  }, 20_000);
+
   it("collects Nether stems when a broken pickaxe cannot be paid for with carried wood", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
