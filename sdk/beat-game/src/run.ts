@@ -1059,8 +1059,11 @@ export function beatGameWithDriver(
     const events = new ReplayBroadcast<BeatGameEvent>(128);
     const snapshots = new ReplayBroadcast<BeatGameSnapshot>(1);
     const sequence = yield* Ref.make(0n);
+    const lastDamage = yield* Ref.make<
+      Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
+    >(undefined);
     const state: RunState = {
-      driver,
+      driver: withGoldCalmedPiglins(driver, observationRef, lastDamage),
       store,
       coordinator,
       strategy,
@@ -1070,9 +1073,7 @@ export function beatGameWithDriver(
       lastLivingObservation,
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
       abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
-      lastDamage: yield* Ref.make<
-        Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
-      >(undefined),
+      lastDamage,
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -8260,6 +8261,76 @@ function waitForDrySurfaceApproach(
           recoveryStagnantObservations,
         );
   });
+}
+
+const GOLD_ARMOR_ITEM_IDS = new Set([
+  "minecraft:golden_helmet",
+  "minecraft:golden_chestplate",
+  "minecraft:golden_leggings",
+  "minecraft:golden_boots",
+]);
+
+const ATTACK_DAMAGE_TYPES = new Set([
+  "minecraft:arrow",
+  "minecraft:mob_attack",
+  "minecraft:mob_projectile",
+]);
+const RECENT_ATTACK_MS = 3_000;
+
+// Piglins leave a player who wears gold alone, but they still report
+// themselves aggressive while they hunt hoglins. A live bot in gold boots
+// read that as a threat, attacked a calm piglin, and a hoglin knocked it
+// into lava during the fight. Once something hits the bot, piglins count as
+// threats again, since an angered piglin attacks even a player in gold.
+function withGoldCalmedPiglins(
+  driver: BeatGameDriver,
+  observation: Ref.Ref<BeatGameObservation>,
+  lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>,
+): BeatGameDriver {
+  const queryEntities: BeatGameDriver["queryEntities"] = (query) =>
+    driver
+      .queryEntities(query)
+      .pipe(
+        Effect.flatMap((entities) =>
+          Effect.all([Ref.get(observation), Ref.get(lastDamage)]).pipe(
+            Effect.map(([current, damage]) =>
+              Object.values(current.player.equipment).some((itemId) =>
+                GOLD_ARMOR_ITEM_IDS.has(itemId),
+              ) &&
+              !(
+                damage?.damageType !== undefined &&
+                ATTACK_DAMAGE_TYPES.has(damage.damageType) &&
+                Date.now() - Date.parse(damage.observedAt) <= RECENT_ATTACK_MS
+              )
+                ? entities.map((entity) =>
+                    entity.entityType === "minecraft:piglin" && entity.aggressive === true
+                      ? { ...entity, aggressive: false }
+                      : entity,
+                  )
+                : entities,
+            ),
+          ),
+        ),
+      );
+  return {
+    instanceId: driver.instanceId,
+    botId: driver.botId,
+    observe: driver.observe,
+    events: driver.events,
+    ...(driver.environment === undefined ? {} : { environment: driver.environment }),
+    queryBlocks: driver.queryBlocks,
+    queryEntities,
+    raycast: driver.raycast,
+    sampleSurface: driver.sampleSurface,
+    recipesFor: driver.recipesFor,
+    canCraft: driver.canCraft,
+    waitForChunks: driver.waitForChunks,
+    pathfind: driver.pathfind,
+    pathfindXZ: driver.pathfindXZ,
+    runTask: driver.runTask,
+    act: driver.act,
+    withControl: driver.withControl,
+  };
 }
 
 function isAggressiveNeutralMob(entity: BeatGameEntityObservation): boolean {

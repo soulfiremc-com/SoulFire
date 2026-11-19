@@ -419,6 +419,58 @@ const standVolumeAt = (stand: BeatGameBlockPosition) => [
 const blockPositionKey = (position: BeatGameBlockPosition) =>
   `${position.x}:${position.y}:${position.z}`;
 
+// Whether a bot in this equipment fights or flees an aggressive piglin.
+async function piglinFight(equipment: Readonly<Record<string, string>>): Promise<boolean> {
+  const driver = new FakeBeatGameDriver();
+  const piglin = {
+    connectionEpoch: "epoch-1",
+    networkId: 58,
+    entityType: "minecraft:piglin",
+    position: { x: 3, y: 64, z: 0, dimension: "minecraft:the_nether" },
+    velocity: { x: 0, y: 0, z: 0 },
+    alive: true,
+    health: 16,
+    // A piglin hunting a hoglin reports itself aggressive.
+    aggressive: true,
+    observedAt: "2026-01-01T00:00:00.000Z",
+  } as const;
+  driver.currentObservation = observation({
+    dimension: "minecraft:the_nether",
+    equipment,
+    counts: { "minecraft:shield": 1, "minecraft:stone_sword": 1 },
+  });
+  driver.entityResults = [piglin];
+  driver.entityQueryResolver = (query) =>
+    query.selector.categories?.includes(2) === true ||
+    query.selector.entityTypes?.includes("minecraft:piglin") === true ||
+    query.selector.networkId === piglin.networkId
+      ? driver.entityResults
+      : [];
+  driver.taskResolver = (task) =>
+    Effect.sync(() => {
+      driver.tasks.push(task);
+    }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.void : Effect.never));
+
+  await Effect.runPromise(
+    Effect.scoped(
+      beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+        Effect.flatMap((run) =>
+          Effect.gen(function* () {
+            yield* Effect.sleep(300);
+            yield* run.stop;
+            yield* run.awaitCompletion.pipe(Effect.result);
+          }),
+        ),
+      ),
+    ),
+  );
+  return driver.tasks.some(
+    (task) =>
+      (task.type === "attack-entity" && task.target.networkId === piglin.networkId) ||
+      task.type === "flee",
+  );
+}
+
 describe("beat-game run lifecycle", () => {
   it("reports incomplete resource movement as progress, not success", async () => {
     const driver = new FakeBeatGameDriver();
@@ -21287,6 +21339,11 @@ describe("beat-game run lifecycle", () => {
         selectBestWeapon: true,
       }),
     );
+  }, 10_000);
+
+  it("leaves a piglin alone while it wears gold", async () => {
+    expect(await piglinFight({})).toBe(true);
+    expect(await piglinFight({ feet: "minecraft:golden_boots" })).toBe(false);
   }, 10_000);
 
   it("turns on an attacking piglin after its first hit", async () => {
