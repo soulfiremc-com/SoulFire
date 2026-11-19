@@ -441,6 +441,15 @@ function queryLiquidInteractionStandBlocks(
   );
 }
 
+const MINING_PICKAXE_ITEM_IDS = [
+  "minecraft:netherite_pickaxe",
+  "minecraft:diamond_pickaxe",
+  "minecraft:iron_pickaxe",
+  "minecraft:stone_pickaxe",
+  "minecraft:wooden_pickaxe",
+  "minecraft:golden_pickaxe",
+] as const;
+
 function pathfindToLiquidInteractionStand(
   driver: BeatGameDriver,
   candidate: BeatGamePosition,
@@ -469,10 +478,16 @@ function pathfindToLiquidInteractionStand(
         z: current.z + (candidate.z - current.z) * progress,
         dimension: candidate.dimension,
       } satisfies BeatGamePosition;
+      // Stone takes seconds per block by hand. A live bot's pickaxe broke a
+      // few legs into a deep approach and it spent ten minutes digging the
+      // rest by hand; without a pickaxe the legs only walk, and a route that
+      // needs digging fails so the caller can make one.
+      const carried = (yield* driver.observe).inventory.counts;
+      const carriesPickaxe = MINING_PICKAXE_ITEM_IDS.some((itemId) => (carried[itemId] ?? 0) > 0);
       const reachedWaypoint = yield* driver
         .pathfind(waypoint, LIQUID_INTERACTION_APPROACH_SEGMENT_RADIUS, {
           ...policy,
-          allowMining: path.allowMining,
+          allowMining: path.allowMining && carriesPickaxe,
         })
         .pipe(
           Effect.as(true),

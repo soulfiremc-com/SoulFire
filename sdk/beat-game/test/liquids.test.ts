@@ -872,6 +872,7 @@ describe("lava interaction positioning", () => {
       blockObservation({ ...stand, y: stand.y - 1 }),
     ];
     driver.currentObservation = observation({
+      counts: { "minecraft:stone_pickaxe": 1 },
       position: {
         x: 0.5,
         y: 64,
@@ -898,7 +899,10 @@ describe("lava interaction positioning", () => {
     driver.pathResolver = (position, radius, policy) =>
       Effect.sync(() => {
         driver.paths.push({ position, radius, policy });
-        driver.currentObservation = observation({ position });
+        driver.currentObservation = observation({
+          counts: driver.currentObservation.inventory.counts,
+          position,
+        });
       });
     driver.raycastResolver = () =>
       driver.currentObservation.player.position.x >= stand.x
@@ -947,5 +951,90 @@ describe("lava interaction positioning", () => {
         maxFallDistance: 1,
       }),
     });
+  });
+
+  it("walks the approach legs without mining when it carries no pickaxe", async () => {
+    const driver = new FakeBeatGameDriver();
+    const source = blockObservation(
+      {
+        x: 40,
+        y: 62,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      {
+        blockId: "minecraft:lava",
+        properties: { level: "0" },
+        replaceable: true,
+      },
+    );
+    const stand = {
+      x: 38,
+      y: 64,
+      z: 0,
+      dimension: "minecraft:overworld",
+    } as const;
+    const standBlocks = [
+      blockObservation(stand, {
+        blockId: "minecraft:air",
+        replaceable: true,
+      }),
+      blockObservation(
+        { ...stand, y: stand.y + 1 },
+        {
+          blockId: "minecraft:air",
+          replaceable: true,
+        },
+      ),
+      blockObservation({ ...stand, y: stand.y - 1 }),
+    ];
+    driver.currentObservation = observation({
+      position: {
+        x: 0.5,
+        y: 64,
+        z: 0.5,
+        dimension: "minecraft:overworld",
+      },
+    });
+    driver.blockQueryResolver = ({ center, radius, selector }) => {
+      if (Object.keys(selector).length !== 0) {
+        return [];
+      }
+      if (radius === 4.9) {
+        return standBlocks;
+      }
+      return radius === 0.25
+        ? standBlocks.filter(
+            (block) =>
+              block.position.x === Math.floor(center.x) &&
+              block.position.y === Math.floor(center.y) &&
+              block.position.z === Math.floor(center.z),
+          )
+        : [];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({ position });
+      });
+    driver.raycastResolver = () =>
+      driver.currentObservation.player.position.x >= stand.x
+        ? { block: source, distance: 3 }
+        : { distance: 6 };
+
+    const selected = await Effect.runPromise(
+      approachLiquidSourceFromSide(driver, driver.currentObservation, [source], {
+        path: defaultBeatGameStrategy.path,
+        requireTargetableSource: true,
+      }),
+    );
+
+    expect(selected.position).toEqual(source.position);
+    // Stone takes seconds per block by hand, so no leg may plan to dig.
+    expect(driver.paths.slice(0, 3)).toEqual(
+      Array.from({ length: 3 }, () =>
+        expect.objectContaining({ policy: expect.objectContaining({ allowMining: false }) }),
+      ),
+    );
   });
 });
