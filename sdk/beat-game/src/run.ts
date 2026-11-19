@@ -406,6 +406,15 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:brown_mushroom",
   // Magma burns whoever stands on it, so it makes a poor building block.
   "minecraft:magma_block",
+  "minecraft:calcite",
+  "minecraft:smooth_basalt",
+  "minecraft:lapis_lazuli",
+  "minecraft:bone",
+] as const;
+const NETHER_BUILDING_BLOCK_DISCARD_IDS = [
+  "minecraft:netherrack",
+  "minecraft:basalt",
+  "minecraft:blackstone",
 ] as const;
 const REDUNDANT_EQUIPMENT_FAMILIES = [
   [
@@ -16032,9 +16041,13 @@ export function selectInventoryDiscard(
   }
   // Nether tunnels fill the inventory with netherrack. A live run held 726 of
   // it and could not free the slots to craft a new pickaxe.
-  const excessNetherrack = (counts["minecraft:netherrack"] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
-  if (excessNetherrack > 0) {
-    return { itemId: "minecraft:netherrack", count: Math.min(64, excessNetherrack) };
+  // Basalt deltas fill it with basalt and blackstone the same way. A live run
+  // held 332 basalt and could not free slots for food.
+  for (const itemId of NETHER_BUILDING_BLOCK_DISCARD_IDS) {
+    const excess = (counts[itemId] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
+    if (excess > 0) {
+      return { itemId, count: Math.min(64, excess) };
+    }
   }
   const cobblestoneCount = counts["minecraft:cobblestone"] ?? 0;
   if (cobblestoneCount > 0) {

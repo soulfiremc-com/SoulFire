@@ -182,6 +182,21 @@ describe("inventory discards", () => {
     });
   });
 
+  it("frees slots held by basalt delta rock", () => {
+    // As in a live run whose inventory filled up in a basalt delta.
+    expect(
+      selectInventoryDiscard({
+        "minecraft:basalt": 332,
+        "minecraft:blackstone": 56,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+      }),
+    ).toEqual({ itemId: "minecraft:basalt", count: 64 });
+    expect(selectInventoryDiscard({ "minecraft:calcite": 15, "minecraft:netherrack": 64 })).toEqual(
+      { itemId: "minecraft:calcite", count: 15 },
+    );
+  });
+
   it("keeps the netherrack building reserve", () => {
     expect(selectInventoryDiscard({ "minecraft:netherrack": 64 })).toBeUndefined();
   });
