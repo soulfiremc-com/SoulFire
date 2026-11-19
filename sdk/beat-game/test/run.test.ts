@@ -44617,6 +44617,59 @@ describe("beat-game run lifecycle", () => {
     expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
   });
 
+  it("replans when a portal carries the bot away mid-action", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation();
+    const command = { failed: false };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          command.failed
+            ? Effect.never
+            : Effect.suspend(() => {
+                command.failed = true;
+                // As in a live run: a portal beside the crafting table moved
+                // the bot, and its next command named a place it had left.
+                driver.currentObservation = observation({ dimension: "minecraft:the_nether" });
+                return Effect.fail(
+                  new BeatGameDriverError({
+                    operation: "task.craft",
+                    retryable: false,
+                    message:
+                      "INVALID_ARGUMENT: Crafting station is in 'minecraft:overworld', but the bot is in 'minecraft:the_nether'",
+                  }),
+                );
+              }),
+        ),
+      );
+
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "portal-mid-action-run",
+          team: { teamId: "portal-mid-action-team" },
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!command.failed) {
+                yield* Effect.sleep(1);
+              }
+              yield* Effect.sleep(200);
+              yield* run.stop;
+              return yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    assert(Result.isFailure(exit));
+    expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
+  }, 20_000);
+
   it("interrupts a blocked observation when the run is stopped", async () => {
     const driver = new FakeBeatGameDriver();
     let observations = 0;

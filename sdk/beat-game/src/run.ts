@@ -4017,7 +4017,9 @@ function executeDecision(
   return executeWithSafety(observation).pipe(
     // A command sent in the tick the bot dies fails like any other. A live
     // fall clutch used its water bucket as the bot hit the ground, and that
-    // failure ended the whole run instead of starting death recovery.
+    // failure ended the whole run instead of starting death recovery. A
+    // portal does the same: a live bot crafting beside one was carried to
+    // the Overworld, and its next craft at the Nether table ended the run.
     Effect.catchIf(
       (error) => error instanceof BeatGameDriverError,
       (error) =>
@@ -4025,7 +4027,11 @@ function executeDecision(
           Effect.flatMap((latest) =>
             latest.player.dead
               ? Effect.succeed({ replanReason: "bot died" } satisfies ActionResult)
-              : Effect.fail(error),
+              : latest.player.position.dimension !== observation.player.position.dimension
+                ? Effect.succeed({
+                    replanReason: "bot changed dimension during the action",
+                  } satisfies ActionResult)
+                : Effect.fail(error),
           ),
           Effect.catchTag("BeatGameObservationError", () => Effect.fail(error)),
         ),
