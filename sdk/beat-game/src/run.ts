@@ -9917,6 +9917,9 @@ function craftNetherPickaxe(
     progressItemIds: NETHER_STEM_ITEM_IDS,
     purpose: "find-nether-stems",
     avoidFluids: true,
+    // The Nether has no surface to walk along. A live bot in a basalt
+    // delta could not leave its cave without digging and looped for an hour.
+    preferSurfaceExploration: false,
   });
 }
 

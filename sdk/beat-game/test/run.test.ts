@@ -1398,6 +1398,70 @@ describe("beat-game run lifecycle", () => {
     ).toBe(true);
   }, 20_000);
 
+  it("digs through Nether terrain while searching for stems", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "nether-stem-search-run";
+    const teamId = "nether-stem-search-team";
+    // As in a live run: no pickaxe, no wood, and a basalt delta all around.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:basalt": 64,
+        "minecraft:blackstone": 64,
+        "minecraft:shield": 1,
+        "minecraft:stick": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      });
+    const explorations: { readonly allowMining: boolean }[] = [];
+    const recordExploration = (policy: { readonly allowMining: boolean }) =>
+      Effect.sync(() => {
+        explorations.push(policy);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.xzPathResolver = (_x, _z, _dimension, _radius, policy) => recordExploration(policy);
+    driver.pathResolver = (_position, _radius, policy) => recordExploration(policy);
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (explorations.length === 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("5 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({
+        type: "collect-blocks",
+        blockIds: ["minecraft:crimson_stem", "minecraft:warped_stem"],
+      }),
+    );
+    expect(explorations[0]).toMatchObject({ allowMining: true });
+  });
+
   it("collects Nether stems when a broken pickaxe cannot be paid for with carried wood", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
