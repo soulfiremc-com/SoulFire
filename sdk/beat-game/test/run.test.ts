@@ -21836,6 +21836,73 @@ describe("beat-game run lifecycle", () => {
     ).toBeGreaterThanOrEqual(2);
   }, 10_000);
 
+  it("keeps fighting a zombie it could not outrun when it takes another hit", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({ counts });
+    const zombie = {
+      connectionEpoch: "epoch-1",
+      networkId: 57,
+      entityType: "minecraft:zombie",
+      position: { x: 8, y: 64, z: 0, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(2) === true ||
+      query.selector.networkId === zombie.networkId
+        ? driver.entityResults
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "collect-blocks" || task.type === "flee" || task.type === "attack-entity"
+            ? Effect.never
+            : Effect.void,
+        ),
+      );
+    let fleesBeforeFight = 0;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+                yield* Effect.sleep(1);
+              }
+              driver.currentObservation = observation({ counts, health: 8, food: 14 });
+              driver.entityResults = [zombie];
+              while (!driver.tasks.some((task) => task.type === "flee")) {
+                yield* Effect.sleep(1);
+              }
+              driver.currentObservation = observation({ counts, health: 14, food: 14 });
+              driver.entityResults = [{ ...zombie, position: { ...zombie.position, x: 2 } }];
+              while (!driver.tasks.some((task) => task.type === "attack-entity")) {
+                yield* Effect.sleep(1);
+              }
+              fleesBeforeFight = driver.tasks.filter((task) => task.type === "flee").length;
+              // As in a live run: the zombie lands another hit mid-fight, though
+              // the bot still has more health than a lethal hit takes.
+              driver.currentObservation = observation({ counts, health: 10, food: 14 });
+              yield* Effect.sleep(500);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("5 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks.filter((task) => task.type === "flee")).toHaveLength(fleesBeforeFight);
+  }, 10_000);
+
   it("turns on a close zombie that catches a healthy armed escape", async () => {
     const driver = new FakeBeatGameDriver();
     const zombie = {

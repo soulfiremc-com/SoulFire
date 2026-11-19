@@ -5333,7 +5333,7 @@ function escapeFromTarget(
             health: current.player.health,
           },
         });
-        yield* defendAndRecover(state, outcome.target);
+        yield* defendAndRecover(state, outcome.target, { commitThroughWound: true });
         return;
       }
       yield* state.driver.withControl(performKnockbackStrike(state, current, outcome.target));
@@ -5494,7 +5494,9 @@ function recoverAfterFailedEscape(
           position: observation.player.position,
         },
       });
-      const defended = yield* defendAgainstTarget(state, closeMeleeThreat).pipe(
+      const defended = yield* defendAgainstTarget(state, closeMeleeThreat, {
+        commitThroughWound: true,
+      }).pipe(
         Effect.as(true),
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
@@ -8636,16 +8638,17 @@ function findNearbyAttackThreat(
 function defendAgainstTarget(
   state: RunState,
   target: BeatGameEntityObservation,
+  options: DefenseOptions = {},
 ): Effect.Effect<void, BeatGameDriverError> {
   if (!PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)) {
-    return defendAgainstSingleTarget(state, target);
+    return defendAgainstSingleTarget(state, target, options);
   }
   return Effect.raceFirst(
-    defendAgainstSingleTarget(state, target).pipe(Effect.as(undefined)),
+    defendAgainstSingleTarget(state, target, options).pipe(Effect.as(undefined)),
     waitForCloserMeleeAttacker(state, target),
   ).pipe(
     Effect.flatMap((closer) =>
-      closer === undefined ? Effect.void : defendAgainstTarget(state, closer),
+      closer === undefined ? Effect.void : defendAgainstTarget(state, closer, options),
     ),
   );
 }
@@ -8691,6 +8694,7 @@ function waitForCloserMeleeAttacker(
 function defendAgainstSingleTarget(
   state: RunState,
   target: BeatGameEntityObservation,
+  options: DefenseOptions = {},
 ): Effect.Effect<void, BeatGameDriverError> {
   const isRangedTarget = PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType);
   const defensivePath = {
@@ -8727,6 +8731,7 @@ function defendAgainstSingleTarget(
           )
         : Effect.void;
       const commitThroughWound =
+        options.commitThroughWound === true ||
         shouldCommitToUnshieldedRangedFight(observation, target) ||
         shouldCommitToBarehandedRangedFight(observation, target) ||
         shouldCommitToCaughtMeleePursuerFight(observation, target) ||
@@ -8847,11 +8852,19 @@ function monitorDefenseHealth(
   );
 }
 
+// A fight the bot turned to because running failed must not end in running
+// again when it takes a hit. A live bot alternated between both for fifteen
+// seconds against a zombie and a skeleton and died without winning either.
+interface DefenseOptions {
+  readonly commitThroughWound?: boolean;
+}
+
 function defendAndRecover(
   state: RunState,
   target: BeatGameEntityObservation,
+  options: DefenseOptions = {},
 ): Effect.Effect<void, BeatGameDriverError> {
-  return defendAgainstTarget(state, target).pipe(
+  return defendAgainstTarget(state, target, options).pipe(
     Effect.andThen(retreatAndRecover(state, POST_DEFENSE_RECOVERY_DURATION_MS)),
     Effect.andThen(
       collectNearbyDrops(state.driver, {
