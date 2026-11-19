@@ -3986,6 +3986,21 @@ function executeDecision(
       }),
     );
   return executeWithSafety(observation).pipe(
+    // A command sent in the tick the bot dies fails like any other. A live
+    // fall clutch used its water bucket as the bot hit the ground, and that
+    // failure ended the whole run instead of starting death recovery.
+    Effect.catchIf(
+      (error) => error instanceof BeatGameDriverError,
+      (error) =>
+        observeDriverFresh(state).pipe(
+          Effect.flatMap((latest) =>
+            latest.player.dead
+              ? Effect.succeed({ replanReason: "bot died" } satisfies ActionResult)
+              : Effect.fail(error),
+          ),
+          Effect.catchTag("BeatGameObservationError", () => Effect.fail(error)),
+        ),
+    ),
     Effect.mapError((error) =>
       error instanceof BeatGameDriverError
         ? error.operation === "pathfind"

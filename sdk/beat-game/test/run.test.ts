@@ -44218,6 +44218,58 @@ describe("beat-game run lifecycle", () => {
     expect(driver.taskExecutions[0]?.deadline).toBeInstanceOf(Date);
   });
 
+  it("recovers from a command that failed because the bot died", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation();
+    const command = { failed: false };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          command.failed || task.type === "auto-respawn"
+            ? Effect.never
+            : Effect.suspend(() => {
+                command.failed = true;
+                // As in a live fall: the bot hit the ground while its
+                // clutch was still sending commands.
+                driver.currentObservation = observation({ dead: true, health: 0 });
+                return Effect.fail(
+                  new BeatGameDriverError({
+                    operation: "act.use-item",
+                    retryable: false,
+                    message: "Bot action did not complete",
+                  }),
+                );
+              }),
+        ),
+      );
+
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "died-mid-command-run",
+          team: { teamId: "died-mid-command-team" },
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!command.failed) {
+                yield* Effect.sleep(1);
+              }
+              yield* Effect.sleep(200);
+              yield* run.stop;
+              return yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    assert(Result.isFailure(exit));
+    expect(exit.failure).toBeInstanceOf(BeatGameCancelled);
+  });
+
   it("interrupts a blocked observation when the run is stopped", async () => {
     const driver = new FakeBeatGameDriver();
     let observations = 0;
