@@ -64,6 +64,7 @@
       }
     ],
     "eslint/no-unmodified-loop-condition": "error",
+    "eslint/no-useless-assignment": "error",
     "eslint/no-useless-call": "error",
     "eslint/no-warning-comments": "off",
     "eslint/require-await": "off",
@@ -73,6 +74,7 @@
     "oxc/no-accumulating-spread": "error",
     "promise/always-return": "error",
     "promise/catch-or-return": "error",
+    "typescript/array-type": "error",
     "typescript/ban-ts-comment": [
       "error",
       {
@@ -83,12 +85,15 @@
         "minimumDescriptionLength": 10
       }
     ],
+    "typescript/consistent-indexed-object-style": "error",
     "typescript/consistent-return": "error",
+    "typescript/consistent-type-definitions": ["error", "interface"],
     "typescript/consistent-type-exports": "error",
     "typescript/consistent-type-imports": "error",
     "typescript/no-deprecated": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-generated-empty-object-type": "error",
+    "typescript/no-inferrable-types": "error",
     "typescript/no-misused-promises": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-unnecessary-condition": [
@@ -105,6 +110,7 @@
     "typescript/no-unsafe-type-assertion": "error",
     "typescript/no-useless-empty-export": "error",
     "typescript/only-throw-error": "error",
+    "typescript/prefer-function-type": "error",
     "typescript/prefer-nullish-coalescing": "error",
     "typescript/prefer-optional-chain": "error",
     "typescript/prefer-promise-reject-errors": "error",
@@ -130,6 +136,7 @@
     "unicorn/prefer-set-has": "error",
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-top-level-await": "error",
+    "unicorn/switch-case-braces": "error",
     "vitest/no-conditional-expect": "error",
     "vitest/no-conditional-in-test": "off"
   },
@@ -167,6 +174,12 @@
       "files": ["**/*.ts"],
       "rules": {
         "eslint/no-redeclare": "off"
+      }
+    },
+    {
+      "files": ["sdk/typescript/src/**/*.ts"],
+      "rules": {
+        "typescript/explicit-module-boundary-types": "error"
       }
     }
   ]

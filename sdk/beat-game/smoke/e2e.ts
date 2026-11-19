@@ -2897,14 +2897,12 @@ function inspectDebugWorldVolume(
         ),
       );
     }
-    const positions: Array<
-      Readonly<{
-        x: number;
-        y: number;
-        z: number;
-        dimension: string;
-      }>
-    > = [];
+    const positions: Readonly<{
+      x: number;
+      y: number;
+      z: number;
+      dimension: string;
+    }>[] = [];
     for (
       let x = center.x - parsed.horizontalRadius;
       x <= center.x + parsed.horizontalRadius;

@@ -330,7 +330,11 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
 
 // ---- what tests use --------------------------------------------------------------------------
 
-export type Pos = { x: number; y: number; z: number };
+export interface Pos {
+  x: number;
+  y: number;
+  z: number;
+}
 
 export interface TestContext {
   bot: SoulFireBot;

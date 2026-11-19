@@ -295,36 +295,47 @@ async function exists(target: string): Promise<boolean> {
 
 function detectArchitecture(): string {
   switch (process.arch) {
-    case "arm":
+    case "arm": {
       return "arm";
-    case "arm64":
+    }
+    case "arm64": {
       return "aarch64";
-    case "ia32":
+    }
+    case "ia32": {
       return "x32";
-    case "ppc64":
+    }
+    case "ppc64": {
       return "ppc64";
-    case "riscv64":
+    }
+    case "riscv64": {
       return "riscv64";
-    case "s390x":
+    }
+    case "s390x": {
       return "s390x";
-    case "x64":
+    }
+    case "x64": {
       return "x64";
+    }
     case "loong64":
     case "mips":
     case "mipsel":
-    default:
+    default: {
       throw new Error(`Unsupported architecture: ${process.arch}`);
+    }
   }
 }
 
 function detectOs(): string {
   switch (process.platform) {
-    case "darwin":
+    case "darwin": {
       return "mac";
-    case "linux":
+    }
+    case "linux": {
       return "linux";
-    case "win32":
+    }
+    case "win32": {
       return "windows";
+    }
     case "aix":
     case "android":
     case "cygwin":
@@ -333,8 +344,9 @@ function detectOs(): string {
     case "netbsd":
     case "openbsd":
     case "sunos":
-    default:
+    default: {
       throw new Error(`Unsupported operating system: ${process.platform}`);
+    }
   }
 }
 

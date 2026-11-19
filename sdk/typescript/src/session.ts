@@ -355,20 +355,24 @@ export function reduceBotSessionState(state: BotSessionState, event: BotEvent): 
   const resourcePacks = new Map(current.resourcePacks);
 
   switch (event.event.case) {
-    case "snapshot":
+    case "snapshot": {
       player = event.event.value;
       break;
-    case "stateDelta":
+    }
+    case "stateDelta": {
       if (player !== undefined) {
         player = mergePlayerState(player, event.event.value);
       }
       break;
-    case "status":
+    }
+    case "status": {
       status = event.event.value;
       break;
-    case "inventory":
+    }
+    case "inventory": {
       inventory = event.event.value.state;
       break;
+    }
     case "entityEvent": {
       const entity = event.event.value.entity;
       if (entity !== undefined) {
@@ -401,21 +405,26 @@ export function reduceBotSessionState(state: BotSessionState, event: BotEvent): 
       }
       break;
     }
-    case "environment":
+    case "environment": {
       environment = reduceEnvironmentState(environment, event.event.value);
       break;
-    case "playerList":
+    }
+    case "playerList": {
       reducePlayerListState(playerList, event.event.value);
       break;
-    case "bossBar":
+    }
+    case "bossBar": {
       reduceBossBarState(bossBars, event.event.value);
       break;
-    case "scoreboard":
+    }
+    case "scoreboard": {
       scoreboard = reduceScoreboardState(scoreboard, event.event.value);
       break;
-    case "resourcePack":
+    }
+    case "resourcePack": {
       reduceResourcePackState(resourcePacks, event.event.value);
       break;
+    }
     case "chat":
     case "chunk":
     case "damage":
@@ -426,8 +435,9 @@ export function reduceBotSessionState(state: BotSessionState, event: BotEvent): 
     case "sound":
     case "title":
     case undefined:
-    default:
+    default: {
       break;
+    }
   }
 
   return {
@@ -458,22 +468,26 @@ function reduceResourcePackState(
   event: BotResourcePackEvent,
 ): void {
   switch (event.kind) {
-    case ResourcePackEventKind.RESOURCE_PACK_EVENT_OFFERED:
+    case ResourcePackEventKind.RESOURCE_PACK_EVENT_OFFERED: {
       if (event.packId !== undefined) {
         resourcePacks.set(event.packId, event);
       }
       break;
-    case ResourcePackEventKind.RESOURCE_PACK_EVENT_REMOVED:
+    }
+    case ResourcePackEventKind.RESOURCE_PACK_EVENT_REMOVED: {
       if (event.packId !== undefined) {
         resourcePacks.delete(event.packId);
       }
       break;
-    case ResourcePackEventKind.RESOURCE_PACK_EVENT_CLEARED:
+    }
+    case ResourcePackEventKind.RESOURCE_PACK_EVENT_CLEARED: {
       resourcePacks.clear();
       break;
+    }
     case ResourcePackEventKind.RESOURCE_PACK_EVENT_UNSPECIFIED:
-    default:
+    default: {
       break;
+    }
   }
 }
 
@@ -493,29 +507,37 @@ function reduceEnvironmentState(
         gameTime: event.change.value.gameTime,
       };
     }
-    case "weather":
+    case "weather": {
       switch (event.change.value.kind) {
-        case WeatherEventKind.WEATHER_EVENT_STARTED_RAINING:
+        case WeatherEventKind.WEATHER_EVENT_STARTED_RAINING: {
           return { ...state, raining: true };
-        case WeatherEventKind.WEATHER_EVENT_STOPPED_RAINING:
+        }
+        case WeatherEventKind.WEATHER_EVENT_STOPPED_RAINING: {
           return { ...state, raining: false };
-        case WeatherEventKind.WEATHER_EVENT_RAIN_LEVEL_CHANGED:
+        }
+        case WeatherEventKind.WEATHER_EVENT_RAIN_LEVEL_CHANGED: {
           return event.change.value.level === undefined
             ? state
             : { ...state, rainLevel: event.change.value.level };
-        case WeatherEventKind.WEATHER_EVENT_THUNDER_LEVEL_CHANGED:
+        }
+        case WeatherEventKind.WEATHER_EVENT_THUNDER_LEVEL_CHANGED: {
           return event.change.value.level === undefined
             ? state
             : { ...state, thunderLevel: event.change.value.level };
+        }
         case WeatherEventKind.WEATHER_EVENT_UNSPECIFIED:
-        default:
+        default: {
           return state;
+        }
       }
-    case "gameEvent":
+    }
+    case "gameEvent": {
       return { ...state, lastGameEvent: event.change.value };
+    }
     case undefined:
-    default:
+    default: {
       return state;
+    }
   }
 }
 
@@ -583,7 +605,7 @@ function reduceScoreboardState(
   const objectiveName = event.objectiveName;
   switch (event.kind) {
     case ScoreboardEventKind.SCOREBOARD_EVENT_OBJECTIVE_ADD:
-    case ScoreboardEventKind.SCOREBOARD_EVENT_OBJECTIVE_UPDATE:
+    case ScoreboardEventKind.SCOREBOARD_EVENT_OBJECTIVE_UPDATE: {
       if (objectiveName !== undefined) {
         const previous = objectives.get(objectiveName);
         objectives.set(objectiveName, {
@@ -595,7 +617,8 @@ function reduceScoreboardState(
         });
       }
       break;
-    case ScoreboardEventKind.SCOREBOARD_EVENT_OBJECTIVE_REMOVE:
+    }
+    case ScoreboardEventKind.SCOREBOARD_EVENT_OBJECTIVE_REMOVE: {
       if (objectiveName !== undefined) {
         objectives.delete(objectiveName);
         for (const [slot, displayedObjective] of displaySlots) {
@@ -610,7 +633,8 @@ function reduceScoreboardState(
         }
       }
       break;
-    case ScoreboardEventKind.SCOREBOARD_EVENT_DISPLAY_OBJECTIVE:
+    }
+    case ScoreboardEventKind.SCOREBOARD_EVENT_DISPLAY_OBJECTIVE: {
       if (event.displaySlot !== undefined) {
         if (objectiveName === undefined || objectiveName.length === 0) {
           displaySlots.delete(event.displaySlot);
@@ -619,7 +643,8 @@ function reduceScoreboardState(
         }
       }
       break;
-    case ScoreboardEventKind.SCOREBOARD_EVENT_SCORE_SET:
+    }
+    case ScoreboardEventKind.SCOREBOARD_EVENT_SCORE_SET: {
       if (objectiveName !== undefined && event.owner !== undefined && event.score !== undefined) {
         scores.set(scoreboardScoreKey(objectiveName, event.owner), {
           objectiveName,
@@ -629,7 +654,8 @@ function reduceScoreboardState(
         });
       }
       break;
-    case ScoreboardEventKind.SCOREBOARD_EVENT_SCORE_RESET:
+    }
+    case ScoreboardEventKind.SCOREBOARD_EVENT_SCORE_RESET: {
       if (event.owner !== undefined) {
         if (objectiveName !== undefined) {
           scores.delete(scoreboardScoreKey(objectiveName, event.owner));
@@ -642,20 +668,24 @@ function reduceScoreboardState(
         }
       }
       break;
-    case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_REMOVE:
+    }
+    case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_REMOVE: {
       if (event.teamName !== undefined) {
         teams.delete(event.teamName);
       }
       break;
+    }
     case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_ADD:
     case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_UPDATE:
     case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_PLAYERS_ADD:
-    case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_PLAYERS_REMOVE:
+    case ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_PLAYERS_REMOVE: {
       reduceScoreboardTeam(teams, event);
       break;
+    }
     case ScoreboardEventKind.SCOREBOARD_EVENT_UNSPECIFIED:
-    default:
+    default: {
       break;
+    }
   }
   return { displaySlots, objectives, scores, teams };
 }

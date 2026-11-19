@@ -3502,7 +3502,7 @@ function executeDecision(
                   replanReason: preparationPending,
                 } satisfies ActionResult;
               }
-              respawned = yield* observeDriverFresh(state);
+              yield* observeDriverFresh(state);
               yield* retreatAndRecover(state, POST_DEFENSE_RECOVERY_DURATION_MS, {
                 preserveFoodBelowCount: DEATH_RECOVERY_FOOD_RESERVE_COUNT,
               });
@@ -3620,7 +3620,7 @@ function executeDecision(
           } satisfies ActionResult;
         });
       }
-      case "eat":
+      case "eat": {
         return (
           state.hooks.eat?.(policyContext) ??
           eatWhenNeeded(state.driver, {
@@ -3630,17 +3630,20 @@ function executeDecision(
             path: state.strategy.path,
           })
         ).pipe(Effect.as({} satisfies ActionResult));
-      case "retreat":
+      }
+      case "retreat": {
         return (state.hooks.retreat?.(policyContext) ?? retreatAndRecover(state)).pipe(
           Effect.as({} satisfies ActionResult),
         );
-      case "prepare-equipment":
+      }
+      case "prepare-equipment": {
         return (
           state.hooks.prepareEquipment?.(policyContext) ??
           equipBestArmor(state.driver, {
             path: state.strategy.path,
           })
         ).pipe(Effect.as({} satisfies ActionResult));
+      }
       case "satisfy-requirement": {
         const satisfy =
           state.hooks.satisfyRequirement === undefined
@@ -3718,7 +3721,7 @@ function executeDecision(
           ),
         );
       }
-      case "return-through-portal":
+      case "return-through-portal": {
         if (state.hooks.returnThroughPortal !== undefined) {
           return state.hooks
             .returnThroughPortal(policyContext)
@@ -3749,7 +3752,8 @@ function executeDecision(
           ),
           Effect.as({} satisfies ActionResult),
         );
-      case "throw-eye":
+      }
+      case "throw-eye": {
         return moveToEyeBaseline(state).pipe(
           Effect.andThen(state.hooks.throwEye?.(policyContext) ?? throwEyeOfEnder(state.driver)),
           Effect.flatMap((sample) => {
@@ -3799,7 +3803,8 @@ function executeDecision(
             );
           }),
         );
-      case "search-stronghold":
+      }
+      case "search-stronghold": {
         return (state.hooks.searchStronghold?.(policyContext) ?? searchStronghold(state)).pipe(
           Effect.tap((found) =>
             !found
@@ -3829,7 +3834,8 @@ function executeDecision(
               : {},
           ),
         );
-      case "activate-end-portal":
+      }
+      case "activate-end-portal": {
         if (state.hooks.activateEndPortal !== undefined) {
           return state.hooks
             .activateEndPortal(policyContext)
@@ -3849,7 +3855,8 @@ function executeDecision(
               rememberWorldPlace(checkpoint, "END_ENTRY", observation.player.position, 1),
           } satisfies ActionResult),
         );
-      case "fight-ender-dragon":
+      }
+      case "fight-ender-dragon": {
         if (state.hooks.fightEnderDragon !== undefined) {
           return state.hooks
             .fightEnderDragon(policyContext)
@@ -3860,15 +3867,18 @@ function executeDecision(
             );
         }
         return fightDragon(state);
-      case "exit-end":
+      }
+      case "exit-end": {
         return (
           state.hooks.exitEnd?.(policyContext) ??
           exitEnd(state.driver, {
             path: state.strategy.path,
           })
         ).pipe(Effect.as({} satisfies ActionResult));
-      default:
+      }
+      default: {
         return decision satisfies never;
+      }
     }
   })();
   const executeWithSafety = (
@@ -5951,7 +5961,7 @@ function knockBackAndSprintAway(
         } else if (threat.entityType === "minecraft:creeper") {
           let remainingSprintMs = sprintDuration;
           let segmentOrigin = playerPosition;
-          const blockedDirections: Array<Readonly<{ x: number; z: number }>> = [];
+          const blockedDirections: Readonly<{ x: number; z: number }>[] = [];
           while (remainingSprintMs > 0) {
             const segmentDuration = Math.min(CREEPER_ESCAPE_SPRINT_SEGMENT_MS, remainingSprintMs);
             yield* Effect.sleep(segmentDuration);
@@ -7065,7 +7075,7 @@ function swimToNearbyDrySurface(
           surface.surfaceY - observation.player.position.y <= AIR_ESCAPE_MAXIMUM_SWIMMABLE_RISE,
       ),
     );
-    const usableSurfaces: Array<Readonly<{ x: number; z: number; surfaceY: number }>> = [];
+    const usableSurfaces: Readonly<{ x: number; z: number; surfaceY: number }>[] = [];
     for (const surface of surfaces) {
       const support = yield* queryExactBlock(state.driver, {
         x: surface.x,
@@ -9319,11 +9329,13 @@ function satisfyRequirementFromWorld(
 ): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   const missing = Math.max(1, requirement.targetCount - requirement.currentCount);
   switch (requirement.key) {
-    case "food-supply":
+    case "food-supply": {
       return satisfyFoodSupplyRequirement(state, requirement, observation);
-    case "food":
+    }
+    case "food": {
       return satisfyFoodRequirement(state, requirement, observation);
-    case "logs":
+    }
+    case "logs": {
       return findNearestTreeColumn(state, observation.player.position).pipe(
         Effect.flatMap((explorationTarget) =>
           collectBlocksOrExplore(state, observation, {
@@ -9338,7 +9350,8 @@ function satisfyRequirementFromWorld(
           }),
         ),
       );
-    case "cobblestone":
+    }
+    case "cobblestone": {
       return collectBlocksOrExplore(state, observation, {
         blockIds: ["minecraft:stone"],
         count: bufferedCollectionCount("cobblestone", missing),
@@ -9349,22 +9362,27 @@ function satisfyRequirementFromWorld(
         prepareAttempt: (current) =>
           ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
       }).pipe(Effect.andThen(digForCobblestoneWithoutProgress(state, observation)));
+    }
     case "bed":
-    case "dragon-beds":
+    case "dragon-beds": {
       return satisfyBedRequirement(state, observation);
-    case "basic-melee-weapon":
+    }
+    case "basic-melee-weapon": {
       return craftWithTable(state, observation, "minecraft:wooden_sword", 1);
-    case "melee-weapon":
+    }
+    case "melee-weapon": {
       return craftWithTable(state, observation, "minecraft:stone_sword", 1);
-    case "obsidian":
+    }
+    case "obsidian": {
       return acquire(state.driver, requirement, {
         searchRadius: state.strategy.blockSearchRadius,
         path: state.strategy.path,
       });
+    }
     case "iron": {
       return satisfyIronRequirement(state, observation, missing);
     }
-    case "pickaxe":
+    case "pickaxe": {
       return craftWithTable(
         state,
         observation,
@@ -9373,6 +9391,7 @@ function satisfyRequirementFromWorld(
           : "minecraft:stone_pickaxe",
         1,
       );
+    }
     case "diamond-pickaxe": {
       const diamonds = observation.inventory.counts["minecraft:diamond"] ?? 0;
       if (diamonds < 3) {
@@ -9385,19 +9404,25 @@ function satisfyRequirementFromWorld(
       }
       return craftWithTable(state, observation, "minecraft:diamond_pickaxe", 1);
     }
-    case "water-bucket":
+    case "water-bucket": {
       return fillLiquidBucket(state, observation, "water");
-    case "lava-bucket":
+    }
+    case "lava-bucket": {
       return fillLiquidBucket(state, observation, "lava");
-    case "ignition":
+    }
+    case "ignition": {
       return ensureIgnition(state, observation);
-    case "shield":
+    }
+    case "shield": {
       return craftWithTable(state, observation, "minecraft:shield", 1);
-    case "chestplate":
+    }
+    case "chestplate": {
       return craftIronArmor(state, observation, "minecraft:iron_chestplate", 8);
-    case "helmet":
+    }
+    case "helmet": {
       return craftIronArmor(state, observation, "minecraft:iron_helmet", 5);
-    case "blaze-rods":
+    }
+    case "blaze-rods": {
       if (
         isNether(observation.player.position.dimension) &&
         !hasMiningPickaxeReserve(
@@ -9445,13 +9470,15 @@ function satisfyRequirementFromWorld(
           },
         },
       );
-    case "ender-pearls":
+    }
+    case "ender-pearls": {
       return acquireEnderPearls(
         state,
         observation,
         bufferedCollectionCount("ender-pearls", missing),
       );
-    case "gold":
+    }
+    case "gold": {
       return collectBlocks(state.driver, {
         blockIds: [
           "minecraft:nether_gold_ore",
@@ -9462,27 +9489,32 @@ function satisfyRequirementFromWorld(
         searchRadius: state.strategy.blockSearchRadius,
         path: state.strategy.path,
       });
-    case "eyes-of-ender":
+    }
+    case "eyes-of-ender": {
       return craftItem(state.driver, {
         resultItemId: "minecraft:ender_eye",
         count: missing,
         path: state.strategy.path,
       });
-    case "ranged-weapon":
+    }
+    case "ranged-weapon": {
       return ensureString(state, observation, 3).pipe(
         Effect.andThen(craftWithTable(state, observation, "minecraft:bow", 1)),
       );
-    case "arrows":
+    }
+    case "arrows": {
       return ensureArrowIngredients(state, observation, missing).pipe(
         Effect.andThen(craftWithTable(state, observation, "minecraft:arrow", missing)),
       );
-    case "torch":
+    }
+    case "torch": {
       return craftItem(state.driver, {
         resultItemId: "minecraft:torch",
         count: missing,
         path: state.strategy.path,
       });
-    default:
+    }
+    default: {
       return acquire(state.driver, requirement, {
         searchRadius: state.strategy.blockSearchRadius,
         path: state.strategy.path,
@@ -9503,6 +9535,7 @@ function satisfyRequirementFromWorld(
           ),
         ),
       );
+    }
   }
 }
 
@@ -9748,20 +9781,26 @@ function tryForageNearbyFood(
 
 function isReadyForageBlock(block: BeatGameBlockObservation): boolean {
   switch (block.blockId) {
-    case "minecraft:beetroots":
+    case "minecraft:beetroots": {
       return block.properties["age"] === "3";
+    }
     case "minecraft:carrots":
-    case "minecraft:potatoes":
+    case "minecraft:potatoes": {
       return block.properties["age"] === "7";
+    }
     case "minecraft:cave_vines":
-    case "minecraft:cave_vines_plant":
+    case "minecraft:cave_vines_plant": {
       return block.properties["berries"] === "true";
-    case "minecraft:melon":
+    }
+    case "minecraft:melon": {
       return block.diggable;
-    case "minecraft:sweet_berry_bush":
+    }
+    case "minecraft:sweet_berry_bush": {
       return Number(block.properties["age"]) >= 2;
-    default:
+    }
+    default: {
       return false;
+    }
   }
 }
 
@@ -14736,14 +14775,18 @@ function rotateExplorationOffset(
   rotation: number,
 ): { readonly x: number; readonly z: number } {
   switch (rotation) {
-    case 1:
+    case 1: {
       return { x: -offset.z, z: offset.x };
-    case 2:
+    }
+    case 2: {
       return { x: -offset.x, z: -offset.z };
-    case 3:
+    }
+    case 3: {
       return { x: offset.z, z: -offset.x };
-    default:
+    }
+    default: {
       return offset;
+    }
   }
 }
 
@@ -19131,33 +19174,43 @@ function actionObservedComplete(
   includeCollectionBuffer = false,
 ): boolean {
   switch (decision.type) {
-    case "recover-death":
+    case "recover-death": {
       return !observation.player.dead;
-    case "eat":
+    }
+    case "eat": {
       return observation.player.food > strategy.eatBelowFood;
-    case "retreat":
+    }
+    case "retreat": {
       return observation.player.health >= strategy.minimumHealth;
-    case "satisfy-requirement":
+    }
+    case "satisfy-requirement": {
       return (
         requirementCount(observation.inventory, decision.requirement) >=
         decision.requirement.targetCount +
           (includeCollectionBuffer ? requirementCollectionBuffer(decision.requirement.key) : 0)
       );
-    case "build-and-enter-nether":
+    }
+    case "build-and-enter-nether": {
       return isNether(observation.player.position.dimension);
-    case "return-through-portal":
+    }
+    case "return-through-portal": {
       return !isNether(observation.player.position.dimension);
-    case "activate-end-portal":
+    }
+    case "activate-end-portal": {
       return isEnd(observation.player.position.dimension);
-    case "exit-end":
+    }
+    case "exit-end": {
       return !isEnd(observation.player.position.dimension);
+    }
     case "prepare-equipment":
     case "throw-eye":
     case "search-stronghold":
-    case "fight-ender-dragon":
+    case "fight-ender-dragon": {
       return false;
-    default:
+    }
+    default: {
       return decision satisfies never;
+    }
   }
 }
 
@@ -19169,12 +19222,15 @@ function requirementCollectionBuffer(requirementKey: string): number {
     case "food":
     case "gold":
     case "iron":
-    case "logs":
+    case "logs": {
       return RESOURCE_COLLECTION_BUFFERS[requirementKey];
-    case "food-supply":
+    }
+    case "food-supply": {
       return RESOURCE_COLLECTION_BUFFERS.food;
-    default:
+    }
+    default: {
       return 0;
+    }
   }
 }
 
@@ -19294,7 +19350,7 @@ function resolveExistingPortalBuildFrame(
 }
 
 function portalBuildSearchOffsets(radius: number): readonly Readonly<{ x: number; z: number }>[] {
-  const offsets: Array<Readonly<{ x: number; z: number }>> = [];
+  const offsets: Readonly<{ x: number; z: number }>[] = [];
   for (let x = -radius; x <= radius; x += 1) {
     for (let z = -radius; z <= radius; z += 1) {
       offsets.push({ x, z });

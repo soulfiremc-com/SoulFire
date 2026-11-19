@@ -203,7 +203,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
   const missing =
     actionableMissing ?? (phase === BeatGamePhase.PREPARE_OVERWORLD ? firstMissing : undefined);
   switch (phase) {
-    case BeatGamePhase.PREPARE_OVERWORLD:
+    case BeatGamePhase.PREPARE_OVERWORLD: {
       if (missing !== undefined) {
         return requirementDecision(missing);
       }
@@ -213,7 +213,8 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
             type: "prepare-equipment",
             action: "prepare-equipment",
           };
-    case BeatGamePhase.ENTER_NETHER:
+    }
+    case BeatGamePhase.ENTER_NETHER: {
       if (isNether(observation.player.position.dimension)) {
         return phaseTransition(phase, BeatGamePhase.COLLECT_NETHER_RESOURCES);
       }
@@ -223,7 +224,8 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
             action: "build-and-enter-nether",
           }
         : requirementDecision(missing);
-    case BeatGamePhase.COLLECT_NETHER_RESOURCES:
+    }
+    case BeatGamePhase.COLLECT_NETHER_RESOURCES: {
       if (!isNether(observation.player.position.dimension)) {
         const reentryRequirement = requirementsForPhase(
           BeatGamePhase.ENTER_NETHER,
@@ -245,21 +247,24 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
       return missing === undefined
         ? phaseTransition(phase, BeatGamePhase.RETURN_TO_OVERWORLD)
         : requirementDecision(missing);
-    case BeatGamePhase.RETURN_TO_OVERWORLD:
+    }
+    case BeatGamePhase.RETURN_TO_OVERWORLD: {
       return isNether(observation.player.position.dimension)
         ? {
             type: "return-through-portal",
             action: "return-through-portal",
           }
         : phaseTransition(phase, BeatGamePhase.LOCATE_STRONGHOLD);
-    case BeatGamePhase.LOCATE_STRONGHOLD:
+    }
+    case BeatGamePhase.LOCATE_STRONGHOLD: {
       if (checkpoint.memory.strongholdEstimate !== undefined) {
         return { type: "search-stronghold", action: "search-stronghold" };
       }
       return missing === undefined
         ? { type: "throw-eye", action: "throw-eye" }
         : requirementDecision(missing);
-    case BeatGamePhase.ACTIVATE_END_PORTAL:
+    }
+    case BeatGamePhase.ACTIVATE_END_PORTAL: {
       if (isEnd(observation.player.position.dimension)) {
         return phaseTransition(phase, BeatGamePhase.FIGHT_ENDER_DRAGON);
       }
@@ -269,21 +274,26 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
             action: "activate-end-portal",
           }
         : requirementDecision(missing);
-    case BeatGamePhase.FIGHT_ENDER_DRAGON:
+    }
+    case BeatGamePhase.FIGHT_ENDER_DRAGON: {
       return missing === undefined
         ? {
             type: "fight-ender-dragon",
             action: "fight-ender-dragon",
           }
         : requirementDecision(missing);
-    case BeatGamePhase.EXIT_END:
+    }
+    case BeatGamePhase.EXIT_END: {
       return isEnd(observation.player.position.dimension)
         ? { type: "exit-end", action: "exit-end" }
         : phaseTransition(phase, BeatGamePhase.COMPLETE);
-    case BeatGamePhase.COMPLETE:
+    }
+    case BeatGamePhase.COMPLETE: {
       return phaseTransition(phase, phase);
-    default:
+    }
+    default: {
       return phase satisfies never;
+    }
   }
 }
 
@@ -442,50 +452,69 @@ function hasReusablePortalCandidate(
 
 export function nextPhase(phase: BeatGamePhase): BeatGamePhase {
   switch (phase) {
-    case BeatGamePhase.PREPARE_OVERWORLD:
+    case BeatGamePhase.PREPARE_OVERWORLD: {
       return BeatGamePhase.ENTER_NETHER;
-    case BeatGamePhase.ENTER_NETHER:
+    }
+    case BeatGamePhase.ENTER_NETHER: {
       return BeatGamePhase.COLLECT_NETHER_RESOURCES;
-    case BeatGamePhase.COLLECT_NETHER_RESOURCES:
+    }
+    case BeatGamePhase.COLLECT_NETHER_RESOURCES: {
       return BeatGamePhase.RETURN_TO_OVERWORLD;
-    case BeatGamePhase.RETURN_TO_OVERWORLD:
+    }
+    case BeatGamePhase.RETURN_TO_OVERWORLD: {
       return BeatGamePhase.LOCATE_STRONGHOLD;
-    case BeatGamePhase.LOCATE_STRONGHOLD:
+    }
+    case BeatGamePhase.LOCATE_STRONGHOLD: {
       return BeatGamePhase.ACTIVATE_END_PORTAL;
-    case BeatGamePhase.ACTIVATE_END_PORTAL:
+    }
+    case BeatGamePhase.ACTIVATE_END_PORTAL: {
       return BeatGamePhase.FIGHT_ENDER_DRAGON;
-    case BeatGamePhase.FIGHT_ENDER_DRAGON:
+    }
+    case BeatGamePhase.FIGHT_ENDER_DRAGON: {
       return BeatGamePhase.EXIT_END;
+    }
     case BeatGamePhase.EXIT_END:
-    case BeatGamePhase.COMPLETE:
+    case BeatGamePhase.COMPLETE: {
       return BeatGamePhase.COMPLETE;
-    default:
+    }
+    default: {
       return phase satisfies never;
+    }
   }
 }
 
 export function objectiveForPhase(phase: BeatGamePhase): string {
   switch (phase) {
-    case BeatGamePhase.PREPARE_OVERWORLD:
+    case BeatGamePhase.PREPARE_OVERWORLD: {
       return "Prepare food, tools, and portal materials";
-    case BeatGamePhase.ENTER_NETHER:
+    }
+    case BeatGamePhase.ENTER_NETHER: {
       return "Build, ignite, and enter a Nether portal";
-    case BeatGamePhase.COLLECT_NETHER_RESOURCES:
+    }
+    case BeatGamePhase.COLLECT_NETHER_RESOURCES: {
       return "Collect blaze rods, pearls, and supporting resources";
-    case BeatGamePhase.RETURN_TO_OVERWORLD:
+    }
+    case BeatGamePhase.RETURN_TO_OVERWORLD: {
       return "Return safely to the Overworld";
-    case BeatGamePhase.LOCATE_STRONGHOLD:
+    }
+    case BeatGamePhase.LOCATE_STRONGHOLD: {
       return "Triangulate and locate the stronghold";
-    case BeatGamePhase.ACTIVATE_END_PORTAL:
+    }
+    case BeatGamePhase.ACTIVATE_END_PORTAL: {
       return "Fill the End portal frames and enter the End";
-    case BeatGamePhase.FIGHT_ENDER_DRAGON:
+    }
+    case BeatGamePhase.FIGHT_ENDER_DRAGON: {
       return "Destroy the End crystals and defeat the dragon";
-    case BeatGamePhase.EXIT_END:
+    }
+    case BeatGamePhase.EXIT_END: {
       return "Enter the exit portal and return from the End";
-    case BeatGamePhase.COMPLETE:
+    }
+    case BeatGamePhase.COMPLETE: {
       return "The dragon is defeated and the bot has left the End";
-    default:
+    }
+    default: {
       return phase satisfies never;
+    }
   }
 }
 

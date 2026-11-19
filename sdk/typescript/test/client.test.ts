@@ -310,7 +310,7 @@ describe("SoulFireBot", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const actionTokens: Array<string | null> = [];
+          const actionTokens: (string | null)[] = [];
           const transport = createRouterTransport(({ service }) => {
             service(BotLiveService, {
               acquireBotControl() {
@@ -354,7 +354,7 @@ describe("SoulFireBot", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const clicks: BotContainerButtonClickRequest[] = [];
-          const tokens: Array<string | null> = [];
+          const tokens: (string | null)[] = [];
           const transport = createRouterTransport(({ service }) => {
             service(BotLiveService, {
               acquireBotControl() {

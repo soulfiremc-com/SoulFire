@@ -16,27 +16,35 @@ export function durableSkillKindForDecision(
   decision: ActionDecision,
 ): BeatGameDurableSkillKind | undefined {
   switch (decision.type) {
-    case "recover-death":
+    case "recover-death": {
       return BeatGameDurableSkillKind.DEATH_RECOVERY;
+    }
     case "build-and-enter-nether":
-    case "return-through-portal":
+    case "return-through-portal": {
       return BeatGameDurableSkillKind.PORTAL_CONSTRUCTION;
+    }
     case "throw-eye":
-    case "search-stronghold":
+    case "search-stronghold": {
       return BeatGameDurableSkillKind.STRONGHOLD_TRIANGULATION;
-    case "activate-end-portal":
+    }
+    case "activate-end-portal": {
       return BeatGameDurableSkillKind.END_PORTAL_ENTRY;
-    case "fight-ender-dragon":
+    }
+    case "fight-ender-dragon": {
       return BeatGameDurableSkillKind.DRAGON_COMBAT;
-    case "satisfy-requirement":
+    }
+    case "satisfy-requirement": {
       return durableRequirementSkill(decision.requirement.key);
+    }
     case "eat":
     case "exit-end":
     case "prepare-equipment":
-    case "retreat":
+    case "retreat": {
       return undefined;
-    default:
+    }
+    default: {
       return decision satisfies never;
+    }
   }
 }
 
@@ -293,15 +301,19 @@ function createDurableSkill(
 function durableRequirementSkill(requirementKey: string): BeatGameDurableSkillKind | undefined {
   switch (requirementKey) {
     case "lava-bucket":
-    case "water-bucket":
+    case "water-bucket": {
       return BeatGameDurableSkillKind.LIQUID_HANDLING;
-    case "blaze-rods":
+    }
+    case "blaze-rods": {
       return BeatGameDurableSkillKind.BLAZE_COMBAT;
+    }
     case "ender-pearls":
-    case "gold":
+    case "gold": {
       return BeatGameDurableSkillKind.PEARL_ACQUISITION;
-    default:
+    }
+    default: {
       return undefined;
+    }
   }
 }
 

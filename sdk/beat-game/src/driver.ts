@@ -532,17 +532,22 @@ const pathOptions = (policy: BeatGamePathPolicy) => ({
   ...(policy.maximumY === undefined ? {} : { maximumY: policy.maximumY }),
   searchMode: ((): PathfindSearchMode => {
     switch (policy.searchMode) {
-      case BeatGamePathSearchMode.PRECISION:
+      case BeatGamePathSearchMode.PRECISION: {
         return PathfindSearchMode.PRECISION;
-      case BeatGamePathSearchMode.URGENT:
+      }
+      case BeatGamePathSearchMode.URGENT: {
         return PathfindSearchMode.URGENT;
-      case BeatGamePathSearchMode.ESCAPE:
+      }
+      case BeatGamePathSearchMode.ESCAPE: {
         return PathfindSearchMode.ESCAPE;
+      }
       case BeatGamePathSearchMode.NORMAL:
-      case undefined:
+      case undefined: {
         return PathfindSearchMode.NORMAL;
-      default:
+      }
+      default: {
         return PathfindSearchMode.NORMAL;
+      }
     }
   })(),
   ...(policy.maximumQualityBound === undefined
@@ -689,7 +694,7 @@ export function makeSoulFireBeatGameDriver(
       unknown
     > = (() => {
       switch (task.type) {
-        case "collect-blocks":
+        case "collect-blocks": {
           return bot.tasks.collectBlocks(task.blockIds, {
             ...taskStart,
             tags: task.tags ?? [],
@@ -700,13 +705,15 @@ export function makeSoulFireBeatGameDriver(
             ...(task.targetYRange === undefined ? {} : { targetYRange: task.targetYRange }),
             path,
           });
-        case "excavate":
+        }
+        case "excavate": {
           return bot.tasks.excavate(blockPosition(task.from), blockPosition(task.to), {
             ...taskStart,
             path,
             ...(task.maximumBlocks === undefined ? {} : { maximumBlocks: task.maximumBlocks }),
           });
-        case "attack-entity":
+        }
+        case "attack-entity": {
           return bot.tasks.attackEntity(task.target, {
             ...taskStart,
             path,
@@ -729,7 +736,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { useOffhandShield: task.useOffhandShield }),
           });
-        case "ranged-attack":
+        }
+        case "ranged-attack": {
           return bot.tasks.rangedAttack(task.target, {
             ...taskStart,
             path,
@@ -752,7 +760,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { restoreSelectedSlot: task.restoreSelectedSlot }),
           });
-        case "attack-nearest":
+        }
+        case "attack-nearest": {
           return bot.tasks.attackNearest(entitySelector(task.selector), {
             ...taskStart,
             path,
@@ -775,7 +784,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { restoreSelectedSlot: task.restoreSelectedSlot }),
           });
-        case "flee":
+        }
+        case "flee": {
           return bot.tasks.flee(entitySelector(task.selector), {
             ...taskStart,
             path,
@@ -787,7 +797,8 @@ export function makeSoulFireBeatGameDriver(
               : { completeWhenSafe: task.completeWhenSafe }),
             ...(task.maximumEscapes === undefined ? {} : { maximumEscapes: task.maximumEscapes }),
           });
-        case "guard":
+        }
+        case "guard": {
           return bot.tasks.guard(blockPosition(task.position), entitySelector(task.selector), {
             ...taskStart,
             path,
@@ -814,7 +825,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { restoreSelectedSlot: task.restoreSelectedSlot }),
           });
-        case "fish":
+        }
+        case "fish": {
           return bot.tasks.fish({
             ...taskStart,
             ...(task.maximumCatches === undefined ? {} : { maximumCatches: task.maximumCatches }),
@@ -822,7 +834,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { maximumFailedCasts: task.maximumFailedCasts }),
           });
-        case "farm":
+        }
+        case "farm": {
           return bot.tasks.farm({
             ...taskStart,
             cropIds: task.cropIds ?? [],
@@ -833,7 +846,8 @@ export function makeSoulFireBeatGameDriver(
               : { maximumHarvests: task.maximumHarvests }),
             path,
           });
-        case "breed":
+        }
+        case "breed": {
           return bot.tasks.breed({
             ...taskStart,
             ...(task.selector === undefined ? {} : { animals: entitySelector(task.selector) }),
@@ -841,7 +855,8 @@ export function makeSoulFireBeatGameDriver(
             ...(task.maximumPairs === undefined ? {} : { maximumPairs: task.maximumPairs }),
             path,
           });
-        case "explore":
+        }
+        case "explore": {
           return bot.tasks.explore({
             ...taskStart,
             ...(task.origin === undefined ? {} : { origin: blockPosition(task.origin) }),
@@ -852,6 +867,7 @@ export function makeSoulFireBeatGameDriver(
             ...(task.purpose === undefined ? {} : { purpose: task.purpose }),
             path,
           });
+        }
         case "transfer-container": {
           const operations = task.operations.map((operation) => ({
             selector: itemSelector(operation.selector),
@@ -870,7 +886,7 @@ export function makeSoulFireBeatGameDriver(
                 path,
               });
         }
-        case "maintain-loadout":
+        case "maintain-loadout": {
           return bot.tasks.maintainLoadout(
             blockPosition(task.container),
             task.requirements.map((requirement) => ({
@@ -883,7 +899,8 @@ export function makeSoulFireBeatGameDriver(
             })),
             { ...taskStart, path },
           );
-        case "auto-eat":
+        }
+        case "auto-eat": {
           return bot.tasks.autoEat(task.foodItemIds ?? [], {
             ...taskStart,
             foodLevel: task.foodLevel,
@@ -895,16 +912,19 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { restoreSelectedSlot: task.restoreSelectedSlot }),
           });
-        case "auto-respawn":
+        }
+        case "auto-respawn": {
           return bot.tasks.autoRespawn({
             ...taskStart,
             ...(task.maximumRespawns === undefined
               ? {}
               : { maximumRespawns: task.maximumRespawns }),
           });
-        case "auto-totem":
+        }
+        case "auto-totem": {
           return bot.tasks.autoTotem(taskStart);
-        case "auto-armor":
+        }
+        case "auto-armor": {
           return bot.tasks.autoArmor({
             ...taskStart,
             ...(task.maximumEquips === undefined ? {} : { maximumEquips: task.maximumEquips }),
@@ -912,7 +932,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { completeWhenNoUpgrade: task.completeWhenNoUpgrade }),
           });
-        case "sleep":
+        }
+        case "sleep": {
           return bot.tasks.sleep({
             ...taskStart,
             path,
@@ -925,7 +946,8 @@ export function makeSoulFireBeatGameDriver(
               ? {}
               : { retryIntervalTicks: task.retryIntervalTicks }),
           });
-        case "build":
+        }
+        case "build": {
           return bot.tasks.build(
             blockPosition(task.origin),
             task.blocks.map((block): SchematicBlock => ({
@@ -940,18 +962,21 @@ export function makeSoulFireBeatGameDriver(
               ...(task.partitionCount === undefined ? {} : { partitionCount: task.partitionCount }),
             },
           );
-        case "craft":
+        }
+        case "craft": {
           return bot.tasks.craft(task.recipeId, task.count, {
             ...taskStart,
             ...(task.station === undefined ? {} : { station: blockPosition(task.station) }),
           });
-        case "smelt":
+        }
+        case "smelt": {
           return bot.tasks.smelt(itemSelector(task.input), task.count, {
             ...taskStart,
             ...(task.fuel === undefined ? {} : { fuel: itemSelector(task.fuel) }),
             ...(task.station === undefined ? {} : { station: blockPosition(task.station) }),
           });
-        case "brew":
+        }
+        case "brew": {
           return bot.tasks.brew(
             itemSelector(task.input),
             itemSelector(task.ingredient),
@@ -965,15 +990,18 @@ export function makeSoulFireBeatGameDriver(
                 : { expectedResult: itemSelector(task.expectedResult) }),
             },
           );
-        case "trade":
+        }
+        case "trade": {
           return bot.tasks.villagerTrade(task.offerIndex, task.count, {
             ...taskStart,
             ...(task.expectedResult === undefined
               ? {}
               : { expectedResult: itemSelector(task.expectedResult) }),
           });
-        default:
+        }
+        default: {
           return task satisfies never;
+        }
       }
     })();
     return started.pipe(
@@ -1310,58 +1338,69 @@ function executePrimitive(
   action: BeatGamePrimitiveAction,
 ): Effect.Effect<unknown, unknown> {
   switch (action.type) {
-    case "look":
+    case "look": {
       return bot.look(action.yaw, action.pitch);
-    case "equip-item":
+    }
+    case "equip-item": {
       return bot.inventory.equip({
         selector: itemSelector(action.selector),
         equipmentSlot: action.equipmentSlot,
       });
-    case "select-item":
+    }
+    case "select-item": {
       return bot.inventory.selectHotbar({
         selection: {
           case: "selector",
           value: itemSelector(action.selector),
         },
       });
-    case "toss-items":
+    }
+    case "toss-items": {
       return bot.inventory.toss({
         selector: itemSelector(action.selector),
         count: action.count,
       });
-    case "use-item":
+    }
+    case "use-item": {
       return bot.useItem({ hand: hand(action.hand) });
-    case "release-item":
+    }
+    case "release-item": {
       return bot.releaseItem();
-    case "dig-block":
+    }
+    case "dig-block": {
       return bot.digBlock({ position: blockPosition(action.position) });
-    case "place-block":
+    }
+    case "place-block": {
       return bot.placeBlock({
         against: blockPosition(action.against),
         face: blockFace(action.face),
         hand: hand(action.hand),
       });
-    case "interact-block":
+    }
+    case "interact-block": {
       return bot.interactBlock({
         position: blockPosition(action.position),
         face: blockFace(action.face),
         hand: hand(action.hand),
         sneaking: action.sneaking ?? false,
       });
-    case "attack-entity":
+    }
+    case "attack-entity": {
       return bot.attackEntity({
         connectionEpoch: action.connectionEpoch,
         entityId: action.networkId,
         sprinting: action.sprinting ?? false,
       });
-    case "interact-entity":
+    }
+    case "interact-entity": {
       return bot.interactEntity({
         connectionEpoch: action.connectionEpoch,
         entityId: action.networkId,
         hand: hand(action.hand),
         sneaking: action.sneaking ?? false,
       });
-    case "set-movement":
+    }
+    case "set-movement": {
       return bot.setMovement({
         ...(action.forward === undefined ? {} : { forward: action.forward }),
         ...(action.backward === undefined ? {} : { backward: action.backward }),
@@ -1371,14 +1410,19 @@ function executePrimitive(
         ...(action.sneak === undefined ? {} : { sneak: action.sneak }),
         ...(action.sprint === undefined ? {} : { sprint: action.sprint }),
       });
-    case "respawn":
+    }
+    case "respawn": {
       return bot.respawn();
-    case "reset-movement":
+    }
+    case "reset-movement": {
       return bot.resetMovement();
-    case "close-container":
+    }
+    case "close-container": {
       return bot.closeContainer();
-    default:
+    }
+    default: {
       return action satisfies never;
+    }
   }
 }
 
@@ -1421,20 +1465,27 @@ function hand(value: BeatGameHand | undefined): Hand {
 
 function blockFace(value: BeatGameBlockFace): BlockFace {
   switch (value) {
-    case "down":
+    case "down": {
       return BlockFace.DOWN;
-    case "up":
+    }
+    case "up": {
       return BlockFace.UP;
-    case "north":
+    }
+    case "north": {
       return BlockFace.NORTH;
-    case "south":
+    }
+    case "south": {
       return BlockFace.SOUTH;
-    case "west":
+    }
+    case "west": {
       return BlockFace.WEST;
-    case "east":
+    }
+    case "east": {
       return BlockFace.EAST;
-    default:
+    }
+    default: {
       return value satisfies never;
+    }
   }
 }
 

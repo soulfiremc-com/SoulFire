@@ -763,38 +763,52 @@ function explainDecision(
   strategy: BeatGameStrategy,
 ): string {
   switch (decision.type) {
-    case "advance-phase":
+    case "advance-phase": {
       return `The ${decision.from} objective is complete, so the planner can advance to ${decision.to}`;
-    case "recover-death":
+    }
+    case "recover-death": {
       return observation.player.dead
         ? "The player is dead and must respawn before continuing"
         : `The planner remembers ${checkpoint.memory.deathPositions.length} death location${
             checkpoint.memory.deathPositions.length === 1 ? "" : "s"
           } with potentially recoverable items`;
-    case "eat":
+    }
+    case "eat": {
       return `Food is ${observation.player.food}, at or below the configured eating threshold of ${strategy.eatBelowFood}, and edible food is available`;
-    case "retreat":
+    }
+    case "retreat": {
       return `Health is ${observation.player.health}, below the configured safety threshold of ${strategy.minimumHealth}`;
-    case "satisfy-requirement":
+    }
+    case "satisfy-requirement": {
       return requirementReason(decision.requirement);
-    case "prepare-equipment":
+    }
+    case "prepare-equipment": {
       return "The Overworld resource requirements are satisfied, but equipment preparation has not completed";
-    case "build-and-enter-nether":
+    }
+    case "build-and-enter-nether": {
       return "The Nether entry requirements are satisfied and the player is still in the Overworld";
-    case "return-through-portal":
+    }
+    case "return-through-portal": {
       return "The Nether resource requirements are satisfied and the player must return to the Overworld";
-    case "throw-eye":
+    }
+    case "throw-eye": {
       return "The stronghold is not estimated yet and the eye supply requirement is satisfied";
-    case "search-stronghold":
+    }
+    case "search-stronghold": {
       return "A stronghold estimate is available and the planner is ready to search it";
-    case "activate-end-portal":
+    }
+    case "activate-end-portal": {
       return "The End portal requirements are satisfied and the player has not entered the End";
-    case "fight-ender-dragon":
+    }
+    case "fight-ender-dragon": {
       return "The dragon-fight requirements are satisfied and the fight remains incomplete";
-    case "exit-end":
+    }
+    case "exit-end": {
       return "The dragon is defeated and the player remains in the End";
-    default:
+    }
+    default: {
       return decision satisfies never;
+    }
   }
 }
 

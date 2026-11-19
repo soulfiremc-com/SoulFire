@@ -82,14 +82,14 @@ export default {
             )) {
               if (!frame.screenOpen) continue;
               const input = (
-                events: Array<{
+                events: {
                   kind: Kind;
                   code?: number;
                   modifiers?: number;
                   action?: number;
                   x?: number;
                   y?: number;
-                }>,
+                }[],
                 width = 1280,
                 height = 720,
                 requestKeyFrame = false,

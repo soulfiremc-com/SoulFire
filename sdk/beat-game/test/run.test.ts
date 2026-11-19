@@ -29447,13 +29447,11 @@ describe("beat-game run lifecycle", () => {
         "minecraft:water_bucket": 1,
       },
     });
-    const floorQueries: Array<
-      Readonly<{
-        x: number;
-        y: number;
-        z: number;
-      }>
-    > = [];
+    const floorQueries: Readonly<{
+      x: number;
+      y: number;
+      z: number;
+    }>[] = [];
     let resolvePortalFloorQueried!: () => void;
     const portalFloorQueried = new Promise<void>((resolve) => {
       resolvePortalFloorQueried = resolve;
@@ -38262,24 +38260,30 @@ describe("beat-game run lifecycle", () => {
       }
       const expected = { ...action.against };
       switch (action.face) {
-        case "up":
+        case "up": {
           expected.y += 1;
           break;
-        case "down":
+        }
+        case "down": {
           expected.y -= 1;
           break;
-        case "east":
+        }
+        case "east": {
           expected.x += 1;
           break;
-        case "west":
+        }
+        case "west": {
           expected.x -= 1;
           break;
-        case "south":
+        }
+        case "south": {
           expected.z += 1;
           break;
-        case "north":
+        }
+        case "north": {
           expected.z -= 1;
           break;
+        }
       }
       placedBlocks.add(blockPositionKey(expected));
     };
@@ -38449,24 +38453,30 @@ describe("beat-game run lifecycle", () => {
       }
       const expected = { ...action.against };
       switch (action.face) {
-        case "up":
+        case "up": {
           expected.y += 1;
           break;
-        case "down":
+        }
+        case "down": {
           expected.y -= 1;
           break;
-        case "east":
+        }
+        case "east": {
           expected.x += 1;
           break;
-        case "west":
+        }
+        case "west": {
           expected.x -= 1;
           break;
-        case "south":
+        }
+        case "south": {
           expected.z += 1;
           break;
-        case "north":
+        }
+        case "north": {
           expected.z -= 1;
           break;
+        }
       }
       placedBlocks.add(blockPositionKey(expected));
     };

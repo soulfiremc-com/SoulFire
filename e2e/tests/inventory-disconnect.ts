@@ -55,16 +55,21 @@ const CASES = [
 
 const menuType = (block: string) => {
   switch (block) {
-    case "crafting_table":
+    case "crafting_table": {
       return "crafting";
-    case "enchanting_table":
+    }
+    case "enchanting_table": {
       return "enchanting";
-    case "cartography_table":
+    }
+    case "cartography_table": {
       return "cartography";
-    case "smithing_table":
+    }
+    case "smithing_table": {
       return "smithing";
-    default:
+    }
+    default: {
       return block;
+    }
   }
 };
 

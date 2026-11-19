@@ -4114,7 +4114,7 @@ function staircaseSteps(
 
   const xDirection = Math.sign(to.x - from.x);
   const zDirection = Math.sign(to.z - from.z);
-  const directSteps: Array<Readonly<{ x: number; z: number }>> = [];
+  const directSteps: Readonly<{ x: number; z: number }>[] = [];
   let completedX = 0;
   let completedZ = 0;
   for (let index = 0; index < directDistance; index += 1) {
@@ -4131,7 +4131,7 @@ function staircaseSteps(
     }
   }
 
-  const route: Array<Readonly<{ x: number; z: number }>> = [];
+  const route: Readonly<{ x: number; z: number }>[] = [];
   if (detourSteps >= 4) {
     const halfPerimeter = detourSteps / 2;
     const firstLength = Math.floor(halfPerimeter / 2);
@@ -4210,7 +4210,7 @@ function adjustedStaircaseDestination(
 }
 
 function appendHorizontalSteps(
-  route: Array<Readonly<{ x: number; z: number }>>,
+  route: Readonly<{ x: number; z: number }>[],
   direction: Readonly<{ x: number; z: number }>,
   count: number,
 ): void {
@@ -6001,10 +6001,12 @@ function primitiveActionPosition(
 ): BeatGameBlockPosition | undefined {
   switch (action.type) {
     case "dig-block":
-    case "interact-block":
+    case "interact-block": {
       return action.position;
-    case "place-block":
+    }
+    case "place-block": {
       return action.against;
+    }
     case "attack-entity":
     case "close-container":
     case "equip-item":
@@ -6016,10 +6018,12 @@ function primitiveActionPosition(
     case "select-item":
     case "set-movement":
     case "toss-items":
-    case "use-item":
+    case "use-item": {
       return undefined;
-    default:
+    }
+    default: {
       return action satisfies never;
+    }
   }
 }
 
@@ -6268,7 +6272,6 @@ function craftItemDependencies(
                 remainingDepth - 1,
               ).pipe(Effect.result);
               if (result._tag === "Failure") {
-                lastFailure = result.failure;
                 continue;
               }
               craftability = yield* driver.canCraft(recipe.recipeId, operations);

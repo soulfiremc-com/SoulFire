@@ -18,13 +18,13 @@ const materialCount = (nbt: string, item = "minecraft:diamond") =>
     .filter(([entry]) => entry.includes(`id: "${item}"`))
     .reduce((sum, [entry]) => sum + Number(entry.match(/count: (\d+)/u)?.[1] ?? 0), 0);
 
-type TransferResult = {
+interface TransferResult {
   index: number;
   completed: boolean;
   transferred?: number;
   finalCount?: number;
   satisfied?: boolean;
-};
+}
 
 export default {
   name: "shared-container-confirmation",

@@ -560,16 +560,18 @@ function orderBots(bots: FleetBot[], selector: FleetSelector): void {
   }
   bots.sort((left, right) => {
     switch (order) {
-      case "name":
+      case "name": {
         return (left.entry.accountName ?? left.account?.lastKnownName ?? "").localeCompare(
           right.entry.accountName ?? right.account?.lastKnownName ?? "",
         );
-      case "health":
+      }
+      case "health": {
         return (
           (right.entry.liveState?.health ?? Number.NEGATIVE_INFINITY) -
           (left.entry.liveState?.health ?? Number.NEGATIVE_INFINITY)
         );
-      case "distance":
+      }
+      case "distance": {
         if (selector.near === undefined) {
           throw new TypeError("orderBy distance requires a near selector");
         }
@@ -577,6 +579,7 @@ function orderBots(bots: FleetBot[], selector: FleetSelector): void {
           distanceSquared(left.entry.liveState, selector.near) -
           distanceSquared(right.entry.liveState, selector.near)
         );
+      }
     }
     return 0;
   });
@@ -600,22 +603,28 @@ function valueToUnknown(value: Value | undefined): unknown {
     return undefined;
   }
   switch (value.kind.case) {
-    case "nullValue":
+    case "nullValue": {
       return null;
+    }
     case "numberValue":
     case "stringValue":
-    case "boolValue":
+    case "boolValue": {
       return value.kind.value;
-    case "structValue":
+    }
+    case "structValue": {
       return Object.fromEntries(
         Object.entries(value.kind.value.fields).map(([key, child]) => [key, valueToUnknown(child)]),
       );
-    case "listValue":
+    }
+    case "listValue": {
       return value.kind.value.values.map(valueToUnknown);
-    case undefined:
+    }
+    case undefined: {
       return undefined;
-    default:
+    }
+    default: {
       return value.kind satisfies never;
+    }
   }
 }
 

@@ -83,7 +83,7 @@ class SmokeDebugListenError extends Data.TaggedError("SmokeDebugListenError")<{
 export class SmokeDebugRequestError extends Error {
   public readonly status: number;
 
-  public constructor(message: string, status: number = 400) {
+  public constructor(message: string, status = 400) {
     super(message);
     this.name = "SmokeDebugRequestError";
     this.status = status;

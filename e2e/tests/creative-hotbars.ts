@@ -25,10 +25,7 @@ const hotbarShortcut = (client: SoulFireClient, bot: SoulFireBot, activator: num
       let sequence = 0n;
       let stage: "shortcut" | "open" | "closed" = "shortcut";
       let token = "";
-      const input = (
-        events: Array<{ kind: Kind; code: number; action: number }>,
-        captured = true,
-      ) =>
+      const input = (events: { kind: Kind; code: number; action: number }[], captured = true) =>
         service.input({
           sessionId,
           inputToken: token,

@@ -938,7 +938,7 @@ ${sections}`;
 }
 
 function pythonCompatibilityReturn(model: GenerationModel): string {
-  const predicates: Array<
+  const predicates: (
     | { readonly kind: "service"; readonly value: string }
     | { readonly kind: "event"; readonly value: string }
     | {
@@ -946,7 +946,7 @@ function pythonCompatibilityReturn(model: GenerationModel): string {
         readonly kind: "task";
         readonly result: string;
       }
-  > = [
+  )[] = [
     ...model.services.map((service) => ({
       kind: "service" as const,
       value: service.fullName,
