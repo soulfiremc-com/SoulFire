@@ -795,6 +795,7 @@ export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // Long enough for a skeleton without line of sight to lose interest and for
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
+const ENDERMAN_COVER_WAIT_MS = 30_000;
 const RANGED_COVER_HEALTH = 8;
 const RECENT_ARROW_HIT_MS = 5_000;
 const PROJECTILE_DAMAGE_TYPES = new Set(["minecraft:arrow", "minecraft:trident"]);
@@ -4861,6 +4862,29 @@ function escapeFromTarget(
       yield* blockCreeperExplosion(state, observation, target);
       return;
     }
+    const endermanWaterEscapeTarget =
+      target.entityType === "minecraft:enderman"
+        ? yield* findEndermanWaterEscapeTarget(state, observation.player.position)
+        : undefined;
+    // An enderman teleports after a fleeing bot, and a live run died running
+    // from one. Away from water, cover it cannot reach into is the escape.
+    if (target.entityType === "minecraft:enderman" && endermanWaterEscapeTarget === undefined) {
+      const cover = yield* takeCoverInPlace(state);
+      if (cover !== undefined) {
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Took cover from an angry enderman",
+          data: {
+            threatNetworkId: target.networkId,
+            position: observation.player.position,
+            method: cover.method,
+            placedBlocks: cover.placedBlocks,
+          },
+        });
+        yield* Effect.sleep(ENDERMAN_COVER_WAIT_MS);
+        return;
+      }
+    }
     let directEscapeSucceeded = false;
     if (
       target.entityType === "minecraft:creeper" ||
@@ -4908,10 +4932,6 @@ function escapeFromTarget(
     }
     const needsRecovery = yield* needsOverworldSurfaceRecovery(state, latest.player.position);
     const currentlyInFluid = yield* isPlayerInFluid(state.driver, latest.player.position);
-    const endermanWaterEscapeTarget =
-      target.entityType === "minecraft:enderman"
-        ? yield* findEndermanWaterEscapeTarget(state, latest.player.position)
-        : undefined;
     const dryEscapeTarget =
       target.entityType === "minecraft:creeper"
         ? undefined
@@ -5161,27 +5181,7 @@ function takeCoverFromRangedFire(
     // which the eyes cannot see from below, and a live run died while every
     // roof placement was refused. Digging down and sealing the shaft only
     // places against a shaft wall the eyes face, so it goes first.
-    const cover = yield* state.driver.act({ type: "reset-movement" }).pipe(
-      Effect.andThen(state.driver.observe),
-      Effect.flatMap((current) =>
-        digAndSealNightShelter(state, current).pipe(
-          Effect.flatMap((seal): Effect.Effect<RangedCover | undefined, BeatGameDriverError> =>
-            seal !== undefined
-              ? Effect.succeed({ method: "sealed-shaft", placedBlocks: 1 } as const)
-              : state.driver.observe.pipe(
-                  Effect.flatMap((latest) => encloseNightShelterInPlace(state, latest)),
-                  Effect.map((enclosure) =>
-                    enclosure === undefined
-                      ? undefined
-                      : ({ method: "walls", placedBlocks: enclosure.placed.length } as const),
-                  ),
-                ),
-          ),
-        ),
-      ),
-      Effect.uninterruptible,
-      Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
-    );
+    const cover = yield* takeCoverInPlace(state);
     if (cover === undefined) {
       return false;
     }
@@ -5199,6 +5199,32 @@ function takeCoverFromRangedFire(
     yield* Effect.sleep(RANGED_COVER_WAIT_MS);
     return true;
   });
+}
+
+// Digs down and seals the shaft, or walls the bot in where it stands. Both
+// keep out arrows, and a three-block-tall enderman cannot reach into either.
+function takeCoverInPlace(state: RunState): Effect.Effect<RangedCover | undefined> {
+  return state.driver.act({ type: "reset-movement" }).pipe(
+    Effect.andThen(state.driver.observe),
+    Effect.flatMap((current) =>
+      digAndSealNightShelter(state, current).pipe(
+        Effect.flatMap((seal): Effect.Effect<RangedCover | undefined, BeatGameDriverError> =>
+          seal !== undefined
+            ? Effect.succeed({ method: "sealed-shaft", placedBlocks: 1 } as const)
+            : state.driver.observe.pipe(
+                Effect.flatMap((latest) => encloseNightShelterInPlace(state, latest)),
+                Effect.map((enclosure) =>
+                  enclosure === undefined
+                    ? undefined
+                    : ({ method: "walls", placedBlocks: enclosure.placed.length } as const),
+                ),
+              ),
+        ),
+      ),
+    ),
+    Effect.uninterruptible,
+    Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
+  );
 }
 
 function recoverAfterFailedEscape(
@@ -8825,6 +8851,11 @@ function retreatAndRecover(
             const threat = entities.find(isAggressiveNeutralMob);
             if (threat === undefined) {
               return Effect.void;
+            }
+            // An enderman teleports after a fleeing bot, so the same escape
+            // as in a fight applies: water nearby, or cover in place.
+            if (threat.entityType === "minecraft:enderman") {
+              return escapeFromTarget(state, threat);
             }
             const selector = hasNearbyGroupAggroMember(threat, entities)
               ? ({ categories: [2], alive: true } as const)
