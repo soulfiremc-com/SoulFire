@@ -207,6 +207,10 @@ const REMEMBERED_PORTAL_PREFERRED_QUALITY_BOUND = 1.5;
 const REMEMBERED_PORTAL_FALLBACK_QUALITY_BOUND = 3;
 const PORTAL_CAREFUL_QUALITY_BOUND = 1.2;
 const REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES = 100_000;
+const REMEMBERED_PORTAL_VERTICAL_LEG_HEIGHT = 24;
+const REMEMBERED_PORTAL_VERTICAL_LEG_RADIUS = 6;
+const REMEMBERED_PORTAL_MAXIMUM_VERTICAL_LEGS = 16;
+const REMEMBERED_PORTAL_MINIMUM_VERTICAL_PROGRESS = 4;
 const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 // A failed route that still brought the bot this much closer counts as
 // progress. Every failure costs confidence, and one without progress costs
@@ -17126,13 +17130,41 @@ function approachRememberedPortal(
         message: "Remembered portal navigation exceeded its bounded leg count",
       });
     }
-    yield* state.driver.pathfind(portal, 8, {
+    const finalApproachPolicy = {
       ...portalCarefulPathPolicy(state.strategy.path),
       maximumExpandedStates: Math.max(
         state.strategy.path.maximumExpandedStates ?? 0,
         REMEMBERED_PORTAL_MAXIMUM_EXPANDED_STATES,
       ),
-    });
+    };
+    // A live bot respawned 124 blocks above its portal, and a single search
+    // for that descent ran out of states every time until the bot gave the
+    // portal up. Shorter climbs or descents each fit in one search.
+    for (
+      let leg = 0;
+      leg < REMEMBERED_PORTAL_MAXIMUM_VERTICAL_LEGS &&
+      Math.abs(portal.y - current.player.position.y) > REMEMBERED_PORTAL_VERTICAL_LEG_HEIGHT;
+      leg += 1
+    ) {
+      const startY = current.player.position.y;
+      yield* state.driver.pathfind(
+        {
+          ...portal,
+          y: Math.round(
+            startY + Math.sign(portal.y - startY) * REMEMBERED_PORTAL_VERTICAL_LEG_HEIGHT,
+          ),
+        },
+        REMEMBERED_PORTAL_VERTICAL_LEG_RADIUS,
+        finalApproachPolicy,
+      );
+      current = yield* state.driver.observe;
+      if (
+        Math.abs(current.player.position.y - startY) < REMEMBERED_PORTAL_MINIMUM_VERTICAL_PROGRESS
+      ) {
+        break;
+      }
+    }
+    yield* state.driver.pathfind(portal, 8, finalApproachPolicy);
     return undefined;
   });
 }
