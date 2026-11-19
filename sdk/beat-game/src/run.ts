@@ -14897,10 +14897,14 @@ function advanceExplorationFrontier(
         existing?.progressVersion === 2 && existing.origin.dimension === position.dimension
           ? existing
           : undefined;
+      // A wide search keeps its spiral through detours. A live fortress
+      // search restarted its spiral around the bot after every fight and
+      // pickaxe trip, and circled one area for an hour.
+      const reanchorDistance =
+        maximumHop > DISCOVERY_MAXIMUM_HOP ? 2 * hop : EXPLORATION_REANCHOR_DISTANCE;
       const wasExternallyDisplaced =
         current?.lastPosition !== undefined &&
-        horizontalDistanceSquared(current.lastPosition, position) >
-          EXPLORATION_REANCHOR_DISTANCE ** 2;
+        horizontalDistanceSquared(current.lastPosition, position) > reanchorDistance ** 2;
       const shouldReanchor =
         wasExternallyDisplaced &&
         !isRecentDeathDisplacement(current.lastPosition, checkpoint.memory.latestDeath);

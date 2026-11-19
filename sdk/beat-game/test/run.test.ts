@@ -941,6 +941,77 @@ describe("beat-game run lifecycle", () => {
     expect(frontier?.target).toMatchObject({ x: 0.5, z: 128.5 });
   });
 
+  it("keeps its fortress search spiral after a detour", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "fortress-spiral-detour-run";
+    const teamId = "fortress-spiral-detour-team";
+    const origin = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_nether" };
+    const initial = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            explorationFrontiers: {
+              "minecraft:the_nether:find-nether-fortress": {
+                progressVersion: 2,
+                origin,
+                nextIndex: 3,
+                targetAttempts: 0,
+                totalAdvances: 5,
+                lastPosition: origin,
+              },
+            },
+          },
+        },
+        undefined,
+      ),
+    );
+    // As in a live run: a fight moved the bot 40 blocks off its search.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { ...origin, x: 40.5 },
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:oak_log": 8,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.xzPaths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(
+      saved?.memory.explorationFrontiers?.["minecraft:the_nether:find-nether-fortress"],
+    ).toMatchObject({ origin: { x: 0.5, z: 0.5 }, nextIndex: 3 });
+  });
+
   it("replenishes a depleted Nether building-block reserve before exploring", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
