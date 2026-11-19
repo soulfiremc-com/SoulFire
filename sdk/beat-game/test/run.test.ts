@@ -31120,97 +31120,120 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
-  it("descends to a remembered portal far below in short legs", async () => {
-    const driver = new FakeBeatGameDriver();
-    const store = new InMemoryBeatGameCheckpointStore();
-    const runId = "deep-remembered-portal-run";
-    const teamId = "deep-remembered-portal-team";
-    const observedAt = "2026-01-01T00:00:00.000Z";
-    const portalPosition = { x: 0, y: -53, z: 0, dimension: "minecraft:overworld" };
-    const portal = blockObservation(portalPosition, {
-      blockId: "minecraft:nether_portal",
-      diggable: false,
-      solid: false,
-      observedAt,
-    });
-    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId });
-    await Effect.runPromise(
-      store.save(
-        {
-          ...initial,
-          memory: {
-            ...initial.memory,
-            portals: [
-              {
-                key: "portal:minecraft:overworld:0:-53:0",
-                value: portal,
-                observedAt,
-                confidence: 1,
-              },
-            ],
-          },
-        },
-        undefined,
-      ),
-    );
-    const counts = {
-      "minecraft:cooked_beef": 8,
-      "minecraft:oak_log": 4,
-      "minecraft:cobblestone": 20,
-      "minecraft:stone_sword": 1,
-      "minecraft:stone_pickaxe": 1,
-      "minecraft:shield": 1,
-    };
-    // As in a live run: the bot respawned 124 blocks above its portal.
-    driver.currentObservation = observation({
-      position: { x: 3, y: 71, z: 2, dimension: "minecraft:overworld" },
-      counts,
-    });
-    driver.blockQueryResolver = () => [];
-    let resolveReachedPortal!: () => void;
-    const reachedPortal = new Promise<void>((resolve) => {
-      resolveReachedPortal = resolve;
-    });
-    driver.pathResolver = (position, radius, policy) =>
-      Effect.suspend(() => {
-        driver.paths.push({ position, radius, policy });
-        // One search covers at most thirty blocks of height.
-        if (Math.abs(position.y - driver.currentObservation.player.position.y) > 30) {
-          return Effect.fail(
-            new BeatGameDriverError({
-              operation: "pathfind",
-              code: "search_limit",
-              retryable: true,
-              message: "Pathfinding reached its search limit after 100000 expanded states",
-            }),
-          );
-        }
-        driver.currentObservation = observation({ position, counts });
-        if (position.y === portalPosition.y) {
-          resolveReachedPortal();
-          return Effect.never;
-        }
-        return Effect.void;
+  it.each([
+    { label: "within", missesQualityBound: false },
+    // As in a live run whose descent leg found a route just above the
+    // preferred quality bound.
+    { label: "just above", missesQualityBound: true },
+  ])(
+    "descends to a remembered portal far below in short legs $label the quality bound",
+    async ({ missesQualityBound }) => {
+      const driver = new FakeBeatGameDriver();
+      const store = new InMemoryBeatGameCheckpointStore();
+      const runId = "deep-remembered-portal-run";
+      const teamId = "deep-remembered-portal-team";
+      const observedAt = "2026-01-01T00:00:00.000Z";
+      const portalPosition = { x: 0, y: -53, z: 0, dimension: "minecraft:overworld" };
+      const portal = blockObservation(portalPosition, {
+        blockId: "minecraft:nether_portal",
+        diggable: false,
+        solid: false,
+        observedAt,
       });
+      const initial = checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId });
+      await Effect.runPromise(
+        store.save(
+          {
+            ...initial,
+            memory: {
+              ...initial.memory,
+              portals: [
+                {
+                  key: "portal:minecraft:overworld:0:-53:0",
+                  value: portal,
+                  observedAt,
+                  confidence: 1,
+                },
+              ],
+            },
+          },
+          undefined,
+        ),
+      );
+      const counts = {
+        "minecraft:cooked_beef": 8,
+        "minecraft:oak_log": 4,
+        "minecraft:cobblestone": 20,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:shield": 1,
+      };
+      // As in a live run: the bot respawned 124 blocks above its portal.
+      driver.currentObservation = observation({
+        position: { x: 3, y: 71, z: 2, dimension: "minecraft:overworld" },
+        counts,
+      });
+      driver.blockQueryResolver = () => [];
+      let resolveReachedPortal!: () => void;
+      const reachedPortal = new Promise<void>((resolve) => {
+        resolveReachedPortal = resolve;
+      });
+      driver.pathResolver = (position, radius, policy) =>
+        Effect.suspend(() => {
+          driver.paths.push({ position, radius, policy });
+          if (missesQualityBound && policy.searchMode !== "URGENT") {
+            return Effect.fail(
+              new BeatGameDriverError({
+                operation: "pathfind",
+                code: "path_quality_bound_not_met",
+                retryable: true,
+                message:
+                  "Pathfinding found a route with certified bound 1.279 but the request requires 1.2",
+              }),
+            );
+          }
+          // One search covers at most thirty blocks of height.
+          if (Math.abs(position.y - driver.currentObservation.player.position.y) > 30) {
+            return Effect.fail(
+              new BeatGameDriverError({
+                operation: "pathfind",
+                code: "search_limit",
+                retryable: true,
+                message: "Pathfinding reached its search limit after 100000 expanded states",
+              }),
+            );
+          }
+          driver.currentObservation = observation({ position, counts });
+          if (position.y === portalPosition.y) {
+            resolveReachedPortal();
+            return Effect.never;
+          }
+          return Effect.void;
+        });
 
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const run = yield* beatGameWithDriver(driver, {
-            runId,
-            team: { teamId },
-            checkpointStore: store,
-            strategy: { observationPollMs: 1 },
-          });
-          yield* Effect.promise(() => reachedPortal).pipe(Effect.timeout("5 seconds"));
-          yield* run.stop;
-          yield* run.awaitCompletion.pipe(Effect.result);
-        }),
-      ),
-    );
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const run = yield* beatGameWithDriver(driver, {
+              runId,
+              team: { teamId },
+              checkpointStore: store,
+              strategy: { observationPollMs: 1 },
+            });
+            yield* Effect.promise(() => reachedPortal).pipe(Effect.timeout("5 seconds"));
+            yield* run.stop;
+            yield* run.awaitCompletion.pipe(Effect.result);
+          }),
+        ),
+      );
 
-    expect(driver.paths.map(({ position }) => position.y)).toEqual([47, 23, -1, -25, -49, -53]);
-  });
+      expect(
+        driver.paths
+          .filter(({ policy }) => !missesQualityBound || policy.searchMode === "URGENT")
+          .map(({ position }) => position.y),
+      ).toEqual([47, 23, -1, -25, -49, -53]);
+    },
+  );
 
   it("returns to the surface before a distant lower remembered portal", async () => {
     const driver = new FakeBeatGameDriver();

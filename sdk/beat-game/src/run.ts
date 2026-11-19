@@ -17147,7 +17147,8 @@ function approachRememberedPortal(
       leg += 1
     ) {
       const startY = current.player.position.y;
-      yield* state.driver.pathfind(
+      yield* pathfindRememberedPortalStep(
+        state,
         {
           ...portal,
           y: Math.round(
@@ -17164,9 +17165,30 @@ function approachRememberedPortal(
         break;
       }
     }
-    yield* state.driver.pathfind(portal, 8, finalApproachPolicy);
+    yield* pathfindRememberedPortalStep(state, portal, 8, finalApproachPolicy);
     return undefined;
   });
+}
+
+// A live descent leg found a route that missed the preferred quality bound
+// by a few percent. Like the horizontal legs, it accepts a rougher route.
+function pathfindRememberedPortalStep(
+  state: RunState,
+  position: BeatGamePosition,
+  radius: number,
+  policy: BeatGameStrategy["path"],
+): Effect.Effect<void, BeatGameDriverError> {
+  return state.driver.pathfind(position, radius, policy).pipe(
+    Effect.catchIf(
+      (error) => error.code === "path_quality_bound_not_met" || error.code === "search_limit",
+      () =>
+        state.driver.pathfind(position, radius, {
+          ...policy,
+          searchMode: BeatGamePathSearchMode.URGENT,
+          maximumQualityBound: REMEMBERED_PORTAL_FALLBACK_QUALITY_BOUND,
+        }),
+    ),
+  );
 }
 
 function pathfindRememberedPortalLeg(
