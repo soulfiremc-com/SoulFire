@@ -5445,7 +5445,9 @@ function planPortalCastingSupportScaffold(
     .pipe(
       Effect.map((blocks) => {
         const observed = new Map(blocks.map((block) => [positionKey(block.position), block]));
-        const forbidden = new Set([...frame.blocks, ...frame.interior].map(positionKey));
+        const forbidden = new Set(
+          [...frame.blocks, ...frame.interior].map((position) => positionKey(position)),
+        );
         forbidden.delete(positionKey(target));
         const queued = new Set([positionKey(target)]);
         const parents = new Map<string, BeatGameBlockPosition | undefined>([
@@ -5543,7 +5545,7 @@ function leavePortalCastingScaffoldCells(
       maximumResults: PORTAL_CASTING_SUPPORT_SCAFFOLD_MAXIMUM_RESULTS,
     });
     const observed = new Map(blocks.map((block) => [positionKey(block.position), block]));
-    const scaffoldKeys = new Set(scaffold.map(positionKey));
+    const scaffoldKeys = new Set(scaffold.map((position) => positionKey(position)));
     const candidates = blocks
       .filter((feet) => {
         const head = observed.get(

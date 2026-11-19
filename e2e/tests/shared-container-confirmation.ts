@@ -14,9 +14,9 @@ const NAMES = ["FleetE2EA", "FleetE2EB"];
 const CHEST = { x: 4263, y: 64, z: 8 };
 const selector = { itemIds: ["minecraft:diamond"] };
 const materialCount = (nbt: string, item = "minecraft:diamond") =>
-  [...nbt.matchAll(/\{[^{}]+\}/g)]
+  [...nbt.matchAll(/\{[^{}]+\}/gu)]
     .filter(([entry]) => entry.includes(`id: "${item}"`))
-    .reduce((sum, [entry]) => sum + Number(entry.match(/count: (\d+)/)?.[1] ?? 0), 0);
+    .reduce((sum, [entry]) => sum + Number(entry.match(/count: (\d+)/u)?.[1] ?? 0), 0);
 
 type TransferResult = {
   index: number;

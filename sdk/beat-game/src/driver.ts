@@ -1058,7 +1058,7 @@ export function makeSoulFireBeatGameDriver(
           pageSize: query.maximumResults ?? 128,
         })
         .pipe(
-          Effect.map(({ blocks }) => blocks.map(toBeatGameBlockObservation)),
+          Effect.map(({ blocks }) => blocks.map((block) => toBeatGameBlockObservation(block))),
           Effect.mapError(mapError("queryBlocks")),
         ),
     queryEntities: (query) =>

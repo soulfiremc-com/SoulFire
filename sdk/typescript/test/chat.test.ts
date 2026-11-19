@@ -32,7 +32,9 @@ describe("SoulFireChat", () => {
         Effect.gen(function* () {
           const client = createClient(
             ChatService,
-            createRouterTransport(({ service }) => service(ChatService, {})),
+            createRouterTransport(({ service }) => {
+              service(ChatService, {});
+            }),
           );
           const chat = new SoulFireChat(
             "instance-id",

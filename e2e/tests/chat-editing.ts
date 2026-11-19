@@ -89,7 +89,7 @@ export default {
       yield* eventually(
         rcon(`scoreboard players get ${BOT_NAME} ${OBJECTIVE}`).pipe(
           Effect.flatMap((score) =>
-            check(/has 23 \[/.test(score), `POV resize changed the edited command: ${score}`),
+            check(/has 23 \[/u.test(score), `POV resize changed the edited command: ${score}`),
           ),
         ),
         "5 seconds",

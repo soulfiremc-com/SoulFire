@@ -72,6 +72,7 @@ class SmokeFailure extends Data.TaggedError("SmokeFailure")<{
   readonly cause?: unknown;
 }> {}
 
+// oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const execFile = promisify(execFileCallback);
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 const runId = environment("SOULFIRE_E2E_RUN_ID", `beat-game-e2e-${randomUUID()}`);
@@ -1370,7 +1371,7 @@ const program = Effect.scoped(
                     kinds: ["block-query", "entity-query", "raycast-query"],
                     limit: 12,
                   })
-                  .map(compactDecisionActivityEntry),
+                  .map((entry) => compactDecisionActivityEntry(entry)),
                 taskActivity: queryDebugTimeline({
                   kind: [
                     "task-started",
@@ -2291,7 +2292,6 @@ function controlEndEncounter(
             yield* record("end-encounter-dying", {
               phase: phase.stdout.trim(),
             });
-            return;
           }
         });
       }),
@@ -2608,7 +2608,7 @@ function latestDebugTimelineEntry(
       kinds: typeof kinds === "string" ? [kinds] : kinds,
       limit: debugApiTimelineEntries,
     })
-    .findLast(predicate);
+    .findLast((entry) => predicate(entry));
 }
 
 function isBeatGameActionEvent(entry: unknown): boolean {
@@ -2723,7 +2723,7 @@ function queryCurrentDecisionActivity(currentAction: string | undefined, limit: 
         );
       })
       .slice(-limit)
-      .map(compactDecisionActivityEntry),
+      .map((entry) => compactDecisionActivityEntry(entry)),
     recentActionOutcomes: recentActionOutcomes(activity),
   };
 }
@@ -2802,12 +2802,15 @@ function compactBlockQueryActivity(entry: Readonly<Record<string, unknown>>): un
 function shouldTraceBlockQuery(query: BeatGameQueryBlocks): boolean {
   return (
     query.radius <= 0.5 ||
-    Object.values(query.selector).some(
-      (value) =>
-        value !== undefined &&
-        (!Array.isArray(value) || value.length > 0) &&
-        (typeof value !== "object" || value === null || Object.keys(value).length > 0),
-    )
+    Object.values(query.selector).some((value: unknown) => {
+      if (value === undefined) {
+        return false;
+      }
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
+      return typeof value !== "object" || value === null || Object.keys(value).length > 0;
+    })
   );
 }
 
@@ -3171,7 +3174,7 @@ function evaluateDebugSource(
       Effect.tryPromise({
         try: async () => {
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- AsyncFunction has no global binding or type; its prototype constructor builds async evaluators
-          const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
+          const AsyncFunction = async function () {}.constructor as new (
             ...parameters: string[]
           ) => (context: Readonly<Record<string, unknown>>) => Promise<unknown>;
           const evaluator = new AsyncFunction(
@@ -3363,23 +3366,25 @@ function optionalDebugBoolean(
 }
 
 function debugStringArray(input: unknown, name: string): readonly string[] {
-  if (
-    !Array.isArray(input) ||
-    !input.every((value) => typeof value === "string" && value.length > 0)
-  ) {
-    throw new SmokeDebugRequestError(`${name} must be an array of non-empty strings`);
+  if (Array.isArray(input)) {
+    const values: readonly unknown[] = input;
+    if (values.every((value): value is string => typeof value === "string" && value.length > 0)) {
+      return values;
+    }
   }
-  return input;
+  throw new SmokeDebugRequestError(`${name} must be an array of non-empty strings`);
 }
 
 function debugNumberArray(input: unknown, name: string): readonly number[] {
-  if (
-    !Array.isArray(input) ||
-    !input.every((value) => typeof value === "number" && Number.isFinite(value))
-  ) {
-    throw new SmokeDebugRequestError(`${name} must be an array of finite numbers`);
+  if (Array.isArray(input)) {
+    const values: readonly unknown[] = input;
+    if (
+      values.every((value): value is number => typeof value === "number" && Number.isFinite(value))
+    ) {
+      return values;
+    }
   }
-  return input;
+  throw new SmokeDebugRequestError(`${name} must be an array of finite numbers`);
 }
 
 function debugStringRecord(input: unknown, name: string): Readonly<Record<string, string>> {
@@ -3629,7 +3634,7 @@ function positiveIntegerEnvironment(name: string, fallback: number): number {
 function json(value: unknown, indentation?: number): string {
   return JSON.stringify(
     value,
-    (_, nested) => (typeof nested === "bigint" ? nested.toString() : nested),
+    (_: string, nested: unknown) => (typeof nested === "bigint" ? nested.toString() : nested),
     indentation,
   );
 }

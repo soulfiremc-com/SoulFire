@@ -49,6 +49,13 @@ import {
   postDragonHooks,
   required,
 } from "./fixtures.js";
+import {
+  arrayContaining,
+  closeTo,
+  objectContaining,
+  stringContaining,
+  stringMatching,
+} from "./matchers.js";
 
 describe("direct escape sprint directions", () => {
   it("does not sprint along a ledge with a drop beside it", () => {
@@ -544,14 +551,14 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         selector: {
-          blockIds: expect.arrayContaining(["minecraft:nether_bricks"]),
+          blockIds: arrayContaining(["minecraft:nether_bricks"]),
         },
       }),
     );
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         selector: { blockIds: ["minecraft:spawner"] },
       }),
     );
@@ -565,7 +572,7 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.xzPaths).toHaveLength(0);
     expect(snapshot.checkpoint.memory.places).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         kind: "FORTRESS",
         confidence: 1,
       }),
@@ -758,7 +765,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "wooden-pickaxe",
         count: 2,
@@ -838,7 +845,7 @@ describe("beat-game run lifecycle", () => {
     // A crafting table, two more sticks and two wooden pickaxes need 12
     // planks, and the bot carries the wood for 5.
     expect(driver.tasks).toEqual([
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:crimson_stem", "minecraft:warped_stem"],
         count: 2,
@@ -1241,18 +1248,18 @@ describe("beat-game run lifecycle", () => {
 
     expect(failures).toEqual([]);
     expect(driver.surfaceQueries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          center: expect.objectContaining({ x: 0.5, y: 40, z: 0.5 }),
+      arrayContaining([
+        objectContaining({
+          center: objectContaining({ x: 0.5, y: 40, z: 0.5 }),
           radius: 0,
           sampleStep: 1,
         }),
       ]),
     );
     expect(driver.actions).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "dig-block" }),
-        expect.objectContaining({ type: "place-block" }),
+      arrayContaining([
+        objectContaining({ type: "dig-block" }),
+        objectContaining({ type: "place-block" }),
       ]),
     );
   });
@@ -1347,7 +1354,7 @@ describe("beat-game run lifecycle", () => {
       );
 
       expect(Option.getOrUndefined(firstAction)).toMatchObject({
-        action: expect.stringMatching(new RegExp(`^${expected}`)),
+        action: stringMatching(new RegExp(`^${expected}`, "u")),
       });
     },
   );
@@ -1496,9 +1503,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(failures).toEqual([]);
     expect(driver.actions).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "dig-block" }),
-        expect.objectContaining({ type: "place-block" }),
+      arrayContaining([
+        objectContaining({ type: "dig-block" }),
+        objectContaining({ type: "place-block" }),
       ]),
     );
   });
@@ -1644,28 +1651,28 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "select-item",
           selector: { itemIds: ["minecraft:white_bed"] },
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "place-block",
-          against: expect.objectContaining({ x: 0, y: 63, z: 1 }),
+          against: objectContaining({ x: 0, y: 63, z: 1 }),
           face: "up",
         }),
       ]),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "sleep",
-        bed: expect.objectContaining({ x: 0, y: 64, z: 1 }),
+        bed: objectContaining({ x: 0, y: 64, z: 1 }),
         waitUntilPossible: false,
       }),
     );
     // The bed replaces a dug shelter, and the bot takes it along after waking.
     expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
-      expect.objectContaining({ position: expect.objectContaining({ x: 0, y: 64, z: 1 }) }),
+      objectContaining({ position: objectContaining({ x: 0, y: 64, z: 1 }) }),
     ]);
   });
 
@@ -1835,23 +1842,23 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "craft",
           recipeId: "oak-planks",
           count: 1,
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "craft",
           recipeId: "white-bed",
           count: 1,
         }),
-        expect.objectContaining({ type: "sleep" }),
+        objectContaining({ type: "sleep" }),
       ]),
     );
     const sleep = driver.tasks.find((task) => task.type === "sleep");
     expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
-      expect.objectContaining({ position: sleep?.type === "sleep" ? sleep.bed : undefined }),
+      objectContaining({ position: sleep?.type === "sleep" ? sleep.bed : undefined }),
     ]);
   });
 
@@ -1966,23 +1973,21 @@ describe("beat-game run lifecycle", () => {
     );
 
     const placeIndex = driver.actions.findIndex((action) => action.type === "place-block");
-    expect(driver.tasks).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "collect-blocks" })]),
-    );
+    expect(driver.tasks).toEqual(arrayContaining([objectContaining({ type: "collect-blocks" })]));
     expect(placeIndex).toBeGreaterThan(2);
     expect(driver.actions.slice(0, placeIndex)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ y: 63 }),
+          position: objectContaining({ y: 63 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ y: 62 }),
+          position: objectContaining({ y: 62 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ y: 61 }),
+          position: objectContaining({ y: 61 }),
         }),
       ]),
     );
@@ -1999,8 +2004,8 @@ describe("beat-game run lifecycle", () => {
     });
     // The bot first steps to the center of its block so it drops into the shaft.
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({
           x: 0,
           y: 64,
           z: 0,
@@ -2099,12 +2104,12 @@ describe("beat-game run lifecycle", () => {
       },
     });
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "select-item",
-          selector: { itemIds: expect.arrayContaining(["minecraft:stone_pickaxe"]) },
+          selector: { itemIds: arrayContaining(["minecraft:stone_pickaxe"]) },
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
           position: {
             x: 0,
@@ -2190,7 +2195,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(
       driver.tasks.filter((task) => task.type === "attack-entity").map((task) => task.target),
-    ).toEqual(sheep.map(({ networkId }) => expect.objectContaining({ networkId })));
+    ).toEqual(sheep.map(({ networkId }) => objectContaining({ networkId })));
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
   });
 
@@ -2312,7 +2317,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks[0]).toMatchObject({
       type: "collect-blocks",
-      blockIds: expect.arrayContaining(["minecraft:red_bed", "minecraft:white_bed"]),
+      blockIds: arrayContaining(["minecraft:red_bed", "minecraft:white_bed"]),
       count: 1,
     });
   });
@@ -2536,8 +2541,8 @@ describe("beat-game run lifecycle", () => {
       "Leaving the night shelter because the night outlasted its maximum length",
     );
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
           position: { x: 0, y: 62, z: 0, dimension: "minecraft:overworld" },
         }),
@@ -2677,7 +2682,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 4.5,
           y: 64,
@@ -2685,7 +2690,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -2693,26 +2698,26 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.actions).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 0, z: 0 }),
+          position: objectContaining({ x: 0, z: 0 }),
         }),
       ]),
     );
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 63, z: 0 }),
+          position: objectContaining({ x: 4, y: 63, z: 0 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 62, z: 0 }),
+          position: objectContaining({ x: 4, y: 62, z: 0 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 61, z: 0 }),
+          position: objectContaining({ x: 4, y: 61, z: 0 }),
         }),
       ]),
     );
@@ -2840,7 +2845,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 4.5,
           y: 64,
@@ -2848,7 +2853,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -2856,26 +2861,26 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.actions).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 0, z: 0 }),
+          position: objectContaining({ x: 0, z: 0 }),
         }),
       ]),
     );
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 63, z: 0 }),
+          position: objectContaining({ x: 4, y: 63, z: 0 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 62, z: 0 }),
+          position: objectContaining({ x: 4, y: 62, z: 0 }),
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 4, y: 61, z: 0 }),
+          position: objectContaining({ x: 4, y: 61, z: 0 }),
         }),
       ]),
     );
@@ -3020,10 +3025,10 @@ describe("beat-game run lifecycle", () => {
       },
     });
     expect(driver.actions).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
-          position: expect.objectContaining({ x: 0, z: 0 }),
+          position: objectContaining({ x: 0, z: 0 }),
         }),
       ]),
     );
@@ -4787,9 +4792,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 0.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -4797,9 +4802,9 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
       }),
     );
   }, 10_000);
@@ -4880,7 +4885,7 @@ describe("beat-game run lifecycle", () => {
       completeWhenSafe: true,
     });
     expect(driver.tasks).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "collect-blocks" })]),
+      arrayContaining([objectContaining({ type: "collect-blocks" })]),
     );
   }, 10_000);
 
@@ -4975,9 +4980,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "flee" }),
-        expect.objectContaining({ type: "attack-entity" }),
+      arrayContaining([
+        objectContaining({ type: "flee" }),
+        objectContaining({ type: "attack-entity" }),
       ]),
     );
   }, 10_000);
@@ -5013,7 +5018,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:salmon"],
         foodLevel: 20,
@@ -5056,7 +5061,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:salmon"],
         foodLevel: 20,
@@ -5131,7 +5136,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter(({ type }) => type === "auto-eat")).toHaveLength(2);
     expect(driver.tasks.filter(({ type }) => type === "auto-eat")).toEqual(
-      expect.arrayContaining([expect.objectContaining({ maximumMeals: 1 })]),
+      arrayContaining([objectContaining({ maximumMeals: 1 })]),
     );
   }, 10_000);
 
@@ -5318,13 +5323,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({
           y: 64,
           dimension: "minecraft:overworld",
         }),
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: false,
@@ -5505,13 +5510,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({
           y: 64,
           dimension: "minecraft:overworld",
         }),
         radius: 1.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
           avoidFluids: false,
@@ -5644,9 +5649,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(recoveryAttempts).toBe(0);
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "dig-block",
-        position: expect.objectContaining({ y: 63 }),
+        position: objectContaining({ y: 63 }),
       }),
     );
   });
@@ -6057,7 +6062,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(recovered).toBe("The bot kept its inventory through death");
-    expect(driver.paths).not.toContainEqual(expect.objectContaining({ position: deathPosition }));
+    expect(driver.paths).not.toContainEqual(objectContaining({ position: deathPosition }));
   });
 
   it("stays in its phase when it keeps a worn-out inventory through death", async () => {
@@ -6249,7 +6254,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -6456,7 +6461,7 @@ describe("beat-game run lifecycle", () => {
       },
     });
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-respawn",
       }),
     );
@@ -6618,8 +6623,8 @@ describe("beat-game run lifecycle", () => {
 
     const saved = await Effect.runPromise(store.load("death-inventory-transition-run"));
     expect(saved?.memory.deathPositions).toContainEqual(
-      expect.objectContaining({
-        value: expect.objectContaining({
+      objectContaining({
+        value: objectContaining({
           ...deathPosition,
           inventoryCounts: {
             "minecraft:iron_ingot": 10,
@@ -6779,8 +6784,8 @@ describe("beat-game run lifecycle", () => {
 
     const saved = await Effect.runPromise(store.load("consecutive-death-inventory-run"));
     expect(saved?.memory.deathPositions).toContainEqual(
-      expect.objectContaining({
-        value: expect.objectContaining({
+      objectContaining({
+        value: objectContaining({
           ...secondDeathPosition,
           inventoryCounts: {},
         }),
@@ -6883,10 +6888,10 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 24,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -6894,7 +6899,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodLevel: 20,
         maximumMeals: 1,
@@ -8014,9 +8019,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: 17 }),
+        target: objectContaining({ networkId: 17 }),
         selectBestWeapon: true,
       }),
     );
@@ -8122,9 +8127,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           entityType: "minecraft:skeleton",
         }),
         selectBestWeapon: true,
@@ -8229,13 +8234,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:mutton"],
         maximumMeals: 1,
@@ -8333,15 +8338,15 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: chicken.networkId }),
+        target: objectContaining({ networkId: chicken.networkId }),
       }),
     );
   });
@@ -8385,7 +8390,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -8550,18 +8555,18 @@ describe("beat-game run lifecycle", () => {
     expect(saved?.memory.deathPositions).toEqual([]);
     expect(saved?.memory.latestDeath).toBeUndefined();
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({
           dimension: portalPosition.dimension,
         }),
         radius: 0,
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           searchMode: BeatGamePathSearchMode.URGENT,
           maximumQualityBound: 2,
         }),
@@ -8656,7 +8661,7 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toHaveLength(3);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -8810,7 +8815,7 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load("retained-empty-recovery-run"));
     expect(saved?.activeSkill).toBeUndefined();
     expect(saved?.memory.skillHistory).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         skillId: "stale-portal-skill",
         status: BeatGameDurableSkillStatus.ABANDONED,
         completionEvidence: "catastrophic inventory loss restarted Overworld preparation",
@@ -8944,7 +8949,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -9029,7 +9034,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -9107,7 +9112,7 @@ describe("beat-game run lifecycle", () => {
     expect(saved?.planner.phase).toBe(BeatGamePhase.PREPARE_OVERWORLD);
     expect(saved?.memory.deathPositions).toEqual([]);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -9503,7 +9508,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -9580,7 +9585,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -9680,7 +9685,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -9944,9 +9949,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: salmon.networkId,
           entityType: salmon.entityType,
         }),
@@ -10055,7 +10060,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -10297,10 +10302,10 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: breathingPocket,
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
         }),
@@ -10405,14 +10410,14 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
-        policy: expect.objectContaining({ allowMining: false }),
+        policy: objectContaining({ allowMining: false }),
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
       }),
     );
@@ -10512,12 +10517,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -10620,12 +10625,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -10914,9 +10919,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
-        blockIds: expect.arrayContaining(["minecraft:oak_log"]),
+        blockIds: arrayContaining(["minecraft:oak_log"]),
         count: 12,
         requireLineOfSight: false,
         targetYRange: { minimum: 60, maximum: 66 },
@@ -10927,7 +10932,7 @@ describe("beat-game run lifecycle", () => {
     );
     expect(driver.taskPolicies[logCollectionIndex]?.minimumY).toBe(63);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -11002,7 +11007,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.some((task) => task.type === "collect-blocks")).toBe(false);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -11090,12 +11095,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -11203,29 +11208,29 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
-        policy: expect.objectContaining({ allowMining: false }),
+        policy: objectContaining({ allowMining: false }),
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
     expect(driver.xzPaths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 12,
         z: 0,
         dimension: deathPosition.dimension,
         radius: 3,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
         }),
@@ -11306,7 +11311,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 444,
         z: 0,
         dimension: deathPosition.dimension,
@@ -11402,10 +11407,10 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 24,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -11511,12 +11516,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -11570,7 +11575,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (driver.tasks.filter((task) => task.type === "collect-blocks").length < 1) {
+              while (driver.tasks.filter((task) => task.type === "collect-blocks").length === 0) {
                 yield* Effect.sleep(1);
               }
               yield* run.stop;
@@ -11583,7 +11588,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.some((task) => task.type === "craft")).toBe(false);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -11747,13 +11752,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
-        blockIds: expect.arrayContaining(["minecraft:dirt", "minecraft:grass_block"]),
+        blockIds: arrayContaining(["minecraft:dirt", "minecraft:grass_block"]),
       }),
     );
     expect(driver.taskPolicies.at(-1)).toEqual(
-      expect.objectContaining({
+      objectContaining({
         avoidFluids: true,
         allowPlacing: false,
       }),
@@ -11915,7 +11920,7 @@ describe("beat-game run lifecycle", () => {
       action: "satisfy:food-supply",
     });
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -12018,9 +12023,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: animalAhead.networkId,
         }),
       }),
@@ -12118,8 +12123,8 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.tasks[attackIndex]).toEqual(
-      expect.objectContaining({
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+      objectContaining({
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
     expect(driver.taskPolicies[attackIndex]).toMatchObject({
@@ -12221,9 +12226,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.xzPaths).toHaveLength(0);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
     expect(driver.paths).toHaveLength(0);
@@ -12396,7 +12401,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: codDrop.position,
       }),
     );
@@ -12688,7 +12693,7 @@ describe("beat-game run lifecycle", () => {
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(attackIndex).toBeGreaterThanOrEqual(0);
     expect(driver.taskPolicies[attackIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         allowPlacing: false,
         avoidFluids: true,
       }),
@@ -12781,13 +12786,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: cow.networkId }),
+        target: objectContaining({ networkId: cow.networkId }),
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -12871,7 +12876,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -12959,7 +12964,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -13078,12 +13083,12 @@ describe("beat-game run lifecycle", () => {
     expect(saved?.memory.deathPositions).toHaveLength(0);
     expect(driver.xzPaths.every(({ x, z }) => x > 0 && z === 0)).toBe(true);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -13500,7 +13505,7 @@ describe("beat-game run lifecycle", () => {
 
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.memory.deathPositions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         observedAt,
       }),
     );
@@ -13580,7 +13585,7 @@ describe("beat-game run lifecycle", () => {
           Effect.flatMap((run) =>
             Effect.gen(function* () {
               yield* Effect.gen(function* () {
-                while (driver.xzPaths.length < 1) {
+                while (driver.xzPaths.length === 0) {
                   yield* Effect.sleep(1);
                 }
               }).pipe(
@@ -13603,7 +13608,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -13724,19 +13729,19 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "wooden-pickaxe",
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "stone-pickaxe",
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -13858,13 +13863,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "stone-pickaxe",
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -13936,13 +13941,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
-        blockIds: expect.arrayContaining(["minecraft:oak_log"]),
+        blockIds: arrayContaining(["minecraft:oak_log"]),
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
       }),
     );
@@ -14091,7 +14096,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
       }),
@@ -14243,9 +14248,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(recoveries).toBe(2);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: zombie.connectionEpoch,
           networkId: zombie.networkId,
         }),
@@ -14505,9 +14510,9 @@ describe("beat-game run lifecycle", () => {
       sprinting: true,
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
         selectBestWeapon: true,
       }),
     );
@@ -14592,8 +14597,8 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "flee").length).toBeGreaterThanOrEqual(2);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
-        policy: expect.objectContaining({
+      objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
         }),
@@ -14681,8 +14686,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        policy: expect.objectContaining({ allowMining: true, allowPlacing: true }),
+      objectContaining({
+        policy: objectContaining({ allowMining: true, allowPlacing: true }),
       }),
     );
   }, 10_000);
@@ -14903,7 +14908,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         selector: { networkId: fusingCreeper.networkId, alive: true },
       }),
     );
@@ -14994,7 +14999,7 @@ describe("beat-game run lifecycle", () => {
 
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.tasks[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 12,
@@ -15018,7 +15023,7 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.actions).toContainEqual({ type: "reset-movement" });
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -15166,8 +15171,8 @@ describe("beat-game run lifecycle", () => {
       (action) => action.type === "look" && action.pitch === 0,
     );
     expect(escapeLooks).toHaveLength(3);
-    expect(escapeLooks[1]).toEqual(expect.objectContaining({ type: "look" }));
-    expect(escapeLooks[2]).toEqual(expect.objectContaining({ type: "look" }));
+    expect(escapeLooks[1]).toEqual(objectContaining({ type: "look" }));
+    expect(escapeLooks[2]).toEqual(objectContaining({ type: "look" }));
     assert(escapeLooks[1]?.type === "look" && escapeLooks[2]?.type === "look");
     expect(Math.abs(escapeLooks[1].yaw - escapeLooks[2].yaw)).toBeGreaterThanOrEqual(45);
     expect(-Math.sin((escapeLooks[1].yaw * Math.PI) / 180)).toBeLessThan(-0.2);
@@ -15233,7 +15238,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -15245,7 +15250,7 @@ describe("beat-game run lifecycle", () => {
       sprint: true,
     });
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -15320,9 +15325,9 @@ describe("beat-game run lifecycle", () => {
     expect(fleeInterruptions).toBe(0);
     expect(driver.tasks.filter((task) => task.type === "flee")).toHaveLength(1);
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 6,
-        selector: expect.objectContaining({
+        selector: objectContaining({
           entityTypes: ["minecraft:creeper"],
           alive: true,
           requireLineOfSight: true,
@@ -15480,7 +15485,7 @@ describe("beat-game run lifecycle", () => {
       maxFallDistance: 3,
     });
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "set-movement",
         forward: true,
         jump: true,
@@ -15558,7 +15563,7 @@ describe("beat-game run lifecycle", () => {
       avoidFluids: true,
     });
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "set-movement",
         forward: true,
         jump: true,
@@ -15660,7 +15665,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -15880,10 +15885,10 @@ describe("beat-game run lifecycle", () => {
     expect(
       driver.paths.filter(({ radius }) => radius === 0.35).map(({ position }) => position),
     ).toEqual([
-      expect.objectContaining({ x: 1.5, y: 62, z: 0.5 }),
-      expect.objectContaining({ x: 2.5, y: 63, z: 0.5 }),
-      expect.objectContaining({ x: 3.5, y: 64, z: 0.5 }),
-      expect.objectContaining({ x: 4.5, y: 65, z: 0.5 }),
+      objectContaining({ x: 1.5, y: 62, z: 0.5 }),
+      objectContaining({ x: 2.5, y: 63, z: 0.5 }),
+      objectContaining({ x: 3.5, y: 64, z: 0.5 }),
+      objectContaining({ x: 4.5, y: 65, z: 0.5 }),
     ]);
   }, 10_000);
 
@@ -16364,17 +16369,17 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 12,
-        selector: expect.objectContaining({
-          entityTypes: expect.arrayContaining(["minecraft:creeper"]),
+        selector: objectContaining({
+          entityTypes: arrayContaining(["minecraft:creeper"]),
           alive: true,
         }),
       }),
     );
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.tasks[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -16450,7 +16455,7 @@ describe("beat-game run lifecycle", () => {
     expect(interruptedBeforeStop).toBe(0);
     expect(escapes).toBe(1);
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -16520,14 +16525,14 @@ describe("beat-game run lifecycle", () => {
     const escapes = driver.tasks.filter((task) => task.type === "flee");
     expect(escapes).toHaveLength(2);
     expect(escapes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           selector: { categories: [2], alive: true },
         }),
       ]),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -16606,7 +16611,7 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.tasks.filter((task) => task.type === "flee")).toHaveLength(2);
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -16667,13 +16672,13 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "flee").length).toBeGreaterThanOrEqual(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -16763,10 +16768,10 @@ describe("beat-game run lifecycle", () => {
 
     expect(interruptedEscapes).toBe(1);
     expect(driver.tasks.filter((task) => task.type === "flee")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         selector: { categories: [2], alive: true },
       }),
-      expect.objectContaining({
+      objectContaining({
         selector: { categories: [2], alive: true },
       }),
     ]);
@@ -16855,8 +16860,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
-        selector: expect.objectContaining({
+      objectContaining({
+        selector: objectContaining({
           categories: [2],
           alive: true,
           requireLineOfSight: true,
@@ -17203,7 +17208,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: false,
@@ -17330,7 +17335,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -17402,12 +17407,12 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "auto-eat")).toBe(false);
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.tasks[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
       }),
     );
     expect(driver.taskPolicies[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         sprint: true,
         allowMining: false,
         allowPlacing: false,
@@ -17487,7 +17492,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -17578,9 +17583,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: 49 }),
+        target: objectContaining({ networkId: 49 }),
         selectBestWeapon: true,
       }),
     );
@@ -17658,13 +17663,13 @@ describe("beat-game run lifecycle", () => {
 
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.tasks[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
     );
     expect(driver.taskPolicies[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         allowMining: true,
         allowPlacing: false,
         maxSearchTimeMs: 3_000,
@@ -17741,13 +17746,13 @@ describe("beat-game run lifecycle", () => {
     expect(driver.entityQueries[0]).toMatchObject({
       radius: 24,
       selector: {
-        entityTypes: expect.arrayContaining(["minecraft:polar_bear"]),
+        entityTypes: arrayContaining(["minecraft:polar_bear"]),
         alive: true,
       },
       maximumResults: 8,
     });
     expect(driver.tasks.filter((task) => task.type === "flee")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         selector: {
           networkId: 12,
           alive: true,
@@ -17814,7 +17819,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -17868,7 +17873,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 12,
@@ -17955,7 +17960,7 @@ describe("beat-game run lifecycle", () => {
       right: true,
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -18015,7 +18020,7 @@ describe("beat-game run lifecycle", () => {
       sprinting: true,
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -18154,9 +18159,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: skeleton.networkId,
           entityType: "minecraft:skeleton",
         }),
@@ -18251,7 +18256,7 @@ describe("beat-game run lifecycle", () => {
       avoidFluids: false,
     });
     expect(driver.surfaceQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 16,
         sampleStep: 1,
       }),
@@ -18332,7 +18337,7 @@ describe("beat-game run lifecycle", () => {
       right: true,
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         triggerRadius: 24,
         safeDistance: 32,
@@ -18421,7 +18426,7 @@ describe("beat-game run lifecycle", () => {
       sprint: true,
     });
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: 0,
       }),
@@ -18525,7 +18530,7 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.actions).toContainEqual({
       type: "select-item",
-      selector: { itemIds: expect.arrayContaining(["minecraft:wooden_sword"]) },
+      selector: { itemIds: arrayContaining(["minecraft:wooden_sword"]) },
     });
   }, 10_000);
 
@@ -18769,9 +18774,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: 18 }),
+        target: objectContaining({ networkId: 18 }),
         selectBestWeapon: true,
       }),
     );
@@ -18834,9 +18839,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: skeleton.networkId }),
+        target: objectContaining({ networkId: skeleton.networkId }),
         selectBestWeapon: true,
       }),
     );
@@ -18899,9 +18904,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: 19,
           entityType: "minecraft:skeleton",
         }),
@@ -18958,7 +18963,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         triggerRadius: 24,
         safeDistance: 32,
@@ -19023,7 +19028,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19097,7 +19102,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -19173,7 +19178,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         useOffhandShield: true,
       }),
@@ -19237,7 +19242,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         useOffhandShield: true,
       }),
@@ -19318,13 +19323,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         useOffhandShield: true,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19396,13 +19401,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         useOffhandShield: true,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19477,7 +19482,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "attack-entity")).toHaveLength(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19587,7 +19592,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
         avoidFluids: true,
@@ -19678,7 +19683,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "attack-entity")).toHaveLength(0);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19761,7 +19766,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "attack-entity")).toHaveLength(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -19840,7 +19845,7 @@ describe("beat-game run lifecycle", () => {
     expect(attackIndex).toBeGreaterThanOrEqual(0);
     expect(eatIndex).toBeGreaterThan(attackIndex);
     expect(driver.tasks[eatIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodLevel: 20,
         maximumMeals: 1,
@@ -19917,7 +19922,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -19993,9 +19998,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: spider.connectionEpoch,
           networkId: spider.networkId,
         }),
@@ -20057,7 +20062,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -20143,7 +20148,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -20222,7 +20227,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -20303,7 +20308,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -20553,15 +20558,15 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: spider.connectionEpoch,
           networkId: spider.networkId,
         }),
@@ -20929,9 +20934,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.filter((task) => task.type === "flee")).toHaveLength(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: zombie.connectionEpoch,
           networkId: zombie.networkId,
         }),
@@ -21010,9 +21015,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: piglin.connectionEpoch,
           networkId: piglin.networkId,
         }),
@@ -21096,7 +21101,7 @@ describe("beat-game run lifecycle", () => {
       sprinting: true,
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -21168,9 +21173,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: spider.networkId,
           entityType: spider.entityType,
         }),
@@ -21355,17 +21360,17 @@ describe("beat-game run lifecycle", () => {
 
     expect(hostileQueries).toBeGreaterThanOrEqual(2);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
         selectBestWeapon: true,
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: rottenFlesh.position,
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: true,
         }),
@@ -21502,9 +21507,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(skeletonInterrupted).toBeGreaterThanOrEqual(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: closingZombie.networkId,
         }),
         selectBestWeapon: true,
@@ -21562,7 +21567,7 @@ describe("beat-game run lifecycle", () => {
     ).toBe(false);
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.tasks[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -21629,7 +21634,7 @@ describe("beat-game run lifecycle", () => {
       driver.tasks.some((task) => task.type === "attack-nearest" || task.type === "attack-entity"),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -21703,7 +21708,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -21712,7 +21717,7 @@ describe("beat-game run lifecycle", () => {
     );
     expect(interruptedEscapes).toBe(1);
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 32,
         selector: {
           networkId: skeleton.networkId,
@@ -21772,7 +21777,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 24,
         selector: {
           categories: [2],
@@ -21783,9 +21788,9 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: attacker.connectionEpoch,
           networkId: attacker.networkId,
         }),
@@ -21796,7 +21801,7 @@ describe("beat-game run lifecycle", () => {
     expect(defensiveAttack).not.toHaveProperty("maximumAttacks");
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.taskPolicies[attackIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: true,
@@ -21869,7 +21874,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 24,
@@ -21878,7 +21883,7 @@ describe("beat-game run lifecycle", () => {
     );
     const fleeIndex = driver.tasks.findIndex((task) => task.type === "flee");
     expect(driver.taskPolicies[fleeIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: false,
@@ -21959,7 +21964,7 @@ describe("beat-game run lifecycle", () => {
     expect(interruptedDefensiveAttacks).toBe(1);
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.taskPolicies[attackIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: true,
@@ -22039,7 +22044,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
         triggerRadius: 12,
@@ -22115,8 +22120,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
-        selector: expect.objectContaining({
+      objectContaining({
+        selector: objectContaining({
           categories: [2],
           alive: true,
         }),
@@ -22182,14 +22187,14 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
     );
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         connectionEpoch: "epoch-1",
         networkId: 1,
@@ -22349,7 +22354,7 @@ describe("beat-game run lifecycle", () => {
     ).toBe(true);
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         connectionEpoch: "epoch-1",
         networkId: 1,
@@ -22431,7 +22436,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 63.5,
@@ -22439,7 +22444,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: false,
@@ -22508,7 +22513,7 @@ describe("beat-game run lifecycle", () => {
       driver.actions.some((action) => action.type === "set-movement" && action.forward === true),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -22572,7 +22577,7 @@ describe("beat-game run lifecycle", () => {
       driver.tasks.some((task) => task.type === "attack-nearest" || task.type === "attack-entity"),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -22644,7 +22649,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions.filter((action) => action.type === "attack-entity")).toHaveLength(2);
     expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: { categories: [2], alive: true },
       }),
@@ -22694,7 +22699,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -22760,9 +22765,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: "epoch-1",
           networkId: 26,
         }),
@@ -22844,9 +22849,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
       }),
     );
     expect(driver.tasks.some((task) => task.type === "flee")).toBe(true);
@@ -22933,13 +22938,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -23041,12 +23046,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "flee",
         selector: {
           categories: [2],
@@ -23114,7 +23119,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 24,
         selector: {
           categories: [2],
@@ -23319,7 +23324,7 @@ describe("beat-game run lifecycle", () => {
         }).pipe(
           Effect.flatMap((run) =>
             Effect.gen(function* () {
-              while (driver.tasks.filter((task) => task.type === "collect-blocks").length < 1) {
+              while (driver.tasks.filter((task) => task.type === "collect-blocks").length === 0) {
                 yield* Effect.sleep(1);
               }
               driver.entityResults = [attacker];
@@ -23335,9 +23340,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: attacker.networkId }),
+        target: objectContaining({ networkId: attacker.networkId }),
         sprinting: true,
       }),
     );
@@ -23790,13 +23795,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -90,
       }),
     );
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -20,
       }),
@@ -23941,7 +23946,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -20,
       }),
@@ -24054,7 +24059,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: false,
@@ -24191,9 +24196,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: pig.networkId }),
+        target: objectContaining({ networkId: pig.networkId }),
       }),
     );
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
@@ -24492,19 +24497,19 @@ describe("beat-game run lifecycle", () => {
 
     expect(ascentObservations).toBeGreaterThanOrEqual(1);
     expect(driver.surfaceQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 16,
         sampleStep: 1,
       }),
     );
     expect(driver.surfaceQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 96,
         sampleStep: 4,
       }),
     );
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -20,
       }),
@@ -24744,7 +24749,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.surfaceQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 96,
         sampleStep: 4,
       }),
@@ -24878,9 +24883,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: zombie.networkId }),
+        target: objectContaining({ networkId: zombie.networkId }),
       }),
     );
     expect(driver.actions).toContainEqual({ type: "reset-movement" });
@@ -25372,7 +25377,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: false,
@@ -26273,14 +26278,14 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toHaveLength(2);
     expect(driver.paths[0]?.policy.avoidFluids).toBe(true);
     expect(driver.paths[1]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 64,
           z: 0.5,
           dimension: "minecraft:overworld",
         },
-        policy: expect.objectContaining({ avoidFluids: true }),
+        policy: objectContaining({ avoidFluids: true }),
       }),
     );
     expect(driver.currentObservation.player.position.y).toBe(64);
@@ -26348,15 +26353,15 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:iron_ore", "minecraft:deepslate_iron_ore"],
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
-        recipeId: expect.stringContaining("bucket"),
+        recipeId: stringContaining("bucket"),
       }),
     );
   });
@@ -26452,9 +26457,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ y: 65 }),
-        policy: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({ y: 65 }),
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
           avoidFluids: true,
@@ -26462,7 +26467,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: undergroundSource.position,
       }),
     );
@@ -26770,9 +26775,9 @@ describe("beat-game run lifecycle", () => {
       sources.map(({ position }) => position),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "explore",
-        purpose: expect.stringContaining("find-water"),
+        purpose: stringContaining("find-water"),
       }),
     );
   });
@@ -27058,13 +27063,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: source,
         radius: 3,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:stone_pickaxe",
       }),
@@ -27082,7 +27087,7 @@ describe("beat-game run lifecycle", () => {
       { type: "use-item", hand: "main" },
     ]);
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "interact-block",
       }),
     );
@@ -27323,19 +27328,19 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         avoidFluids: true,
         maxFallDistance: 1,
       }),
     });
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: source,
         radius: 3,
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 3.5,
           y: -50,
@@ -27346,7 +27351,7 @@ describe("beat-game run lifecycle", () => {
     );
     expect(driver.actions.some((action) => action.type === "dig-block")).toBe(false);
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         center: {
           x: 0.5,
           y: -51.5,
@@ -27526,7 +27531,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths.find(({ radius }) => radius === 0.75)).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: poolStand.x + 0.5,
           y: poolStand.y,
@@ -27536,7 +27541,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: loneStand.x + 0.5,
           y: loneStand.y,
@@ -27720,7 +27725,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths.find(({ radius }) => radius === 0.75)).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: clearStand.x + 0.5,
           y: clearStand.y,
@@ -27730,7 +27735,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: blockedStand.x + 0.5,
           y: blockedStand.y,
@@ -27740,7 +27745,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:iron_pickaxe",
       }),
@@ -28062,7 +28067,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: blockedStand.x + 0.5,
           y: blockedStand.y,
@@ -28073,7 +28078,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: openStand.x + 0.5,
           y: openStand.y,
@@ -28084,7 +28089,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "dig-block",
       }),
     );
@@ -28225,11 +28230,11 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths.filter(({ policy }) => !policy.allowMining)).toEqual([
-      expect.objectContaining({ position: stand, radius: 0.75 }),
-      expect.objectContaining({ position: stand, radius: 1.1 }),
+      objectContaining({ position: stand, radius: 0.75 }),
+      objectContaining({ position: stand, radius: 1.1 }),
     ]);
     expect(driver.paths.filter(({ policy }) => policy.allowMining)).toEqual([
-      expect.objectContaining({ position: stand }),
+      objectContaining({ position: stand }),
     ]);
   });
 
@@ -28366,7 +28371,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         avoidFluids: true,
         maxFallDistance: 1,
@@ -28490,8 +28495,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ y: 63 }),
+      objectContaining({
+        position: objectContaining({ y: 63 }),
       }),
     );
     expect(driver.paths.some(({ radius }) => radius === 0.75)).toBe(false);
@@ -28678,8 +28683,8 @@ describe("beat-game run lifecycle", () => {
       maxFallDistance: 1,
     });
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
-        center: expect.objectContaining({ y: 52 }),
+      objectContaining({
+        center: objectContaining({ y: 52 }),
         selector: {
           blockIds: ["minecraft:lava"],
           properties: { level: "0" },
@@ -28774,7 +28779,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:stone_pickaxe",
       }),
@@ -28932,12 +28937,12 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 0.75,
       }),
     );
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "dig-block",
       }),
     );
@@ -29058,23 +29063,23 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ y: 64 }),
-        policy: expect.objectContaining({
+      objectContaining({
+        position: objectContaining({ y: 64 }),
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
         }),
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ y: 53 }),
+      objectContaining({
+        position: objectContaining({ y: 53 }),
       }),
     );
     expect(driver.xzPaths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         dimension: "minecraft:overworld",
-        policy: expect.objectContaining({
+        policy: objectContaining({
           avoidFluids: true,
         }),
       }),
@@ -29226,9 +29231,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.xzPaths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         dimension: "minecraft:overworld",
-        policy: expect.objectContaining({ avoidFluids: true }),
+        policy: objectContaining({ avoidFluids: true }),
       }),
     );
     expect(actionEvents).toContain("action-progressed:advanced the search for lava-bucket");
@@ -29375,7 +29380,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 42,
@@ -29383,7 +29388,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -29392,7 +29397,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "use-item",
       }),
     );
@@ -29603,7 +29608,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toContainEqual({
       position: safeStand,
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         avoidFluids: true,
         maxFallDistance: 1,
       }),
@@ -29618,9 +29623,9 @@ describe("beat-game run lifecycle", () => {
     // The fake world never finishes the frame, so the site may already be
     // abandoned once its retries run out.
     expect(saved?.memory.portalWorkspaces).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         method: "CAST",
-        candidateLavaSources: expect.arrayContaining([source.position]),
+        candidateLavaSources: arrayContaining([source.position]),
       }),
     );
   });
@@ -29900,7 +29905,7 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.planner.status).not.toBe("FAILED");
     expect(saved?.memory.portalWorkspaces).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         workspaceId: "unreachable-lava-workspace",
         status: "ABANDONED",
       }),
@@ -30063,7 +30068,7 @@ describe("beat-game run lifecycle", () => {
     });
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.planner.requirements.map(({ key }) => key)).not.toEqual(
-      expect.arrayContaining(["iron", "water-bucket", "lava-bucket", "ignition"]),
+      arrayContaining(["iron", "water-bucket", "lava-bucket", "ignition"]),
     );
   });
 
@@ -30292,7 +30297,7 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.memory.portals[0]?.confidence).toBe(0);
     expect(saved?.planner.requirements).toContainEqual(
-      expect.objectContaining({ key: "lava-bucket", satisfied: false }),
+      objectContaining({ key: "lava-bucket", satisfied: false }),
     );
   });
 
@@ -30551,12 +30556,12 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.memory.portals[0]?.confidence).toBe(1);
     expect(saved?.memory.unreachable).toContainEqual(
-      expect.objectContaining({
-        key: expect.stringContaining("portal-route:"),
+      objectContaining({
+        key: stringContaining("portal-route:"),
       }),
     );
     expect(saved?.planner.requirements).not.toContainEqual(
-      expect.objectContaining({ key: "lava-bucket" }),
+      objectContaining({ key: "lava-bucket" }),
     );
     expect(driver.paths).toHaveLength(0);
   });
@@ -30670,12 +30675,12 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load(runId));
     expect(saved?.memory.portals[0]?.confidence).toBe(1);
     expect(saved?.memory.unreachable).toContainEqual(
-      expect.objectContaining({
-        key: expect.stringContaining("portal-route:"),
+      objectContaining({
+        key: stringContaining("portal-route:"),
       }),
     );
     expect(saved?.planner.requirements).not.toContainEqual(
-      expect.objectContaining({ key: "lava-bucket" }),
+      objectContaining({ key: "lava-bucket" }),
     );
     expect(driver.paths).toHaveLength(1);
   });
@@ -30754,7 +30759,7 @@ describe("beat-game run lifecycle", () => {
     const retained = await Effect.runPromise(store.load(runId));
     expect(attempts).toBe(2);
     expect(failures).toContainEqual(
-      expect.stringContaining("retained the portal workspace after a local route failure"),
+      stringContaining("retained the portal workspace after a local route failure"),
     );
     expect(retained?.planner.status).not.toBe(BeatGameRunStatus.FAILED);
     expect(retained?.activeSkill).toMatchObject({
@@ -30949,7 +30954,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:iron_pickaxe",
       }),
@@ -31081,7 +31086,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:iron_pickaxe",
       }),
@@ -31353,7 +31358,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:gravel"],
         avoidSubmergedTargets: true,
@@ -31561,7 +31566,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.paths).toHaveLength(0);
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 24.5,
         z: 0.5,
         dimension: "minecraft:overworld",
@@ -31664,10 +31669,10 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.xzPaths[0]?.policy.maxFallDistance).toBe(3);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
         sprinting: true,
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: salmon.connectionEpoch,
           networkId: salmon.networkId,
         }),
@@ -31798,15 +31803,15 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -90,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
     expect(driver.paths).toHaveLength(0);
@@ -31941,9 +31946,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: shallowSalmon.networkId }),
+        target: objectContaining({ networkId: shallowSalmon.networkId }),
       }),
     );
     expect(driver.paths).toHaveLength(0);
@@ -32013,9 +32018,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: woundedCod.networkId }),
+        target: objectContaining({ networkId: woundedCod.networkId }),
       }),
     );
     expect(driver.paths).toHaveLength(0);
@@ -32129,7 +32134,7 @@ describe("beat-game run lifecycle", () => {
         .map((task) => task.target.networkId),
     ).toEqual([salmon.networkId, salmon.networkId]);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 2.5,
           y: 64,
@@ -32249,7 +32254,7 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (driver.tasks.filter((task) => task.type === "attack-entity").length < 1) {
+          while (driver.tasks.filter((task) => task.type === "attack-entity").length === 0) {
             yield* Effect.sleep(1);
           }
           yield* Effect.sleep(10);
@@ -32433,9 +32438,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
     expect(driver.paths).toHaveLength(0);
@@ -32547,15 +32552,15 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: cow.networkId }),
+        target: objectContaining({ networkId: cow.networkId }),
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
   });
@@ -32641,9 +32646,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
   });
@@ -32780,9 +32785,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: cow.networkId }),
+        target: objectContaining({ networkId: cow.networkId }),
       }),
     );
     expect(driver.tasks.some((task) => task.type === "collect-blocks")).toBe(false);
@@ -33031,8 +33036,8 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.tasks[attackIndex]).toEqual(
-      expect.objectContaining({
-        target: expect.objectContaining({
+      objectContaining({
+        target: objectContaining({
           connectionEpoch: salmon.connectionEpoch,
           networkId: salmon.networkId,
         }),
@@ -33112,8 +33117,8 @@ describe("beat-game run lifecycle", () => {
     expect(driver.surfaceQueries.length).toBeGreaterThan(0);
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.tasks[attackIndex]).toEqual(
-      expect.objectContaining({
-        target: expect.objectContaining({
+      objectContaining({
+        target: objectContaining({
           connectionEpoch: salmon.connectionEpoch,
           networkId: salmon.networkId,
         }),
@@ -33264,8 +33269,8 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toHaveLength(0);
     const attackIndex = driver.tasks.findIndex((task) => task.type === "attack-entity");
     expect(driver.tasks[attackIndex]).toEqual(
-      expect.objectContaining({
-        target: expect.objectContaining({
+      objectContaining({
+        target: objectContaining({
           connectionEpoch: salmon.connectionEpoch,
           networkId: salmon.networkId,
         }),
@@ -33431,7 +33436,7 @@ describe("beat-game run lifecycle", () => {
       },
     });
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         avoidSubmergedTargets: true,
       }),
@@ -33622,9 +33627,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           networkId: zombie.networkId,
           entityType: zombie.entityType,
         }),
@@ -34123,8 +34128,8 @@ describe("beat-game run lifecycle", () => {
     });
 
     expect(path).toMatchObject({
-      x: expect.closeTo(22.62741699796952),
-      z: expect.closeTo(22.62741699796952),
+      x: closeTo(22.62741699796952),
+      z: closeTo(22.62741699796952),
     });
   }, 10_000);
 
@@ -34546,7 +34551,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -34628,7 +34633,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -34768,13 +34773,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "craft",
         recipeId: "minecraft:iron_pickaxe",
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 12.5,
           y: 87,
@@ -34782,7 +34787,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 1.5,
-        policy: expect.objectContaining({ allowMining: true }),
+        policy: objectContaining({ allowMining: true }),
       }),
     );
   });
@@ -34869,7 +34874,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.paths).toHaveLength(0);
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 48.5,
         z: 0.5,
         radius: 2,
@@ -34937,7 +34942,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -34998,7 +35003,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
         avoidFluids: false,
@@ -35061,7 +35066,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -35151,7 +35156,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -35366,11 +35371,11 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths.slice(0, 2)).toEqual([
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 0.5, y: 65, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 0.5, y: 65, z: 0.5 }),
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: -2.5, y: 63, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: -2.5, y: 63, z: 0.5 }),
       }),
     ]);
   });
@@ -35423,7 +35428,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toHaveLength(0);
     expect(driver.xzPaths).toHaveLength(1);
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 131.5,
         z: 39.5,
         radius: 2,
@@ -35593,11 +35598,11 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "attack-entity")).toEqual([
-      expect.objectContaining({
-        target: expect.objectContaining({ position: cow.position }),
+      objectContaining({
+        target: objectContaining({ position: cow.position }),
       }),
-      expect.objectContaining({
-        target: expect.objectContaining({ position: movedCow.position }),
+      objectContaining({
+        target: objectContaining({ position: movedCow.position }),
       }),
     ]);
   });
@@ -35671,16 +35676,16 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: droppedIron.position,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: true,
         }),
       }),
     );
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
       }),
     );
@@ -35761,10 +35766,10 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: berryBush.position,
         radius: 3,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: true,
         }),
@@ -35776,7 +35781,7 @@ describe("beat-game run lifecycle", () => {
       face: "up",
     });
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -35856,16 +35861,16 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: droppedRottenFlesh.position,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: true,
         }),
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:rotten_flesh"],
       }),
@@ -36018,7 +36023,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 100,
           y: 70,
@@ -36229,7 +36234,7 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.paths[0]?.radius).toBe(0.5);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 15,
           y: 10,
@@ -36339,7 +36344,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(portalFrameQueries).toBeGreaterThanOrEqual(3);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           ...currentPosition,
           x: currentPosition.x + 0.5,
@@ -36349,7 +36354,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 2.5,
           y: 9,
@@ -36357,7 +36362,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           maxFallDistance: 1,
@@ -36729,9 +36734,9 @@ describe("beat-game run lifecycle", () => {
     );
     expect(firstHuntQuery?.maximumResults).toBeGreaterThanOrEqual(candidates.length);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: cow.networkId }),
+        target: objectContaining({ networkId: cow.networkId }),
       }),
     );
     expect(driver.xzPaths).toHaveLength(0);
@@ -36821,9 +36826,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: droppedBeef.position,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: false,
         }),
@@ -36911,9 +36916,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: surfacedSalmon.position,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: false,
         }),
@@ -36986,9 +36991,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.xzPaths).toHaveLength(3);
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -36998,9 +37003,9 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths[0]?.x).toBeCloseTo(33.941);
     expect(driver.xzPaths[0]?.z).toBeCloseTo(33.941);
     expect(driver.xzPaths[1]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -37010,9 +37015,9 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths[1]?.x).toBeCloseTo(67.882);
     expect(driver.xzPaths[1]?.z).toBeCloseTo(67.882);
     expect(driver.xzPaths[2]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -37026,15 +37031,15 @@ describe("beat-game run lifecycle", () => {
     );
     expect(huntQueries.slice(0, 4).map(({ origin }) => origin?.x)).toEqual([
       0,
-      expect.closeTo(33.941),
-      expect.closeTo(67.882),
-      expect.closeTo(85.858),
+      closeTo(33.941),
+      closeTo(67.882),
+      closeTo(85.858),
     ]);
     expect(huntQueries.slice(0, 4).map(({ origin }) => origin?.z)).toEqual([
       0,
-      expect.closeTo(33.941),
-      expect.closeTo(67.882),
-      expect.closeTo(85.858),
+      closeTo(33.941),
+      closeTo(67.882),
+      closeTo(85.858),
     ]);
   });
 
@@ -37092,11 +37097,11 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 12,
         z: 0,
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           avoidFluids: true,
@@ -37189,7 +37194,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 12,
         z: 0,
         radius: 2,
@@ -37266,7 +37271,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.xzPaths).toHaveLength(1);
     expect(driver.xzPaths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         x: 5.5,
         z: 0.5,
         dimension: "minecraft:overworld",
@@ -37274,9 +37279,9 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: cow.connectionEpoch,
           networkId: cow.networkId,
         }),
@@ -37380,7 +37385,7 @@ describe("beat-game run lifecycle", () => {
         dimension: "minecraft:overworld",
       },
       radius: 1.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -37461,7 +37466,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "set-movement",
         forward: true,
         jump: true,
@@ -37519,7 +37524,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 64,
@@ -37804,7 +37809,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "dig-block",
         position: {
           x: 0,
@@ -37989,36 +37994,36 @@ describe("beat-game run lifecycle", () => {
         policy,
       })),
     ).toEqual([
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 3.5, y: 63, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 3.5, y: 63, z: 0.5 }),
         radius: 1.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
           avoidFluids: true,
           maxSearchTimeMs: 2_000,
         }),
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 1.5, y: 61, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 1.5, y: 61, z: 0.5 }),
         radius: 0.35,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
         }),
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 2.5, y: 62, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 2.5, y: 62, z: 0.5 }),
         radius: 0.35,
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 3.5, y: 63, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 3.5, y: 63, z: 0.5 }),
         radius: 0.35,
       }),
     ]);
     expect(driver.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+      arrayContaining([
+        objectContaining({
           type: "dig-block",
           position: {
             x: 0,
@@ -38027,7 +38032,7 @@ describe("beat-game run lifecycle", () => {
             dimension: "minecraft:overworld",
           },
         }),
-        expect.objectContaining({
+        objectContaining({
           type: "dig-block",
           position: {
             x: 1,
@@ -38653,10 +38658,10 @@ describe("beat-game run lifecycle", () => {
     expect(
       driver.paths.filter(({ radius }) => radius === 0.35).map(({ position }) => position),
     ).toEqual([
-      expect.objectContaining({ x: 1.5, y: 1, z: 0.5 }),
-      expect.objectContaining({ x: 2.5, y: 2, z: 0.5 }),
-      expect.objectContaining({ x: 2.5, y: 3, z: 1.5 }),
-      expect.objectContaining({ x: 2.5, y: 4, z: 2.5 }),
+      objectContaining({ x: 1.5, y: 1, z: 0.5 }),
+      objectContaining({ x: 2.5, y: 2, z: 0.5 }),
+      objectContaining({ x: 2.5, y: 3, z: 1.5 }),
+      objectContaining({ x: 2.5, y: 4, z: 2.5 }),
     ]);
     expect(driver.paths[0]).toMatchObject({
       position: {
@@ -38746,14 +38751,14 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 64,
           z: 0.5,
           dimension: "minecraft:overworld",
         },
-        policy: expect.objectContaining({ avoidFluids: false }),
+        policy: objectContaining({ avoidFluids: false }),
       }),
     );
   });
@@ -38784,7 +38789,7 @@ describe("beat-game run lifecycle", () => {
     );
     expect(logCollectionIndex).toBeGreaterThanOrEqual(0);
     expect(driver.tasks[logCollectionIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         avoidSubmergedTargets: true,
         requireLineOfSight: false,
@@ -38854,7 +38859,7 @@ describe("beat-game run lifecycle", () => {
     );
     expect(logCollectionIndex).toBeGreaterThanOrEqual(0);
     expect(driver.tasks[logCollectionIndex]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         avoidSubmergedTargets: true,
       }),
@@ -38994,13 +38999,13 @@ describe("beat-game run lifecycle", () => {
       "collect-blocks",
     ]);
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 32,
         selector: { blockIds: ["minecraft:crafting_table"] },
       }),
     );
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         selector: { diggable: true, interactive: false },
       }),
     );
@@ -39494,13 +39499,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 23.5, y: 63, z: -12.5 }),
+      objectContaining({
+        position: objectContaining({ x: 23.5, y: 63, z: -12.5 }),
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 25.5, y: 63, z: -12.5 }),
+      objectContaining({
+        position: objectContaining({ x: 25.5, y: 63, z: -12.5 }),
       }),
     );
     expect(
@@ -39671,20 +39676,20 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 2.5, y: 64, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 2.5, y: 64, z: 0.5 }),
         radius: 0.75,
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 1.5, y: 64, z: 0.5 }),
+      objectContaining({
+        position: objectContaining({ x: 1.5, y: 64, z: 0.5 }),
       }),
     );
     expect(driver.blockQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 12,
-        selector: expect.objectContaining({
+        selector: objectContaining({
           solid: true,
           requireLineOfSight: true,
         }),
@@ -39781,9 +39786,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths.find(({ radius, policy }) => radius === 2 && policy.allowMining)).toEqual({
-      position: expect.objectContaining({ y: miningPosition.y }),
+      position: objectContaining({ y: miningPosition.y }),
       radius: 2,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         avoidFluids: true,
       }),
@@ -40118,7 +40123,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths[0]?.policy.maxSearchTimeMs).toBe(5_000);
     expect(driver.paths[0]?.radius).toBe(1.5);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: undergroundTable.position.x + 0.5,
           y: undergroundTable.position.y,
@@ -40285,13 +40290,13 @@ describe("beat-game run lifecycle", () => {
       z: 0.5,
     });
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: -20,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:raw_iron"] },
         count: 1,
@@ -40355,7 +40360,7 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:beef"] },
         count: 6,
@@ -40404,7 +40409,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:stone"],
         count: 20,
@@ -40524,7 +40529,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(Option.isSome(failure)).toBe(true);
     expect(Option.getOrUndefined(failure)).toMatchObject({
-      detail: expect.stringContaining("Interrupted for replanning"),
+      detail: stringContaining("Interrupted for replanning"),
     });
     expect(driver.xzPaths.length).toBeGreaterThanOrEqual(1);
     expect(driver.tasks.some((task) => task.type === "smelt")).toBe(false);
@@ -40583,7 +40588,7 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:chicken"] },
         count: 2,
@@ -40698,7 +40703,7 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toBe(false);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 1.5,
           y: 64,
@@ -40706,7 +40711,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           avoidFluids: true,
         }),
@@ -40810,7 +40815,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 0.5,
           y: 64,
@@ -40820,7 +40825,7 @@ describe("beat-game run lifecycle", () => {
       }),
     );
     expect(driver.actions).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
         pitch: 30,
       }),
@@ -40976,7 +40981,7 @@ describe("beat-game run lifecycle", () => {
     expect(waterQueryCenters).toContain(0);
     expect(waterQueryCenters).toContain(30);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 31.5,
           y: 64,
@@ -40984,7 +40989,7 @@ describe("beat-game run lifecycle", () => {
           dimension: "minecraft:overworld",
         },
         radius: 0.75,
-        policy: expect.objectContaining({ avoidFluids: true }),
+        policy: objectContaining({ avoidFluids: true }),
       }),
     );
   });
@@ -41061,9 +41066,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
-        selector: expect.objectContaining({
-          entityTypes: expect.arrayContaining(["minecraft:cow"]),
+      objectContaining({
+        selector: objectContaining({
+          entityTypes: arrayContaining(["minecraft:cow"]),
         }),
       }),
     );
@@ -41195,9 +41200,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.tasks.map(({ type }) => type)).toContain("fish");
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: cow.connectionEpoch,
           networkId: cow.networkId,
         }),
@@ -41260,7 +41265,7 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toBe(false);
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:porkchop"] },
         count: 1,
         fuel: {
@@ -41457,7 +41462,7 @@ describe("beat-game run lifecycle", () => {
           },
         ],
       },
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:porkchop"] },
         count: 1,
@@ -41784,13 +41789,13 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "transfer-container",
         container: furnace.position,
       }),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
       }),
     );
@@ -41963,9 +41968,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({
+        target: objectContaining({
           connectionEpoch: chicken.connectionEpoch,
           networkId: chicken.networkId,
         }),
@@ -42077,7 +42082,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "auto-eat")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         foodItemIds: ["minecraft:mutton"],
         foodLevel: 18,
         maximumMeals: 2,
@@ -42128,7 +42133,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:salmon"],
         foodLevel: 18,
@@ -42189,7 +42194,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:salmon"],
         maximumMeals: 1,
@@ -42226,7 +42231,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:rotten_flesh"],
         foodLevel: 20,
@@ -42266,7 +42271,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:rotten_flesh"],
         foodLevel: 20,
@@ -42308,7 +42313,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "auto-eat")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         foodItemIds: ["minecraft:rotten_flesh"],
         foodLevel: 14,
         maximumMeals: 1,
@@ -42384,7 +42389,7 @@ describe("beat-game run lifecycle", () => {
 
     expect(interruptedHunts).toBe(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "auto-eat",
         foodItemIds: ["minecraft:cooked_mutton"],
         foodLevel: 14,
@@ -42445,9 +42450,9 @@ describe("beat-game run lifecycle", () => {
 
     expect(interruptedCollections).toBe(1);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-entity",
-        target: expect.objectContaining({ networkId: salmon.networkId }),
+        target: objectContaining({ networkId: salmon.networkId }),
       }),
     );
   });
@@ -42802,9 +42807,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: {
-          itemIds: expect.arrayContaining(["minecraft:oak_log"]),
+          itemIds: arrayContaining(["minecraft:oak_log"]),
         },
         count: 3,
         fuel: {
@@ -42823,7 +42828,7 @@ describe("beat-game run lifecycle", () => {
           ],
         },
       }),
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:beef"] },
         count: 8,
         fuel: {
@@ -42907,22 +42912,22 @@ describe("beat-game run lifecycle", () => {
       (task) => task.type === "collect-blocks" || task.type === "smelt",
     );
     expect(resourceTasks).toEqual([
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
-        blockIds: expect.arrayContaining(["minecraft:oak_log"]),
+        blockIds: arrayContaining(["minecraft:oak_log"]),
         count: 8,
       }),
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: {
-          itemIds: expect.arrayContaining(["minecraft:oak_log"]),
+          itemIds: arrayContaining(["minecraft:oak_log"]),
         },
         count: 3,
         fuel: {
-          itemIds: expect.arrayContaining(["minecraft:oak_log"]),
+          itemIds: arrayContaining(["minecraft:oak_log"]),
         },
       }),
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:beef"] },
         count: 8,
@@ -43005,19 +43010,19 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: {
-          itemIds: expect.arrayContaining(["minecraft:oak_log"]),
+          itemIds: arrayContaining(["minecraft:oak_log"]),
         },
         station: surfaceFurnace.position,
       }),
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:beef"] },
         station: surfaceFurnace.position,
       }),
     ]);
     expect(driver.tasks).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         station: undergroundFurnace.position,
       }),
@@ -43082,7 +43087,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:porkchop"] },
         count: 8,
         fuel: {
@@ -43149,7 +43154,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:cod"] },
         count: 1,
         fuel: {
@@ -43249,7 +43254,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(driver.blockQueries).toContainEqual({
-      center: expect.objectContaining({ dimension: "minecraft:overworld" }),
+      center: objectContaining({ dimension: "minecraft:overworld" }),
       radius: 16,
       selector: {
         blockIds: ["minecraft:coal_ore", "minecraft:deepslate_coal_ore"],
@@ -43261,7 +43266,7 @@ describe("beat-game run lifecycle", () => {
       (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:coal_ore"),
     );
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "collect-blocks",
         blockIds: ["minecraft:coal_ore", "minecraft:deepslate_coal_ore"],
         count: 3,
@@ -43273,7 +43278,7 @@ describe("beat-game run lifecycle", () => {
       avoidFluids: true,
     });
     expect(driver.tasks.filter((task) => task.type === "smelt")).toEqual([
-      expect.objectContaining({
+      objectContaining({
         input: { itemIds: ["minecraft:cod"] },
         count: 1,
         fuel: {
@@ -43374,11 +43379,11 @@ describe("beat-game run lifecycle", () => {
       ),
     ).toBe(false);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "smelt",
         input: { itemIds: ["minecraft:cod"] },
         fuel: {
-          itemIds: expect.arrayContaining(["minecraft:oak_planks"]),
+          itemIds: arrayContaining(["minecraft:oak_planks"]),
         },
       }),
     );

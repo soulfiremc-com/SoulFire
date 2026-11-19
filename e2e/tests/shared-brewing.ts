@@ -188,5 +188,5 @@ export default {
 } satisfies E2ETest;
 
 function countBottles(nbt: string) {
-  return [...nbt.matchAll(/id: "minecraft:potion"/g)].length;
+  return [...nbt.matchAll(/id: "minecraft:potion"/gu)].length;
 }

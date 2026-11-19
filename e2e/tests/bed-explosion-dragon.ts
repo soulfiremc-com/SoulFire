@@ -12,10 +12,10 @@ const STAND_DISTANCE = 3;
 
 const dragonNumber = (path: string) =>
   rcon(`${END} data get entity ${DRAGON} ${path}`).pipe(
-    Effect.map((text) => Number(text.match(/: (-?[\d.]+)[fbd]?$/)?.[1])),
+    Effect.map((text) => Number(text.match(/: (-?[\d.]+)[fbd]?$/u)?.[1])),
   );
 const botHealth = rcon(`${END} data get entity ${BOT_NAME} Health`).pipe(
-  Effect.map((text) => Number(text.match(/: ([\d.]+)f$/)?.[1])),
+  Effect.map((text) => Number(text.match(/: ([\d.]+)f$/u)?.[1])),
 );
 const topSolid = (x: number, z: number, from: number) =>
   Effect.gen(function* () {

@@ -73,7 +73,7 @@ export default {
                 : "data get block 3819 64 10 cooking_time_spent",
             ).pipe(
               Effect.flatMap((text) =>
-                check(Number(text.match(/: (\d+)$/)?.[1]) > 0, `Vanilla did not start ${kind}`),
+                check(Number(text.match(/: (\d+)$/u)?.[1]) > 0, `Vanilla did not start ${kind}`),
               ),
             ),
             "15 seconds",

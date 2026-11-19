@@ -76,7 +76,7 @@ describe("workflow resources", () => {
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const transport = createRouterTransport(({ service }) =>
+          const transport = createRouterTransport(({ service }) => {
             service(BotLiveService, {
               wake() {
                 return {
@@ -87,8 +87,8 @@ describe("workflow resources", () => {
                   },
                 };
               },
-            }),
-          );
+            });
+          });
           const soulfire = yield* SoulFire.unauthenticated({
             baseUrl: "https://soulfire.example.com",
             transport,

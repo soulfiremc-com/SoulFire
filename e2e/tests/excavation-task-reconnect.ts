@@ -159,7 +159,7 @@ export default {
               }
               yield* guard.cancel("Resume excavation");
               const result = yield* excavation.result({ call: { timeoutMs: 30_000 } });
-              const expectedCount = maximumBlocks || targets.length;
+              const expectedCount = maximumBlocks === 0 ? targets.length : maximumBlocks;
               const world = [];
               for (const [index, target] of targets.entries()) {
                 const expected = index < expectedCount ? "air" : "stone";

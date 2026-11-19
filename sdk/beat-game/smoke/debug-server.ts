@@ -157,7 +157,9 @@ function indexOperations(
 
 function listen(server: Server, port: number): Effect.Effect<AddressInfo, Error> {
   return Effect.callback<AddressInfo, Error>((resume) => {
-    const onError = (cause: Error) => resume(Effect.fail(cause));
+    const onError = (cause: Error) => {
+      resume(Effect.fail(cause));
+    };
     server.once("error", onError);
     server.listen(port, "127.0.0.1", () => {
       server.off("error", onError);
@@ -181,7 +183,9 @@ function listen(server: Server, port: number): Effect.Effect<AddressInfo, Error>
 
 function close(server: Server): Effect.Effect<void> {
   return Effect.callback<void>((resume) => {
-    server.close(() => resume(Effect.void));
+    server.close(() => {
+      resume(Effect.void);
+    });
     server.closeIdleConnections();
     server.closeAllConnections();
   });
@@ -287,7 +291,8 @@ async function readJson(request: IncomingMessage, maximumBodyBytes: number): Pro
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const data: unknown = chunk;
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
     bytes += buffer.byteLength;
     if (bytes > maximumBodyBytes) {
       throw new SmokeDebugRequestError(`Request body exceeds ${maximumBodyBytes} bytes`, 413);
@@ -308,7 +313,7 @@ function writeJson(response: ServerResponse, status: number, value: unknown): vo
   if (response.writableEnded) {
     return;
   }
-  const body = `${JSON.stringify(value, (_, nested) =>
+  const body = `${JSON.stringify(value, (_: string, nested: unknown) =>
     typeof nested === "bigint" ? nested.toString() : nested,
   )}\n`;
   response.writeHead(status, {

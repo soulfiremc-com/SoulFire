@@ -267,7 +267,7 @@ export default {
           yield* eventually(
             Effect.gen(function* () {
               const inventory = yield* rcon(`clear ${BOT_NAME} ${item} 0`, { check: false });
-              const held = Number(inventory.match(/Found (\d+) /)?.[1] ?? 0);
+              const held = Number(inventory.match(/Found (\d+) /u)?.[1] ?? 0);
               if ("stored" in spec) {
                 const storage = yield* rcon(
                   `data get block ${TABLE.x} ${TABLE.y} ${TABLE.z} Items`,
@@ -283,7 +283,7 @@ export default {
                   `execute as @e[type=item,x=4264,y=64,z=8,distance=..8,nbt={Item:{id:"minecraft:${item}"}}] run data get entity @s Item`,
                   { check: false },
                 );
-                const dropped = [...drops.matchAll(/count: (\d+)/g)].reduce(
+                const dropped = [...drops.matchAll(/count: (\d+)/gu)].reduce(
                   (sum, match) => sum + Number(match[1]),
                   0,
                 );

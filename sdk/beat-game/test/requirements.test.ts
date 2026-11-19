@@ -8,6 +8,7 @@ import {
   requirementsForPhase,
 } from "../src/index.js";
 import { observation } from "./fixtures.js";
+import { arrayContaining } from "./matchers.js";
 
 const keys = (strategy: typeof defaultBeatGameStrategy, bedUnavailable = false) =>
   requirementsForPhase(
@@ -385,7 +386,7 @@ describe("beat-game requirements", () => {
 
     expect(requirements.every(({ satisfied }) => satisfied)).toBe(true);
     expect(requirements.map(({ key }) => key)).not.toEqual(
-      expect.arrayContaining(["iron", "water-bucket", "lava-bucket", "ignition", "obsidian"]),
+      arrayContaining(["iron", "water-bucket", "lava-bucket", "ignition", "obsidian"]),
     );
   });
 
@@ -418,7 +419,7 @@ describe("beat-game requirements", () => {
       requirements.findIndex(({ key }) => key === "shield"),
     );
     expect(requirements.map(({ key }) => key)).not.toEqual(
-      expect.arrayContaining(["water-bucket", "lava-bucket", "ignition", "obsidian"]),
+      arrayContaining(["water-bucket", "lava-bucket", "ignition", "obsidian"]),
     );
   });
 

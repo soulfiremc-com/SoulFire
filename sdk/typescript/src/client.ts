@@ -291,7 +291,7 @@ const DEFAULT_INSTANCE_EVENT_FILTER: MessageInitShape<typeof InstanceEventFilter
 };
 
 function normalizeBaseUrl(baseUrl: string): string {
-  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  const normalized = baseUrl.trim().replace(/\/+$/u, "");
   if (normalized.length === 0) {
     throw new TypeError("SoulFire baseUrl must not be empty");
   }
@@ -552,7 +552,9 @@ export class SoulFireClient {
   ): Effect.Effect<SoulFireInstance, SoulFireOperationError> {
     return Effect.gen({ self: this }, function* () {
       yield* Effect.try({
-        try: () => this.capabilities.require("instance.provisioning.v1"),
+        try: () => {
+          this.capabilities.require("instance.provisioning.v1");
+        },
         catch: (cause) => operationError("SoulFire.getOrCreateInstance", cause),
       });
       const response = yield* rpc("SoulFire.getOrCreateInstance", (signal) =>
@@ -885,7 +887,11 @@ export class SoulFireInstance {
         this.#instanceClient.deleteInstance({ id: this.id }, withSignal(options, signal)),
       ).pipe(
         Effect.asVoid,
-        Effect.onExit((exit) => Effect.sync(() => complete(Exit.isSuccess(exit)))),
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            complete(Exit.isSuccess(exit));
+          }),
+        ),
       );
     });
   }
@@ -1216,7 +1222,7 @@ export class SoulFireInstance {
         return [...new Set(selection.botIds)];
       }
       const bots = yield* this.bots(options);
-      const candidates = bots.filter(countFilter);
+      const candidates = bots.filter((bot) => countFilter(bot));
       if (selection?.count === undefined) {
         return candidates.map((bot) => bot.profileId);
       }
@@ -1337,7 +1343,14 @@ export class SoulFireBot {
                 ),
                 Effect.asVoid,
               );
-            }).pipe(Effect.ensuring(Effect.sync(() => ownership.release())), Effect.orDie),
+            }).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  ownership.release();
+                }),
+              ),
+              Effect.orDie,
+            ),
         );
         const info = yield* this.info(options.call);
         stopOnExit = info.status?.desiredState !== BotDesiredState.RUNNING;
@@ -2390,7 +2403,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Inventory click failed"),
+        try: () => {
+          requireSuccess(response, "Inventory click failed");
+        },
         catch: (cause) => operationError("SoulFireBot.clickInventory", cause),
       });
     });
@@ -2452,7 +2467,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Selecting a hotbar slot failed"),
+        try: () => {
+          requireSuccess(response, "Selecting a hotbar slot failed");
+        },
         catch: (cause) => operationError("SoulFireBot.selectHotbar", cause),
       });
     });
@@ -2479,7 +2496,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Updating movement failed"),
+        try: () => {
+          requireSuccess(response, "Updating movement failed");
+        },
         catch: (cause) => operationError("SoulFireBot.setMovement", cause),
       });
     });
@@ -2497,7 +2516,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Resetting movement failed"),
+        try: () => {
+          requireSuccess(response, "Resetting movement failed");
+        },
         catch: (cause) => operationError("SoulFireBot.resetMovement", cause),
       });
     });
@@ -2520,7 +2541,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Updating rotation failed"),
+        try: () => {
+          requireSuccess(response, "Updating rotation failed");
+        },
         catch: (cause) => operationError("SoulFireBot.look", cause),
       });
     });
@@ -2535,7 +2558,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Opening inventory failed"),
+        try: () => {
+          requireSuccess(response, "Opening inventory failed");
+        },
         catch: (cause) => operationError("SoulFireBot.openInventory", cause),
       });
     });
@@ -2550,7 +2575,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Closing container failed"),
+        try: () => {
+          requireSuccess(response, "Closing container failed");
+        },
         catch: (cause) => operationError("SoulFireBot.closeContainer", cause),
       });
     });
@@ -2576,7 +2603,9 @@ export class SoulFireBot {
         ),
       );
       yield* Effect.try({
-        try: () => requireSuccess(response, "Clicking a container button failed"),
+        try: () => {
+          requireSuccess(response, "Clicking a container button failed");
+        },
         catch: (cause) => operationError("SoulFireBot.clickContainerButton", cause),
       });
     });

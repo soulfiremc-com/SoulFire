@@ -42,7 +42,9 @@ export class InMemoryBeatGameCheckpointStore implements BeatGameCheckpointStore 
   ): Effect.Effect<BeatGameCheckpoint, BeatGameCheckpointError> =>
     Effect.gen({ self: this }, function* () {
       yield* Effect.try({
-        try: () => assertValidCheckpoint(checkpoint),
+        try: () => {
+          assertValidCheckpoint(checkpoint);
+        },
         catch: (cause) =>
           makeCheckpointError(
             checkpoint,
@@ -249,9 +251,9 @@ function worldMemory(value: unknown): void {
   if (!Array.isArray(memory["portalWorkspaces"])) {
     throw new TypeError("checkpoint.memory.portalWorkspaces must be an array");
   }
-  memory["portalWorkspaces"].forEach((workspace, index) =>
-    portalWorkspace(workspace, `checkpoint.memory.portalWorkspaces[${index}]`),
-  );
+  memory["portalWorkspaces"].forEach((workspace, index) => {
+    portalWorkspace(workspace, `checkpoint.memory.portalWorkspaces[${index}]`);
+  });
   if (!Array.isArray(memory["places"])) {
     throw new TypeError("checkpoint.memory.places must be an array");
   }
@@ -282,9 +284,9 @@ function worldMemory(value: unknown): void {
   if (!Array.isArray(memory["skillHistory"])) {
     throw new TypeError("checkpoint.memory.skillHistory must be an array");
   }
-  memory["skillHistory"].forEach((skill, index) =>
-    durableSkill(skill, `checkpoint.memory.skillHistory[${index}]`),
-  );
+  memory["skillHistory"].forEach((skill, index) => {
+    durableSkill(skill, `checkpoint.memory.skillHistory[${index}]`);
+  });
   memoryEntries(memory["unreachable"], "checkpoint.memory.unreachable", position);
   memoryEntries(memory["deathPositions"], "checkpoint.memory.deathPositions", deathPosition);
   if (memory["explorationFrontiers"] !== undefined) {
@@ -300,12 +302,10 @@ function worldMemory(value: unknown): void {
         frontier["nextIndex"],
         `checkpoint.memory.explorationFrontiers.${key}.nextIndex`,
       );
-      if (frontier["progressVersion"] !== undefined) {
-        if (frontier["progressVersion"] !== 2) {
-          throw new TypeError(
-            `checkpoint.memory.explorationFrontiers.${key}.progressVersion must be 2`,
-          );
-        }
+      if (frontier["progressVersion"] !== undefined && frontier["progressVersion"] !== 2) {
+        throw new TypeError(
+          `checkpoint.memory.explorationFrontiers.${key}.progressVersion must be 2`,
+        );
       }
       if (frontier["target"] !== undefined) {
         position(frontier["target"], `checkpoint.memory.explorationFrontiers.${key}.target`);
@@ -410,7 +410,9 @@ function positionArray(value: unknown, name: string): void {
   if (!Array.isArray(value)) {
     throw new TypeError(`${name} must be an array`);
   }
-  value.forEach((item, index) => position(item, `${name}[${index}]`));
+  value.forEach((item, index) => {
+    position(item, `${name}[${index}]`);
+  });
 }
 
 function nonNegativeIntegerRecord(value: unknown, name: string): void {
@@ -444,7 +446,9 @@ function memoryEntries(
   if (!Array.isArray(value)) {
     throw new TypeError(`${name} must be an array`);
   }
-  value.forEach((entry, index) => memoryEntry(entry, `${name}[${index}]`, validateValue));
+  value.forEach((entry, index) => {
+    memoryEntry(entry, `${name}[${index}]`, validateValue);
+  });
 }
 
 function memoryEntry(
@@ -534,7 +538,7 @@ function nonEmptyString(value: unknown, name: string): string {
 
 function unsignedIntegerString(value: unknown, name: string): void {
   const source = nonEmptyString(value, name);
-  if (!/^(?:0|[1-9][0-9]*)$/.test(source)) {
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(source)) {
     throw new TypeError(`${name} must be an unsigned integer string`);
   }
 }

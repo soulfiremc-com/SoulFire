@@ -183,7 +183,7 @@ export default {
                   ).pipe(
                     Effect.tap((text) =>
                       check(
-                        Number(text.match(/: (\d+)$/)?.[1]) > 0,
+                        Number(text.match(/: (\d+)$/u)?.[1]) > 0,
                         "Vanilla has not started processing",
                       ),
                     ),

@@ -161,7 +161,7 @@ export default {
                   const data = yield* rcon(
                     `data get entity @e[tag=${TAG}_${index},limit=1] InLove`,
                   );
-                  values.push(Number(data.match(/:\s*(\d+)$/)?.[1]));
+                  values.push(Number(data.match(/:\s*(\d+)$/u)?.[1]));
                 }
                 return values;
               });

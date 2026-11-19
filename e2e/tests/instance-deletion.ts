@@ -44,7 +44,7 @@ export default {
               path.join(directory, root, `instance-${instance.id}`),
             );
             yield* check(
-              directories.every(existsSync),
+              directories.every((storage) => existsSync(storage)),
               "The connected instance did not create its storage",
             );
             // Exercise deletion after the one-second settings cache can expire.
@@ -101,11 +101,16 @@ async function deleteInstanceWithScripts(client: SoulFireClient, instance: SoulF
   );
   const events = stream[Symbol.asyncIterator]();
   try {
-    if ((await events.next()).value?.event.case !== "scriptStarted")
+    const started = await events.next();
+    if (started.done === true || started.value.event.case !== "scriptStarted")
       throw new Error("The deletion script did not start");
     await Effect.runPromise(instance.delete());
     const stopped = await events.next();
-    if (stopped.value?.event.case !== "scriptCompleted" || stopped.value.event.value.success)
+    if (
+      stopped.done === true ||
+      stopped.value.event.case !== "scriptCompleted" ||
+      stopped.value.event.value.success
+    )
       throw new Error("Instance deletion did not cancel its script");
     if (!(await events.next()).done) throw new Error("The deleted script's stream did not close");
     for (const scriptId of [active.script.id, paused.script.id]) {

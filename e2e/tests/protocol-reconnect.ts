@@ -21,11 +21,12 @@ export default {
             resolveReady = resolve;
             rejectReady = reject;
           });
-          const readyTimer = setTimeout(
-            () => rejectReady(new Error("Packet observation never became ready")),
-            5000,
-          );
-          const timer = setTimeout(() => abort.abort(), 15000);
+          const readyTimer = setTimeout(() => {
+            rejectReady(new Error("Packet observation never became ready"));
+          }, 5000);
+          const timer = setTimeout(() => {
+            abort.abort();
+          }, 15000);
           // The stream below sets these flags while the outer code awaits it.
           const seen = { information: false, encoded: false };
           const stream = (async () => {

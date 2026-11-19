@@ -49,7 +49,7 @@ export default {
             "5 seconds",
           );
         const health = rcon(`data get entity @e[tag=${TAG},type=cow,limit=1] Health`).pipe(
-          Effect.map((text) => Number(text.match(/: ([\d.]+)f$/)?.[1])),
+          Effect.map((text) => Number(text.match(/: ([\d.]+)f$/u)?.[1])),
         );
         yield* rcon(`summon cow 3284.5 64 8.5 {Tags:["${TAG}"],NoAI:1b}`);
         const cow = yield* target("minecraft:cow");

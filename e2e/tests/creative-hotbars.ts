@@ -204,7 +204,10 @@ export default {
           .inventoryState()
           .pipe(
             Effect.flatMap((state) =>
-              check(!state.slots.length, "The inventory did not clear before restoring a hotbar"),
+              check(
+                state.slots.length === 0,
+                "The inventory did not clear before restoring a hotbar",
+              ),
             ),
           ),
         "3 seconds",

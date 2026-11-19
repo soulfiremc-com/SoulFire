@@ -16,7 +16,18 @@ if (language !== "typescript" && language !== "python") {
 }
 
 const root = import.meta.dirname;
-const { version } = JSON.parse(readFileSync(join(root, "../typescript/package.json"), "utf8"));
+const packageJson: unknown = JSON.parse(
+  readFileSync(join(root, "../typescript/package.json"), "utf8"),
+);
+if (
+  typeof packageJson !== "object" ||
+  packageJson === null ||
+  !("version" in packageJson) ||
+  typeof packageJson.version !== "string"
+) {
+  throw new TypeError("sdk/typescript/package.json has no version");
+}
+const { version } = packageJson;
 const assets = join(root, "dist", language);
 rmSync(assets, { recursive: true, force: true });
 mkdirSync(assets, { recursive: true });

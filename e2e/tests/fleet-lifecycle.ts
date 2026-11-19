@@ -88,7 +88,7 @@ export default {
           yield* eventually(
             rcon(`data get entity ${NAMES[index]} Rotation`).pipe(
               Effect.flatMap((text) => {
-                const values = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/);
+                const values = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/u);
                 return check(
                   !!values &&
                     Number(values[1]) === index * 90 - 90 &&

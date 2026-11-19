@@ -5,7 +5,8 @@
   "categories": {
     "correctness": "error",
     "suspicious": "error",
-    "perf": "error"
+    "perf": "error",
+    "pedantic": "error"
   },
   "options": {
     "typeAware": true,
@@ -41,10 +42,17 @@
         "null": "ignore"
       }
     ],
+    "eslint/max-classes-per-file": "off",
+    "eslint/max-depth": "off",
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-nested-callbacks": "off",
     "eslint/no-await-in-loop": "off",
     "eslint/no-console": "error",
     "eslint/no-fallthrough": "error",
+    "eslint/no-inline-comments": "off",
     "eslint/no-loop-func": "error",
+    "eslint/no-negated-condition": "off",
     "eslint/no-promise-executor-return": "error",
     "eslint/no-self-compare": "error",
     "eslint/no-shadow": "error",
@@ -57,6 +65,9 @@
     ],
     "eslint/no-unmodified-loop-condition": "error",
     "eslint/no-useless-call": "error",
+    "eslint/no-warning-comments": "off",
+    "eslint/require-await": "off",
+    "import/max-dependencies": "off",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "oxc/no-accumulating-spread": "error",
@@ -98,15 +109,20 @@
     "typescript/prefer-optional-chain": "error",
     "typescript/prefer-promise-reject-errors": "error",
     "typescript/prefer-readonly": "error",
+    "typescript/prefer-readonly-parameter-types": "off",
     "typescript/prefer-reduce-type-parameter": "error",
     "typescript/prefer-ts-expect-error": "error",
     "typescript/require-await": "error",
     "typescript/restrict-plus-operands": "error",
     "typescript/restrict-template-expressions": "error",
     "typescript/return-await": "error",
+    "typescript/strict-boolean-expressions": "off",
     "typescript/switch-exhaustiveness-check": "error",
     "unicorn/consistent-function-scoping": "error",
     "unicorn/no-abusive-eslint-disable": "error",
+    "unicorn/no-negated-condition": "off",
+    "unicorn/no-useless-switch-case": "off",
+    "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-array-flat-map": "error",
     "unicorn/prefer-at": "error",
@@ -114,7 +130,8 @@
     "unicorn/prefer-set-has": "error",
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-top-level-await": "error",
-    "vitest/no-conditional-expect": "error"
+    "vitest/no-conditional-expect": "error",
+    "vitest/no-conditional-in-test": "off"
   },
   "overrides": [
     {
@@ -144,6 +161,12 @@
       "rules": {
         "typescript/require-await": "off",
         "eslint/require-await": "error"
+      }
+    },
+    {
+      "files": ["**/*.ts"],
+      "rules": {
+        "eslint/no-redeclare": "off"
       }
     }
   ]

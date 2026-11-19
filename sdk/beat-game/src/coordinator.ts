@@ -227,7 +227,7 @@ export class InMemoryBeatGameCoordinator implements BeatGameCoordinator {
         throw new Error(`Bot ${botId} is not registered with team ${teamId}`);
       }
       const normalized = nonNegativeInteger(count, "count");
-      const requirements = team.memberRequirements.get(botId) ?? new Map();
+      const requirements = team.memberRequirements.get(botId) ?? new Map<string, number>();
       if (normalized === 0) {
         requirements.delete(key);
       } else {

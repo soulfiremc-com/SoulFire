@@ -23,7 +23,7 @@ const URGENT = {
 };
 const count = (item: string) =>
   rcon(`clear ${BOT_NAME} ${item} 0`, { check: false }).pipe(
-    Effect.map((text) => Number(text.match(/Found (\d+) matching/)?.[1] ?? 0)),
+    Effect.map((text) => Number(text.match(/Found (\d+) matching/u)?.[1] ?? 0)),
   );
 
 export default {
@@ -245,7 +245,7 @@ export default {
                 `data get entity @e[type=villager,tag=${TAG},limit=1] Offers.Recipes[1]`,
               );
               yield* check(offer.includes("minecraft:bread"), "The vanilla offer disappeared");
-              const uses = Number(offer.match(/(?:^|[,{}]\s*)uses: (\d+)/)?.[1] ?? 0);
+              const uses = Number(offer.match(/(?:^|[,{}]\s*)uses: (\d+)/u)?.[1] ?? 0);
               if (mode === "keep-open" || mode === "close")
                 yield* check(uses === 2, "Vanilla completed the wrong trade count");
               if (mode === "queued") yield* check(uses === 0, "Queued trading performed a trade");

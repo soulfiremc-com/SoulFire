@@ -21,6 +21,7 @@ import {
   respawnAndRecover,
   rotationToward,
   throwEyeOfEnder,
+  type BeatGameBlockObservation,
   type BeatGameBlockPosition,
   type BeatGameEntityObservation,
 } from "../src/index.js";
@@ -31,6 +32,7 @@ import {
   observation,
   required,
 } from "./fixtures.js";
+import { anyInstanceOf, arrayContaining, objectContaining, stringContaining } from "./matchers.js";
 
 function feetCenter(position: BeatGameBlockPosition): BeatGameBlockPosition {
   return {
@@ -341,9 +343,9 @@ describe("beat-game behavior programs", () => {
     ]);
     expect(driver.xzPaths).toEqual(
       driver.xzPaths.map(() =>
-        expect.objectContaining({
+        objectContaining({
           radius: 3,
-          policy: expect.objectContaining({
+          policy: objectContaining({
             allowMining: false,
             allowPlacing: false,
             maxFallDistance: 1,
@@ -354,10 +356,10 @@ describe("beat-game behavior programs", () => {
       ),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
           maxFallDistance: 1,
@@ -453,23 +455,23 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths.slice(0, 2)).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
-        policy: expect.objectContaining({ avoidFluids: true }),
+        policy: objectContaining({ avoidFluids: true }),
       }),
-      expect.objectContaining({
+      objectContaining({
         position: deathPosition,
-        policy: expect.objectContaining({ avoidFluids: false }),
+        policy: objectContaining({ avoidFluids: false }),
       }),
     ]);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: submergedDrop.position,
-        policy: expect.objectContaining({ avoidFluids: false }),
+        policy: objectContaining({ avoidFluids: false }),
       }),
     );
     expect(driver.entityQueries).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 24,
         selector: {
           entityTypes: ["minecraft:item"],
@@ -528,7 +530,7 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.entityQueries).toEqual(
-      expect.arrayContaining([
+      arrayContaining([
         {
           origin: position,
           radius: 8,
@@ -541,10 +543,10 @@ describe("beat-game behavior programs", () => {
       ]),
     );
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: drops[0]?.position,
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           maxSearchTimeMs: 5_000,
         }),
@@ -732,13 +734,13 @@ describe("beat-game behavior programs", () => {
 
     expect(driver.paths).toEqual([]);
     expect(driver.xzPaths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         x: nearDrop.position.x,
         z: nearDrop.position.z,
         dimension: nearDrop.position.dimension,
         radius: 1.25,
       }),
-      expect.objectContaining({
+      objectContaining({
         x: farDrop.position.x,
         z: farDrop.position.z,
         dimension: farDrop.position.dimension,
@@ -783,12 +785,12 @@ describe("beat-game behavior programs", () => {
 
     expect(driver.paths).toHaveLength(0);
     expect(driver.xzPaths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         x: drop.position.x,
         z: drop.position.z,
         dimension: drop.position.dimension,
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           avoidFluids: false,
           sprint: true,
         }),
@@ -855,19 +857,19 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.xzPaths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         x: 7.5,
         z: -2.5,
         dimension: "minecraft:overworld",
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: false,
         }),
       }),
     ]);
     const dive = driver.actions.find((action) => action.type === "look");
-    expect(dive).toEqual(expect.objectContaining({ type: "look" }));
+    expect(dive).toEqual(objectContaining({ type: "look" }));
     expect(dive?.type === "look" ? dive.pitch : 0).toBeGreaterThan(0);
     expect(driver.actions).toContainEqual({
       type: "set-movement",
@@ -1036,10 +1038,10 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: cobblestonePosition,
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
         }),
       }),
@@ -1089,7 +1091,7 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           ...surfaceDrop.position,
           y: position.y,
@@ -1156,13 +1158,13 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           ...dryDrop.position,
           y: position.y,
         },
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           avoidFluids: true,
         }),
       }),
@@ -1223,7 +1225,7 @@ describe("beat-game behavior programs", () => {
           y: position.y,
         },
         radius: 1.25,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           maxSearchTimeMs: 5_000,
         }),
       },
@@ -1327,7 +1329,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.actions[0]).toMatchObject({
       type: "select-item",
       selector: {
-        itemIds: expect.arrayContaining(["minecraft:diamond_pickaxe"]),
+        itemIds: arrayContaining(["minecraft:diamond_pickaxe"]),
       },
     });
     expect(driver.activeControlScopes).toBe(0);
@@ -1353,14 +1355,14 @@ describe("beat-game behavior programs", () => {
     await Effect.runPromise(excavateStaircase(driver, { from, to }));
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(from),
         radius: 0.5,
       }),
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(to),
         radius: 0.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
           maxFallDistance: 1,
@@ -1671,7 +1673,7 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: plannedFrom,
       }),
     );
@@ -1745,10 +1747,10 @@ describe("beat-game behavior programs", () => {
     await Effect.runPromise(excavateStaircase(driver, { from, to }));
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(firstStep),
         radius: 0.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           allowPlacing: false,
         }),
@@ -1757,7 +1759,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths.at(-1)).toMatchObject({
       position: to,
       radius: 4,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         allowPlacing: true,
       }),
@@ -1845,12 +1847,12 @@ describe("beat-game behavior programs", () => {
       failure: { code: "unsupported_opening", retryable: true },
     });
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "place-block",
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(to),
       }),
     );
@@ -2025,12 +2027,12 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "dig-block",
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(to),
       }),
     );
@@ -2098,7 +2100,7 @@ describe("beat-game behavior programs", () => {
       position: ceiling,
     });
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(to),
       }),
     );
@@ -2160,17 +2162,17 @@ describe("beat-game behavior programs", () => {
       failure: { code: "unsupported_opening", retryable: true },
     });
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(firstStep),
       }),
     );
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: feetCenter(to),
       }),
     );
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "place-block",
       }),
     );
@@ -2220,17 +2222,17 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: to,
         radius: 1,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
         }),
       }),
     );
     expect(driver.actions).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "place-block",
       }),
     );
@@ -2312,7 +2314,7 @@ describe("beat-game behavior programs", () => {
 
     expect(supportPlaced).toBe(true);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         radius: 1,
       }),
     );
@@ -3268,7 +3270,7 @@ describe("beat-game behavior programs", () => {
 
     expect(world.placementAttempts.get(world.key(initiallyRejected))).toBe(2);
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 11,
           y: 65,
@@ -3578,7 +3580,7 @@ describe("beat-game behavior programs", () => {
     await Effect.runPromise(enterPortal(driver, { portal }));
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 11,
           y: 64,
@@ -3648,7 +3650,7 @@ describe("beat-game behavior programs", () => {
     await Effect.runPromise(enterPortal(driver, { portal }));
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 103,
           y: 50,
@@ -3761,7 +3763,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths.at(-1)).toMatchObject({
       position: feetCenter({ ...portal, x: 1, z: -21 }),
       radius: 0.5,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
       }),
@@ -3771,12 +3773,12 @@ describe("beat-game behavior programs", () => {
       position: { ...portal, x: 1, y: 48, z: -21 },
     });
     expect(driver.xzPaths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         x: 1.5,
         z: -16.5,
         dimension: "minecraft:overworld",
         radius: 1.5,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowPlacing: false,
           avoidFluids: true,
         }),
@@ -3905,7 +3907,7 @@ describe("beat-game behavior programs", () => {
       });
 
     await expect(Effect.runPromise(enterPortal(driver, { portal }))).rejects.toMatchObject({
-      message: expect.stringContaining("Moved away from the Nether portal while approaching it"),
+      message: stringContaining("Moved away from the Nether portal while approaching it"),
     });
 
     expect(movementPulses).toBeLessThan(8);
@@ -4073,7 +4075,7 @@ describe("beat-game behavior programs", () => {
     const placementIndex = driver.actions.findIndex(({ type }) => type === "place-block");
     expect(placementIndex).toBeGreaterThan(-1);
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           ...portal,
           x: 11,
@@ -4366,7 +4368,7 @@ describe("beat-game behavior programs", () => {
     await Effect.runPromise(enterPortal(driver, { portal }));
 
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           x: 9,
           y: 65,
@@ -4456,24 +4458,15 @@ describe("beat-game behavior programs", () => {
       y: origin.y + 1,
       z: origin.z - 2,
     };
-    const blocks = new Map(
-      frame.blocks.map((position) => [
+    const blocks = new Map<string, BeatGameBlockObservation>([
+      ...frame.blocks.map((position): [string, BeatGameBlockObservation] => [
         framePositionKey(position),
         blockObservation(position, { blockId: "minecraft:obsidian" }),
       ]),
-    );
-    blocks.set(
-      framePositionKey(target),
-      blockObservation(target, { blockId: "minecraft:deepslate" }),
-    );
-    blocks.set(
-      framePositionKey(water),
-      blockObservation(water, { blockId: "minecraft:deepslate" }),
-    );
-    blocks.set(
-      framePositionKey(interior),
-      blockObservation(interior, { blockId: "minecraft:deepslate" }),
-    );
+      [framePositionKey(target), blockObservation(target, { blockId: "minecraft:deepslate" })],
+      [framePositionKey(water), blockObservation(water, { blockId: "minecraft:deepslate" })],
+      [framePositionKey(interior), blockObservation(interior, { blockId: "minecraft:deepslate" })],
+    ]);
     const liquidSightObstruction = {
       ...origin,
       x: origin.x + 1,
@@ -4779,7 +4772,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths).toContainEqual({
       position: castingStand,
       radius: 0,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: true,
@@ -4835,7 +4828,7 @@ describe("beat-game behavior programs", () => {
     expect(rejectedWaterPickup).toBe(true);
     expect(driver.raycasts.some(({ includeFluids }) => includeFluids === true)).toBe(true);
     expect(driver.paths).not.toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: water,
         radius: 1.25,
       }),
@@ -4872,21 +4865,21 @@ describe("beat-game behavior programs", () => {
       y: origin.y + 1,
       z: origin.z - 2,
     };
-    const blocks = new Map(
-      frame.blocks.map((position) => [
+    const blocks = new Map<string, BeatGameBlockObservation>([
+      ...frame.blocks.map((position): [string, BeatGameBlockObservation] => [
         framePositionKey(position),
         blockObservation(position, { blockId: "minecraft:obsidian" }),
       ]),
-    );
-    // A failed cast left its lava source in the casting cell.
-    blocks.set(
-      framePositionKey(target),
-      blockObservation(target, {
-        blockId: "minecraft:lava",
-        properties: { level: "0" },
-        replaceable: true,
-      }),
-    );
+      // A failed cast left its lava source in the casting cell.
+      [
+        framePositionKey(target),
+        blockObservation(target, {
+          blockId: "minecraft:lava",
+          properties: { level: "0" },
+          replaceable: true,
+        }),
+      ],
+    ]);
     let strayLava = true;
     let dugBesideStrayLava = false;
     blocks.set(
@@ -5278,7 +5271,7 @@ describe("beat-game behavior programs", () => {
       z: 8,
       dimension: origin.dimension,
     } as const;
-    const targetKeys = new Set(targets.map(blockKey));
+    const targetKeys = new Set(targets.map((block) => blockKey(block)));
     const blocks = new Map(
       frame.blocks
         .filter((position) => !targetKeys.has(blockKey(position)))
@@ -5543,7 +5536,7 @@ describe("beat-game behavior programs", () => {
         dimension: safeStand.dimension,
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         avoidFluids: true,
         maxFallDistance: 1,
@@ -5738,27 +5731,27 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: castingStand,
         radius: 0,
-        policy: expect.objectContaining({ allowPlacing: false }),
+        policy: objectContaining({ allowPlacing: false }),
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: castingStand,
         radius: 0,
-        policy: expect.objectContaining({ allowPlacing: true }),
+        policy: objectContaining({ allowPlacing: true }),
       }),
     );
     expect(driver.paths).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         position: castingStand,
         radius: 0,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: true,
           allowPlacing: true,
-          protectedBlocks: expect.arrayContaining([...frame.blocks]),
+          protectedBlocks: arrayContaining([...frame.blocks]),
         }),
       }),
     );
@@ -5771,9 +5764,9 @@ describe("beat-game behavior programs", () => {
       .slice(lavaSelectionIndex + 1)
       .find((action) => action.type === "look");
     expect(lavaLook).toEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "look",
-        pitch: expect.any(Number),
+        pitch: anyInstanceOf(Number),
       }),
     );
     if (lavaLook?.type !== "look") {
@@ -5782,9 +5775,9 @@ describe("beat-game behavior programs", () => {
     expect(lavaLook.pitch).toBeGreaterThan(0);
     expect(blocks.get(blockKey(target))?.blockId).toBe("minecraft:obsidian");
     expect(driver.raycasts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ includeFluids: true }),
-        expect.objectContaining({ includeFluids: false }),
+      arrayContaining([
+        objectContaining({ includeFluids: true }),
+        objectContaining({ includeFluids: false }),
       ]),
     );
     expect(driver.activeControlScopes).toBe(0);
@@ -6124,7 +6117,7 @@ describe("beat-game behavior programs", () => {
         dimension: safeStand.dimension,
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         allowPlacing: false,
         avoidFluids: true,
@@ -6928,7 +6921,7 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "ranged-attack",
         strafe: false,
       }),
@@ -6989,7 +6982,7 @@ describe("beat-game behavior programs", () => {
 
     expect(resultQueries).toBe(2);
     expect(driver.tasks).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         type: "attack-nearest",
         maximumTargets: 1,
       }),

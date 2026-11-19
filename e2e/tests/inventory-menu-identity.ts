@@ -63,7 +63,7 @@ export default {
           "A stale action changed or closed the replacement crafter",
         );
         const disabled = yield* rcon("data get block 1681 64 1 disabled_slots");
-        yield* check(/\[I;\s*\]/.test(disabled), "A stale action toggled the vanilla crafter");
+        yield* check(/\[I;\s*\]/u.test(disabled), "A stale action toggled the vanilla crafter");
       }
       yield* check(!!first.menuId && current.menuId !== first.menuId, "Menus reused an identity");
       yield* rpc(() =>
@@ -72,7 +72,7 @@ export default {
       yield* eventually(
         rcon("data get block 1681 64 1 disabled_slots").pipe(
           Effect.flatMap((data) =>
-            check(/\[I;\s*0\]/.test(data), "A current button did not reach vanilla"),
+            check(/\[I;\s*0\]/u.test(data), "A current button did not reach vanilla"),
           ),
         ),
         "3 seconds",

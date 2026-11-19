@@ -105,5 +105,5 @@ export class SoulFireCamera {
  */
 export function decodeCameraImage(image: Pick<BotRenderPovResponse, "imageBase64">): Uint8Array {
   const binary = globalThis.atob(image.imageBase64);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return Uint8Array.from(binary, (character) => character.codePointAt(0) ?? 0);
 }

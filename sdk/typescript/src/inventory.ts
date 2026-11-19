@@ -69,7 +69,9 @@ export class SoulFireContainer {
   public refresh(options?: CallOptions): Effect.Effect<ContainerSnapshot, SoulFireOperationError> {
     return Effect.gen({ self: this }, function* () {
       yield* Effect.try({
-        try: () => this.requireOpen(),
+        try: () => {
+          this.requireOpen();
+        },
         catch: (cause) => operationError("SoulFireContainer.refresh", cause),
       });
       const response = yield* rpc("SoulFireContainer.refresh", (signal) =>
@@ -156,7 +158,9 @@ export class SoulFireContainer {
   ): Effect.Effect<ContainerSnapshot, SoulFireOperationError> {
     return Effect.gen({ self: this }, function* () {
       yield* Effect.try({
-        try: () => this.requireOpen(),
+        try: () => {
+          this.requireOpen();
+        },
         catch: (cause) => operationError("SoulFireContainer.transfer", cause),
       });
       const response = yield* rpc("SoulFireContainer.transfer", (signal) =>

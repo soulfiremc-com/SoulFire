@@ -28,7 +28,7 @@ export function blockSelectors(input: string | readonly string[]): {
 
 function resourceId(value: string): string {
   const id = value.includes(":") ? value : `minecraft:${value}`;
-  if (!/^[a-z0-9_.-]+:[a-z0-9/._-]+$/.test(id))
+  if (!/^[a-z0-9_.-]+:[a-z0-9/._-]+$/u.test(id))
     throw new TypeError(`Invalid Minecraft resource ID: ${value}`);
   return id;
 }

@@ -8,7 +8,7 @@ export default {
   name: "chat-input-validation",
   run: ({ bot }) =>
     Effect.gen(function* () {
-      for (const character of ["\0", "\t", "\n", "\r", "\u001f", "\u007f", "§"]) {
+      for (const character of ["\0", "\t", "\n", "\r", "\u001F", "\u007F", "§"]) {
         const cases = [
           { kind: "public chat", action: bot.chat.send(`invalid${character}text`) },
           { kind: "command", action: bot.chat.command(`help${character}`) },
@@ -20,7 +20,7 @@ export default {
             Result.isFailure(result) &&
               result.failure._tag === "SoulFireRpcError" &&
               result.failure.code === Code.InvalidArgument,
-            `${test.kind} accepted illegal character ${character.charCodeAt(0)}`,
+            `${test.kind} accepted illegal character ${character.codePointAt(0)}`,
           );
           yield* check(
             (yield* rcon("list")).includes(BOT_NAME),
@@ -51,7 +51,7 @@ export default {
       yield* eventually(
         rcon(`scoreboard players get ${BOT_NAME} ${OBJECTIVE}`).pipe(
           Effect.flatMap((score) =>
-            check(/has 7 \[/.test(score), `Valid command was not applied: ${score}`),
+            check(/has 7 \[/u.test(score), `Valid command was not applied: ${score}`),
           ),
         ),
         "5 seconds",

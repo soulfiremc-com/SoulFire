@@ -147,7 +147,7 @@ export default {
         `execute as @e[type=item,x=1776,y=62,z=-8,dx=32,dy=8,dz=16,nbt={Item:{id:"minecraft:nether_star"}}] run data get entity @s Item.count`,
       ).pipe(
         Effect.map((data) =>
-          [...data.matchAll(/data: (\d+)/g)].reduce((sum, match) => sum + Number(match[1]), 0),
+          [...data.matchAll(/data: (\d+)/gu)].reduce((sum, match) => sum + Number(match[1]), 0),
         ),
       );
       yield* eventually(

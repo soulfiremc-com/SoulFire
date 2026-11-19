@@ -106,6 +106,7 @@ await Effect.runPromise(
   ),
 );
 
+/** @param {string} name */
 function requiredEnvironment(name) {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) {
@@ -114,6 +115,7 @@ function requiredEnvironment(name) {
   return value;
 }
 
+/** @param {string} name */
 function commaSeparatedEnvironment(name) {
   const values = requiredEnvironment(name)
     .split(",")
@@ -125,11 +127,19 @@ function commaSeparatedEnvironment(name) {
   return values;
 }
 
+/**
+ * @param {string} name
+ * @param {string} fallback
+ */
 function environment(name, fallback) {
   const value = process.env[name]?.trim();
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
+/**
+ * @param {string} name
+ * @param {boolean} fallback
+ */
 function booleanEnvironment(name, fallback) {
   const value = process.env[name]?.trim().toLowerCase();
   if (value === undefined || value.length === 0) {
@@ -144,6 +154,7 @@ function booleanEnvironment(name, fallback) {
   throw new Error(`${name} must be true or false`);
 }
 
+/** @param {string} name */
 function optionalPositiveIntegerEnvironment(name) {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) {
@@ -156,8 +167,14 @@ function optionalPositiveIntegerEnvironment(name) {
   return number;
 }
 
+/** @param {unknown} value */
 function jsonLine(value) {
-  return JSON.stringify(value, (_, nestedValue) =>
-    typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
+  return JSON.stringify(
+    value,
+    /**
+     * @param {string} _
+     * @param {unknown} nestedValue
+     */
+    (_, nestedValue) => (typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue),
   );
 }

@@ -37,11 +37,11 @@ export default {
         yield* rcon("forceload add 3900 8");
         yield* rcon("fill 3664 63 0 3711 63 15 stone");
         const health = rcon(`data get entity @e[tag=${TAG},limit=1] Health`).pipe(
-          Effect.map((text) => Number(text.match(/: ([\d.]+)f$/)?.[1])),
+          Effect.map((text) => Number(text.match(/: ([\d.]+)f$/u)?.[1])),
         );
         const arrows = rcon(
           `data get entity ${BOT_NAME} Inventory[{id:"minecraft:arrow"}].count`,
-        ).pipe(Effect.map((text) => Number(text.match(/: (\d+)$/)?.[1])));
+        ).pipe(Effect.map((text) => Number(text.match(/: (\d+)$/u)?.[1])));
         for (const mode of ["cancel", "suspend", "unavailable"] as const) {
           yield* rcon(`kill @e[tag=${TAG}]`, { check: false });
           yield* Effect.sleep("600 millis");

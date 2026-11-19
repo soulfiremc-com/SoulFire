@@ -514,14 +514,13 @@ function matchesSelector(bot: FleetBot, selector: FleetSelector): boolean {
   ) {
     return false;
   }
-  if (selector.near !== undefined) {
-    if (
-      live === undefined ||
+  if (
+    selector.near !== undefined &&
+    (live === undefined ||
       (selector.near.dimension !== undefined && live.dimension !== selector.near.dimension) ||
-      distanceSquared(live, selector.near) > selector.near.radius * selector.near.radius
-    ) {
-      return false;
-    }
+      distanceSquared(live, selector.near) > selector.near.radius * selector.near.radius)
+  ) {
+    return false;
   }
   return (selector.metadata ?? []).every((condition) => matchesMetadata(bot, condition));
 }

@@ -164,7 +164,7 @@ export default {
                 for (const tag of [`${TAG}_a`, `${TAG}_b`]) {
                   const data = yield* rcon(`data get entity @e[tag=${tag},limit=1] InLove`);
                   yield* check(
-                    Number(data.match(/:\s*(\d+)$/)?.[1] ?? 0) > 0,
+                    Number(data.match(/:\s*(\d+)$/u)?.[1] ?? 0) > 0,
                     `${mode} was not confirmed by vanilla: ${data}`,
                   );
                 }

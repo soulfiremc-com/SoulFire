@@ -34,7 +34,7 @@ describe("smoke debug server", () => {
             fetch(`${server.url}/state`, { headers: authorization() }),
           );
           expect(response.status).toBe(200);
-          const body = yield* Effect.promise(() => response.json());
+          const body: unknown = yield* Effect.promise(() => response.json());
           expect(body).toEqual({
             ok: true,
             result: { revision: "42" },
@@ -74,7 +74,7 @@ describe("smoke debug server", () => {
               body: JSON.stringify({ radius: 8 }),
             }),
           );
-          const acceptedBody = yield* Effect.promise(() => accepted.json());
+          const acceptedBody: unknown = yield* Effect.promise(() => accepted.json());
           expect(acceptedBody).toEqual({
             ok: true,
             result: { radius: 8 },
@@ -91,7 +91,7 @@ describe("smoke debug server", () => {
             }),
           );
           expect(rejected.status).toBe(400);
-          const rejectedBody = yield* Effect.promise(() => rejected.json());
+          const rejectedBody: unknown = yield* Effect.promise(() => rejected.json());
           expect(rejectedBody).toMatchObject({
             ok: false,
             error: { message: "radius is required" },

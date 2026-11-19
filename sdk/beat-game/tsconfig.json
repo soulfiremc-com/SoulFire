@@ -3,7 +3,8 @@
   "compilerOptions": {
     "lib": ["DOM", "ESNext"],
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "allowJs": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.mjs"]
 }

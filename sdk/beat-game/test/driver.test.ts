@@ -20,6 +20,7 @@ import { Effect, Fiber, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { defaultBeatGameStrategy, makeSoulFireBeatGameDriver } from "../src/index.js";
+import { objectContaining } from "./matchers.js";
 
 function effectBot(
   taskResult: Effect.Effect<unknown, unknown> = Effect.succeed({}),
@@ -323,7 +324,7 @@ describe("production SoulFire beat-game driver", () => {
     const events = await Effect.runPromise(driver.events.pipe(Stream.take(1), Stream.runCollect));
 
     expect(Array.from(events)).toEqual([
-      expect.objectContaining({
+      objectContaining({
         type: "bot-damaged",
         amount: 1,
         health: 19,
@@ -353,7 +354,7 @@ describe("production SoulFire beat-game driver", () => {
     const events = await Effect.runPromise(driver.events.pipe(Stream.take(1), Stream.runCollect));
 
     expect(Array.from(events)).toEqual([
-      expect.objectContaining({
+      objectContaining({
         type: "game-event",
         event: "win_game",
         parameter: 1,
@@ -454,7 +455,7 @@ describe("production SoulFire beat-game driver", () => {
 
     expect(calls.eat).toEqual([
       ["minecraft:cooked_mutton"],
-      expect.objectContaining({
+      objectContaining({
         foodLevel: 18,
         maximumMeals: 8,
         completeWhenNoFood: true,
@@ -495,7 +496,7 @@ describe("production SoulFire beat-game driver", () => {
         alive: true,
         requireLineOfSight: false,
       },
-      expect.objectContaining({
+      objectContaining({
         triggerRadius: 12,
         safeDistance: 16,
         completeWhenSafe: true,
@@ -527,7 +528,7 @@ describe("production SoulFire beat-game driver", () => {
     );
 
     expect(calls.sleep).toEqual(
-      expect.objectContaining({
+      objectContaining({
         bed: {
           x: 8,
           y: 64,

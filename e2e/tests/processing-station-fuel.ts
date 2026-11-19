@@ -41,7 +41,7 @@ export default {
             if (mode === "residual") {
               const burn = yield* rcon(`data get block ${x} 64 8 lit_time_remaining`);
               yield* check(
-                Number(burn.match(/: (\d+)$/)?.[1]) > 200,
+                Number(burn.match(/: (\d+)$/u)?.[1]) > 200,
                 "The previous smelt left insufficient burn time for the fixture",
               );
             }

@@ -68,7 +68,7 @@ export default {
           const buttons = (yield* bot.inventoryState()).layout?.buttons ?? [];
           for (const offer of offers) {
             const button = buttons.find((candidate) => candidate.buttonId === offer.offerIndex);
-            const displayed = Array.from(button?.description?.matchAll(/(\d+)x/g) ?? [], (match) =>
+            const displayed = Array.from(button?.description?.matchAll(/(\d+)x/gu) ?? [], (match) =>
               Number(match[1]),
             );
             const firstCost = yield* present(offer.firstCost, "A trade offer has no first cost");

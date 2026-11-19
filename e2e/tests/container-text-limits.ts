@@ -18,7 +18,7 @@ const cases = [
   { input: "A".repeat(49) + "🙂B", expected: "A".repeat(49) },
   { input: "A".repeat(48) + "🙂B", expected: "A".repeat(48) + "🙂" },
   { input: "雪🙂界", expected: "雪🙂界" },
-  { input: "§cOrange\u0000\t\r\n\u001f\u007f雪🙂", expected: "cOrange雪🙂" },
+  { input: "§cOrange\u0000\t\r\n\u001F\u007F雪🙂", expected: "cOrange雪🙂" },
   { input: "§".repeat(10) + "A".repeat(50) + "B", expected: "A".repeat(50) },
   { input: "§".repeat(10) + "A".repeat(49) + "🙂B", expected: "A".repeat(49) },
 ];

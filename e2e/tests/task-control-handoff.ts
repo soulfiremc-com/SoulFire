@@ -19,7 +19,7 @@ export default {
     Effect.scoped(
       Effect.gen(function* () {
         const difficulty = (yield* rcon("difficulty"))
-          .match(/difficulty is (Peaceful|Easy|Normal|Hard)/)?.[1]
+          .match(/difficulty is (Peaceful|Easy|Normal|Hard)/u)?.[1]
           ?.toLowerCase();
         yield* check(!!difficulty, "Cannot determine the difficulty to restore");
         yield* Effect.addFinalizer(() => rcon(`difficulty ${difficulty}`).pipe(Effect.ignore));
@@ -181,12 +181,12 @@ export default {
             `data get entity ${BOT_NAME} Inventory[{id:"minecraft:bread"}].count`,
           );
           yield* check(
-            Number(bread.match(/: (\d+)$/)?.[1]) === 2,
+            Number(bread.match(/: (\d+)$/u)?.[1]) === 2,
             `${mode} did not consume exactly one bread on vanilla`,
           );
           const food = yield* rcon(`data get entity ${BOT_NAME} foodLevel`);
           yield* check(
-            Number(food.match(/: (\d+)$/)?.[1]) > foodBefore,
+            Number(food.match(/: (\d+)$/u)?.[1]) > foodBefore,
             `${mode} did not restore food on vanilla`,
           );
         }

@@ -27,7 +27,7 @@ export default {
   run: ({ bot }) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const original = (yield* rcon(`gamerule ${REGEN}`)).match(/\b(true|false)\s*$/)?.[1];
+        const original = (yield* rcon(`gamerule ${REGEN}`)).match(/\b(true|false)\s*$/u)?.[1];
         yield* check(original !== undefined, "The regeneration rule could not be read");
         yield* Effect.addFinalizer(() => rcon(`gamerule ${REGEN} ${original}`).pipe(Effect.ignore));
         yield* rcon(`gamerule ${REGEN} false`);

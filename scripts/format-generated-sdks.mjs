@@ -2,6 +2,10 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
+import { Schema } from "effect";
+
+const JsrConfig = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
+
 const repositoryRoot = process.cwd();
 const generatedDirectories = [
   path.join(repositoryRoot, "sdk/typescript/src/generated"),
@@ -13,6 +17,7 @@ for (const directory of generatedDirectories) {
 }
 await updateJsrExports();
 
+/** @param {string} directory */
 async function formatGeneratedDirectory(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const filePath = path.join(directory, entry.name);
@@ -26,7 +31,7 @@ async function formatGeneratedDirectory(directory) {
 
     const source = await readFile(filePath, "utf8");
     const formatted = `${source
-      .split(/\r?\n/)
+      .split(/\r?\n/u)
       .map((line) => line.trimEnd())
       .join("\n")
       .trimEnd()}\n`;
@@ -48,7 +53,7 @@ function isGeneratedSource(fileName) {
 
 async function updateJsrExports() {
   const jsrPath = path.join(repositoryRoot, "sdk/typescript/jsr.json");
-  const jsr = JSON.parse(await readFile(jsrPath, "utf8"));
+  const jsr = Schema.decodeSync(JsrConfig)(await readFile(jsrPath, "utf8"));
   const generatedRoot = path.join(repositoryRoot, "sdk/typescript/src/generated");
   const generated = await generatedTypeScriptModules(generatedRoot);
   jsr.exports = {
@@ -56,7 +61,7 @@ async function updateJsrExports() {
     "./platform": "./src/platform.ts",
     ...Object.fromEntries(
       generated.map((modulePath) => [
-        `./generated/${modulePath.replace(/_pb\.ts$/, "_pb")}`,
+        `./generated/${modulePath.replace(/_pb\.ts$/u, "_pb")}`,
         `./src/generated/${modulePath}`,
       ]),
     ),
@@ -64,7 +69,13 @@ async function updateJsrExports() {
   await writeFile(jsrPath, `${JSON.stringify(jsr, null, 2)}\n`);
 }
 
+/**
+ * @param {string} directory
+ * @param {string} [relative]
+ * @returns {Promise<string[]>}
+ */
 async function generatedTypeScriptModules(directory, relative = "") {
+  /** @type {string[]} */
   const modules = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const entryRelative = path.posix.join(relative, entry.name);

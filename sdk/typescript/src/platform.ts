@@ -26,7 +26,9 @@ export function makeEffectHttpClientFetch(client: HttpClient.HttpClient): typeof
     const httpRequest = request;
     return new Promise<Response>((resolve, reject) => {
       const effectController = new AbortController();
-      const abort = () => effectController.abort(webRequest.signal.reason);
+      const abort = () => {
+        effectController.abort(webRequest.signal.reason);
+      };
       if (webRequest.signal.aborted) {
         abort();
       } else {

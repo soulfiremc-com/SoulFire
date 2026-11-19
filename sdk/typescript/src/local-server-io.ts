@@ -50,7 +50,7 @@ function parseGitHubRelease(value: unknown): GitHubRelease {
   return {
     ...(tagName === undefined ? {} : { tag_name: tagName }),
     ...(Array.isArray(value["assets"])
-      ? { assets: value["assets"].filter(isRecord).map(parseGitHubAsset) }
+      ? { assets: value["assets"].filter(isRecord).map((asset) => parseGitHubAsset(asset)) }
       : {}),
   };
 }
@@ -107,7 +107,7 @@ export function resolveDedicatedAsset(
   const expectedName = `SoulFireDedicated-${requestedVersion?.trim() ?? release.tag_name}.jar`;
   const asset =
     release.assets.find((candidate) => candidate.name === expectedName) ??
-    release.assets.find((candidate) => /^SoulFireDedicated-.+\.jar$/.test(candidate.name ?? ""));
+    release.assets.find((candidate) => /^SoulFireDedicated-.+\.jar$/u.test(candidate.name ?? ""));
   if (!asset?.name || !asset.browser_download_url || !asset.digest) {
     throw new Error(`SoulFire release ${release.tag_name} has no verified dedicated server JAR`);
   }
@@ -242,7 +242,7 @@ async function downloadFile(
 }
 
 export function requireSha256Digest(digest: string, label: string): string {
-  const match = /^sha256:([a-fA-F0-9]{64})$/.exec(digest);
+  const match = /^sha256:([a-fA-F0-9]{64})$/u.exec(digest);
   if (!match?.[1]) {
     throw new Error(`${label} did not include a SHA-256 digest`);
   }
@@ -253,7 +253,11 @@ async function sha256File(filePath: string): Promise<string> {
   const hash = createHash("sha256");
   const stream = createReadStream(filePath);
   for await (const chunk of stream) {
-    hash.update(chunk);
+    const data: unknown = chunk;
+    if (!Buffer.isBuffer(data)) {
+      throw new TypeError(`Reading ${filePath} returned a non-binary chunk`);
+    }
+    hash.update(data);
   }
   return hash.digest("hex");
 }

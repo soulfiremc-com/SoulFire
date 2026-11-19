@@ -674,11 +674,17 @@ function reduceScoreboardTeam(
     event.kind === ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_UPDATE
   ) {
     players.clear();
-    event.players.forEach((player) => players.add(player));
+    for (const player of event.players) {
+      players.add(player);
+    }
   } else if (event.kind === ScoreboardEventKind.SCOREBOARD_EVENT_TEAM_PLAYERS_ADD) {
-    event.players.forEach((player) => players.add(player));
+    for (const player of event.players) {
+      players.add(player);
+    }
   } else {
-    event.players.forEach((player) => players.delete(player));
+    for (const player of event.players) {
+      players.delete(player);
+    }
   }
   teams.set(event.teamName, {
     name: event.teamName,

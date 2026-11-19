@@ -68,7 +68,7 @@ export default {
           rcon("data get block 3819 64 8 BrewTime").pipe(
             Effect.flatMap((text) =>
               check(
-                Number(text.match(/: (\d+)$/)?.[1]) > 0,
+                Number(text.match(/: (\d+)$/u)?.[1]) > 0,
                 "Vanilla never started the owner brew",
               ),
             ),
@@ -135,7 +135,7 @@ export default {
           `data get entity ${BOT_NAME} Inventory[{id:"minecraft:potion",components:{"minecraft:potion_contents":{potion:"minecraft:awkward"}}}].count`,
         );
         yield* check(
-          Number(potion.match(/: (\d+)$/)?.[1]) === 1,
+          Number(potion.match(/: (\d+)$/u)?.[1]) === 1,
           "Vanilla did not deliver the brewed potion",
         );
         const craft = yield* bot.tasks.craft(recipe.recipeId);
@@ -169,7 +169,7 @@ export default {
             `data get entity ${BOT_NAME} Inventory[{id:"minecraft:${item}"}].count`,
           );
           yield* check(
-            Number(actual.match(/: (\d+)$/)?.[1]) === count,
+            Number(actual.match(/: (\d+)$/u)?.[1]) === count,
             `Vanilla did not deliver ${item}: ${actual}`,
           );
         }

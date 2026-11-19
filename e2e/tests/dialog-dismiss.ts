@@ -35,7 +35,10 @@ export default {
       yield* eventually(
         rcon(`scoreboard players get ${BOT_NAME} ${OBJECTIVE}`).pipe(
           Effect.flatMap((score) =>
-            check(/has 1 \[/.test(score), "Dismiss did not execute the native dialog close action"),
+            check(
+              /has 1 \[/u.test(score),
+              "Dismiss did not execute the native dialog close action",
+            ),
           ),
         ),
         "5 seconds",
@@ -83,7 +86,7 @@ export default {
       yield* eventually(
         rcon(`scoreboard players get ${BOT_NAME} ${OBJECTIVE}`).pipe(
           Effect.flatMap((score) =>
-            check(/has 1 \[/.test(score), "Escape did not execute the native dialog close action"),
+            check(/has 1 \[/u.test(score), "Escape did not execute the native dialog close action"),
           ),
         ),
         "5 seconds",

@@ -74,8 +74,12 @@ export default {
           });
         };
         socket.on("data", receive);
-        socket.on("error", () => socket.destroy());
-        socket.on("close", () => sockets.delete(socket));
+        socket.on("error", () => {
+          socket.destroy();
+        });
+        socket.on("close", () => {
+          sockets.delete(socket);
+        });
       });
       yield* Effect.acquireRelease(
         Effect.tryPromise({
@@ -91,7 +95,9 @@ export default {
             () =>
               new Promise<void>((resolve) => {
                 for (const socket of sockets) socket.destroy();
-                proxy.close(() => resolve());
+                proxy.close(() => {
+                  resolve();
+                });
               }),
           ),
       );

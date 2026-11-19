@@ -5,6 +5,7 @@ import { BeatGameDriverError } from "../src/errors.js";
 import { approachLiquidSourceFromSide } from "../src/liquids.js";
 import { defaultBeatGameStrategy, type BeatGameBlockPosition } from "../src/model.js";
 import { blockObservation, FakeBeatGameDriver, observation } from "./fixtures.js";
+import { objectContaining } from "./matchers.js";
 
 const standVolume = (stand: BeatGameBlockPosition, obstruction?: BeatGameBlockPosition) => [
   blockObservation(stand, {
@@ -243,7 +244,7 @@ describe("lava interaction positioning", () => {
           dimension: clearStand.dimension,
         },
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           avoidFluids: true,
           maxFallDistance: 1,
@@ -309,7 +310,7 @@ describe("lava interaction positioning", () => {
       },
     });
     driver.blockQueryResolver = ({ center, radius, selector }) => {
-      if (Object.keys(selector).length !== 0) {
+      if (Object.keys(selector).length > 0) {
         return [];
       }
       if (radius === 4.9) {
@@ -408,7 +409,7 @@ describe("lava interaction positioning", () => {
       },
     });
     driver.blockQueryResolver = ({ center, radius, selector }) => {
-      if (Object.keys(selector).length !== 0) {
+      if (Object.keys(selector).length > 0) {
         return [];
       }
       const volume =
@@ -449,7 +450,7 @@ describe("lava interaction positioning", () => {
 
     expect(selected.position).toEqual(exposedSource.position);
     expect(driver.paths).toEqual([
-      expect.objectContaining({
+      objectContaining({
         position: {
           ...exposedStand,
           x: exposedStand.x + 0.5,
@@ -631,7 +632,7 @@ describe("lava interaction positioning", () => {
         dimension: stand.dimension,
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: true,
         avoidFluids: true,
         maxFallDistance: 1,
@@ -690,7 +691,7 @@ describe("lava interaction positioning", () => {
       },
     });
     driver.blockQueryResolver = ({ center, radius, selector }) => {
-      if (Object.keys(selector).length !== 0) {
+      if (Object.keys(selector).length > 0) {
         return [];
       }
       if (radius === 4.9) {
@@ -753,7 +754,7 @@ describe("lava interaction positioning", () => {
           dimension: safeStand.dimension,
         },
         radius: 0.75,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: false,
           avoidFluids: true,
           maxFallDistance: 1,
@@ -881,7 +882,7 @@ describe("lava interaction positioning", () => {
       },
     });
     driver.blockQueryResolver = ({ center, radius, selector }) => {
-      if (Object.keys(selector).length !== 0) {
+      if (Object.keys(selector).length > 0) {
         return [];
       }
       if (radius === 4.9) {
@@ -919,21 +920,21 @@ describe("lava interaction positioning", () => {
     expect(selected.position).toEqual(source.position);
     expect(driver.paths).toHaveLength(4);
     expect(driver.paths.slice(0, 3)).toEqual([
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 12.5 }),
+      objectContaining({
+        position: objectContaining({ x: 12.5 }),
         radius: 2,
-        policy: expect.objectContaining({
+        policy: objectContaining({
           allowMining: defaultBeatGameStrategy.path.allowMining,
           avoidFluids: true,
           maxFallDistance: 1,
         }),
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 24.5 }),
+      objectContaining({
+        position: objectContaining({ x: 24.5 }),
         radius: 2,
       }),
-      expect.objectContaining({
-        position: expect.objectContaining({ x: 36.5 }),
+      objectContaining({
+        position: objectContaining({ x: 36.5 }),
         radius: 2,
       }),
     ]);
@@ -945,7 +946,7 @@ describe("lava interaction positioning", () => {
         dimension: stand.dimension,
       },
       radius: 0.75,
-      policy: expect.objectContaining({
+      policy: objectContaining({
         allowMining: false,
         avoidFluids: true,
         maxFallDistance: 1,
@@ -997,7 +998,7 @@ describe("lava interaction positioning", () => {
       },
     });
     driver.blockQueryResolver = ({ center, radius, selector }) => {
-      if (Object.keys(selector).length !== 0) {
+      if (Object.keys(selector).length > 0) {
         return [];
       }
       if (radius === 4.9) {
@@ -1033,7 +1034,7 @@ describe("lava interaction positioning", () => {
     // Stone takes seconds per block by hand, so no leg may plan to dig.
     expect(driver.paths.slice(0, 3)).toEqual(
       Array.from({ length: 3 }, () =>
-        expect.objectContaining({ policy: expect.objectContaining({ allowMining: false }) }),
+        objectContaining({ policy: objectContaining({ allowMining: false }) }),
       ),
     );
   });

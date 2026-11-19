@@ -204,8 +204,10 @@ function waitForServerReady(
     const onLine = (line: string) => {
       if (line.includes("Finished loading!")) finish(Effect.void);
     };
-    const onError = (cause: Error) => finish(Effect.fail(operationError("install.ready", cause)));
-    const onExit = (code: number | null) =>
+    const onError = (cause: Error) => {
+      finish(Effect.fail(operationError("install.ready", cause)));
+    };
+    const onExit = (code: number | null) => {
       finish(
         Effect.fail(
           operationError(
@@ -214,6 +216,7 @@ function waitForServerReady(
           ),
         ),
       );
+    };
     output.on("line", onLine);
     errors.on("line", onLine);
     child.once("error", onError);
@@ -227,7 +230,9 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
     if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null)
       return Effect.void;
     return Effect.callback<void>((resume) => {
-      const onExit = () => resume(Effect.void);
+      const onExit = () => {
+        resume(Effect.void);
+      };
       child.once("exit", onExit);
       child.kill("SIGTERM");
       return Effect.sync(() => child.off("exit", onExit));
@@ -240,7 +245,9 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
               resume(Effect.void);
               return undefined;
             }
-            const onExit = () => resume(Effect.void);
+            const onExit = () => {
+              resume(Effect.void);
+            };
             child.once("exit", onExit);
             child.kill("SIGKILL");
             return Effect.sync(() => child.off("exit", onExit));

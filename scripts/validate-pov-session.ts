@@ -51,8 +51,8 @@ let keyFrames = 0;
 let streamError: Error | undefined;
 let sequence = 0n;
 let captured = false;
-let width = 640,
-  height = 360;
+let height = 360,
+  width = 640;
 let busy = false;
 // Concurrent input calls wait here until the running call clears `busy`.
 const isBusy = () => busy;

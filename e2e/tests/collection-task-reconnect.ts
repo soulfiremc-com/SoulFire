@@ -224,7 +224,7 @@ export default {
                     "execute as @e[type=item,x=4260,y=-200,z=4,dx=18,dy=300,dz=8] run data get entity @s Item.count",
                     { check: false },
                   );
-                  const dropCount = [...dropped.matchAll(/entity data: (\d+)/g)].reduce(
+                  const dropCount = [...dropped.matchAll(/entity data: (\d+)/gu)].reduce(
                     (sum, match) => sum + Number(match[1]),
                     0,
                   );

@@ -1014,7 +1014,9 @@ export function beatGameWithDriver(
     );
     const restored = yield* store.load(runId);
     yield* Effect.try({
-      try: () => validateRestoredCheckpoint(restored, driver, teamId),
+      try: () => {
+        validateRestoredCheckpoint(restored, driver, teamId);
+      },
       catch: (cause) =>
         new BeatGameProtocolError({
           runId,
@@ -4504,9 +4506,9 @@ function findImmediateThreat(
     Effect.map(([visibleHostiles, nearbyEscapeOnlyThreats, nearbyDangerousNeutralMobs]) => {
       const hostiles = new Map(
         [
-          ...visibleHostiles.filter(isCurrentlyHostileMob),
+          ...visibleHostiles.filter((entity) => isCurrentlyHostileMob(entity)),
           ...nearbyEscapeOnlyThreats,
-          ...nearbyDangerousNeutralMobs.filter(isAggressiveNeutralMob),
+          ...nearbyDangerousNeutralMobs.filter((entity) => isAggressiveNeutralMob(entity)),
         ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
       );
       const candidates = [...hostiles.values()]
@@ -4937,7 +4939,9 @@ function escapeFromTarget(
       selector: { categories: [2], alive: true },
       maximumResults: 32,
     });
-    const nearbyEscapeThreats = nearbyEscapeCandidates.filter(isCurrentlyHostileMob);
+    const nearbyEscapeThreats = nearbyEscapeCandidates.filter((entity) =>
+      isCurrentlyHostileMob(entity),
+    );
     const groupAggroRisk = hasNearbyGroupAggroMember(target, nearbyEscapeCandidates);
     const rangedThreat = deduplicateEntityTargets([target, ...nearbyEscapeThreats]).some(
       (candidate) =>
@@ -5772,7 +5776,7 @@ function knockBackAndSprintAway(
       selector: { categories: [2], alive: true },
       maximumResults: 32,
     });
-    const nearbyThreats = nearbyEntityCandidates.filter(isCurrentlyHostileMob);
+    const nearbyThreats = nearbyEntityCandidates.filter((entity) => isCurrentlyHostileMob(entity));
     const groupAggroRisk = hasNearbyGroupAggroMember(threat, nearbyEntityCandidates);
     const nearbyGroupMembers = groupAggroRisk
       ? nearbyEntityCandidates.filter((candidate) => sharesGroupAggroFamily(threat, candidate))
@@ -5979,7 +5983,7 @@ function knockBackAndSprintAway(
               radius: THREAT_ESCAPE_SAFE_DISTANCE,
               selector: { categories: [2], alive: true },
               maximumResults: 32,
-            })).filter(isCurrentlyHostileMob);
+            })).filter((entity) => isCurrentlyHostileMob(entity));
             const refreshedThreat =
               refreshedThreats.find((candidate) => isSameEntityTarget(candidate, threat)) ?? threat;
             const refreshedPreferredTarget = surfaceEscapeTarget(
@@ -8294,8 +8298,8 @@ function findNearbyAttackThreat(
       ]);
       const threats = new Map(
         [
-          ...hostiles.filter(isCurrentlyHostileMob),
-          ...dangerousNeutralMobs.filter(isAggressiveNeutralMob),
+          ...hostiles.filter((entity) => isCurrentlyHostileMob(entity)),
+          ...dangerousNeutralMobs.filter((entity) => isAggressiveNeutralMob(entity)),
         ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
       );
       const candidates = [...threats.values()].toSorted((left, right) => {
@@ -8543,7 +8547,12 @@ function monitorDefenseHealth(
         })
         .pipe(
           Effect.flatMap((nearbyThreats) => {
-            if (isOverwhelmingAmbush(observation, nearbyThreats.filter(isCurrentlyHostileMob))) {
+            if (
+              isOverwhelmingAmbush(
+                observation,
+                nearbyThreats.filter((entity) => isCurrentlyHostileMob(entity)),
+              )
+            ) {
               return Effect.succeed("disengage" as const);
             }
             if (
@@ -8910,7 +8919,7 @@ function retreatAndRecover(
         })
         .pipe(
           Effect.flatMap((entities) => {
-            const threat = entities.find(isAggressiveNeutralMob);
+            const threat = entities.find((entity) => isAggressiveNeutralMob(entity));
             if (threat === undefined) {
               return Effect.void;
             }
@@ -9686,7 +9695,7 @@ function tryForageNearbyFood(
       Effect.map(
         (blocks) =>
           blocks
-            .filter(isReadyForageBlock)
+            .filter((block) => isReadyForageBlock(block))
             .toSorted(
               (left, right) =>
                 distanceSquared(left.position, observation.player.position) -
@@ -13523,10 +13532,14 @@ function recoverLocalNavigationTrap(
         surfaceHorizontalDistanceSquared(surface, position) >=
         LOCAL_NAVIGATION_RECOVERY_MINIMUM_DISTANCE ** 2;
       const orderedColumns = [
-        ...stableColumns.filter(nonTrivial).filter(separated),
-        ...safeColumns.filter(nonTrivial).filter(separated),
-        ...stableColumns.filter(nonTrivial),
-        ...safeColumns.filter(nonTrivial),
+        ...stableColumns
+          .filter((surface) => nonTrivial(surface))
+          .filter((surface) => separated(surface)),
+        ...safeColumns
+          .filter((surface) => nonTrivial(surface))
+          .filter((surface) => separated(surface)),
+        ...stableColumns.filter((surface) => nonTrivial(surface)),
+        ...safeColumns.filter((surface) => nonTrivial(surface)),
       ];
       const uniqueColumns = new Map(
         orderedColumns.map((surface) => [`${surface.x}:${surface.surfaceY}:${surface.z}`, surface]),
@@ -14075,14 +14088,15 @@ function pathfindToFirstReachableSurface(
   targets: readonly BeatGamePosition[],
   index = 0,
   attemptTimeoutMs?: number,
-  path: BeatGameStrategy["path"] = {
+  pathOverride?: BeatGameStrategy["path"],
+  goalRadius = 1.5,
+): Effect.Effect<void, BeatGameDriverError> {
+  const path = pathOverride ?? {
     ...state.strategy.path,
     allowMining: true,
     allowPlacing: true,
     avoidFluids: true,
-  },
-  goalRadius = 1.5,
-): Effect.Effect<void, BeatGameDriverError> {
+  };
   const target = targets[index];
   if (target === undefined) {
     return Effect.void;
@@ -16193,7 +16207,7 @@ function samePositionSet(
   if (left.length !== right.length) {
     return false;
   }
-  const rightKeys = new Set(right.map(positionKey));
+  const rightKeys = new Set(right.map((position) => positionKey(position)));
   return left.every((position) => rightKeys.has(positionKey(position)));
 }
 
@@ -17204,7 +17218,7 @@ function observeFresh(state: RunState): Effect.Effect<BeatGameObservation, BeatG
   return Effect.gen(function* () {
     const observation = yield* observeDriverFresh(state);
     const pendingDeath = yield* Ref.modify(state.pendingDeaths, (pendingDeaths) => {
-      const recoverableDeaths = pendingDeaths.filter(isPendingDeathRecoverable);
+      const recoverableDeaths = pendingDeaths.filter((death) => isPendingDeathRecoverable(death));
       return [recoverableDeaths.at(-1), recoverableDeaths] as const;
     });
     if (pendingDeath === undefined) {
@@ -17845,7 +17859,7 @@ function hasGuardedCorpseAtNight(
         selector: { categories: [2], alive: true },
         maximumResults: 8,
       });
-      if (nearby.some(isCurrentlyHostileMob)) {
+      if (nearby.some((entity) => isCurrentlyHostileMob(entity))) {
         return true;
       }
     }
@@ -19428,6 +19442,7 @@ function stableFingerprint(value: unknown): string {
   const source = JSON.stringify(value);
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < source.length; index += 1) {
+    // oxlint-disable-next-line unicorn/prefer-code-point -- the fingerprint hashes UTF-16 code units; code points would change existing idempotency keys
     hash ^= BigInt(source.charCodeAt(index));
     hash = BigInt.asUintN(64, hash * 0x100000001b3n);
   }

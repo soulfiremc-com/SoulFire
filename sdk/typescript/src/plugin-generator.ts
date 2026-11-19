@@ -25,6 +25,7 @@ import { promisify } from "node:util";
 import { SDK_VERSION } from "./connection.js";
 import type { PluginApiDescriptor } from "./generated/soulfire/plugin_api_pb.js";
 
+// oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const executeFile = promisify(execFile);
 const require = createRequire(import.meta.url);
 const PYTHON_KEYWORDS = new Set([
@@ -315,7 +316,7 @@ function inferMetadata(
     pluginIndex >= 0
       ? (packageParts[pluginIndex + 1] ?? "")
       : (packageParts.at(-2) ?? packageParts.at(-1) ?? "");
-  const versionPart = packageParts.findLast((part) => /^v\d+$/.test(part));
+  const versionPart = packageParts.findLast((part) => /^v\d+$/u.test(part));
 
   return {
     pluginId,
@@ -324,7 +325,7 @@ function inferMetadata(
     author: "",
     license: "LicenseRef-Proprietary",
     requiredSoulFireVersion: "*",
-    apiMajorVersion: versionPart === undefined ? 1 : Number.parseInt(versionPart.slice(1), 10),
+    apiMajorVersion: versionPart === undefined ? 1 : Number(versionPart.slice(1)),
     descriptorSha256,
     serviceNames: services.map(({ fullName }) => fullName),
     eventTypeUrls: [],
@@ -416,7 +417,7 @@ function taskModels(
     const inputType = requirePythonType(messageTypes, `.${typeNameFromUrl(task.inputTypeUrl)}`);
     const resultType = requirePythonType(messageTypes, `.${typeNameFromUrl(task.resultTypeUrl)}`);
     const inputName = typeNameFromUrl(task.inputTypeUrl).split(".").at(-1) ?? "PluginTask";
-    const methodName = inputName.replace(/Task$/, "") || inputName;
+    const methodName = inputName.replace(/Task$/u, "") || inputName;
     const progressType =
       task.progressTypeUrl === undefined
         ? undefined
@@ -1243,7 +1244,7 @@ async function inspectOutput(outputDirectory: string): Promise<"missing" | "empt
 }
 
 function isSharedSchema(name: string): boolean {
-  return name.startsWith("google/") || /^soulfire\/[^/]+\.proto$/.test(name);
+  return name.startsWith("google/") || /^soulfire\/[^/]+\.proto$/u.test(name);
 }
 
 function qualify(packageName: string, name: string): string {
@@ -1251,15 +1252,15 @@ function qualify(packageName: string, name: string): string {
 }
 
 function protoTypeScriptModule(name: string): string {
-  return `${name.replace(/\.proto$/, "")}_pb.js`;
+  return `${name.replace(/\.proto$/u, "")}_pb.js`;
 }
 
 function protoPythonModule(name: string): string {
-  return `${name.replace(/\.proto$/, "")}_pb2`.replaceAll("/", ".");
+  return `${name.replace(/\.proto$/u, "")}_pb2`.replaceAll("/", ".");
 }
 
 function protoPythonConnectModule(name: string): string {
-  return `${name.replace(/\.proto$/, "")}_connect`.replaceAll("/", ".");
+  return `${name.replace(/\.proto$/u, "")}_connect`.replaceAll("/", ".");
 }
 
 function lowerCamel(value: string): string {
@@ -1271,8 +1272,8 @@ function lowerCamel(value: string): string {
 
 function snakeCase(value: string): string {
   return value
-    .replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replaceAll(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replaceAll(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
     .replaceAll("-", "_")
     .toLowerCase();
 }
@@ -1280,7 +1281,7 @@ function snakeCase(value: string): string {
 function pascalCase(value: string): string {
   return (
     value
-      .split(/[^a-zA-Z0-9]+/)
+      .split(/[^a-zA-Z0-9]+/u)
       .filter((part) => part.length > 0)
       .map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`)
       .join("") || "SoulFire"
@@ -1291,16 +1292,16 @@ function packageSegment(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replaceAll(/[^a-z0-9._-]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9._-]+/gu, "-")
+    .replaceAll(/^-+|-+$/gu, "");
 }
 
 function nextMinorVersion(version: string): string {
   const [majorText, minorText] = version.split(".");
-  const major = Number.parseInt(majorText ?? "", 10);
-  const minor = Number.parseInt(minorText ?? "", 10);
+  const major = Number(majorText);
+  const minor = Number(minorText);
   if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor)) {
-    throw new Error(`Invalid SoulFire SDK version: ${version}`);
+    throw new TypeError(`Invalid SoulFire SDK version: ${version}`);
   }
   return `${major}.${minor + 1}`;
 }
@@ -1310,8 +1311,8 @@ function pythonMemberName(value: string): string {
 }
 
 function pythonIdentifier(value: string): string {
-  const normalized = value.replaceAll(/[^a-zA-Z0-9_]+/g, "_");
-  return /^\d/.test(normalized) ? `plugin_${normalized}` : normalized;
+  const normalized = value.replaceAll(/[^a-zA-Z0-9_]+/gu, "_");
+  return /^\d/u.test(normalized) ? `plugin_${normalized}` : normalized;
 }
 
 function pythonSlots(services: readonly ServiceModel[]): string {
@@ -1373,12 +1374,14 @@ async function rewriteTypeScriptSharedImports(outputDirectory: string): Promise<
   const existingFiles = new Set(files);
   for (const file of files) {
     const source = await readFile(file, "utf8");
-    const rewritten = source.replaceAll(/from "(\.[^"]+_pb\.js)"/g, (match, specifier: string) => {
-      const target = resolve(dirname(file), specifier.replace(/\.js$/, ".ts"));
+    const rewritten = source.replaceAll(/from "(\.[^"]+_pb\.js)"/gu, (match, specifier: string) => {
+      const target = resolve(dirname(file), specifier.replace(/\.js$/u, ".ts"));
       if (existingFiles.has(target)) {
         return match;
       }
-      const modulePath = relative(generatedRoot, target).replaceAll("\\", "/").replace(/\.ts$/, "");
+      const modulePath = relative(generatedRoot, target)
+        .replaceAll("\\", "/")
+        .replace(/\.ts$/u, "");
       if (modulePath.startsWith("../")) {
         throw new Error(`Generated import escapes its output directory: ${specifier}`);
       }

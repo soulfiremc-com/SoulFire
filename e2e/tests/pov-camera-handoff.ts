@@ -92,7 +92,7 @@ export default {
           if (mode !== "preempted-attack") yield* Effect.sleep("700 millis");
           const rotation = async () => {
             const text = await runPromise(rcon(`data get entity ${BOT_NAME} Rotation`));
-            const match = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/);
+            const match = text.match(/\[(-?[\d.]+)f, (-?[\d.]+)f\]/u);
             if (!match) throw new Error(`Unexpected rotation: ${text}`);
             return Number(match[1]);
           };

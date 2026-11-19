@@ -11,6 +11,7 @@ import type { SoulFireBot, SoulFireClient, SoulFireOperationError } from "@soulf
 import { SoulFire } from "@soulfiremc/sdk/node";
 import { Console, Data, Duration, Effect, Schedule, Semaphore } from "effect";
 
+// oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const execFileAsync = promisify(execFile);
 
 export const E2E_DIR = import.meta.dirname;
@@ -91,7 +92,7 @@ const MINECRAFT_START_TIMEOUT = "5 minutes";
 
 /** Command output that means the command failed (RCON itself still succeeds). */
 const RCON_ERROR =
-  /Unknown or incomplete command|Incorrect argument|Expected |Invalid |That position is not loaded|No player was found|Unknown |Could not /;
+  /Unknown or incomplete command|Incorrect argument|Expected |Invalid |That position is not loaded|No player was found|Unknown |Could not /u;
 
 // Vanilla's RCON handlers share one command-output buffer.
 const rconCommands = Semaphore.makeUnsafe(1);
@@ -137,7 +138,9 @@ export const stopMinecraft = run("docker", ["rm", "--force", CONTAINER]).pipe(Ef
 export const saveMinecraftLog = (file: string) =>
   run("docker", ["logs", CONTAINER], { maxBuffer: 64 * 1024 * 1024 }).pipe(
     Effect.flatMap(({ stdout, stderr }) =>
-      Effect.sync(() => appendFileSync(file, stdout + stderr)),
+      Effect.sync(() => {
+        appendFileSync(file, stdout + stderr);
+      }),
     ),
     Effect.ignore,
   );
@@ -235,7 +238,7 @@ function env(vars: Record<string, string>) {
 export function soulfireJar() {
   if (process.env["SOULFIRE_E2E_JAR"]) return path.resolve(process.env["SOULFIRE_E2E_JAR"]);
   const version = readFileSync(path.join(REPO_DIR, "gradle.properties"), "utf8").match(
-    /^maven_version=(.+)$/m,
+    /^maven_version=(.+)$/mu,
   )?.[1];
   return path.join(
     REPO_DIR,
@@ -294,7 +297,9 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
       javaPath: javaPath(),
       javaArgs: ["-Xms1G", "-Xmx4G"],
       startupTimeoutMs: 180_000,
-      onLog: (line) => appendFileSync(logFile, line + "\n"),
+      onLog: (line) => {
+        appendFileSync(logFile, line + "\n");
+      },
     }),
   );
   yield* Console.log(`[soulfire] ready in ${seconds(took)}`);
@@ -366,7 +371,7 @@ export const placeBot = Effect.fn("placeBot")(function* (bot: SoulFireBot, at: P
 export const serverPosition: Effect.Effect<Pos, CommandFailed | CheckFailed> = Effect.flatMap(
   rcon(`data get entity ${BOT_NAME} Pos`),
   (out) => {
-    const m = out.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/);
+    const m = out.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/u);
     return m
       ? Effect.succeed({ x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) })
       : Effect.fail(new CheckFailed({ message: `unexpected Pos output: ${out}` }));

@@ -32,16 +32,29 @@ const { values: flags, positionals: names } = parseArgs({
   },
 });
 
+const isE2ETest = (value: unknown): value is E2ETest =>
+  typeof value === "object" &&
+  value !== null &&
+  "name" in value &&
+  typeof value.name === "string" &&
+  "run" in value &&
+  typeof value.run === "function";
+
 const tests: E2ETest[] = [];
 for (const file of readdirSync(path.join(E2E_DIR, "tests"))
   .filter((f) => f.endsWith(".ts"))
   .toSorted()) {
-  tests.push((await import(path.join(E2E_DIR, "tests", file))).default);
+  const module: unknown = await import(path.join(E2E_DIR, "tests", file));
+  if (typeof module !== "object" || module === null || !("default" in module)) {
+    throw new Error(`tests/${file} has no default export`);
+  }
+  if (!isE2ETest(module.default)) throw new Error(`tests/${file} does not export an E2E test`);
+  tests.push(module.default);
 }
-if (!tests.length) throw new Error("no tests in tests/");
-const selected = names.length ? tests.filter((t) => names.includes(t.name)) : tests;
+if (tests.length === 0) throw new Error("no tests in tests/");
+const selected = names.length > 0 ? tests.filter((t) => names.includes(t.name)) : tests;
 const unknown = names.filter((n) => !tests.some((t) => t.name === n));
-if (unknown.length)
+if (unknown.length > 0)
   throw new Error(
     `no such test: ${unknown.join(", ")} (have: ${tests.map((t) => t.name).join(", ")})`,
   );
@@ -52,7 +65,7 @@ if (!existsSync(jar))
     `no SoulFire jar at ${jar}: run ./gradlew :dedicated-launcher:uberJar, or set SOULFIRE_E2E_JAR`,
   );
 
-const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replaceAll(/[:.]/g, "-"));
+const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replaceAll(/[:.]/gu, "-"));
 mkdirSync(runDir, { recursive: true });
 
 const program = Effect.gen(function* () {

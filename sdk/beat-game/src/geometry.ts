@@ -126,7 +126,9 @@ export function inferNetherPortalFrames(
   reference: BeatGamePosition,
 ): readonly NetherPortalFrameMatch[] {
   const observedKeys = new Set(
-    obsidian.filter(({ dimension }) => dimension === reference.dimension).map(positionKey),
+    obsidian
+      .filter(({ dimension }) => dimension === reference.dimension)
+      .map((position) => positionKey(position)),
   );
   const candidates = new Map<string, PortalFrame>();
   for (const block of obsidian) {

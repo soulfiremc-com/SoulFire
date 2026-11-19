@@ -922,7 +922,7 @@ function parseSmokeProgressActivity(input: unknown): readonly SmokeProgressActiv
                 failedApproaches.map((approach) => approach["target"]),
               ),
               taskFailedApproachPositions: blockPositionKeys(
-                failedApproaches.flatMap((approach) =>
+                failedApproaches.flatMap((approach): readonly unknown[] =>
                   Array.isArray(approach["playerPositions"]) ? approach["playerPositions"] : [],
                 ),
               ),

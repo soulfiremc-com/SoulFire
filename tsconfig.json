@@ -13,8 +13,9 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "types": ["node"],
+    "allowJs": true
   },
-  "include": ["scripts/**/*.ts"],
+  "include": ["scripts/**/*.ts", "scripts/**/*.mjs"],
   "exclude": ["node_modules", ".repos"]
 }

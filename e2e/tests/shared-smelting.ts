@@ -162,7 +162,7 @@ export default {
 } satisfies E2ETest;
 
 function countMaterial(nbt: string) {
-  return [...nbt.matchAll(/\{[^{}]+\}/g)]
-    .filter(([entry]) => /id: "minecraft:iron_(ore|ingot)"/.test(entry))
-    .reduce((total, [entry]) => total + Number(entry.match(/count: (\d+)/)?.[1] ?? 0), 0);
+  return [...nbt.matchAll(/\{[^{}]+\}/gu)]
+    .filter(([entry]) => /id: "minecraft:iron_(ore|ingot)"/u.test(entry))
+    .reduce((total, [entry]) => total + Number(entry.match(/count: (\d+)/u)?.[1] ?? 0), 0);
 }

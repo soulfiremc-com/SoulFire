@@ -73,7 +73,7 @@ export default {
         rcon("data get block 1649 64 0 Items").pipe(
           Effect.flatMap((data) =>
             check(
-              (data.match(/minecraft:awkward/g) ?? []).length === 3,
+              (data.match(/minecraft:awkward/gu) ?? []).length === 3,
               "Vanilla did not brew all three awkward potions",
             ),
           ),

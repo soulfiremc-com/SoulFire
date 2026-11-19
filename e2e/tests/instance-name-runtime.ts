@@ -16,7 +16,7 @@ export default {
         for (const name of [`NameQA_${suffix}`, `Renamed_${suffix}`]) {
           const previousName = previous;
           yield* instance.updateMetadata({
-            meta: { case: "friendlyName", value: ` \u00a0${name}\ufeff ` },
+            meta: { case: "friendlyName", value: ` \u00A0${name}\uFEFF ` },
           });
           const result = yield* Effect.tryPromise({
             try: () =>

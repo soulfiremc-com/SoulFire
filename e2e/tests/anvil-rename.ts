@@ -101,7 +101,7 @@ export default {
                   captured: true,
                   width: 320,
                   height: 240,
-                  events: [{ kind: PovInputEvent_Kind.CHARACTER, code: "Y".charCodeAt(0) }],
+                  events: [{ kind: PovInputEvent_Kind.CHARACTER, code: "Y".codePointAt(0) ?? 0 }],
                 });
                 return;
               }
@@ -125,7 +125,7 @@ export default {
                 captured: true,
                 width: 640,
                 height: 480,
-                events: [{ kind: PovInputEvent_Kind.CHARACTER, code: "X".charCodeAt(0) }],
+                events: [{ kind: PovInputEvent_Kind.CHARACTER, code: "X".codePointAt(0) ?? 0 }],
               });
               const edited = await service.getInventoryState(scope);
               if (!edited.layout?.textInputs.some((input) => input.currentValue === ICON_NAME))

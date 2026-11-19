@@ -19,6 +19,7 @@ import {
   type BeatGamePortalWorkspace,
 } from "../src/index.js";
 import { checkpoint, required } from "./fixtures.js";
+import { objectContaining } from "./matchers.js";
 
 const now = "2026-08-28T12:00:00.000Z";
 
@@ -133,7 +134,7 @@ describe("durable beat-game skills", () => {
 
     expect(completed.activeSkill).toBeUndefined();
     expect(completed.memory.skillHistory).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         skillId: "dragon-skill",
         status: BeatGameDurableSkillStatus.COMPLETED,
         completionEvidence: "exit portal observed after dragon death",

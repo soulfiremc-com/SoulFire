@@ -29,7 +29,7 @@ interface GenerateArguments {
 }
 
 async function main(arguments_: readonly string[]): Promise<void> {
-  const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
+  const nodeMajor = Number(process.versions.node.split(".")[0]);
   if (!Number.isFinite(nodeMajor) || nodeMajor < 22) {
     throw new Error("soulfire-sdk requires Node.js 22 or newer");
   }

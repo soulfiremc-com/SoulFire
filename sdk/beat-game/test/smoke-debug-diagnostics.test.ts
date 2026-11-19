@@ -10,6 +10,7 @@ import {
 } from "../smoke/debug-diagnostics.js";
 import { BeatGamePhase, defaultBeatGameStrategy } from "../src/index.js";
 import { checkpoint, observation } from "./fixtures.js";
+import { arrayContaining, objectContaining } from "./matchers.js";
 
 const origin = {
   x: 10,
@@ -530,9 +531,9 @@ describe("smoke stuck diagnostics", () => {
       ageMs: 120_000,
     });
     expect(diagnostics.findings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "path-no-displacement" }),
-        expect.objectContaining({ code: "repeated-replan-reason" }),
+      arrayContaining([
+        objectContaining({ code: "path-no-displacement" }),
+        objectContaining({ code: "repeated-replan-reason" }),
       ]),
     );
   });
@@ -559,7 +560,7 @@ describe("smoke stuck diagnostics", () => {
       total: "20",
     });
     expect(diagnostics.findings).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         code: "task-progress-stalled",
       }),
     );
@@ -591,9 +592,9 @@ describe("smoke stuck diagnostics", () => {
       consecutiveStalledPaths: 3,
     });
     expect(diagnostics.findings).toContainEqual(
-      expect.objectContaining({
+      objectContaining({
         code: "repeated-collection-target",
-        evidence: expect.objectContaining({
+        evidence: objectContaining({
           target: "minecraft:overworld:19,66,-16",
           count: 3,
         }),

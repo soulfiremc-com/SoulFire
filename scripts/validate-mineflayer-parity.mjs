@@ -1,8 +1,26 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+import { Schema } from "effect";
+
+const ParityMatrix = Schema.fromJsonString(
+  Schema.Struct({
+    source: Schema.Struct({
+      headingCount: Schema.Int,
+      headingSha256: Schema.String,
+    }),
+    rules: Schema.Array(
+      Schema.Struct({
+        status: Schema.String,
+        exact: Schema.optional(Schema.Array(Schema.String)),
+        regex: Schema.optional(Schema.String),
+      }),
+    ),
+  }),
+);
+
 const matrixUrl = new URL("../docs/mineflayer-parity.json", import.meta.url);
-const matrix = JSON.parse(await readFile(matrixUrl, "utf8"));
+const matrix = Schema.decodeSync(ParityMatrix)(await readFile(matrixUrl, "utf8"));
 const sourceResponse = await fetch(
   "https://raw.githubusercontent.com/PrismarineJS/mineflayer/master/docs/api.md",
 );
@@ -44,7 +62,7 @@ for (const heading of headings) {
   if (firstMatch.status === "native" && firstMatch.regex === ".*") {
     continue;
   }
-  if (matches.findIndex((rule) => rule.status === firstMatch.status) < 0) {
+  if (!matches.some((rule) => rule.status === firstMatch.status)) {
     throw new Error(`Invalid rule resolution for ${JSON.stringify(heading)}`);
   }
 }

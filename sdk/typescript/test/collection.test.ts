@@ -42,7 +42,14 @@ it.each([true, false])(
           } else {
             await new Promise<void>((resolve) => {
               if (context.signal.aborted) resolve();
-              else context.signal.addEventListener("abort", () => resolve(), { once: true });
+              else
+                context.signal.addEventListener(
+                  "abort",
+                  () => {
+                    resolve();
+                  },
+                  { once: true },
+                );
             });
           }
         },

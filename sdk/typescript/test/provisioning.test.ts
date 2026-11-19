@@ -122,7 +122,14 @@ function server(
             yield { event: { case: "snapshot", value: { health: 20 } } };
           await new Promise<void>((resolve) => {
             if (context.signal.aborted) resolve();
-            else context.signal.addEventListener("abort", () => resolve(), { once: true });
+            else
+              context.signal.addEventListener(
+                "abort",
+                () => {
+                  resolve();
+                },
+                { once: true },
+              );
           });
         } finally {
           release();

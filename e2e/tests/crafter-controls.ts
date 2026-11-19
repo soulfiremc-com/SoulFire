@@ -31,7 +31,7 @@ export default {
       yield* eventually(
         rcon("data get block 621 64 0 disabled_slots").pipe(
           Effect.flatMap((data) =>
-            check(/\[I;\s*0\]/.test(data), "The crafter slot toggle never reached vanilla"),
+            check(/\[I;\s*0\]/u.test(data), "The crafter slot toggle never reached vanilla"),
           ),
         ),
         "5 seconds",
@@ -64,7 +64,7 @@ export default {
       yield* eventually(
         rcon("data get block 621 64 0 disabled_slots").pipe(
           Effect.flatMap((data) =>
-            check(/\[I;\s*\]/.test(data), "The crafter slot never became enabled again"),
+            check(/\[I;\s*\]/u.test(data), "The crafter slot never became enabled again"),
           ),
         ),
         "5 seconds",
@@ -73,7 +73,7 @@ export default {
       yield* eventually(
         rcon("data get block 621 64 0 disabled_slots").pipe(
           Effect.flatMap((data) =>
-            check(/\[I;\s*0\]/.test(data), "Clicking an empty crafter slot did not disable it"),
+            check(/\[I;\s*0\]/u.test(data), "Clicking an empty crafter slot did not disable it"),
           ),
         ),
         "5 seconds",

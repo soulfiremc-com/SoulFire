@@ -24,7 +24,7 @@ export default {
     return Effect.gen(function* () {
       const runPromise = Effect.runPromiseWith(yield* Effect.context());
       const previousDifficulty = (yield* rcon("difficulty"))
-        .match(/difficulty is (Peaceful|Easy|Normal|Hard)/)?.[1]
+        .match(/difficulty is (Peaceful|Easy|Normal|Hard)/u)?.[1]
         ?.toLowerCase();
       yield* check(!!previousDifficulty, "Cannot determine the difficulty to restore");
       const failures: string[] = [];

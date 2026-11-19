@@ -46,6 +46,7 @@ import { goals } from "../src/pathfinding.js";
 import { makeEffectHttpClientFetch } from "../src/platform.js";
 import { ReflectivePlugin } from "../src/plugins.js";
 import { emptyBotSessionState, reduceBotSessionState } from "../src/session.js";
+import { objectContaining } from "./matchers.js";
 
 describe("SoulFire", () => {
   it("creates a scoped bot through the public connection hierarchy", () =>
@@ -808,8 +809,8 @@ describe("release resolution", () => {
           expect(release.tag_name).toBe("2.9.1");
           expect(fetch).toHaveBeenCalledWith(
             "https://api.github.com/repos/soulfiremc-com/SoulFire/releases/latest",
-            expect.objectContaining({
-              headers: expect.objectContaining({
+            objectContaining({
+              headers: objectContaining({
                 "User-Agent": "@soulfiremc/sdk",
               }),
             }),
