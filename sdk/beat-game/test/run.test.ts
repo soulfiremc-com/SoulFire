@@ -470,7 +470,8 @@ function deathEntry(secondsAgo: number, inventoryCounts: Readonly<Record<string,
 
 // Counts the blocks a bot with a full inventory digs for its item discard
 // pocket before it heads for a nearby corpse.
-async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
+// `lavaWalls` is how many of the walls the bot checks have lava behind them.
+async function discardPocketDigs(lavaWalls: number): Promise<number> {
   const driver = new FakeBeatGameDriver();
   const store = new InMemoryBeatGameCheckpointStore();
   const deathPosition = { x: 4, y: 64, z: 0, dimension: "minecraft:overworld" };
@@ -518,6 +519,7 @@ async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
           },
         ]
       : [];
+  const wallChecks: { lavaDirections: { x: number; z: number }[] } = { lavaDirections: [] };
   driver.blockQueryResolver = ({ center, radius, selector }) => {
     if (selector.diggable === true) {
       return [
@@ -529,7 +531,7 @@ async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
         }),
       ];
     }
-    if (!lavaBehindWall || selector.blockIds?.includes("minecraft:lava") !== true) {
+    if (selector.blockIds?.includes("minecraft:lava") !== true) {
       return [];
     }
     // Lava fills the wall three blocks out from where the bot stands, out of
@@ -538,7 +540,19 @@ async function discardPocketDigs(lavaBehindWall: boolean): Promise<number> {
     const offsetX = center.x - player.x;
     const offsetZ = center.z - player.z;
     const offset = Math.hypot(offsetX, offsetZ);
-    if (offset + radius < 2.5) {
+    if (offset + radius < 2.5 || offset === 0) {
+      return [];
+    }
+    // Lava stays behind each wall that has it: the first `lavaWalls`
+    // directions the bot checks.
+    const direction = { x: offsetX / offset, z: offsetZ / offset };
+    const behindKnownLava = () =>
+      wallChecks.lavaDirections.some(({ x, z }) => x * direction.x + z * direction.z > 0.7);
+    if (!behindKnownLava() && wallChecks.lavaDirections.length < lavaWalls) {
+      wallChecks.lavaDirections.push(direction);
+    }
+    const lavaWall = behindKnownLava();
+    if (!lavaWall) {
       return [];
     }
     const scale = offset === 0 ? 0 : 3 / offset;
@@ -11774,9 +11788,14 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("digs its item discard pocket into another wall when one has lava behind it", async () => {
+    // As in a live run: lava lay behind the first wall the bot picked.
+    expect(await discardPocketDigs(1)).toBeGreaterThan(0);
+  }, 20_000);
+
   it("does not dig its item discard pocket into a wall with lava behind it", async () => {
-    expect(await discardPocketDigs(false)).toBeGreaterThan(0);
-    expect(await discardPocketDigs(true)).toBe(0);
+    expect(await discardPocketDigs(0)).toBeGreaterThan(0);
+    expect(await discardPocketDigs(Number.POSITIVE_INFINITY)).toBe(0);
   }, 20_000);
 
   it("clears inventory slots before collecting nearby corpse drops", async () => {

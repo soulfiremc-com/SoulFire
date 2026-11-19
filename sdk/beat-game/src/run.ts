@@ -15876,27 +15876,38 @@ function ensureInventorySpace(
             ) *
               180) /
             Math.PI;
-          const pocketYaw = wrappedDegrees(Math.round((corridorYaw + 90) / 90) * 90);
-          const pocketYawRadians = (pocketYaw * Math.PI) / 180;
-          const pocketStepX = Math.round(-Math.sin(pocketYawRadians));
-          const pocketStepZ = Math.round(Math.cos(pocketYawRadians));
           const pocketOriginX = Math.floor(discardSitePosition.x);
           const pocketOriginY = Math.floor(discardSitePosition.y);
           const pocketOriginZ = Math.floor(discardSitePosition.z);
           // A live bot dug its pocket into a Nether wall with lava behind it
-          // and burned in the flow.
-          const lavaBehindPocket = yield* state.driver.queryBlocks({
-            center: {
-              x: pocketOriginX + 0.5 + pocketStepX * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
-              y: pocketOriginY + 1,
-              z: pocketOriginZ + 0.5 + pocketStepZ * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
-              dimension: discardSitePosition.dimension,
-            },
-            radius: INVENTORY_DISCARD_POCKET_LAVA_CLEARANCE,
-            selector: { blockIds: ["minecraft:lava"] },
-            maximumResults: 1,
-          });
-          if (lavaBehindPocket.length > 0) {
+          // and burned in the flow. Another live bot then found lava behind
+          // the same side wall every time and gave up, so the other side and
+          // the wall ahead are tried too. The way back stays clear of items.
+          let pocket:
+            | { readonly yaw: number; readonly stepX: number; readonly stepZ: number }
+            | undefined;
+          for (const offset of [90, -90, 0]) {
+            const yaw = wrappedDegrees(Math.round((corridorYaw + offset) / 90) * 90);
+            const yawRadians = (yaw * Math.PI) / 180;
+            const stepX = Math.round(-Math.sin(yawRadians));
+            const stepZ = Math.round(Math.cos(yawRadians));
+            const lavaBehindPocket = yield* state.driver.queryBlocks({
+              center: {
+                x: pocketOriginX + 0.5 + stepX * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
+                y: pocketOriginY + 1,
+                z: pocketOriginZ + 0.5 + stepZ * (INVENTORY_DISCARD_POCKET_DEPTH + 1) * 0.5,
+                dimension: discardSitePosition.dimension,
+              },
+              radius: INVENTORY_DISCARD_POCKET_LAVA_CLEARANCE,
+              selector: { blockIds: ["minecraft:lava"] },
+              maximumResults: 1,
+            });
+            if (lavaBehindPocket.length === 0) {
+              pocket = { yaw, stepX, stepZ };
+              break;
+            }
+          }
+          if (pocket === undefined) {
             cleanupFailure = new BeatGameDriverError({
               operation: "ensure-inventory-space",
               code: "unreachable",
@@ -15905,6 +15916,9 @@ function ensureInventorySpace(
             });
             break;
           }
+          const pocketYaw = pocket.yaw;
+          const pocketStepX = pocket.stepX;
+          const pocketStepZ = pocket.stepZ;
           for (let distance = 1; distance <= INVENTORY_DISCARD_POCKET_DEPTH; distance += 1) {
             for (const yOffset of [1, 0]) {
               const position = {
