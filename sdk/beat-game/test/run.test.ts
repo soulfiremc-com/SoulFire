@@ -25574,6 +25574,108 @@ describe("beat-game run lifecycle", () => {
     ).toEqual([]);
   }, 15_000);
 
+  it("swims out from under a ledge without sprinting to breathe", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    // One block of water at y 62 runs under a grass ledge, except for one
+    // open column at x 1, like the bank a live bot drowned under.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      const water = position.y === 62;
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return water
+          ? [
+              blockObservation(position, {
+                blockId: "minecraft:water",
+                diggable: false,
+                replaceable: true,
+              }),
+            ]
+          : [];
+      }
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      if (water) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:water",
+            diggable: false,
+            replaceable: true,
+          }),
+        ];
+      }
+      if (position.y === 63 && !(position.x === 1 && position.z === 0)) {
+        return [blockObservation(position, { blockId: "minecraft:grass_block", hardness: 0.6 })];
+      }
+      if (position.y < 62) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    // Sprinting keeps a swimmer in the swimming pose with its eyes under
+    // water; without sprint it stands up in the open column and breathes.
+    driver.actionObserver = (action) => {
+      if (action.type !== "set-movement" || action.forward !== true) {
+        return;
+      }
+      const current = driver.currentObservation;
+      driver.currentObservation = {
+        ...current,
+        player: {
+          ...current.player,
+          air: action.sprint === true ? Math.max(0, current.player.air - 20) : 300,
+          position:
+            action.sprint === true
+              ? { ...current.player.position, x: 1.5 }
+              : { ...current.player.position, x: 1.5, y: 63 },
+        },
+      };
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            air: 80,
+            position: { x: 0.5, y: 62.4, z: 0.5 },
+          });
+          while (
+            driver.currentObservation.player.air < 300 &&
+            driver.currentObservation.player.air > 0
+          ) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(Effect.timeout("8 seconds")),
+      ),
+    );
+
+    expect(driver.currentObservation.player.air).toBe(300);
+  }, 10_000);
+
   it("keeps climbing a deep aquifer after surface pathfinding fails", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceColumns = [

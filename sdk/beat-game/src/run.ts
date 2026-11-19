@@ -7773,7 +7773,9 @@ function swimTowardOpenAirColumn(
             type: "set-movement",
             forward: true,
             jump: true,
-            sprint: observation.player.food > CRITICAL_HUNGER_FOOD_LEVEL,
+            // A sprinting swimmer stays in the swimming pose with its eyes under
+            // water, and a live bot drowned sprinting toward open air under a ledge.
+            sprint: false,
           }),
         ),
         Effect.andThen(waitForOpenAirColumn(state, target, 30)),
@@ -8050,7 +8052,11 @@ function swimTowardDrySurface(
                 type: "set-movement",
                 forward: true,
                 jump: true,
-                sprint: observation.player.food > CRITICAL_HUNGER_FOOD_LEVEL,
+                // Sprint-swimming keeps the eyes under water, which costs air the bot
+                // may not have left.
+                sprint:
+                  observation.player.food > CRITICAL_HUNGER_FOOD_LEVEL &&
+                  !hasUnsafeAir(observation),
               }),
             ),
             Effect.andThen(
