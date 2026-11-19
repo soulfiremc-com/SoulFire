@@ -367,6 +367,26 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:diorite",
   "minecraft:granite",
   "minecraft:tuff",
+  // Nether exploration picks these up and nothing uses them. A live bot held
+  // so many that it could not free slots for food.
+  "minecraft:crimson_roots",
+  "minecraft:warped_roots",
+  "minecraft:nether_sprouts",
+  "minecraft:weeping_vines",
+  "minecraft:twisting_vines",
+  "minecraft:crimson_fungus",
+  "minecraft:warped_fungus",
+  "minecraft:nether_wart_block",
+  "minecraft:warped_wart_block",
+  "minecraft:shroomlight",
+  "minecraft:quartz",
+  "minecraft:soul_sand",
+  "minecraft:soul_soil",
+  "minecraft:egg",
+  "minecraft:red_mushroom",
+  "minecraft:brown_mushroom",
+  // Magma burns whoever stands on it, so it makes a poor building block.
+  "minecraft:magma_block",
 ] as const;
 const REDUNDANT_EQUIPMENT_FAMILIES = [
   [

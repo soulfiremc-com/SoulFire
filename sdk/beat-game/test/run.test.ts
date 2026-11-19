@@ -159,6 +159,25 @@ describe("inventory discards", () => {
     });
   });
 
+  it("frees slots held by Nether junk", () => {
+    // As in a live run whose inventory was full of Nether plants and magma,
+    // so it could not make room for food.
+    const counts = {
+      "minecraft:magma_block": 80,
+      "minecraft:nether_wart_block": 12,
+      "minecraft:netherrack": 64,
+      "minecraft:stone_sword": 1,
+    };
+    expect(selectInventoryDiscard(counts)).toEqual({
+      itemId: "minecraft:nether_wart_block",
+      count: 12,
+    });
+    expect(selectInventoryDiscard({ ...counts, "minecraft:nether_wart_block": 0 })).toEqual({
+      itemId: "minecraft:magma_block",
+      count: 80,
+    });
+  });
+
   it("keeps the netherrack building reserve", () => {
     expect(selectInventoryDiscard({ "minecraft:netherrack": 64 })).toBeUndefined();
   });
