@@ -7428,6 +7428,104 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(12);
   });
 
+  it("escapes lava before fighting the attacker that knocked it in", async () => {
+    const driver = new FakeBeatGameDriver();
+    // The live bot stood on dry ground here while lava in the next block
+    // reached into its hitbox.
+    const position = {
+      x: 81.3,
+      y: 22,
+      z: 62.25,
+      dimension: "minecraft:overworld",
+    } as const;
+    const lava = { x: 81, y: 22, z: 61, dimension: "minecraft:overworld" } as const;
+    let actionStarted = false;
+    let escaped = false;
+    let health = 20;
+    driver.currentObservation = observation({ position, health });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && !escaped) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          position,
+          health,
+          fireTicks: actionStarted && !escaped ? 80 : 0,
+        });
+        return driver.currentObservation;
+      });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:lava") === true
+        ? [blockObservation(lava, { blockId: "minecraft:lava", replaceable: true })]
+        : [];
+    // A hostile stands right next to the lava, like the piglin that shot a
+    // live bot into a lava lake.
+    const attacker = {
+      ...skeletonAt(77, 82.5, 63.5),
+      entityType: "minecraft:zombie",
+      aggressive: true,
+      position: { x: 82.5, y: 22, z: 63.5, dimension: "minecraft:overworld" },
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      actionStarted &&
+      (selector.categories?.includes(2) === true ||
+        selector.networkId === attacker.networkId ||
+        selector.entityTypes?.includes(attacker.entityType) === true)
+        ? [attacker]
+        : [];
+    const order: string[] = [];
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "set-movement" && action.sprint === true) {
+          escaped = true;
+          order.push("escape");
+        }
+        return {};
+      });
+    const resolveTask = driver.taskResolver;
+    driver.taskResolver = (task, execution) => {
+      if (task.type === "attack-entity") {
+        order.push("attack");
+      }
+      return resolveTask(task, execution);
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted = true;
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* sleepWhile(() => !escaped);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "2 seconds",
+                orElse: () =>
+                  Effect.fail(
+                    new ScenarioFailure({ message: "Timed out waiting for the lava escape" }),
+                  ),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(health).toBeGreaterThan(12);
+    // Fighting can wait until the bot is out of the lava.
+    expect(order[0]).toBe("escape");
+  });
+
   it("swims ashore when tridents hit it in the water", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;

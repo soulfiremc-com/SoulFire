@@ -4121,34 +4121,50 @@ function monitorActionSafety(
                               decision.type !== "fight-ender-dragon" &&
                               !observation.player.dead
                             ) {
-                              return findImmediateThreat(state, observation).pipe(
-                                Effect.flatMap((threat) => {
-                                  if (threat === undefined) {
-                                    return monitorObservedSafety(
-                                      state,
-                                      decision,
-                                      previousObservation,
-                                      observation,
-                                      monitor,
-                                      actionObservation.observedAt,
-                                    );
-                                  }
-                                  const response = threat.response;
-                                  return Effect.succeed({
-                                    replanReason:
-                                      decision.type === "recover-death"
-                                        ? response === "flee"
-                                          ? "interrupted item recovery to evade a hostile"
-                                          : "interrupted item recovery to defend against a hostile"
-                                        : response === "flee"
-                                          ? "interrupted an action to evade an immediate threat"
-                                          : "interrupted an action to preempt a nearby hostile",
-                                    ...(response === "flee"
-                                      ? { escapeTarget: threat.target }
-                                      : { defenseTarget: threat.target }),
-                                    replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
-                                  } satisfies ActionResult);
-                                }),
+                              // Lava kills in seconds, so it comes before any
+                              // threat. A live bot was shot into lava by a
+                              // piglin and burned while it kept turning to fight.
+                              const inLava =
+                                observation.player.fireTicks > 0
+                                  ? isPlayerInLava(state.driver, observation.player.position)
+                                  : Effect.succeed(false);
+                              return inLava.pipe(
+                                Effect.flatMap((burningInLava) =>
+                                  burningInLava
+                                    ? Effect.succeed({
+                                        replanReason: "interrupted an action to escape lava",
+                                        environmentalEscapePosition: observation.player.position,
+                                      } satisfies ActionResult)
+                                    : findImmediateThreat(state, observation).pipe(
+                                        Effect.flatMap((threat) => {
+                                          if (threat === undefined) {
+                                            return monitorObservedSafety(
+                                              state,
+                                              decision,
+                                              previousObservation,
+                                              observation,
+                                              monitor,
+                                              actionObservation.observedAt,
+                                            );
+                                          }
+                                          const response = threat.response;
+                                          return Effect.succeed({
+                                            replanReason:
+                                              decision.type === "recover-death"
+                                                ? response === "flee"
+                                                  ? "interrupted item recovery to evade a hostile"
+                                                  : "interrupted item recovery to defend against a hostile"
+                                                : response === "flee"
+                                                  ? "interrupted an action to evade an immediate threat"
+                                                  : "interrupted an action to preempt a nearby hostile",
+                                            ...(response === "flee"
+                                              ? { escapeTarget: threat.target }
+                                              : { defenseTarget: threat.target }),
+                                            replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
+                                          } satisfies ActionResult);
+                                        }),
+                                      ),
+                                ),
                               );
                             }
                             return monitorObservedSafety(
