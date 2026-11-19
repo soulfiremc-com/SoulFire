@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { SoulFireTask } from "@soulfiremc/sdk";
 import {
   BotTaskConflictPolicy,
@@ -8,6 +7,7 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
 import {
+  randomUuid,
   encodeJson,
   BOT_NAME,
   check,
@@ -93,7 +93,7 @@ export default {
                 const options = {
                   station: STATION,
                   reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-                  idempotencyKey: randomUUID(),
+                  idempotencyKey: randomUuid(),
                 };
                 const start = () =>
                   kind === "smelt"

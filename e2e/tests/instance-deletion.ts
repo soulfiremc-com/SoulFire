@@ -1,16 +1,19 @@
-import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import path from "node:path";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { SoulFireClient, SoulFireInstance } from "@soulfiremc/sdk";
 import { ScriptService } from "@soulfiremc/sdk/generated/soulfire/script_pb";
-import { Effect } from "effect";
-import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { Effect, FileSystem, Path } from "effect";
+import { randomUuid, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 
 export default {
   name: "instance-deletion",
   run: ({ bot, client }) =>
     Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const exists = (storage: string) =>
+        fs.exists(storage).pipe(Effect.orElseSucceed(() => false));
       const directory = client.localServer?.runDirectory;
       if (!directory)
         return yield* new CheckFailed({
@@ -22,7 +25,7 @@ export default {
       for (let attempt = 0; attempt < 3; attempt++) {
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const suffix = randomUUID().slice(0, 8);
+            const suffix = randomUuid().slice(0, 8);
             const name = `Delete_${suffix}`;
             const instance = yield* Effect.acquireRelease(
               client.getOrCreateInstance(`e2e-delete-${suffix}`),
@@ -43,8 +46,9 @@ export default {
             const directories = ["client-data", "object-storage"].map((root) =>
               path.join(directory, root, `instance-${instance.id}`),
             );
+            const createdStorage = yield* Effect.forEach(directories, exists, { concurrency: 1 });
             yield* check(
-              directories.every((storage) => existsSync(storage)),
+              createdStorage.every(Boolean),
               "The connected instance did not create its storage",
             );
             // Exercise deletion after the one-second settings cache can expire.
@@ -58,8 +62,9 @@ export default {
               !(yield* client.instances()).some((entry) => entry.id === instance.id),
               "Deleted profile remains in the database",
             );
+            const remainingStorage = yield* Effect.forEach(directories, exists, { concurrency: 1 });
             yield* check(
-              directories.every((remaining) => !existsSync(remaining)),
+              !remainingStorage.some(Boolean),
               "Instance deletion left native client or object storage behind",
             );
             yield* eventually(
@@ -78,7 +83,7 @@ export default {
         );
       }
       return undefined;
-    }),
+    }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
 } satisfies E2ETest;
 
 async function deleteInstanceWithScripts(client: SoulFireClient, instance: SoulFireInstance) {

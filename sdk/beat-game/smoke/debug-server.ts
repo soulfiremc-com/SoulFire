@@ -3,6 +3,13 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import { Schema, Cause, Effect, Exit, Option, type Scope } from "effect";
 
+const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+const encodeJson = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Unknown, {
+    replacer: (_: string, value: unknown) => (typeof value === "bigint" ? value.toString() : value),
+  }),
+);
+
 const DEFAULT_MAXIMUM_BODY_BYTES = 1024 * 1024;
 
 export type SmokeDebugMethod = "GET" | "POST";
@@ -306,7 +313,7 @@ async function readJson(request: IncomingMessage, maximumBodyBytes: number): Pro
     return {};
   }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+    return decodeJson(Buffer.concat(chunks).toString("utf8"));
   } catch {
     throw new SmokeDebugRequestError("Request body must be valid JSON", 400);
   }
@@ -316,9 +323,7 @@ function writeJson(response: ServerResponse, status: number, value: unknown): vo
   if (response.writableEnded) {
     return;
   }
-  const body = `${JSON.stringify(value, (_: string, nested: unknown) =>
-    typeof nested === "bigint" ? nested.toString() : nested,
-  )}\n`;
+  const body = `${encodeJson(value)}\n`;
   response.writeHead(status, {
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(body),

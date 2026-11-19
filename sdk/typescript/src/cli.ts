@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Effect } from "effect";
+import { Config, ConfigProvider, Effect, Option } from "effect";
 
 import { readFile } from "node:fs/promises";
 import process from "node:process";
@@ -155,7 +155,15 @@ function parseGenerateArguments(arguments_: readonly string[]): GenerateArgument
     "--api-major-version",
   );
   const plugin = values.get("--plugin");
-  const token = values.get("--token") ?? process.env["SOULFIRE_TOKEN"];
+  const token =
+    values.get("--token") ??
+    Option.getOrUndefined(
+      Effect.runSync(
+        Config.option(Config.String("SOULFIRE_TOKEN")).parse(
+          ConfigProvider.fromEnv({ preserveEmptyStrings: true }),
+        ),
+      ),
+    );
   const output = values.get("--output");
   const packageName = values.get("--package");
   const pluginVersion = values.get("--plugin-version");

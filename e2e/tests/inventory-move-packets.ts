@@ -51,10 +51,7 @@ function clickedSlot(event: RawPacketEvent): number {
   return (high << 8) | low;
 }
 
-const pause = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const pause = (ms: number) => Effect.runPromise(Effect.sleep(ms));
 
 export default {
   name: "inventory-move-packets",

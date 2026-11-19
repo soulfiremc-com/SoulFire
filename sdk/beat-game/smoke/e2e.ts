@@ -61,6 +61,7 @@ import {
   Scope,
   Stream,
 } from "effect";
+import { readEnvironment } from "./environment.ts";
 import { pruneArtifactRuns } from "./artifact-retention.ts";
 import { BoundedLog } from "./bounded-log.ts";
 import {
@@ -795,7 +796,7 @@ const program = Effect.scoped(
             if (Exit.isSuccess(exit)) {
               return Effect.void;
             }
-            const completedAt = new Date().toISOString();
+            const completedAt = DateTime.formatIso(DateTime.nowUnsafe());
             const status = Exit.hasInterrupts(exit) ? "interrupted" : "failed";
             if (status === "interrupted") {
               pathInterruptions += 1;
@@ -997,7 +998,7 @@ const program = Effect.scoped(
             }).pipe(Effect.orDie);
             return yield* baseDriver.runTask(task, policy, execution).pipe(
               Effect.onExit((exit) => {
-                const completedAt = new Date().toISOString();
+                const completedAt = DateTime.formatIso(DateTime.nowUnsafe());
                 if (Exit.isSuccess(exit)) {
                   return record("task-completed", {
                     operationId,
@@ -1040,7 +1041,7 @@ const program = Effect.scoped(
             }).pipe(Effect.orDie);
             return yield* baseDriver.act(action).pipe(
               Effect.onExit((exit) => {
-                const completedAt = new Date().toISOString();
+                const completedAt = DateTime.formatIso(DateTime.nowUnsafe());
                 if (Exit.isSuccess(exit)) {
                   return record("primitive-completed", {
                     operationId,
@@ -2059,7 +2060,7 @@ async function readSoulFireProcessRecord(): Promise<SoulFireProcessRecord | unde
     }
     throw cause;
   }
-  const value: unknown = JSON.parse(source);
+  const value = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(source);
   if (
     typeof value !== "object" ||
     value === null ||
@@ -2139,14 +2140,12 @@ function signalProcess(pid: number, signal: NodeJS.Signals): boolean {
 }
 
 async function waitForProcessExit(pid: number, exitTimeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + exitTimeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = DateTime.toEpochMillis(DateTime.nowUnsafe()) + exitTimeoutMs;
+  while (DateTime.toEpochMillis(DateTime.nowUnsafe()) < deadline) {
     if (!isProcessRunning(pid)) {
       return true;
     }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
+    await Effect.runPromise(Effect.sleep(100));
   }
   return !isProcessRunning(pid);
 }
@@ -3140,7 +3139,7 @@ function captureSmokeActivePath(
 }
 
 function latestSmokeTaskRoute() {
-  const capturedAt = new Date().toISOString();
+  const capturedAt = DateTime.formatIso(DateTime.nowUnsafe());
   const activity = debugTimeline.query({
     kinds: [
       "task-started",
@@ -3553,7 +3552,7 @@ function parsePublishedPort(output: string): number {
   const match = output.trim().match(/:(\d+)$/u);
   const value = Number(match?.[1]);
   if (!Number.isSafeInteger(value) || value < 1 || value > 65_535) {
-    throw new Error(`Could not parse Minecraft port from ${JSON.stringify(output)}`);
+    throw new Error(`Could not parse Minecraft port from ${quote(output)}`);
   }
   return value;
 }
@@ -3561,7 +3560,7 @@ function parsePublishedPort(output: string): number {
 function parseStronghold(output: string): Readonly<{ x: number; z: number }> {
   const match = output.match(/\[\s*(-?\d+)\s*,\s*(?:~|-?\d+)\s*,\s*(-?\d+)\s*\]/u);
   if (match === null) {
-    throw new Error(`Could not parse stronghold coordinates from ${JSON.stringify(output)}`);
+    throw new Error(`Could not parse stronghold coordinates from ${quote(output)}`);
   }
   return { x: Number(match[1]), z: Number(match[2]) };
 }
@@ -3569,7 +3568,7 @@ function parseStronghold(output: string): Readonly<{ x: number; z: number }> {
 function parseWorldSpawn(output: string): Readonly<{ x: number; y: number; z: number }> {
   const match = output.match(/Set the world spawn point to\s+(-?\d+),\s*(-?\d+),\s*(-?\d+)/iu);
   if (match === null) {
-    throw new Error(`Could not parse world spawn coordinates from ${JSON.stringify(output)}`);
+    throw new Error(`Could not parse world spawn coordinates from ${quote(output)}`);
   }
   return {
     x: Number(match[1]),
@@ -3598,12 +3597,12 @@ function isEnd(dimension: string): boolean {
 }
 
 function environment(name: string, fallback: string): string {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
 function optionalEnvironment(name: string): string | undefined {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   return value === undefined || value.length === 0 ? undefined : value;
 }
 
@@ -3626,7 +3625,7 @@ function minMaxValue(min: number, max: number) {
 }
 
 function booleanEnvironment(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+  const value = readEnvironment(name)?.trim().toLowerCase();
   if (value === undefined || value.length === 0) {
     return fallback;
   }
@@ -3640,7 +3639,7 @@ function booleanEnvironment(name: string, fallback: boolean): boolean {
 }
 
 function positiveIntegerEnvironment(name: string, fallback: number): number {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   const parsed = value === undefined || value.length === 0 ? fallback : Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) {
     throw new Error(`${name} must be a positive integer`);
@@ -3648,12 +3647,15 @@ function positiveIntegerEnvironment(name: string, fallback: number): number {
   return parsed;
 }
 
+const quote = Schema.encodeSync(Schema.fromJsonString(Schema.String));
+
 function json(value: unknown, indentation?: number): string {
-  return JSON.stringify(
-    value,
-    (_: string, nested: unknown) => (typeof nested === "bigint" ? nested.toString() : nested),
-    indentation,
-  );
+  const schema = Schema.fromJsonString(Schema.Unknown, {
+    replacer: (_: string, nested: unknown) =>
+      typeof nested === "bigint" ? nested.toString() : nested,
+    space: indentation,
+  });
+  return Schema.encodeSync(schema)(value);
 }
 
 NodeRuntime.runMain(

@@ -1,7 +1,15 @@
-import { randomUUID } from "node:crypto";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect, Result } from "effect";
-import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import {
+  randomUuid,
+  encodeJson,
+  BOT_NAME,
+  CheckFailed,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+} from "../harness.ts";
 
 const OBJECTIVE = "sf_inputs";
 const rpc = <A>(call: () => Promise<A>) =>
@@ -37,7 +45,7 @@ export default {
       const service = client.service(BotService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const show = (dialog: object) =>
-        rcon(`dialog show ${BOT_NAME} ${JSON.stringify(dialog)}`).pipe(
+        rcon(`dialog show ${BOT_NAME} ${encodeJson(dialog)}`).pipe(
           Effect.andThen(
             eventually(
               rpc(() => service.getDialog(scope)).pipe(
@@ -209,7 +217,7 @@ export default {
         ),
         "5 seconds",
       );
-      const clipboard = randomUUID();
+      const clipboard = randomUuid();
       yield* show({
         type: "notice",
         title: "Clipboard QA",

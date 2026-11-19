@@ -1,9 +1,8 @@
 import { Code } from "@connectrpc/connect";
-import { randomUUID } from "node:crypto";
 import { create } from "@bufbuild/protobuf";
 import { MinecraftAccountProtoSchema } from "@soulfiremc/sdk/generated/soulfire/common_pb";
 import { Effect, Result } from "effect";
-import { CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import { randomUuid, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
 
 export default {
   name: "account-replacement",
@@ -13,7 +12,7 @@ export default {
         const source = (yield* client.instance(bot.instanceId).info()).config;
         if (!source)
           return yield* new CheckFailed({ message: "The source profile has no configuration" });
-        const suffix = randomUUID().slice(0, 8);
+        const suffix = randomUuid().slice(0, 8);
         const instance = yield* Effect.acquireRelease(
           client.getOrCreateInstance(`e2e-replace-${suffix}`),
           (created) => created.delete().pipe(Effect.ignore),

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { goals, type SoulFireTask } from "@soulfiremc/sdk";
 import {
   BotTaskConflictPolicy,
@@ -8,6 +7,7 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -109,7 +109,7 @@ export default {
               const recipe = yield* recipeFor("minecraft:oak_planks");
               const options = {
                 reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-                idempotencyKey: randomUUID(),
+                idempotencyKey: randomUuid(),
               };
               const craft = yield* bot.tasks.craft(recipe.recipeId, 16, options);
               yield* Effect.addFinalizer(() => craft.cancel("test cleanup").pipe(Effect.ignore));

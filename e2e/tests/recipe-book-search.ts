@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -71,7 +71,7 @@ export default {
               ),
             );
           const scope = { instanceId: bot.instanceId, botId: bot.id };
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const abort = new AbortController();
           let sequence = 0n;
           const nextSequence = () => ++sequence;

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { BlockFace, Hand } from "@soulfiremc/sdk/generated/soulfire/bot_live_pb";
 import {
@@ -8,6 +7,8 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -60,7 +61,7 @@ export default {
           yield* Effect.tryPromise({
             try: async () => {
               const abort = new AbortController();
-              const sessionId = randomUUID();
+              const sessionId = randomUuid();
               const pov = client.service(PovService);
               let sequence = 0n;
               const nextSequence = () => ++sequence;
@@ -157,7 +158,7 @@ export default {
           yield* eventually(
             rcon(`data get block 2481 ${y} 0 ${side}_text.messages`).pipe(
               Effect.flatMap((response) => {
-                const expected = JSON.stringify([side, "1X4", "final", "last"]);
+                const expected = encodeJson([side, "1X4", "final", "last"]);
                 return check(
                   response.slice(response.indexOf("[")).replaceAll(", ", ",") === expected,
                   `Sign editing or resize changed the saved lines: ${response}`,

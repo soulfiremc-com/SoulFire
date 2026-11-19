@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { fromJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -49,7 +49,7 @@ export default {
       yield* Effect.tryPromise({
         try: async () => {
           const service = client.service(PovService);
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const abort = new AbortController();
           let sequence = 0n;
           let token = "";
@@ -78,17 +78,13 @@ export default {
               token = frame.inputToken;
               await input();
               captured = true;
-              await new Promise((resolve) => {
-                setTimeout(resolve, 500);
-              });
+              await runPromise(Effect.sleep(500));
               const start = await runPromise(serverPosition);
               for (const enabled of [false, true]) {
                 await runPromise(setting("enabled", enabled));
                 for (let sample = 0; sample < 30; sample++) {
                   await input();
-                  await new Promise((resolve) => {
-                    setTimeout(resolve, 100);
-                  });
+                  await runPromise(Effect.sleep(100));
                   const info = await runPromise(bot.info());
                   if (!info.liveState) throw new Error("The controlled bot went offline");
                   const distance = Math.hypot(

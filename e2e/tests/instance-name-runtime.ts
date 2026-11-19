@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { CommandService } from "@soulfiremc/sdk/generated/soulfire/command_pb";
 import { Effect } from "effect";
-import { CheckFailed, check, type E2ETest } from "../harness.ts";
+import { randomUuid, CheckFailed, check, type E2ETest } from "../harness.ts";
 
 export default {
   name: "instance-name-runtime",
@@ -10,7 +9,7 @@ export default {
       const instance = client.instance(bot.instanceId);
       const originalName = (yield* instance.info()).friendlyName;
       const commands = client.service(CommandService);
-      const suffix = randomUUID().slice(0, 8);
+      const suffix = randomUuid().slice(0, 8);
       yield* Effect.gen(function* () {
         let previous = originalName;
         for (const name of [`NameQA_${suffix}`, `Renamed_${suffix}`]) {

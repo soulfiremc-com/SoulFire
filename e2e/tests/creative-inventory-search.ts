@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Clock, Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -45,12 +45,14 @@ export default {
         return yield* new CheckFailed({ message: "The creative search tab is missing" });
       yield* bot.clickContainerButton(searchTab.buttonId);
       const clock = yield* Clock.Clock;
+      const effectContext = yield* Effect.context();
+      const runPromise = Effect.runPromiseWith(effectContext);
       yield* Effect.tryPromise({
         try: async () => {
           const pov = client.service(PovService);
           const inventory = client.service(BotService);
           const scope = { instanceId: bot.instanceId, botId: bot.id };
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const abort = new AbortController();
           let sequence = 0n;
           const nextSequence = () => ++sequence;
@@ -66,9 +68,7 @@ export default {
                 state.slots.some((slot) => slot.slot === 0 && slot.itemId === item)
               )
                 return;
-              await new Promise((resolve) => {
-                setTimeout(resolve, 50);
-              });
+              await runPromise(Effect.sleep(50));
             } while (clock.currentTimeMillisUnsafe() < deadline);
             throw new Error(label);
           };

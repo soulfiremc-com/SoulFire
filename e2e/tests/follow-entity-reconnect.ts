@@ -6,6 +6,7 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  encodeJson,
   BOT_NAME,
   CheckFailed,
   check,
@@ -24,7 +25,7 @@ const near = (x: number) =>
       Effect.tap((position) =>
         check(
           Math.hypot(position.x - x, position.z - 8.5) <= 3,
-          `The follower did not reach ${x}: ${JSON.stringify(position)}`,
+          `The follower did not reach ${x}: ${encodeJson(position)}`,
         ),
       ),
     ),

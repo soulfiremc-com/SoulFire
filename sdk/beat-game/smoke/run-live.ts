@@ -1,10 +1,17 @@
-import { Effect, Fiber, Stream } from "effect";
 import { mkdir } from "node:fs/promises";
 import process from "node:process";
 
 import { beatGame, beatGameTeam } from "@soulfiremc/beat-game";
 import { JsonFileBeatGameCheckpointStore } from "@soulfiremc/beat-game/node";
 import { SoulFire } from "@soulfiremc/sdk/node";
+import { Effect, Fiber, Schema, Stream } from "effect";
+import { readEnvironment } from "./environment.ts";
+
+const jsonLine = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Unknown, {
+    replacer: (_: string, value: unknown) => (typeof value === "bigint" ? value.toString() : value),
+  }),
+);
 
 const configuration = {
   baseUrl: requiredEnvironment("SOULFIRE_SMOKE_BASE_URL"),
@@ -111,7 +118,7 @@ await Effect.runPromise(
 );
 
 function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   if (value === undefined || value.length === 0) {
     throw new Error(`${name} is required`);
   }
@@ -130,12 +137,12 @@ function commaSeparatedEnvironment(name: string): string[] {
 }
 
 function environment(name: string, fallback: string): string {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
 function booleanEnvironment(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+  const value = readEnvironment(name)?.trim().toLowerCase();
   if (value === undefined || value.length === 0) {
     return fallback;
   }
@@ -149,7 +156,7 @@ function booleanEnvironment(name: string, fallback: boolean): boolean {
 }
 
 function optionalPositiveIntegerEnvironment(name: string): number | undefined {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   if (value === undefined || value.length === 0) {
     return undefined;
   }
@@ -158,10 +165,4 @@ function optionalPositiveIntegerEnvironment(name: string): number | undefined {
     throw new Error(`${name} must be a positive integer`);
   }
   return number;
-}
-
-function jsonLine(value: unknown): string {
-  return JSON.stringify(value, (_: string, nestedValue: unknown) =>
-    typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
-  );
 }

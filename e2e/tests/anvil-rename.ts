@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { PovService, PovInputEvent_Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -82,7 +82,7 @@ export default {
       yield* Effect.tryPromise({
         try: async () => {
           const abort = new AbortController();
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const pov = client.service(PovService);
           const service = client.service(BotService);
           const scope = { instanceId: bot.instanceId, botId: bot.id };

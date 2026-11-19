@@ -134,9 +134,7 @@ export default {
           yield* check((yield* bot.world.player()).dead, "Auto-respawn hid the death screen");
           if (native) {
             yield* nativeInput(client, bot, async (input) => {
-              await new Promise((resolve) => {
-                setTimeout(resolve, 1200);
-              });
+              await run(Effect.sleep(1200));
               await input.click(213, 142);
               await run(
                 eventually(

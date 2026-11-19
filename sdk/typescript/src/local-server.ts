@@ -1,5 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
-import { Effect, Semaphore, type Scope } from "effect";
+import { Schema, DateTime, Effect, Semaphore, type Scope } from "effect";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
@@ -257,11 +257,14 @@ function stopChild(child: ChildProcessWithoutNullStreams): Effect.Effect<void> {
   });
 }
 
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
 function createRootApiToken(secretKey: Buffer): string {
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  // The local server validates token timestamps against its wall clock.
+  const issuedAt = Math.floor(DateTime.toEpochMillis(DateTime.nowUnsafe()) / 1000);
+  const header = Buffer.from(encodeJson({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const claims = Buffer.from(
-    JSON.stringify({
+    encodeJson({
       aud: ["api"],
       iat: issuedAt,
       sub: ROOT_USER_UUID,

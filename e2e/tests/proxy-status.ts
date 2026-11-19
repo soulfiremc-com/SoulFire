@@ -1,12 +1,12 @@
-import { randomUUID } from "node:crypto";
 import net from "node:net";
+// oxlint-disable-next-line effecttsgo/node-builtin-import -- The fixture connects a transform to native sockets.
 import { Transform } from "node:stream";
 import { create, fromJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { ProxyProtoSchema, ProxyProto_Type } from "@soulfiremc/sdk/generated/soulfire/common_pb";
 import { ProxyCheckService } from "@soulfiremc/sdk/generated/soulfire/proxy-check_pb";
 import { Config, Effect } from "effect";
-import { CheckFailed, check, type E2ETest } from "../harness.ts";
+import { randomUuid, CheckFailed, check, type E2ETest } from "../harness.ts";
 
 export default {
   name: "proxy-status",
@@ -45,6 +45,7 @@ export default {
             transform(bytes: Buffer, _encoding, done) {
               if (first) {
                 first = false;
+                // oxlint-disable-next-line effecttsgo/global-timers -- A Node stream owns this timer and clears it when destroyed.
                 timer = setTimeout(() => {
                   timer = undefined;
                   done(null, bytes);
@@ -106,7 +107,7 @@ export default {
           ),
       );
       const instance = yield* Effect.acquireRelease(
-        client.getOrCreateInstance(`Proxy status ${randomUUID().slice(0, 8)}`, {
+        client.getOrCreateInstance(`Proxy status ${randomUuid().slice(0, 8)}`, {
           server: `127.0.0.1:${targetPort}`,
         }),
         (created) => created.delete().pipe(Effect.orDie),

@@ -1,8 +1,15 @@
-import { randomUUID } from "node:crypto";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { Effect } from "effect";
-import { BOT_NAME, CheckFailed, check, type E2ETest, eventually, rcon } from "../harness.ts";
+import {
+  randomUuid,
+  BOT_NAME,
+  CheckFailed,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+} from "../harness.ts";
 
 const OBJECTIVE = "sf_e2e_dismiss";
 
@@ -51,7 +58,7 @@ export default {
       yield* Effect.tryPromise({
         try: async () => {
           const controller = new AbortController();
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const pov = client.service(PovService);
           let sentEscape = false;
           try {

@@ -1,9 +1,7 @@
-// oxlint-disable-next-line effecttsgo/node-builtin-import -- Use the native SHA-256 digest for comparison with the checked-in matrix.
-import { createHash } from "node:crypto";
-
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { Digest } from "effect/crypto";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 
@@ -50,7 +48,12 @@ const headings = source
   .filter((line) => line.startsWith("#### "))
   .map((line) => line.slice(5));
 const canonicalHeadings = `${headings.join("\n")}\n`;
-const digest = createHash("sha256").update(canonicalHeadings).digest("hex");
+const digest = await Effect.runPromise(
+  Effect.gen(function* () {
+    const service = yield* Digest.Digest;
+    return yield* service.digestHex(Digest.sha256, new TextEncoder().encode(canonicalHeadings));
+  }).pipe(Effect.provide(Digest.layerWebCrypto)),
+);
 
 if (headings.length !== matrix.source.headingCount) {
   throw new Error(

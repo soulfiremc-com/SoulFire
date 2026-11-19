@@ -4,6 +4,8 @@ import process from "node:process";
 
 import { Schema } from "effect";
 
+const encodePrettyJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
+
 const JsrConfig = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
 
 const repositoryRoot = process.cwd();
@@ -67,7 +69,7 @@ async function updateJsrExports(): Promise<void> {
       ),
     },
   };
-  await writeFile(jsrPath, `${JSON.stringify(updated, null, 2)}\n`);
+  await writeFile(jsrPath, `${encodePrettyJson(updated)}\n`);
 }
 
 async function generatedTypeScriptModules(directory: string, relative = ""): Promise<string[]> {

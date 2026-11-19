@@ -1,10 +1,9 @@
-import { randomUUID } from "node:crypto";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SoulFireBot, SoulFireClient } from "@soulfiremc/sdk";
 import type { PovFrame, PovInputEventSchema } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { CheckFailed, required } from "./harness.ts";
+import { randomUuid, CheckFailed, required } from "./harness.ts";
 
 // Each native screen uses GUI scale 3 and logical dimensions 427x240.
 export const nativeInput = (
@@ -19,7 +18,7 @@ export const nativeInput = (
   Effect.tryPromise({
     try: async () => {
       const service = client.service(PovService);
-      const sessionId = randomUUID();
+      const sessionId = randomUuid();
       const abort = new AbortController();
       let latest: PovFrame | undefined;
       let streamError: Error | undefined;
@@ -76,9 +75,7 @@ export const nativeInput = (
         while (!screenOpen()) {
           if (streamError) throw streamError;
           if (performance.now() > deadline) throw new Error("The native inventory did not render");
-          await new Promise((resolve) => {
-            setTimeout(resolve, 25);
-          });
+          await Effect.runPromise(Effect.sleep(25));
         }
         await action({
           click: (x, y) =>
@@ -101,9 +98,7 @@ export const nativeInput = (
               if (streamError) throw streamError;
               if (performance.now() > escapeDeadline)
                 throw new Error("Escape did not return to the game view");
-              await new Promise((resolve) => {
-                setTimeout(resolve, 25);
-              });
+              await Effect.runPromise(Effect.sleep(25));
             }
           },
         });

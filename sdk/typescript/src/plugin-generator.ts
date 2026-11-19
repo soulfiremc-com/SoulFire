@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { fromBinary } from "@bufbuild/protobuf";
 import { safeObjectProperty } from "@bufbuild/protobuf/reflect";
 import {
@@ -24,6 +25,9 @@ import { promisify } from "node:util";
 
 import { SDK_VERSION } from "./connection.js";
 import type { PluginApiDescriptor } from "./generated/soulfire/plugin_api_pb.js";
+
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const encodePrettyJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
 
 // oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const executeFile = promisify(execFile);
@@ -207,7 +211,7 @@ export async function generatePluginSdk(options: GeneratePluginSdkOptions): Prom
     await writeFile(join(staging, "plugin-api.binpb"), options.descriptorSet);
     await writeFile(
       join(staging, "soulfire-plugin.json"),
-      `${JSON.stringify(model.metadata, null, 2)}\n`,
+      `${encodePrettyJson(model.metadata)}\n`,
       "utf8",
     );
 
@@ -530,12 +534,12 @@ async function generateTypeScript(outputDirectory: string, model: GenerationMode
   await mkdir(join(outputDirectory, "src"), { recursive: true });
   await writeFile(
     join(outputDirectory, "package.json"),
-    `${JSON.stringify(packageJson, null, 2)}\n`,
+    `${encodePrettyJson(packageJson)}\n`,
     "utf8",
   );
   await writeFile(
     join(outputDirectory, "tsconfig.json"),
-    `${JSON.stringify(tsconfig, null, 2)}\n`,
+    `${encodePrettyJson(tsconfig)}\n`,
     "utf8",
   );
   await writeFile(join(outputDirectory, "bunfig.toml"), '[install]\nlinker = "hoisted"\n', "utf8");
@@ -562,12 +566,12 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = ${JSON.stringify(model.pythonPackageName)}
-version = ${JSON.stringify(model.metadata.pluginVersion)}
-description = ${JSON.stringify(model.metadata.description)}
+name = ${encodeJson(model.pythonPackageName)}
+version = ${encodeJson(model.metadata.pluginVersion)}
+description = ${encodeJson(model.metadata.description)}
 readme = "README.md"
 requires-python = ">=3.14"
-license = ${JSON.stringify(model.metadata.license)}
+license = ${encodeJson(model.metadata.license)}
 dependencies = [
   "soulfire>=${SDK_VERSION},<${nextMinorVersion(SDK_VERSION)}",
   "connectrpc>=0.13,<0.14",
@@ -637,7 +641,7 @@ async function runBufGenerate(
     "generate",
     descriptorPath,
     "--template",
-    JSON.stringify(template),
+    encodeJson(template),
     ...sourceFiles.flatMap((file) => ["--path", file]),
   ];
   try {
@@ -705,17 +709,17 @@ function typeScriptEffectSource(model: GenerationModel): string {
       ...model.services.map(
         (service) =>
           `descriptor.services.some((service) =>
-      service.fullName === ${JSON.stringify(service.fullName)}
+      service.fullName === ${encodeJson(service.fullName)}
     )`,
       ),
       ...model.events.map(
-        (event) => `descriptor.eventTypeUrls.includes(${JSON.stringify(event.typeUrl)})`,
+        (event) => `descriptor.eventTypeUrls.includes(${encodeJson(event.typeUrl)})`,
       ),
       ...model.tasks.map(
         (task) =>
           `descriptor.taskTypes.some((task) =>
-      task.inputTypeUrl === ${JSON.stringify(task.inputTypeUrl)}
-      && task.resultTypeUrl === ${JSON.stringify(task.resultTypeUrl)}
+      task.inputTypeUrl === ${encodeJson(task.inputTypeUrl)}
+      && task.resultTypeUrl === ${encodeJson(task.resultTypeUrl)}
     )`,
       ),
     ].join("\n    && ") || "true";
@@ -739,7 +743,7 @@ import {
 } from "@soulfiremc/sdk";
 ${imports}
 
-const PLUGIN_ID = ${JSON.stringify(model.metadata.pluginId)};
+const PLUGIN_ID = ${encodeJson(model.metadata.pluginId)};
 const API_MAJOR_VERSION = ${model.metadata.apiMajorVersion};
 
 type StreamValue<T> = T extends AsyncIterable<infer Value> ? Value : never;
@@ -842,12 +846,12 @@ function eventMethodSources(events: readonly EventModel[]): string {
 function effectServiceSource(service: ServiceModel): string {
   const methods = service.methods
     .map((method) => {
-      const request = `Parameters<Client<typeof ${service.name}>[${JSON.stringify(method.localName)}]>[0]`;
+      const request = `Parameters<Client<typeof ${service.name}>[${encodeJson(method.localName)}]>[0]`;
       if (method.serverStreaming) {
         return `  public ${method.localName}(
     request: ${request},
   ): Stream.Stream<
-    StreamValue<ReturnType<Client<typeof ${service.name}>[${JSON.stringify(method.localName)}]>>,
+    StreamValue<ReturnType<Client<typeof ${service.name}>[${encodeJson(method.localName)}]>>,
     SoulFirePluginError
   > {
     return rpcStream(PLUGIN_ID + ".${method.localName}", (signal) =>
@@ -858,7 +862,7 @@ function effectServiceSource(service: ServiceModel): string {
       return `  public ${method.localName}(
     request: ${request},
   ): Effect.Effect<
-    Awaited<ReturnType<Client<typeof ${service.name}>[${JSON.stringify(method.localName)}]>>,
+    Awaited<ReturnType<Client<typeof ${service.name}>[${encodeJson(method.localName)}]>>,
     SoulFirePluginError
   > {
     return Effect.tryPromise({
@@ -891,7 +895,7 @@ ${pythonRuntimeImports(model)}
 
 ${pythonImports(model)}
 
-PLUGIN_ID = ${JSON.stringify(model.metadata.pluginId)}
+PLUGIN_ID = ${encodeJson(model.metadata.pluginId)}
 API_MAJOR_VERSION = ${model.metadata.apiMajorVersion}
 
 
@@ -987,19 +991,19 @@ function pythonCompatibilityPredicate(
   indentation: number,
 ): string {
   if (predicate.kind === "event") {
-    return `${JSON.stringify(predicate.value)} in descriptor.event_type_urls`;
+    return `${encodeJson(predicate.value)} in descriptor.event_type_urls`;
   }
   const padding = " ".repeat(indentation);
   const body = " ".repeat(indentation + 4);
   if (predicate.kind === "service") {
     return `any(
-${body}service.full_name == ${JSON.stringify(predicate.value)}
+${body}service.full_name == ${encodeJson(predicate.value)}
 ${body}for service in descriptor.services
 ${padding})`;
   }
   return `any(
-${body}task.input_type_url == ${JSON.stringify(predicate.input)}
-${body}and task.result_type_url == ${JSON.stringify(predicate.result)}
+${body}task.input_type_url == ${encodeJson(predicate.input)}
+${body}and task.result_type_url == ${encodeJson(predicate.result)}
 ${body}for task in descriptor.task_types
 ${padding})`;
 }
@@ -1115,10 +1119,10 @@ function pythonServiceSource(service: ServiceModel): string {
         timeout_ms: int | None = None,
     ) -> Stream[${method.outputType.expression}, SoulFireOperationError]:
         return rpc_stream(
-            ${JSON.stringify(operation)},
+            ${encodeJson(operation)},
             lambda: self._client.${method.pythonName}(request, timeout_ms=timeout_ms),
         )`
-        : `    @fn(${JSON.stringify(operation)})
+        : `    @fn(${encodeJson(operation)})
     def ${method.pythonName}(
         self,
         request: ${method.inputType.expression},
@@ -1127,7 +1131,7 @@ function pythonServiceSource(service: ServiceModel): string {
     ) -> EffectGen[${method.outputType.expression}, SoulFireOperationError]:
         return (
             yield from rpc(
-                ${JSON.stringify(operation)},
+                ${encodeJson(operation)},
                 lambda: self._client.${method.pythonName}(request, timeout_ms=timeout_ms),
             )
         )`;
@@ -1180,7 +1184,7 @@ ${exports.map((name) => `    ${name},`).join("\n")}
 )
 
 __all__ = [
-${exports.map((name) => `    ${JSON.stringify(name)},`).join("\n")}
+${exports.map((name) => `    ${encodeJson(name)},`).join("\n")}
 ]
 `;
 }
@@ -1318,9 +1322,9 @@ function pythonIdentifier(value: string): string {
 function pythonSlots(services: readonly ServiceModel[]): string {
   const slots = ["_catalog", ...services.map((service) => service.pythonName)];
   if (slots.length === 1) {
-    return `${JSON.stringify(slots[0])},`;
+    return `${encodeJson(slots[0])},`;
   }
-  return slots.map((slot) => JSON.stringify(slot)).join(", ");
+  return slots.map((slot) => encodeJson(slot)).join(", ");
 }
 
 function indent(value: string, spaces: number): string {
@@ -1346,8 +1350,8 @@ function extensionMethodSources(services: readonly ServiceModel[]): string {
             ? method.localName
             : `${service.localName}${pascalCase(method.name)}`;
         return `  public ${publicName}(
-    request: Parameters<${service.name}Client[${JSON.stringify(method.localName)}]>[0],
-  ): ReturnType<${service.name}Client[${JSON.stringify(method.localName)}]> {
+    request: Parameters<${service.name}Client[${encodeJson(method.localName)}]>[0],
+  ): ReturnType<${service.name}Client[${encodeJson(method.localName)}]> {
     return this.${service.localName}.${method.localName}(request);
   }`;
       }),

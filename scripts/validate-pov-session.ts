@@ -5,6 +5,8 @@ import { writeFile } from "node:fs/promises";
 import { createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
+import { Config, ConfigProvider, Effect, Fiber, Option, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { WorldService } from "../sdk/typescript/src/generated/soulfire/world_pb";
 import { BotService } from "../sdk/typescript/src/generated/soulfire/bot_pb";
 import {
@@ -28,7 +30,15 @@ const botId = argument(2, "bot ID");
 const otherBotId = argument(3, "other bot ID");
 const output = argument(4, "output directory");
 const mode = args[5];
-const token = process.env["SF_POV_TEST_TOKEN"];
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+const token = Option.getOrUndefined(
+  Effect.runSync(
+    Config.option(Config.String("SF_POV_TEST_TOKEN")).parse(
+      ConfigProvider.fromEnv({ preserveEmptyStrings: true }),
+    ),
+  ),
+);
 assert.ok(token);
 const transport = createGrpcWebTransport({
   baseUrl: url,
@@ -41,7 +51,7 @@ const transport = createGrpcWebTransport({
 });
 const bots = createClient(BotService, transport);
 const pov = createClient(PovService, transport);
-const sessionId = crypto.randomUUID();
+const sessionId = SecureRandom.uuidV4Unsafe();
 const abort = new AbortController();
 let latest: PovFrame | undefined;
 let latestKey: PovFrame | undefined;
@@ -57,10 +67,7 @@ let busy = false;
 // Concurrent input calls wait here until the running call clears `busy`.
 const isBusy = () => busy;
 let deliveryDelayMs = 0;
-const sleep = (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const sleep = (ms: number) => Effect.runPromise(Effect.sleep(ms));
 async function until(check: () => boolean, message: string) {
   const deadline = performance.now() + 15_000;
   while (!check()) {
@@ -157,15 +164,22 @@ async function saveFrame(name: string) {
     `${output}/${name}.jpg`,
   ]);
 }
-let heartbeat: ReturnType<typeof setInterval> | undefined;
+let heartbeat: Fiber.Fiber<void> | undefined;
 try {
   await until(() => !!latest, "No first frame");
-  heartbeat = setInterval(() => {
-    if (!busy)
-      void input().catch((error: unknown) => {
-        streamError = error instanceof Error ? error : new Error(String(error));
-      });
-  }, 500);
+  heartbeat = Effect.runFork(
+    Effect.sleep(500).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          if (!busy)
+            void input().catch((error: unknown) => {
+              streamError = error instanceof Error ? error : new Error(String(error));
+            });
+        }),
+      ),
+      Effect.forever,
+    ),
+  );
   if (mode === "transition") {
     await writeFile(`${output}/transition-ready`, "");
     const deadline = performance.now() + 60_000;
@@ -184,7 +198,7 @@ try {
     await saveFrame("interactive-nether");
     assert.equal(streamError, undefined, "Dimension changes must preserve the session");
     process.stdout.write(
-      `${JSON.stringify({
+      `${encodeJson({
         dimensionTransfer: true,
         framesAfterTransfer: frameCount - framesAtTransfer,
       })}\n`,
@@ -210,7 +224,7 @@ try {
       "Healthy delivery must recover target bitrate",
     );
     process.stdout.write(
-      `${JSON.stringify({
+      `${encodeJson({
         adaptiveBitrate: true,
         initial,
         raised,
@@ -266,7 +280,7 @@ try {
     ]);
     await until(() => latest?.screenOpen === false, "Closing chat must hide the cursor");
     process.stdout.write(
-      `${JSON.stringify({ pointingCursor: true, textCursor: true, hiddenInWorld: true })}\n`,
+      `${encodeJson({ pointingCursor: true, textCursor: true, hiddenInWorld: true })}\n`,
     );
   } else if (mode === "world") {
     captured = true;
@@ -361,7 +375,7 @@ try {
     const landed = await liveState();
     assert.ok(landed.y < hovering.y - 1, "Double jump must disable flight");
     process.stdout.write(
-      `${JSON.stringify({
+      `${encodeJson({
         escapeMenu: true,
         doubleJumpFlight: true,
         middleClick: true,
@@ -453,7 +467,7 @@ try {
     await sleep(11_000);
     assert.equal(streamError, undefined, "An active session must not hit the ordinary RPC timeout");
     await saveFrame("interactive-world-settled");
-    clearInterval(heartbeat);
+    await Effect.runPromise(Fiber.interrupt(heartbeat));
     captured = true;
     await input([{ kind: Kind.KEY, code: 87, action: 1 }]);
     await until(() => !!streamError, "Missing heartbeats must terminate the stream");
@@ -472,10 +486,10 @@ try {
     );
     assert.ok(
       Math.hypot(afterTimeout.x - timedOut.x, afterTimeout.z - timedOut.z) < 0.05,
-      `Heartbeat timeout must release held movement: ${JSON.stringify([timedOut, afterTimeout].map(({ x, y, z, health }) => ({ x, y, z, health })))}`,
+      `Heartbeat timeout must release held movement: ${encodeJson([timedOut, afterTimeout].map(({ x, y, z, health }) => ({ x, y, z, health })))}`,
     );
     process.stdout.write(
-      `${JSON.stringify({
+      `${encodeJson({
         frameCount,
         encodedBytes,
         keyFrames,
@@ -492,7 +506,7 @@ try {
     );
   }
 } finally {
-  clearInterval(heartbeat);
+  if (heartbeat !== undefined) await Effect.runPromise(Fiber.interrupt(heartbeat));
   abort.abort();
   await watching;
 }

@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { fromJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   check,
   CheckFailed,
@@ -77,7 +77,7 @@ export default {
       yield* Effect.tryPromise({
         try: async () => {
           const service = client.service(PovService);
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           const abort = new AbortController();
           let sequence = 0n;
           let token = "";
@@ -114,9 +114,7 @@ export default {
                   throw new Error(
                     `Automatic jumping moved a captured bot to Y=${info.liveState?.y}`,
                   );
-                await new Promise((resolve) => {
-                  setTimeout(resolve, 25);
-                });
+                await runPromise(Effect.sleep(25));
               }
               const nativePosition = await runPromise(serverPosition);
               if (Math.abs(nativePosition.y - 64) >= 0.01)

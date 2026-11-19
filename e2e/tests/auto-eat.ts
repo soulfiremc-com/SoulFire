@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { BotTaskService, BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -91,7 +91,7 @@ export default {
                 try: async () => {
                   const abort = new AbortController();
                   const pov = client.service(PovService);
-                  const sessionId = randomUUID();
+                  const sessionId = randomUuid();
                   let sequence = 0n;
                   let tookControl = false;
                   try {
@@ -135,9 +135,7 @@ export default {
                         captured: true,
                       });
                       tookControl = true;
-                      await new Promise((resolve) => {
-                        setTimeout(resolve, 300);
-                      });
+                      await runPromise(Effect.sleep(300));
                       await pov.input({
                         sessionId,
                         inputToken: frame.inputToken,

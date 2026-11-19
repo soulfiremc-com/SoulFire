@@ -1,7 +1,14 @@
-import { randomUUID } from "node:crypto";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  randomUuid,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 export default {
   name: "pov-audio",
@@ -15,7 +22,7 @@ export default {
       const service = client.service(PovService);
       // oxlint-disable-next-line effecttsgo/abort-controller-in-effect -- the async watch loop and heartbeat run outside Effect, and cleanup must abort before awaiting them
       const abort = new AbortController();
-      const sessionId = randomUUID();
+      const sessionId = randomUuid();
       let sequence = 0n;
       let sending = false;
       let enabled = false;

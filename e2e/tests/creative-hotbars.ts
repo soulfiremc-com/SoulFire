@@ -1,9 +1,9 @@
 import { Code } from "@connectrpc/connect";
-import { randomUUID } from "node:crypto";
 import type { SoulFireBot, SoulFireClient } from "@soulfiremc/sdk";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect, Schedule } from "effect";
 import {
+  randomUuid,
   BOT_NAME,
   CheckFailed,
   check,
@@ -20,7 +20,7 @@ const hotbarShortcut = (client: SoulFireClient, bot: SoulFireBot, activator: num
   Effect.tryPromise({
     try: async () => {
       const service = client.service(PovService);
-      const sessionId = randomUUID();
+      const sessionId = randomUuid();
       const abort = new AbortController();
       let sequence = 0n;
       let stage: "shortcut" | "open" | "closed" = "shortcut";

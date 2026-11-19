@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { BotService } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovInputEvent_Kind as Kind, PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   encodeJson,
   BOT_NAME,
   CheckFailed,
@@ -80,7 +80,7 @@ export default {
         try: async () => {
           const pov = client.service(PovService);
           const abort = new AbortController();
-          const sessionId = randomUUID();
+          const sessionId = randomUuid();
           let sequence = 0n;
           let scrolledAt: bigint | undefined;
           const input = (events: NonNullable<Parameters<typeof pov.input>[0]["events"]>) =>

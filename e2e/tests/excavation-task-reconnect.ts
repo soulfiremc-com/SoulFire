@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   BotTaskConflictPolicy,
   BotTaskPriority,
@@ -8,6 +7,7 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
 import {
+  randomUuid,
   encodeJson,
   BOT_NAME,
   check,
@@ -81,7 +81,7 @@ export default {
               const options = {
                 maximumBlocks,
                 reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-                idempotencyKey: randomUUID(),
+                idempotencyKey: randomUuid(),
               };
               const excavation = yield* bot.tasks.excavate(from, to, options);
               yield* Effect.addFinalizer(() =>

@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { BotTaskStatus } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
 import {
+  randomUuid,
   encodeJson,
   BOT_NAME,
   CheckFailed,
@@ -101,7 +101,7 @@ export default {
           yield* Effect.tryPromise({
             try: async () => {
               const pov = client.service(PovService);
-              const sessionId = randomUUID();
+              const sessionId = randomUuid();
               const abort = new AbortController();
               let sequence = 0n;
               const nextSequence = () => ++sequence;
@@ -132,19 +132,13 @@ export default {
                       events,
                     });
                   await input();
-                  await new Promise((resolve) => {
-                    setTimeout(resolve, 150);
-                  });
+                  await runPromise(Effect.sleep(150));
                   const before = await rotation();
                   await input([{ kind: Kind.MOVE, relative: true, x: 240, y: 0 }]);
-                  await new Promise((resolve) => {
-                    setTimeout(resolve, 400);
-                  });
+                  await runPromise(Effect.sleep(400));
                   const moved = await rotation();
                   await input();
-                  await new Promise((resolve) => {
-                    setTimeout(resolve, 350);
-                  });
+                  await runPromise(Effect.sleep(350));
                   const retained = await rotation();
                   if (
                     Math.abs(yawDelta(moved, before)) < 10 ||
@@ -156,9 +150,7 @@ export default {
                   await input([], false);
                   await input();
                   await input([{ kind: Kind.MOVE, relative: true, x: -120, y: 0 }]);
-                  await new Promise((resolve) => {
-                    setTimeout(resolve, 400);
-                  });
+                  await runPromise(Effect.sleep(400));
                   const recaptured = await rotation();
                   if (yawDelta(recaptured, retained) > -5)
                     throw new Error(`${mode} restored old aiming after recapture`);

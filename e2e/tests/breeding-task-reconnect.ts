@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   BotTaskConflictPolicy,
   BotTaskPriority,
@@ -8,6 +7,7 @@ import {
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Console, Effect } from "effect";
 import {
+  randomUuid,
   encodeJson,
   BOT_NAME,
   check,
@@ -113,7 +113,7 @@ export default {
                 completeWhenNoPair: true,
                 breedingTimeoutTicks: 40,
                 reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-                idempotencyKey: randomUUID(),
+                idempotencyKey: randomUuid(),
               };
               const task = yield* bot.tasks.breed(options);
               yield* Effect.addFinalizer(() => task.cancel("test cleanup").pipe(Effect.ignore));

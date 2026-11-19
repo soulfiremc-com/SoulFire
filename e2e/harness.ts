@@ -9,7 +9,18 @@ import { create } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import type { SoulFireBot, SoulFireClient, SoulFireOperationError } from "@soulfiremc/sdk";
 import { SoulFire } from "@soulfiremc/sdk/node";
-import { Schema, Console, Duration, Effect, Schedule, Semaphore } from "effect";
+import {
+  Schema,
+  Config,
+  ConfigProvider,
+  Console,
+  Duration,
+  Effect,
+  Option,
+  Schedule,
+  Semaphore,
+} from "effect";
+import { SecureRandom } from "effect/crypto";
 
 // oxlint-disable-next-line typescript/strict-void-return -- promisify uses execFile's custom promisified form; the ChildProcess return value is not used
 const execFileAsync = promisify(execFile);
@@ -17,6 +28,10 @@ const execFileAsync = promisify(execFile);
 const encodeJsonValue = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 export const encodeJson = (input: unknown): string | undefined =>
   input === undefined ? undefined : encodeJsonValue(input);
+
+export function randomUuid(): string {
+  return SecureRandom.uuidV4Unsafe();
+}
 
 export const E2E_DIR = import.meta.dirname;
 const REPO_DIR = path.dirname(E2E_DIR);
@@ -94,10 +109,20 @@ const CONTAINER = "soulfire-e2e";
 const IMAGE = "itzg/minecraft-server:2026.3.2-java25";
 /** SoulFire's native version, so the bot needs no protocol translation. */
 export const MINECRAFT_VERSION = "26.3";
+function readEnvironment(name: string): string | undefined {
+  return Option.getOrUndefined(
+    Effect.runSync(
+      Config.option(Config.String(name)).parse(
+        ConfigProvider.fromEnv({ preserveEmptyStrings: true }),
+      ),
+    ),
+  );
+}
+
 /** Not 25565, so a server someone runs for play keeps its port. */
-const MINECRAFT_PORT = Number(process.env["SOULFIRE_E2E_MINECRAFT_PORT"] ?? 25_566);
+const MINECRAFT_PORT = Number(readEnvironment("SOULFIRE_E2E_MINECRAFT_PORT") ?? 25_566);
 /** A flat world of one air layer: nothing exists that a test didn't build. */
-const VOID_WORLD = JSON.stringify({
+const VOID_WORLD = encodeJsonValue({
   layers: [{ block: "minecraft:air", height: 1 }],
   biome: "minecraft:the_void",
 });
@@ -250,7 +275,8 @@ function env(vars: Record<string, string>) {
 
 /** The jar `./gradlew :dedicated-launcher:uberJar` builds, unless SOULFIRE_E2E_JAR names another. */
 export function soulfireJar() {
-  if (process.env["SOULFIRE_E2E_JAR"]) return path.resolve(process.env["SOULFIRE_E2E_JAR"]);
+  const configuredJar = readEnvironment("SOULFIRE_E2E_JAR");
+  if (configuredJar) return path.resolve(configuredJar);
   const version = readFileSync(path.join(REPO_DIR, "gradle.properties"), "utf8").match(
     /^maven_version=(.+)$/mu,
   )?.[1];
@@ -265,8 +291,9 @@ export function soulfireJar() {
 
 /** Java 25: SOULFIRE_E2E_JAVA, else the `java` on PATH. */
 function javaPath() {
-  if (process.env["SOULFIRE_E2E_JAVA"]) return process.env["SOULFIRE_E2E_JAVA"];
-  for (const dir of (process.env["PATH"] ?? "").split(path.delimiter)) {
+  const configuredJava = readEnvironment("SOULFIRE_E2E_JAVA");
+  if (configuredJava) return configuredJava;
+  for (const dir of (readEnvironment("PATH") ?? "").split(path.delimiter)) {
     const candidate = path.join(dir, "java");
     try {
       accessSync(candidate, constants.X_OK);
@@ -379,7 +406,7 @@ export const placeBot = Effect.fn("placeBot")(function* (bot: SoulFireBot, at: P
           Math.abs(p.x - at.x) < 0.01 &&
           Math.abs(p.y - at.y) < 0.01 &&
           Math.abs(p.z - at.z) < 0.01,
-        `bot not at ${JSON.stringify(at)} after teleport (at ${JSON.stringify(p)})`,
+        `bot not at ${encodeJson(at)} after teleport (at ${encodeJson(p)})`,
       ),
     ),
     "10 seconds",

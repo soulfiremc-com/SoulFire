@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { goals } from "@soulfiremc/sdk";
 import {
   BotTaskConflictPolicy,
@@ -7,7 +6,15 @@ import {
   BotTaskStatus,
 } from "@soulfiremc/sdk/generated/soulfire/task_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, placeBot, rcon } from "../harness.ts";
+import {
+  randomUuid,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  placeBot,
+  rcon,
+} from "../harness.ts";
 
 export default {
   name: "task-reconnect-recovery",
@@ -16,7 +23,7 @@ export default {
       Effect.gen(function* () {
         yield* rcon(`gamemode creative ${BOT_NAME}`);
         yield* placeBot(bot, { x: 0.5, y: 64, z: 0.5 });
-        const key = randomUUID();
+        const key = randomUuid();
         const goal = goals.block({ x: 0, y: 64, z: 0 });
         const completed = yield* bot.tasks.goTo(goal, { idempotencyKey: `${key}-complete` });
         const result = yield* completed.result({ call: { timeoutMs: 5000 } });

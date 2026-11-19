@@ -285,30 +285,23 @@
         "scripts/**/*.ts"
       ],
       "rules": {
+        "effecttsgo/global-date": "error",
+        "effecttsgo/global-json": "error",
         "effecttsgo/global-fetch": "error",
         "effecttsgo/global-random": "error",
-        "effecttsgo/global-console": "error"
-      }
-    },
-    {
-      "files": [
-        "e2e/run.ts",
-        "sdk/typescript/src/{node,bun}.ts",
-        "scripts/validate-mineflayer-parity.ts"
-      ],
-      "rules": {
-        "effecttsgo/global-json": "error",
-        "effecttsgo/global-timers": "error",
+        "effecttsgo/global-console": "error",
         "effecttsgo/crypto-random-uuid": "error",
+        "effecttsgo/global-timers": "error",
         "effecttsgo/process-env": "error"
       }
     },
     {
-      "files": ["e2e/**/*.ts", "sdk/typescript/src/{node,bun}.ts", "scripts/**/*.ts"],
-      "rules": { "effecttsgo/global-date": "error" }
-    },
-    {
-      "files": ["sdk/typescript/src/{node,bun}.ts", "scripts/validate-mineflayer-parity.ts"],
+      "files": [
+        "e2e/native-input.ts",
+        "e2e/tests/**/*.ts",
+        "sdk/typescript/src/{node,bun}.ts",
+        "scripts/validate-mineflayer-parity.ts"
+      ],
       "rules": { "effecttsgo/node-builtin-import": "error" }
     },
     {
@@ -361,7 +354,10 @@
         "sdk/typescript/test/api.test.ts",
         "sdk/typescript/examples/quickstart.ts",
         "scripts/validate-mineflayer-parity.ts",
-        "sdk/beat-game/smoke/e2e.ts",
+        "scripts/validate-pov-session.ts",
+        "sdk/beat-game/smoke/{e2e,qualify}.ts",
+        "e2e/harness.ts",
+        "e2e/tests/instance-deletion.ts",
         "e2e/run.ts"
       ],
       "rules": {

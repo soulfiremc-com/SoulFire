@@ -1,8 +1,15 @@
-import { randomUUID } from "node:crypto";
 import type { SoulFireBot } from "@soulfiremc/sdk";
 import { PovService } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
 import { Effect } from "effect";
-import { BOT_NAME, check, type E2ETest, eventually, rcon, required } from "../harness.ts";
+import {
+  randomUuid,
+  BOT_NAME,
+  check,
+  type E2ETest,
+  eventually,
+  rcon,
+  required,
+} from "../harness.ts";
 
 export default {
   name: "pov-audio-lifecycle",
@@ -17,7 +24,7 @@ export default {
             yield* instance.removeAccounts(others.map((other) => other.id)).pipe(Effect.ignore);
           }),
         );
-        const suffix = randomUUID().slice(0, 6);
+        const suffix = randomUuid().slice(0, 6);
         const otherNames = [`AudioA_${suffix}`, `AudioB_${suffix}`];
         for (const name of otherNames) {
           const other = yield* instance.getOrCreateBot(name, { start: false });
@@ -30,7 +37,7 @@ export default {
         const sessions = [bot, ...others].map((target, index) => ({
           name: required(names[index], "the bot name"),
           target,
-          id: randomUUID(),
+          id: randomUuid(),
           abort: new AbortController(),
           sequence: 0n,
           frames: 0,

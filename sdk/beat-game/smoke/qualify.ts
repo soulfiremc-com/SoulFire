@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { SecureRandom } from "effect/crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { Schema } from "effect";
+import { DateTime, Schema } from "effect";
+import { readEnvironment } from "./environment.ts";
+
+const encodePrettyJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 const packageDirectory = path.resolve(import.meta.dirname, "..");
@@ -17,7 +20,7 @@ const continueAfterFailure = booleanEnvironment(
 const skipBuild = booleanEnvironment("SOULFIRE_QUALIFICATION_SKIP_BUILD", false);
 const qualificationId = environment(
   "SOULFIRE_QUALIFICATION_ID",
-  `${new Date().toISOString().replaceAll(/[:.]/gu, "-")}-${randomUUID()}`,
+  `${DateTime.formatIso(DateTime.nowUnsafe()).replaceAll(/[:.]/gu, "-")}-${SecureRandom.uuidV4Unsafe()}`,
 );
 const artifactRoot = path.resolve(
   environment(
@@ -100,7 +103,7 @@ for (let index = 1; index <= runCount; index += 1) {
 }
 
 const report = await writeReport(results);
-process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+process.stdout.write(`${encodePrettyJson(report)}\n`);
 if (!report.qualified) {
   process.exitCode = 1;
 }
@@ -140,7 +143,7 @@ async function writeReport(runResults: readonly QualificationRunResult[]) {
     .toSorted((left, right) => left - right);
   const qualificationReport = {
     qualificationId,
-    generatedAt: new Date().toISOString(),
+    generatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
     mode: controlled ? "controlled" : "survival",
     seed,
     requiredConsecutiveRuns: runCount,
@@ -167,7 +170,7 @@ async function writeReport(runResults: readonly QualificationRunResult[]) {
   } as const;
   await writeFile(
     path.join(artifactRoot, "qualification-report.json"),
-    `${JSON.stringify(qualificationReport, null, 2)}\n`,
+    `${encodePrettyJson(qualificationReport)}\n`,
   );
   return qualificationReport;
 }
@@ -199,7 +202,7 @@ function runCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      env: options.env ?? process.env,
+      ...(options.env === undefined ? {} : { env: options.env }),
       stdio: "inherit",
     });
     child.once("error", reject);
@@ -221,12 +224,12 @@ function runCommand(
 }
 
 function environment(name: string, fallback: string): string {
-  const value = process.env[name]?.trim();
+  const value = readEnvironment(name)?.trim();
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
 function booleanEnvironment(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+  const value = readEnvironment(name)?.trim().toLowerCase();
   if (value === undefined || value.length === 0) {
     return fallback;
   }
@@ -240,7 +243,7 @@ function booleanEnvironment(name: string, fallback: boolean): boolean {
 }
 
 function positiveIntegerEnvironment(name: string, fallback: number): number {
-  const source = process.env[name]?.trim();
+  const source = readEnvironment(name)?.trim();
   if (source === undefined || source.length === 0) {
     return fallback;
   }
