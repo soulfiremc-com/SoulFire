@@ -865,6 +865,67 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("scans and explores for a fortress as far as a block search reaches", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "fortress-wide-search-run";
+    const teamId = "fortress-wide-search-team";
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_nether" },
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:oak_log": 8,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+    const fortressScans: number[] = [];
+    driver.blockQueryResolver = ({ radius, selector }) => {
+      if (selector.blockIds?.includes("minecraft:nether_bricks") === true) {
+        fortressScans.push(radius);
+      }
+      return [];
+    };
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          while (driver.xzPaths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // As in a live run whose nearest fortress lay 820 blocks from its portal.
+    expect(fortressScans).toContain(128);
+    const saved = await Effect.runPromise(store.load(runId));
+    const frontier =
+      saved?.memory.explorationFrontiers?.["minecraft:the_nether:find-nether-fortress"];
+    // Each hop moves as far as one scan reaches, so the next scan starts
+    // where this one ends.
+    expect(frontier?.target).toMatchObject({ x: 0.5, z: 128.5 });
+  });
+
   it("replenishes a depleted Nether building-block reserve before exploring", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

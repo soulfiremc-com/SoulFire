@@ -195,6 +195,9 @@ const NETHER_EXPLORATION_MINIMUM_BUILDING_BLOCKS = 16;
 const NETHER_EXPLORATION_TARGET_BUILDING_BLOCKS = 64;
 const NETHER_EXPLORATION_PICKAXE_DURABILITY_RESERVE = 64;
 const NETHER_STONE_PICKAXE_BATCH = 3;
+// The farthest a block search reaches, and within the Nether view distance.
+const NETHER_FORTRESS_SCAN_RADIUS = 128;
+const DISCOVERY_MAXIMUM_HOP = 64;
 const WOODEN_PICKAXE_MAXIMUM_DURABILITY = 59;
 const EXPLORATION_MAXIMUM_LEG_DISTANCE = 32;
 const EXPLORATION_MAXIMUM_SURFACE_ELEVATION_CHANGE = 12;
@@ -9747,7 +9750,7 @@ function satisfyRequirementFromWorld(
             anchorBlockIds: new Set(NETHER_FORTRESS_BLOCK_IDS),
             stationaryBlockIds: new Set(["minecraft:spawner"]),
             placeKind: "FORTRESS",
-            scanRadius: Math.min(64, state.strategy.blockSearchRadius),
+            scanRadius: NETHER_FORTRESS_SCAN_RADIUS,
             maximumResults: 2048,
           },
         },
@@ -12900,10 +12903,14 @@ function huntOrExplore(
           // seen from the full search radius on each side, so a healthy hunt
           // hops a whole radius: no ground is missed, and a live food search
           // no longer spent an hour within 150 blocks of spawn.
+          // A structure search hops as far as its scan reaches. A live
+          // fortress search scanned and hopped 48 blocks at a time and spent
+          // an hour within 150 blocks of a portal 820 blocks from the fortress.
+          const structureScanRadius = targetPreference?.structureSearch?.scanRadius;
           const frontierScanRadius =
             current.player.health < state.strategy.minimumHealth
               ? Math.min(32, state.strategy.entitySearchRadius)
-              : 2 * state.strategy.entitySearchRadius;
+              : 2 * Math.max(state.strategy.entitySearchRadius, structureScanRadius ?? 0);
           const directedExplorationTarget =
             targetPreference?.explorationTarget?.dimension === current.player.position.dimension &&
             horizontalDistanceSquared(targetPreference.explorationTarget, current.player.position) >
@@ -12924,6 +12931,8 @@ function huntOrExplore(
                   explorationPath,
                   true,
                   allowFluidFallback,
+                  0,
+                  structureScanRadius ?? DISCOVERY_MAXIMUM_HOP,
                 )
               : pathfindExplorationTarget(
                   state,
@@ -14832,13 +14841,14 @@ function advanceExplorationFrontier(
   preferSurface = true,
   allowFluidFallback = true,
   rotation = 0,
+  maximumHop = DISCOVERY_MAXIMUM_HOP,
 ): Effect.Effect<void, BeatGameDriverError> {
   const normalizedRotation = ((rotation % 4) + 4) % 4;
   const key =
     normalizedRotation === 0
       ? `${position.dimension}:${purpose}`
       : `${position.dimension}:${purpose}:${normalizedRotation}`;
-  const hop = discoveryHopRadius(state, scanRadius);
+  const hop = discoveryHopRadius(state, scanRadius, maximumHop);
   const explorationPath = {
     ...path,
     maxSearchTimeMs: Math.min(path.maxSearchTimeMs, EXPLORATION_MAXIMUM_SEARCH_TIME_MS),
@@ -15262,8 +15272,15 @@ function squareSpiralOffset(index: number): {
   return { x, z };
 }
 
-function discoveryHopRadius(state: RunState, scanRadius: number): number {
-  return Math.max(8, Math.min(64, state.strategy.explorationRadius, Math.floor(scanRadius / 2)));
+function discoveryHopRadius(
+  state: RunState,
+  scanRadius: number,
+  maximumHop = DISCOVERY_MAXIMUM_HOP,
+): number {
+  return Math.max(
+    8,
+    Math.min(maximumHop, state.strategy.explorationRadius, Math.floor(scanRadius / 2)),
+  );
 }
 
 function acquireEnderPearls(
