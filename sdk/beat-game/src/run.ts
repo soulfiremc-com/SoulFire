@@ -863,6 +863,7 @@ const MAXIMUM_KNOCKBACK_ESCAPES = 2;
 const THREAT_ESCAPE_SAFE_DISTANCE = 24;
 const SINGLE_THREAT_MAXIMUM_ESCAPES = 4;
 const DURABLE_DEATH_RECOVERY_WINDOW_MS = 8 * 60 * 60 * 1_000;
+const KEPT_INVENTORY_MINIMUM_SHARE = 0.8;
 const DROPPED_ITEM_LOADED_LIFETIME_MS = 5 * 60 * 1_000;
 const CHAINED_DEATH_RESPAWN_BASE_COOLDOWN_MS = 60_000;
 const CHAINED_DEATH_RESPAWN_MAXIMUM_COOLDOWN_MS = 8 * 60_000;
@@ -18143,9 +18144,14 @@ function keptInventoryThroughDeath(
   const carried = Object.entries(pendingDeath.inventoryCounts ?? {}).filter(
     ([, count]) => count > 0,
   );
+  // A vanilla respawn starts with an empty inventory, so most item kinds
+  // still being there means nothing dropped. Exact counts are too strict: a
+  // live bot ate during recovery and then searched for its own food.
+  const stillCarried = carried.filter(
+    ([itemId]) => (observation.inventory.counts[itemId] ?? 0) > 0,
+  ).length;
   return (
-    carried.length > 0 &&
-    carried.every(([itemId, count]) => (observation.inventory.counts[itemId] ?? 0) >= count)
+    carried.length > 0 && stillCarried >= Math.ceil(carried.length * KEPT_INVENTORY_MINIMUM_SHARE)
   );
 }
 

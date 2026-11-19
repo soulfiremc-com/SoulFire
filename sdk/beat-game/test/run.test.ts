@@ -6596,6 +6596,72 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).not.toContainEqual(objectContaining({ position: deathPosition }));
   });
 
+  it("counts the inventory as kept after eating some of its food", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "kept-inventory-meal-run";
+    const deathInventory = {
+      "minecraft:cooked_beef": 8,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:shield": 1,
+      "minecraft:cobblestone": 20,
+      "minecraft:stone_sword": 1,
+    };
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId,
+      teamId: "kept-inventory-meal-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, deathPositions: [deathEntry(60, deathInventory)] },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({ dead: true, health: 0 });
+    const resolveTask = driver.taskResolver;
+    driver.taskResolver = (task, execution) =>
+      task.type === "auto-respawn"
+        ? Effect.sync(() => {
+            driver.tasks.push(task);
+            // As in a live run: the bot ate during recovery, so it carries
+            // less food than when it died.
+            driver.currentObservation = observation({
+              counts: { ...deathInventory, "minecraft:cooked_beef": 5 },
+            });
+          })
+        : resolveTask(task, execution);
+    let recovered: string | undefined;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId: "kept-inventory-meal-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              const event = yield* run.events.pipe(
+                Stream.filter((candidate) => candidate.type === "items-recovered"),
+                Stream.runHead,
+              );
+              const found = Option.getOrUndefined(event);
+              recovered = found?.type === "items-recovered" ? found.detail : undefined;
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ).pipe(Effect.timeout("5 seconds")),
+    );
+
+    expect(recovered).toBe("The bot kept its inventory through death");
+  });
+
   it("forgets every recorded death once one death kept the inventory", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
