@@ -30241,13 +30241,25 @@ describe("beat-game run lifecycle", () => {
       expectedConfidence: 0,
       previousConfidence: 0.25,
     },
+    {
+      label: "keeps after a quality-bound miss",
+      previousX: 0,
+      expectedConfidence: 1,
+      previousConfidence: 0.25,
+      failureCode: "path_quality_bound_not_met",
+    },
   ])(
     "$label a remembered portal when its failed route did not bring the bot closer",
-    async ({ previousX, expectedConfidence, previousConfidence = 0.5 }) => {
+    async ({
+      previousX,
+      expectedConfidence,
+      previousConfidence = 0.5,
+      failureCode = "unreachable",
+    }) => {
       const driver = new FakeBeatGameDriver();
       const store = new InMemoryBeatGameCheckpointStore();
-      const runId = `stalled-portal-route-${previousX}-${previousConfidence}`;
-      const teamId = `stalled-portal-route-team-${previousX}-${previousConfidence}`;
+      const runId = `stalled-portal-route-${previousX}-${previousConfidence}-${failureCode}`;
+      const teamId = `stalled-portal-route-team-${previousX}-${previousConfidence}-${failureCode}`;
       const observedAt = "2026-01-01T00:00:00.000Z";
       const portalPosition = { x: 64, y: 64, z: 0, dimension: "minecraft:overworld" };
       const portal = blockObservation(portalPosition, {
@@ -30300,7 +30312,31 @@ describe("beat-game run lifecycle", () => {
       driver.pathResolver = (position, radius, policy) =>
         Effect.sync(() => {
           driver.paths.push({ position, radius, policy });
-        }).pipe(Effect.andThen(Effect.fail(noRoute("pathfind"))));
+        }).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new BeatGameDriverError({
+                operation: "pathfind",
+                code: failureCode,
+                retryable: true,
+                message: "No route found to the goal!",
+              }),
+            ),
+          ),
+        );
+      // The long route itself exists but misses the requested quality bound.
+      if (failureCode === "path_quality_bound_not_met") {
+        driver.xzPathResolver = () =>
+          Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfindXZ",
+              code: failureCode,
+              retryable: true,
+              message:
+                "Pathfinding found a route with certified bound 4.1 but the request requires 3.0",
+            }),
+          );
+      }
       const routeFailures: unknown[] = [];
 
       await Effect.runPromise(

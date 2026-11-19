@@ -16437,6 +16437,7 @@ function enterKnownPortal(
             state,
             resumableWorkspace.origin,
             `remembered portal route failed: ${approached.failure.message}`,
+            approached.failure.code,
           );
         } else {
           yield* invalidatePortalEvidence(
@@ -16472,6 +16473,7 @@ function enterKnownPortal(
           state,
           memory.value.position,
           `remembered portal route failed: ${approached.failure.message}`,
+          approached.failure.code,
         );
         continue;
       }
@@ -16732,6 +16734,7 @@ function markPortalRouteUnavailable(
   state: RunState,
   portal: BeatGamePosition,
   reason: string,
+  failureCode?: string,
 ): Effect.Effect<void, BeatGameError> {
   return Effect.gen(function* () {
     // A live run spent an hour retrying a remembered portal it could not
@@ -16752,13 +16755,19 @@ function markPortalRouteUnavailable(
         Math.sqrt(distanceSquared(current, portal)) <=
           Math.sqrt(distanceSquared(previous.value, portal)) -
             REMEMBERED_PORTAL_ROUTE_MINIMUM_PROGRESS;
-      routeConfidence = Math.max(
-        0,
-        (previous?.confidence ?? 1) -
-          (madeProgress
-            ? REMEMBERED_PORTAL_ROUTE_FAILURE_PENALTY
-            : REMEMBERED_PORTAL_ROUTE_STALL_PENALTY),
-      );
+      // A route that only missed the requested quality bound exists, so it
+      // says nothing about whether the portal is reachable. A live run lost
+      // most of its confidence in a portal 650 blocks away this way.
+      routeConfidence =
+        failureCode === "path_quality_bound_not_met"
+          ? (previous?.confidence ?? 1)
+          : Math.max(
+              0,
+              (previous?.confidence ?? 1) -
+                (madeProgress
+                  ? REMEMBERED_PORTAL_ROUTE_FAILURE_PENALTY
+                  : REMEMBERED_PORTAL_ROUTE_STALL_PENALTY),
+            );
       return {
         ...checkpoint,
         memory: {
