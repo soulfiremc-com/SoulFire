@@ -869,6 +869,156 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("crafts spare stone pickaxes before a Nether search", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "fortress-spare-pickaxes-run";
+    const teamId = "fortress-spare-pickaxes-team";
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cobblestone": 64,
+        "minecraft:cooked_beef": 16,
+        "minecraft:crafting_table": 1,
+        "minecraft:ender_pearl": 14,
+        "minecraft:oak_log": 8,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:stone_pickaxe"
+        ? [
+            {
+              recipeId: "stone-pickaxe",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 3,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 1, y: 64, z: 0, dimension: "minecraft:the_nether" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "craft" ? Effect.never : Effect.void));
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "craft")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("3 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({ type: "craft", recipeId: "stone-pickaxe", count: 3 }),
+    );
+  });
+
+  it("replans a Nether search as soon as its last pickaxe breaks", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "fortress-broken-pickaxe-run";
+    const teamId = "fortress-broken-pickaxe-team";
+    const counts: Record<string, number> = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:oak_log": 8,
+      "minecraft:cobblestone": 64,
+      "minecraft:stone_sword": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:shield": 1,
+      "minecraft:ender_pearl": 14,
+    };
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts,
+    });
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+    const failures: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed" && event.action === "satisfy:blaze-rods"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (driver.xzPaths.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          const { "minecraft:stone_pickaxe": _, ...withoutPickaxe } = counts;
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_nether",
+            pathBuildingBlockCount: 64,
+            counts: withoutPickaxe,
+          });
+          while (failures.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("3 seconds")),
+      ),
+    );
+
+    expect(failures).toContain(
+      "Interrupted for replanning: interrupted an action to replace a broken pickaxe",
+    );
+  });
+
   it("collects Nether stems when a broken pickaxe cannot be paid for with carried wood", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

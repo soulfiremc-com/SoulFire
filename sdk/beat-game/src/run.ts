@@ -180,6 +180,7 @@ const NETHER_EXPLORATION_BUILDING_BLOCK_IDS = ["minecraft:netherrack"] as const;
 const NETHER_EXPLORATION_MINIMUM_BUILDING_BLOCKS = 16;
 const NETHER_EXPLORATION_TARGET_BUILDING_BLOCKS = 64;
 const NETHER_EXPLORATION_PICKAXE_DURABILITY_RESERVE = 64;
+const NETHER_STONE_PICKAXE_BATCH = 3;
 const WOODEN_PICKAXE_MAXIMUM_DURABILITY = 59;
 const EXPLORATION_MAXIMUM_LEG_DISTANCE = 32;
 const EXPLORATION_MAXIMUM_SURFACE_ELEVATION_CHANGE = 12;
@@ -4222,6 +4223,18 @@ function monitorObservedSafety(
     return Effect.succeed({
       replanReason: "interrupted an action to clutch a dangerous fall",
       fallClutchPosition: observation.player.position,
+    } satisfies ActionResult);
+  }
+  // A live bot broke its last pickaxe three minutes into a fortress search
+  // and dug netherrack by hand for seven more minutes before it replanned.
+  if (
+    decision.type === "satisfy-requirement" &&
+    isNether(observation.player.position.dimension) &&
+    hasMiningPickaxe(previousObservation) &&
+    !hasMiningPickaxe(observation)
+  ) {
+    return Effect.succeed({
+      replanReason: "interrupted an action to replace a broken pickaxe",
     } satisfies ActionResult);
   }
   if (
@@ -9586,12 +9599,17 @@ function ensureNetherExplorationPickaxe(
     (total, itemId) => total + (observation.inventory.counts[itemId] ?? 0),
     0,
   );
-  if (ironIngots >= 3 || stoneToolMaterials >= 3) {
+  if (ironIngots >= 3) {
+    return craftNetherPickaxe(state, observation, "minecraft:iron_pickaxe", 1);
+  }
+  if (stoneToolMaterials >= 3) {
+    // A live fortress search wore out a stone pickaxe every three minutes,
+    // so spare ones save a trip back to the crafting table each time.
     return craftNetherPickaxe(
       state,
       observation,
-      ironIngots >= 3 ? "minecraft:iron_pickaxe" : "minecraft:stone_pickaxe",
-      1,
+      "minecraft:stone_pickaxe",
+      Math.min(NETHER_STONE_PICKAXE_BATCH, Math.floor(stoneToolMaterials / 3)),
     );
   }
   const reportedDurability = observation.inventory.remainingDurability;
@@ -9626,18 +9644,21 @@ function craftNetherPickaxe(
   const counts = observation.inventory.counts;
   const total = (itemIds: readonly string[]) =>
     itemIds.reduce((sum, itemId) => sum + (counts[itemId] ?? 0), 0);
-  const sticksNeeded = Math.max(0, 2 * count - (counts["minecraft:stick"] ?? 0));
-  const planksNeeded =
+  const planksNeeded = (pickaxes: number) =>
     ((counts["minecraft:crafting_table"] ?? 0) > 0 ? 0 : 4) +
-    2 * Math.ceil(sticksNeeded / 4) +
-    (resultItemId === "minecraft:wooden_pickaxe" ? 3 * count : 0);
+    2 * Math.ceil(Math.max(0, 2 * pickaxes - (counts["minecraft:stick"] ?? 0)) / 4) +
+    (resultItemId === "minecraft:wooden_pickaxe" ? 3 * pickaxes : 0);
   const planksAvailable = total(PLANK_ITEM_IDS) + 4 * total(LOG_ITEM_IDS);
-  if (planksAvailable >= planksNeeded) {
-    return craftWithTable(state, observation, resultItemId, count);
+  // Carried wood that pays for fewer pickaxes still pays for those now.
+  const affordable = Array.from({ length: count }, (_, index) => count - index).find(
+    (pickaxes) => planksNeeded(pickaxes) <= planksAvailable,
+  );
+  if (affordable !== undefined) {
+    return craftWithTable(state, observation, resultItemId, affordable);
   }
   return collectBlocksOrExplore(state, observation, {
     blockIds: NETHER_STEM_ITEM_IDS,
-    count: Math.ceil((planksNeeded - planksAvailable) / 4),
+    count: Math.ceil((planksNeeded(count) - planksAvailable) / 4),
     progressItemIds: NETHER_STEM_ITEM_IDS,
     purpose: "find-nether-stems",
     avoidFluids: true,
