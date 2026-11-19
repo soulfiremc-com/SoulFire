@@ -80,6 +80,20 @@ final class PathExecutorPlayerNodeTest {
   }
 
   @Test
+  void aPlayerOnTheEdgeOfALedgeStartsAboveTheLedge() {
+    // As in a live run: the bot stood on the edge of a netherrack block with
+    // its feet over an open drop into lava.
+    var blocks = new TestBlockAccessorBuilder();
+    blocks.setBlockAt(0, 0, 0, Blocks.NETHERRACK);
+    blocks.setBlockAt(-1, -10, 0, Blocks.LAVA);
+
+    assertEquals(
+      new SFVec3i(0, 1, 0),
+      PathExecutor.playerNode(blocks.build(), new Vec3(-0.12, 1, 0.3))
+    );
+  }
+
+  @Test
   void aPlayerBesideAFenceBelowItsFeetStartsAboveTheStone() {
     var blocks = new TestBlockAccessorBuilder();
     blocks.setBlockAt(0, 0, 0, Blocks.STONE);

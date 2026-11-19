@@ -652,10 +652,13 @@ public final class PathExecutor implements ControlTask {
 
   /// The node of a player at `position`. A player pressed against a fence post
   /// can have its feet over the post's cell; then it's the nearest free cell.
+  /// A player standing on the edge of a block can have its feet over an open
+  /// drop; then it's the nearest cell it overlaps that has a floor.
   static SFVec3i playerNode(BlockGetter level, Vec3 position) {
     var feet = BlockPos.containing(position);
     var node = playerNode(level, feet);
-    if (fitsCentered(level, node, position.y)) {
+    var nodeHasFloor = hasFloor(level, node);
+    if (nodeHasFloor && fitsCentered(level, node, position.y)) {
       return node;
     }
     SFVec3i best = null;
@@ -673,7 +676,11 @@ public final class PathExecutor implements ControlTask {
         }
         var candidate = playerNode(level, feet.offset(dx, 0, dz));
         var distance = offX * offX + offZ * offZ;
-        if (distance < bestDistance && fitsCentered(level, candidate, Math.max(position.y, candidate.y))) {
+        // A live bot planned from the open cell beside its ledge, stepped
+        // off and fell ten blocks into lava.
+        if (distance < bestDistance
+          && (nodeHasFloor || hasFloor(level, candidate))
+          && fitsCentered(level, candidate, Math.max(position.y, candidate.y))) {
           best = candidate;
           bestDistance = distance;
         }
@@ -683,6 +690,10 @@ public final class PathExecutor implements ControlTask {
   }
 
   /// Whether a player centered in `node`'s cell, feet at `y`, collides with nothing.
+  private static boolean hasFloor(BlockGetter level, SFVec3i node) {
+    return !SFBlockHelpers.isCollisionShapeEmpty(level.getBlockState(node.toBlockPos().below()));
+  }
+
   private static boolean fitsCentered(BlockGetter level, SFVec3i node, double y) {
     var box = Avatar.STANDING_DIMENSIONS
       .makeBoundingBox(new Vec3(node.x + 0.5, y, node.z + 0.5))
