@@ -8636,6 +8636,7 @@ function extinguishFire(
 }
 
 const FIRE_BLOCK_IDS: ReadonlySet<string> = new Set(["minecraft:fire", "minecraft:soul_fire"]);
+const HOT_FLOOR_BLOCK_IDS: ReadonlySet<string> = new Set(["minecraft:magma_block"]);
 const FIRE_STEP_OFFSETS = [
   { x: 1, z: 0 },
   { x: -1, z: 0 },
@@ -8656,11 +8657,12 @@ function isFireFreeOpenBlock(block: BeatGameBlockObservation | undefined): boole
 
 // Standing in a fire block keeps setting the bot alight, and in the Nether
 // there is no water to put it out. A live bot stood in fire left by ghast
-// fireballs for nine seconds and burned to death.
-function stepOutOfFire(
+// fireballs for nine seconds and burned to death. Magma under the feet burns
+// the same way. Returns whether the bot stepped off burning ground.
+function stepOffBurningGround(
   state: RunState,
   observation: BeatGameObservation,
-): Effect.Effect<void, BeatGameDriverError> {
+): Effect.Effect<boolean, BeatGameDriverError> {
   return Effect.gen(function* () {
     const position = observation.player.position;
     const feet = {
@@ -8669,11 +8671,15 @@ function stepOutOfFire(
       z: Math.floor(position.z),
       dimension: position.dimension,
     };
-    const occupied = yield* Effect.forEach([feet, { ...feet, y: feet.y + 1 }], (cell) =>
-      queryExactBlock(state.driver, cell),
+    const [floorBlock, ...occupied] = yield* Effect.forEach(
+      [{ ...feet, y: feet.y - 1 }, feet, { ...feet, y: feet.y + 1 }],
+      (cell) => queryExactBlock(state.driver, cell),
     );
-    if (!occupied.some((block) => block !== undefined && FIRE_BLOCK_IDS.has(block.blockId))) {
-      return;
+    if (
+      !occupied.some((block) => block !== undefined && FIRE_BLOCK_IDS.has(block.blockId)) &&
+      (floorBlock === undefined || !HOT_FLOOR_BLOCK_IDS.has(floorBlock.blockId))
+    ) {
+      return false;
     }
     const candidates = FIRE_STEP_OFFSETS.map((offset) => ({
       x: feet.x + offset.x,
@@ -8690,7 +8696,12 @@ function stepOutOfFire(
         [{ ...cell, y: cell.y - 1 }, cell, { ...cell, y: cell.y + 1 }],
         (block) => queryExactBlock(state.driver, block),
       );
-      if (!isSolid(floor) || !isFireFreeOpenBlock(body) || !isFireFreeOpenBlock(head)) {
+      if (
+        !isSolid(floor) ||
+        (floor !== undefined && HOT_FLOOR_BLOCK_IDS.has(floor.blockId)) ||
+        !isFireFreeOpenBlock(body) ||
+        !isFireFreeOpenBlock(head)
+      ) {
         continue;
       }
       const stepped = yield* state.driver
@@ -8706,9 +8717,10 @@ function stepOutOfFire(
           Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
         );
       if (stepped) {
-        return;
+        return true;
       }
     }
+    return false;
   });
 }
 
@@ -13378,13 +13390,18 @@ function escapeEnvironmentalDamage(
     // A live run burned to death for twelve seconds while this escape walked
     // toward the surface. Lava and fire need their own response first.
     const burning = yield* state.driver.observe;
+    // Magma hurts without setting the bot alight, so burning ground is
+    // checked before anything else. A live bot stood on magma in the Nether
+    // through ten interrupts and burned to death.
+    if (!burning.player.dead && (yield* stepOffBurningGround(state, burning))) {
+      return;
+    }
     if (
       !burning.player.dead &&
       (burning.player.fireTicks > 0 ||
         (yield* isPlayerInLava(state.driver, burning.player.position)))
     ) {
-      yield* stepOutOfFire(state, burning);
-      yield* escapeLava(state, yield* state.driver.observe);
+      yield* escapeLava(state, burning);
       yield* extinguishFire(state, yield* state.driver.observe);
       return;
     }
