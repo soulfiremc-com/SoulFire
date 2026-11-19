@@ -61,7 +61,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { readEnvironment } from "./environment.ts";
+import { minecraftContainerLifecycleArguments, readEnvironment } from "./environment.ts";
 import { pruneArtifactRuns } from "./artifact-retention.ts";
 import { BoundedLog } from "./bounded-log.ts";
 import {
@@ -1705,7 +1705,7 @@ const startMinecraftFixture = Effect.suspend(() => {
     const commonArguments = [
       "run",
       "--detach",
-      "--rm",
+      ...minecraftContainerLifecycleArguments(fixtureConfiguration.keepContainer),
       "--name",
       containerName,
       "--log-driver",
