@@ -10,8 +10,8 @@ on:
         description: "Snapshot version after release"
         required: true
 
-# FIXME: Entire secret keys should not be inherited, Use specific set of secrets explicitly instead.
-# See this issue to learn more: https://github.com/zizmorcore/zizmor/issues/360
+permissions: {}
+
 jobs:
   native-runtime:
     uses: ./.github/workflows/vulkan-runtime.yml
@@ -25,7 +25,6 @@ jobs:
     with:
       version: ${{ inputs.version }}
       update_sdk: true
-    secrets: inherit
 
   build:
     needs: [set-release-version, native-runtime]
@@ -54,6 +53,9 @@ jobs:
           path: build/vulkan-prebuilt
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          # Release artifacts must not come from a cache that other workflows can write.
+          cache-disabled: true
       - name: Build with Gradle
         run: ./gradlew build test -PvulkanPlatforms=all -PvulkanRuntimeDirectory=build/vulkan-prebuilt --stacktrace --scan
 
@@ -198,7 +200,7 @@ jobs:
             dedicated-launcher/build/libs/SoulFireDedicated-${{ inputs.version }}.jar
             client-launcher/build/libs/SoulFireCLI-${{ inputs.version }}.jar
       - name: Announce release on Discord
-        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # 7.0.0
+        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.WEBHOOK_URL }}
           content: <@&850705047938793503> New SoulFire version released!
@@ -213,12 +215,16 @@ jobs:
     uses: soulfiremc-com/SoulFire/.github/workflows/deploy-javadoc.yml@main
     permissions:
       contents: write
-    secrets: inherit
 
   deploy-docker:
     needs: build
     uses: soulfiremc-com/SoulFire/.github/workflows/docker-deploy.yml@main
-    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
 
   publish-sdk:
     needs: build
@@ -277,4 +283,3 @@ jobs:
       contents: write
     with:
       version: ${{ inputs.after-version }}
-    secrets: inherit

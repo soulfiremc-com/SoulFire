@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to set'
+        description: "Version to set"
         required: true
       update_sdk:
-        description: 'Update SDK package versions'
+        description: "Update SDK package versions"
         required: true
         default: false
         type: boolean
@@ -21,6 +21,8 @@ on:
         default: false
         type: boolean
 
+permissions: {}
+
 jobs:
   set-version:
     name: Set Version
@@ -29,25 +31,26 @@ jobs:
       contents: write
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      - name: 'Shared: Checkout repository'
+      # The Push Version step pushes with the persisted checkout credentials.
+      - name: "Shared: Checkout repository" # zizmor: ignore[artipacked]
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
-      - name: 'Set Version'
+      - name: "Set Version"
         run: |
           sed -i 's/^maven_version=.*/maven_version='"${INPUTS_VERSION}"'/g' gradle.properties
         env:
           INPUTS_VERSION: ${{ inputs.version }}
 
-      - name: 'Set up Bun'
+      - name: "Set up Bun"
         if: inputs.update_sdk
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.4.4"
 
-      - name: 'Set SDK Version'
+      - name: "Set SDK Version"
         if: inputs.update_sdk
         run: |
           node scripts/set-sdk-version.mjs "${INPUTS_VERSION}"
@@ -55,15 +58,15 @@ jobs:
         env:
           INPUTS_VERSION: ${{ inputs.version }}
 
-      - name: 'Commit Version'
+      - name: "Commit Version"
         uses: stefanzweifel/git-auto-commit-action@d0b01107b5db882071f96de5dd4b54961ea93f4c # v7.2.1
         with:
-          commit_message: 'chore(release): bump version to ${{ inputs.version }}'
+          commit_message: "chore(release): bump version to ${{ inputs.version }}"
           skip_fetch: true
           skip_checkout: true
           skip_push: true
 
-      - name: 'Push Version'
+      - name: "Push Version"
         env:
           RELEASE_BRANCH: ${{ github.ref_name }}
         run: |

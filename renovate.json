@@ -1,5 +1,10 @@
 {
-  "extends": ["config:base", "group:allNonMajor", ":semanticCommits"],
+  "extends": [
+    "config:base",
+    "group:allNonMajor",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests"
+  ],
   "ignoreDeps": [
     "net.fabricmc:intermediary",
     "eclipse-temurin",

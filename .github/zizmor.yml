@@ -1,0 +1,8 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # release.yml calls this repository's own reusable workflows at main,
+        # so they run the version that the release commits were pushed to.
+        soulfiremc-com/SoulFire/*: ref-pin
+        "*": hash-pin

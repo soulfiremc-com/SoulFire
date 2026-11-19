@@ -1,13 +1,22 @@
 name: Docker Deploy
-on: [ workflow_dispatch, workflow_call ]
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_PASSWORD:
+        required: true
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build:
     runs-on: blacksmith-2vcpu-ubuntu-2404
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout repository
@@ -68,5 +77,5 @@ jobs:
         with:
           destination_container_repo: alexprogrammerde/soulfire
           provider: dockerhub
-          short_description: 'Advanced Minecraft Bot Tool. Deploy bots for testing, automation, and server development.'
-          readme_file: 'README.md'
+          short_description: "Advanced Minecraft Bot Tool. Deploy bots for testing, automation, and server development."
+          readme_file: "README.md"
