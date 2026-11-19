@@ -5,7 +5,7 @@ import {
   PacketDirection,
   type RawPacketEvent,
 } from "@soulfiremc/sdk/generated/soulfire/protocol_pb";
-import { Effect, Result } from "effect";
+import { Clock, Effect, Result } from "effect";
 import {
   BOT_NAME,
   CheckFailed,
@@ -58,8 +58,8 @@ const pause = (ms: number) =>
 
 export default {
   name: "inventory-move-packets",
-  run: ({ bot, client }) => {
-    return Effect.scoped(
+  run: ({ bot, client }) =>
+    Effect.scoped(
       Effect.gen(function* () {
         const forced = (yield* rcon("forceload query 4256 0", { check: false })).includes(
           "not marked",
@@ -82,6 +82,7 @@ export default {
         const effectContext = yield* Effect.context();
         const run = Effect.runPromiseWith(effectContext);
 
+        const clock = yield* Clock.Clock;
         yield* Effect.tryPromise({
           try: async () => {
             const events: RawPacketEvent[] = [];
@@ -110,8 +111,8 @@ export default {
               const start = events.length;
               const slot = markerSlot;
               await run(bot.clickInventory(slot));
-              const until = Date.now() + 3000;
-              while (Date.now() < until) {
+              const until = clock.currentTimeMillisUnsafe() + 3000;
+              while (clock.currentTimeMillisUnsafe() < until) {
                 if (streamError) throw streamError;
                 const event = events.slice(start).find((entry) => clickedSlot(entry) === slot);
                 if (event) return event.sequence;
@@ -365,6 +366,5 @@ export default {
           catch: (cause) => new CheckFailed({ message: String(cause) }),
         });
       }),
-    );
-  },
+    ),
 } satisfies E2ETest;

@@ -858,8 +858,8 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
     call?: CallOptions;
   }): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireTask.events", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireTask.events", (signal) =>
           this.client.watchBotTask(
             {
               taskId: this.id,
@@ -868,8 +868,8 @@ export class SoulFireTask<Result extends DescMessage | undefined = undefined> {
             },
             withWatchSignal(options?.call, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -1485,9 +1485,9 @@ export class SoulFireTasks {
     options: GuardTaskOptions = {},
   ): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return this.runGuardSubject({ case: "position", value: position }, threats, false, options);
-      }),
+      Effect.sync(() =>
+        this.runGuardSubject({ case: "position", value: position }, threats, false, options),
+      ),
     );
   }
 
@@ -2687,8 +2687,8 @@ export class SoulFireTasks {
     call?: CallOptions;
   }): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireTasks.watch", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireTasks.watch", (signal) =>
           this.client.watchBotTasks(
             {
               instanceId: this.instanceId,
@@ -2701,8 +2701,8 @@ export class SoulFireTasks {
             },
             withWatchSignal(options?.call, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 }

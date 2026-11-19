@@ -8,7 +8,9 @@ export default {
       const commands = ["advance_time", "advance_weather", "spawn_mobs", "random_tick_speed"].map(
         (rule) => `gamerule ${rule}`,
       );
-      const expected = yield* Effect.forEach(commands, (command) => rcon(command));
+      const expected = yield* Effect.forEach(commands, (command) => rcon(command), {
+        concurrency: 1,
+      });
       const results = yield* Effect.forEach(
         Array.from({ length: 128 }, (_, index) => index % commands.length),
         (index) =>

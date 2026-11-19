@@ -61,8 +61,10 @@ export default {
             value: { kind: { case: "boolValue", value: false } },
           });
         }
-        const bots = yield* Effect.forEach(NAMES, (name) =>
-          instance.getOrCreateBot(name, { readyTimeoutMs: 60_000 }),
+        const bots = yield* Effect.forEach(
+          NAMES,
+          (name) => instance.getOrCreateBot(name, { readyTimeoutMs: 60_000 }),
+          { concurrency: 1 },
         );
         const forced = (yield* rcon("forceload query 4256 0", { check: false })).includes(
           "not marked",
@@ -166,7 +168,9 @@ export default {
             }
             const containers =
               mode === "inventory"
-                ? yield* Effect.forEach(bots, (bot) => bot.inventory.open(CHEST))
+                ? yield* Effect.forEach(bots, (bot) => bot.inventory.open(CHEST), {
+                    concurrency: 1,
+                  })
                 : [];
             for (const container of containers) {
               yield* eventually(

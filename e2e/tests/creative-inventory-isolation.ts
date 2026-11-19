@@ -21,8 +21,8 @@ const firstItem = (target: SoulFireBot, itemId: string) =>
 
 export default {
   name: "creative-inventory-isolation",
-  run: ({ bot, client }) => {
-    return Effect.gen(function* () {
+  run: ({ bot, client }) =>
+    Effect.gen(function* () {
       const effectContext = yield* Effect.context();
       const run = Effect.runPromiseWith(effectContext);
       const instance = client.instance(bot.instanceId);
@@ -95,6 +95,5 @@ export default {
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),
       Effect.scoped,
-    );
-  },
+    ),
 } satisfies E2ETest;

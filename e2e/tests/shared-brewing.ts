@@ -37,8 +37,10 @@ export default {
             value: { kind: { case: "boolValue", value: false } },
           });
         }
-        const bots = yield* Effect.forEach(NAMES, (name) =>
-          instance.getOrCreateBot(name, { readyTimeoutMs: 60_000 }),
+        const bots = yield* Effect.forEach(
+          NAMES,
+          (name) => instance.getOrCreateBot(name, { readyTimeoutMs: 60_000 }),
+          { concurrency: 1 },
         );
         yield* rcon("forceload add 3920 0 3935 15");
         yield* Effect.addFinalizer(() =>
@@ -119,7 +121,9 @@ export default {
                 { concurrency: 2 },
               );
               yield* Effect.addFinalizer(() =>
-                Effect.forEach(tasks, (task) => task.cancel("test cleanup").pipe(Effect.ignore)),
+                Effect.forEach(tasks, (task) => task.cancel("test cleanup").pipe(Effect.ignore), {
+                  concurrency: 1,
+                }),
               );
               const states = yield* Effect.forEach(
                 tasks,
@@ -128,7 +132,7 @@ export default {
               ).pipe(
                 Effect.catch((error) =>
                   Effect.flatMap(
-                    Effect.forEach(tasks, (task) => task.refresh()),
+                    Effect.forEach(tasks, (task) => task.refresh(), { concurrency: 1 }),
                     (current) =>
                       Effect.fail(
                         new CheckFailed({

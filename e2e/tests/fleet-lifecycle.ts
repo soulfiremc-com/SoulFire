@@ -34,8 +34,10 @@ export default {
             value: { kind: { case: "boolValue", value: false } },
           });
         }
-        const bots = yield* Effect.forEach(NAMES, (name) =>
-          instance.getOrCreateBot(name, { start: false }),
+        const bots = yield* Effect.forEach(
+          NAMES,
+          (name) => instance.getOrCreateBot(name, { start: false }),
+          { concurrency: 1 },
         );
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {

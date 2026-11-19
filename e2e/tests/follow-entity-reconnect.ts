@@ -34,8 +34,8 @@ const near = (x: number) =>
 
 export default {
   name: "follow-entity-reconnect",
-  run: ({ bot }) => {
-    return Effect.scoped(
+  run: ({ bot }) =>
+    Effect.scoped(
       Effect.gen(function* () {
         const forced: number[] = [];
         yield* Effect.addFinalizer(() =>
@@ -158,6 +158,5 @@ export default {
         );
         yield* sentinel.result({ call: { timeoutMs: 5000 } });
       }),
-    );
-  },
+    ),
 } satisfies E2ETest;

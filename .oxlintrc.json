@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/strict.json"],
+  "extends": [
+    "./node_modules/@effect/tsgo/oxlint-presets/strict.json",
+    "./node_modules/@effect/tsgo/oxlint-presets/antipattern.json"
+  ],
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest", "effecttsgo"],
   "categories": {
     "correctness": "error",
@@ -31,19 +34,110 @@
     "sdk/reference/.source/**"
   ],
   "rules": {
+    "effecttsgo/acquire-release-disposable": "error",
+    "effecttsgo/all-of-map-to-for-each": "error",
     "effecttsgo/any-unknown-in-error-context": "off",
+    "effecttsgo/catch-all-tag-dispatch-to-catch-tag": "error",
+    "effecttsgo/catch-all-to-map-error": "error",
+    "effecttsgo/catch-chain-to-first-success-of": "error",
+    "effecttsgo/catch-conditional-refail-to-catch-if": "error",
+    "effecttsgo/catch-die-to-or-die": "error",
+    "effecttsgo/catch-if-tag-to-catch-tag": "error",
+    "effecttsgo/catch-refail-to-tap-error": "error",
+    "effecttsgo/catch-tag-to-catch-reason": "error",
+    "effecttsgo/catch-to-ignore": "error",
+    "effecttsgo/catch-to-or-else-succeed": "error",
+    "effecttsgo/catch-unfailable-effect": "error",
     "effecttsgo/crypto-random-uuid-in-effect": "error",
+    "effecttsgo/deterministic-keys": "error",
+    "effecttsgo/effect-do-notation": "error",
+    "effecttsgo/effect-fn-iife": "error",
+    "effecttsgo/effect-fn-opportunity": "error",
+    "effecttsgo/effect-gen-uses-adapter": "error",
+    "effecttsgo/effect-in-failure": "error",
+    "effecttsgo/effect-in-void-success": "error",
+    "effecttsgo/effect-map-flatten": "error",
+    "effecttsgo/effect-map-void": "error",
+    "effecttsgo/effect-sleep-zero-to-yield-now": "error",
+    "effecttsgo/effect-succeed-with-undefined": "error",
+    "effecttsgo/effect-succeed-with-void": "error",
+    "effecttsgo/effect-try-without-catch": "error",
     "effecttsgo/extends-native-error": "error",
+    "effecttsgo/fail-cause-to-constructor": "error",
+    "effecttsgo/flat-map-conditional-to-filter-or-fail": "error",
+    "effecttsgo/flat-map-identity-to-flatten": "error",
+    "effecttsgo/flat-map-ignored-param-to-and-then": "error",
+    "effecttsgo/flat-map-provide-service-to-provide-service-effect": "error",
+    "effecttsgo/flat-map-to-map": "error",
+    "effecttsgo/flat-map-to-tap": "error",
+    "effecttsgo/for-loop-push-to-for-each": "error",
     "effecttsgo/global-console-in-effect": "error",
     "effecttsgo/global-date-in-effect": "error",
+    "effecttsgo/global-error-in-effect-catch": "error",
+    "effecttsgo/global-error-in-effect-failure": "error",
     "effecttsgo/global-fetch-in-effect": "error",
     "effecttsgo/global-json-in-effect": "error",
     "effecttsgo/global-random-in-effect": "error",
     "effecttsgo/global-timers-in-effect": "error",
+    "effecttsgo/layer-merge-all-with-dependencies": "error",
+    "effecttsgo/lazy-effect": "error",
+    "effecttsgo/lazy-promise-in-effect-sync": "error",
+    "effecttsgo/leaking-requirements": "error",
+    "effecttsgo/manual-metric-tap-to-track": "error",
+    "effecttsgo/map-const-to-as": "error",
+    "effecttsgo/map-map-error-to-map-both": "error",
+    "effecttsgo/map-some-catch-no-such-element": "error",
+    "effecttsgo/map-some-to-as-some": "error",
+    "effecttsgo/match-boolean-to-is-success": "error",
+    "effecttsgo/match-effect-to-map-both": "error",
+    "effecttsgo/match-effect-to-match": "error",
+    "effecttsgo/match-to-result-or-option": "error",
+    "effecttsgo/missed-pipeable-opportunity": "error",
+    "effecttsgo/missing-concurrency-option": "error",
+    "effecttsgo/missing-effect-service-dependency": "error",
+    "effecttsgo/multiple-catch-tag": "error",
+    "effecttsgo/multiple-effect-provide": "error",
+    "effecttsgo/nested-effect-gen-yield": "error",
+    "effecttsgo/on-exit-failure-to-on-error": "error",
+    "effecttsgo/option-match-to-from-option": "error",
+    "effecttsgo/prefer-barrel-import": "error",
+    "effecttsgo/prefer-namespace-import": "error",
     "effecttsgo/prefer-schema-over-json": "error",
     "effecttsgo/prefer-schema-tagged-error": "error",
+    "effecttsgo/prefer-schema-type-property": "error",
+    "effecttsgo/prefer-succeed-some-or-none": "error",
+    "effecttsgo/prefer-typed-schema-decoder": "error",
+    "effecttsgo/prefer-unsafe-constructor": "error",
     "effecttsgo/process-env-in-effect": "error",
+    "effecttsgo/provide-layer-succeed-to-provide-service": "error",
+    "effecttsgo/provide-merge-all-to-array": "error",
+    "effecttsgo/race-first-with-sleep-to-timeout": "error",
+    "effecttsgo/redundant-map-error": "error",
+    "effecttsgo/redundant-or-die": "error",
+    "effecttsgo/redundant-schema-tag-identifier": "error",
+    "effecttsgo/result-match-to-from-result": "error",
+    "effecttsgo/return-effect-in-gen": "error",
+    "effecttsgo/run-effect-inside-effect": "error",
+    "effecttsgo/run-of-exit-to-run-exit": "error",
+    "effecttsgo/schema-number": "error",
+    "effecttsgo/schema-struct-with-tag": "error",
+    "effecttsgo/schema-sync-in-effect": "error",
+    "effecttsgo/schema-union-of-literals": "error",
+    "effecttsgo/scope-in-layer-effect": "error",
+    "effecttsgo/service-not-as-class": "error",
     "effecttsgo/strict-effect-provide": "off",
+    "effecttsgo/suspend-fail-to-fail-sync": "error",
+    "effecttsgo/sync-to-succeed": "error",
+    "effecttsgo/timeout-catch-tag-to-timeout-or-else": "error",
+    "effecttsgo/try-catch-in-effect-gen": "error",
+    "effecttsgo/type-union-to-schema-union": "error",
+    "effecttsgo/unknown-in-effect-catch": "error",
+    "effecttsgo/unnecessary-arrow-block": "error",
+    "effecttsgo/unnecessary-effect-gen": "error",
+    "effecttsgo/unnecessary-fail-yieldable-error": "error",
+    "effecttsgo/unnecessary-pipe": "error",
+    "effecttsgo/unnecessary-pipe-chain": "error",
+    "effecttsgo/unnecessary-typeof-type": "error",
     "effecttsgo/unsafe-effect-type-assertion": "off",
     "effecttsgo/yield-in-call-argument": "error",
     "eslint/array-callback-return": "error",
@@ -89,7 +183,12 @@
     "eslint/prefer-template": "error",
     "eslint/require-await": "off",
     "import/max-dependencies": "off",
-    "import/no-cycle": "error",
+    "import/no-cycle": [
+      "error",
+      {
+        "ignoreTypes": true
+      }
+    ],
     "import/no-duplicates": "error",
     "oxc/no-accumulating-spread": "error",
     "oxc/no-barrel-file": "error",
@@ -179,8 +278,44 @@
   },
   "overrides": [
     {
+      "files": [
+        "e2e/**/*.ts",
+        "sdk/beat-game/smoke/**/*.ts",
+        "sdk/typescript/src/{node,bun,local-server,local-server-io,cli,plugin-generator}.ts",
+        "scripts/**/*.ts"
+      ],
+      "rules": {
+        "effecttsgo/global-fetch": "error",
+        "effecttsgo/global-random": "error",
+        "effecttsgo/global-console": "error"
+      }
+    },
+    {
+      "files": [
+        "e2e/run.ts",
+        "sdk/typescript/src/{node,bun}.ts",
+        "scripts/validate-mineflayer-parity.ts"
+      ],
+      "rules": {
+        "effecttsgo/global-json": "error",
+        "effecttsgo/global-timers": "error",
+        "effecttsgo/crypto-random-uuid": "error",
+        "effecttsgo/process-env": "error"
+      }
+    },
+    {
+      "files": ["e2e/**/*.ts", "sdk/typescript/src/{node,bun}.ts", "scripts/**/*.ts"],
+      "rules": { "effecttsgo/global-date": "error" }
+    },
+    {
+      "files": ["sdk/typescript/src/{node,bun}.ts", "scripts/validate-mineflayer-parity.ts"],
+      "rules": { "effecttsgo/node-builtin-import": "error" }
+    },
+    {
       "files": ["sdk/beat-game/test/smoke-debug-server.test.ts"],
-      "rules": { "effecttsgo/global-fetch-in-effect": "off" }
+      "rules": {
+        "effecttsgo/global-fetch-in-effect": "off"
+      }
     },
     {
       "files": [
@@ -189,7 +324,9 @@
         "e2e/tests/pov-audio.ts",
         "e2e/tests/protocol-reconnect.ts"
       ],
-      "rules": { "effecttsgo/global-timers-in-effect": "off" }
+      "rules": {
+        "effecttsgo/global-timers-in-effect": "off"
+      }
     },
     {
       "files": [
@@ -197,7 +334,9 @@
         "sdk/typescript/src/bun.ts",
         "sdk/typescript/src/node.ts"
       ],
-      "rules": { "oxc/no-barrel-file": "off" }
+      "rules": {
+        "oxc/no-barrel-file": "off"
+      }
     },
     {
       "files": [
@@ -208,7 +347,9 @@
         "sdk/typescript/src/inventory.ts",
         "sdk/typescript/src/plugins.ts"
       ],
-      "rules": { "effecttsgo/extends-native-error": "off" }
+      "rules": {
+        "effecttsgo/extends-native-error": "off"
+      }
     },
     {
       "files": [
@@ -219,6 +360,7 @@
         "sdk/typescript/src/client.ts",
         "sdk/typescript/test/api.test.ts",
         "sdk/typescript/examples/quickstart.ts",
+        "scripts/validate-mineflayer-parity.ts",
         "sdk/beat-game/smoke/e2e.ts",
         "e2e/run.ts"
       ],

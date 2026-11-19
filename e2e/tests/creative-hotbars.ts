@@ -116,8 +116,8 @@ const expectSaved = (target: SoulFireBot, item: string) =>
 
 export default {
   name: "creative-hotbars",
-  run: ({ bot, client }) => {
-    return Effect.gen(function* () {
+  run: ({ bot, client }) =>
+    Effect.gen(function* () {
       const instance = client.instance(bot.instanceId);
       const cleanup: { otherId?: string } = {};
       yield* Effect.addFinalizer(() =>
@@ -226,6 +226,5 @@ export default {
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),
       Effect.scoped,
-    );
-  },
+    ),
 } satisfies E2ETest;

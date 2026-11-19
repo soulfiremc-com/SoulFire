@@ -1015,14 +1015,14 @@ export class SoulFireInstance {
     options?: CallOptions,
   ): Stream.Stream<CredentialsAuthResponse, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireInstance.loginCredentials", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireInstance.loginCredentials", (signal) =>
           this.#requireMcAuthClient().loginCredentials(
             { ...request, instanceId: this.id },
             withSignal(options, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -1031,14 +1031,14 @@ export class SoulFireInstance {
     options?: CallOptions,
   ): Stream.Stream<DeviceCodeAuthResponse, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireInstance.loginDeviceCode", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireInstance.loginDeviceCode", (signal) =>
           this.#requireMcAuthClient().loginDeviceCode(
             { ...request, instanceId: this.id },
             withSignal(options, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -1074,14 +1074,14 @@ export class SoulFireInstance {
     options?: CallOptions,
   ): Stream.Stream<WatchBotStatusesResponse, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireInstance.watchBotStatuses", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireInstance.watchBotStatuses", (signal) =>
           this.#botClient.watchBotStatuses(
             { instanceId: this.id },
             withWatchSignal(options, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -1663,8 +1663,8 @@ export class SoulFireBot {
     if (this.#session !== undefined && filter === DEFAULT_EVENT_FILTER && options === undefined)
       return this.#session.events();
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireBot.events", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireBot.events", (signal) =>
           this.liveClient.watchBotEvents(
             {
               instanceId: this.instanceId,
@@ -1673,8 +1673,8 @@ export class SoulFireBot {
             },
             withWatchSignal(options, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -2331,8 +2331,8 @@ export class SoulFireBot {
     options?: CallOptions,
   ): Stream.Stream<PathfindProgress, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireBot.goTo", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireBot.goTo", (signal) =>
           this.liveClient.goTo(
             {
               ...request,
@@ -2341,8 +2341,8 @@ export class SoulFireBot {
             },
             withSignal(this.#actionOptions(options), signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 

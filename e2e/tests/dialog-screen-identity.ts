@@ -21,8 +21,8 @@ const rpc = <A>(call: () => Promise<A>) =>
 
 export default {
   name: "dialog-screen-identity",
-  run: ({ bot, client }) => {
-    return Effect.gen(function* () {
+  run: ({ bot, client }) =>
+    Effect.gen(function* () {
       const service = client.service(BotService);
       const scope = { instanceId: bot.instanceId, botId: bot.id };
       const show = (title: string, value: string) =>
@@ -128,6 +128,5 @@ export default {
           ),
         ),
       ),
-    );
-  },
+    ),
 } satisfies E2ETest;

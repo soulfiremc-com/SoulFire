@@ -321,11 +321,11 @@ export class SoulFireAdmin {
     options?: CallOptions,
   ): Stream.Stream<LogResponse, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireAdmin.logs", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireAdmin.logs", (signal) =>
           this.#logs.subscribe(request, withSignal(options, signal)),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -462,11 +462,11 @@ export class SoulFireAdmin {
     options?: CallOptions,
   ): Stream.Stream<ScriptEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireAdmin.activateScript", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireAdmin.activateScript", (signal) =>
           this.#scripts.activateScript({ ...request, instanceId }, withSignal(options, signal)),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -498,14 +498,14 @@ export class SoulFireAdmin {
     options?: CallOptions,
   ): Stream.Stream<ScriptLogEntry, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireAdmin.scriptLogs", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireAdmin.scriptLogs", (signal) =>
           this.#scripts.subscribeScriptLogs(
             { ...request, instanceId },
             withSignal(options, signal),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 
@@ -543,11 +543,11 @@ export class SoulFireAdmin {
     options?: CallOptions,
   ): Stream.Stream<ScriptEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return rpcStream("SoulFireAdmin.dryRunScript", (signal) =>
+      Effect.sync(() =>
+        rpcStream("SoulFireAdmin.dryRunScript", (signal) =>
           this.#scripts.dryRunScript({ ...request, instanceId }, withSignal(options, signal)),
-        );
-      }),
+        ),
+      ),
     );
   }
 }

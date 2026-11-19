@@ -58,38 +58,41 @@ await Effect.runPromise(
       const memberRuns = "runs" in run ? run.runs : [run];
       let savedCheckpoints = 0;
 
-      const eventConsumers = yield* Effect.forEach(memberRuns, (memberRun) =>
-        Effect.forkScoped(
-          memberRun.events.pipe(
-            Stream.runForEach((event) =>
-              Effect.sync(() => {
-                process.stdout.write(
-                  `${jsonLine({
-                    kind: "beat-game-event",
-                    memberRunId: memberRun.id,
-                    event,
-                  })}\n`,
-                );
-                if (event.type !== "checkpoint-saved") {
-                  return;
-                }
-                savedCheckpoints += 1;
-                if (
-                  configuration.crashAfterCheckpoints !== undefined &&
-                  savedCheckpoints >= configuration.crashAfterCheckpoints
-                ) {
-                  process.stderr.write(
+      const eventConsumers = yield* Effect.forEach(
+        memberRuns,
+        (memberRun) =>
+          Effect.forkScoped(
+            memberRun.events.pipe(
+              Stream.runForEach((event) =>
+                Effect.sync(() => {
+                  process.stdout.write(
                     `${jsonLine({
-                      kind: "intentional-hard-crash",
-                      savedCheckpoints,
+                      kind: "beat-game-event",
+                      memberRunId: memberRun.id,
+                      event,
                     })}\n`,
                   );
-                  process.exit(75);
-                }
-              }),
+                  if (event.type !== "checkpoint-saved") {
+                    return;
+                  }
+                  savedCheckpoints += 1;
+                  if (
+                    configuration.crashAfterCheckpoints !== undefined &&
+                    savedCheckpoints >= configuration.crashAfterCheckpoints
+                  ) {
+                    process.stderr.write(
+                      `${jsonLine({
+                        kind: "intentional-hard-crash",
+                        savedCheckpoints,
+                      })}\n`,
+                    );
+                    process.exit(75);
+                  }
+                }),
+              ),
             ),
           ),
-        ),
+        { concurrency: 1 },
       );
 
       const result = yield* run.awaitCompletion;

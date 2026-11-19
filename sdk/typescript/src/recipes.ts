@@ -97,11 +97,7 @@ export class SoulFireRecipes {
     count = 1,
     options: CraftTaskOptions = {},
   ): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
-    return Stream.unwrap(
-      Effect.sync(() => {
-        return this.tasks.runCraft(recipeId, count, options);
-      }),
-    );
+    return Stream.unwrap(Effect.sync(() => this.tasks.runCraft(recipeId, count, options)));
   }
 
   /**
@@ -124,11 +120,7 @@ export class SoulFireRecipes {
     count = 1,
     options: SmeltTaskOptions = {},
   ): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
-    return Stream.unwrap(
-      Effect.sync(() => {
-        return this.tasks.runSmelt(input, count, options);
-      }),
-    );
+    return Stream.unwrap(Effect.sync(() => this.tasks.runSmelt(input, count, options)));
   }
 
   /**
@@ -152,11 +144,7 @@ export class SoulFireRecipes {
     count = 1,
     options: BrewTaskOptions = {},
   ): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
-    return Stream.unwrap(
-      Effect.sync(() => {
-        return this.tasks.runBrew(input, ingredient, count, options);
-      }),
-    );
+    return Stream.unwrap(Effect.sync(() => this.tasks.runBrew(input, ingredient, count, options)));
   }
 
   /**
@@ -181,9 +169,7 @@ export class SoulFireRecipes {
     options: VillagerTradeTaskOptions = {},
   ): Stream.Stream<BotTaskEvent, SoulFireOperationError> {
     return Stream.unwrap(
-      Effect.sync(() => {
-        return this.tasks.runVillagerTrade(offerIndex, count, options);
-      }),
+      Effect.sync(() => this.tasks.runVillagerTrade(offerIndex, count, options)),
     );
   }
 

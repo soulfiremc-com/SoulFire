@@ -1948,7 +1948,7 @@ const startMinecraftFixture = Effect.suspend(() => {
                 rm(managedDataDirectory, { recursive: true, force: true }),
               ).pipe(Effect.ignore),
             ],
-            { discard: true },
+            { discard: true, concurrency: 1 },
           ),
     ),
   );

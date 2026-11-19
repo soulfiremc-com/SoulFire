@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Schema, Cause, Console, Effect, Result } from "effect";
+import { Schema, Cause, Console, DateTime, Effect, Result } from "effect";
 import {
   E2E_DIR,
   type E2ETest,
@@ -71,10 +71,14 @@ if (!existsSync(jar))
     `no SoulFire jar at ${jar}: run ./gradlew :dedicated-launcher:uberJar, or set SOULFIRE_E2E_JAR`,
   );
 
-const runDir = path.join(E2E_DIR, "runs", new Date().toISOString().replaceAll(/[:.]/gu, "-"));
-mkdirSync(runDir, { recursive: true });
-
 const program = Effect.gen(function* () {
+  const startedAt = yield* DateTime.now;
+  const runDir = path.join(
+    E2E_DIR,
+    "runs",
+    DateTime.formatIso(startedAt).replaceAll(/[:.]/gu, "-"),
+  );
+  mkdirSync(runDir, { recursive: true });
   yield* Console.log(`[e2e] logs in ${path.relative(process.cwd(), runDir)}`);
   // Added first, so it runs last: after the bot and SoulFire have stopped.
   yield* Effect.addFinalizer(() =>

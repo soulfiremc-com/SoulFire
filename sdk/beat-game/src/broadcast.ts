@@ -59,6 +59,7 @@ export class ReplayBroadcast<A> {
         }
         yield* Effect.forEach(this.#subscribers, (subscriber) => Queue.offer(subscriber, value), {
           discard: true,
+          concurrency: 1,
         });
       }),
     );
@@ -71,7 +72,7 @@ export class ReplayBroadcast<A> {
           return;
         }
         this.#ended = true;
-        yield* Effect.forEach(this.#subscribers, Queue.end, { discard: true });
+        yield* Effect.forEach(this.#subscribers, Queue.end, { discard: true, concurrency: 1 });
         this.#subscribers.clear();
       }),
     );

@@ -111,7 +111,9 @@ describe("Effect behavior combinators", () => {
     ));
 });
 
-class Counter extends Context.Service<Counter, { readonly value: number }>()("test/Counter") {}
+class Counter extends Context.Service<Counter, { readonly value: number }>()(
+  "@soulfiremc/sdk/test/behaviors.test/Counter",
+) {}
 // oxlint-disable-next-line unicorn/throw-new-error -- Schema.TaggedError is a class factory.
 class CustomFailure extends Schema.TaggedError<CustomFailure, { readonly brand: unique symbol }>()(
   "CustomFailure",

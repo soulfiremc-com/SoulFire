@@ -4320,11 +4320,14 @@ function refuseFloodedStaircaseStep(
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.sleep(100).pipe(
     Effect.andThen(
-      Effect.all([
-        queryExactBlock(driver, step),
-        queryExactBlock(driver, { ...step, y: step.y + 1 }),
-        queryExactBlock(driver, { ...step, y: step.y + 2 }),
-      ]),
+      Effect.all(
+        [
+          queryExactBlock(driver, step),
+          queryExactBlock(driver, { ...step, y: step.y + 1 }),
+          queryExactBlock(driver, { ...step, y: step.y + 2 }),
+        ],
+        { concurrency: 1 },
+      ),
     ),
     Effect.flatMap((blocks) => {
       const fluid = blocks.find(
@@ -4349,7 +4352,9 @@ function isOpenStaircaseStep(
   driver: BeatGameDriver,
   target: BeatGameBlockPosition,
 ): Effect.Effect<boolean, BeatGameDriverError> {
-  return Effect.all([queryExactBlock(driver, target), queryExactBlock(driver, below(target))]).pipe(
+  return Effect.all([queryExactBlock(driver, target), queryExactBlock(driver, below(target))], {
+    concurrency: 1,
+  }).pipe(
     Effect.map(
       ([targetBlock, supportBlock]) =>
         targetBlock?.replaceable === true && supportBlock?.replaceable === true,
@@ -4861,7 +4866,7 @@ function clearPortalInterior(
             });
           }),
         ),
-    { discard: true },
+    { discard: true, concurrency: 1 },
   );
 }
 
@@ -5945,7 +5950,7 @@ function takeBackPortalCastingLava(
           });
           yield* collectApproachedPortalCastingLavaSource(driver, block);
         }),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     ).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
   );
 }

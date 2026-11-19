@@ -600,76 +600,81 @@ export function makeSoulFireBeatGameDriver(
       }),
     );
 
-  const observe = Effect.all({
-    player: bot.world.player(),
-    inventory: bot.inventory.snapshot(),
-  }).pipe(
-    Effect.map(({ player, inventory }): BeatGameObservation => {
-      const position = required(player.position, "player.position");
-      const velocity = required(player.velocity, "player.velocity");
-      const rotation = required(player.rotation, "player.rotation");
-      const counts: Record<string, number> = {};
-      const remainingDurability: Record<string, number> = {};
-      const hotbar: Record<number, string> = {};
-      let occupiedPlayerSlots = 0;
-      const equipment = Object.fromEntries(
-        Object.entries(player.equipment).map(([slot, item]) => [slot, item.itemId]),
-      );
-      for (const slot of inventory.slots) {
-        if (
-          slot.item === undefined ||
-          (slot.area !== InventoryArea.MAIN &&
-            slot.area !== InventoryArea.HOTBAR &&
-            slot.area !== InventoryArea.ARMOR &&
-            slot.area !== InventoryArea.OFFHAND)
-        ) {
-          continue;
+  const observe = Effect.all(
+    {
+      player: bot.world.player(),
+      inventory: bot.inventory.snapshot(),
+    },
+    { concurrency: 1 },
+  ).pipe(
+    Effect.mapBoth({
+      onSuccess: ({ player, inventory }): BeatGameObservation => {
+        const position = required(player.position, "player.position");
+        const velocity = required(player.velocity, "player.velocity");
+        const rotation = required(player.rotation, "player.rotation");
+        const counts: Record<string, number> = {};
+        const remainingDurability: Record<string, number> = {};
+        const hotbar: Record<number, string> = {};
+        let occupiedPlayerSlots = 0;
+        const equipment = Object.fromEntries(
+          Object.entries(player.equipment).map(([slot, item]) => [slot, item.itemId]),
+        );
+        for (const slot of inventory.slots) {
+          if (
+            slot.item === undefined ||
+            (slot.area !== InventoryArea.MAIN &&
+              slot.area !== InventoryArea.HOTBAR &&
+              slot.area !== InventoryArea.ARMOR &&
+              slot.area !== InventoryArea.OFFHAND)
+          ) {
+            continue;
+          }
+          counts[slot.item.itemId] = (counts[slot.item.itemId] ?? 0) + slot.item.count;
+          if (slot.item.maxDamage > 0) {
+            remainingDurability[slot.item.itemId] =
+              (remainingDurability[slot.item.itemId] ?? 0) +
+              Math.max(0, slot.item.maxDamage - slot.item.damage) * slot.item.count;
+          }
+          if (slot.area === InventoryArea.MAIN || slot.area === InventoryArea.HOTBAR) {
+            occupiedPlayerSlots += 1;
+          }
+          if (slot.area === InventoryArea.HOTBAR) {
+            hotbar[slot.slot] = slot.item.itemId;
+          }
         }
-        counts[slot.item.itemId] = (counts[slot.item.itemId] ?? 0) + slot.item.count;
-        if (slot.item.maxDamage > 0) {
-          remainingDurability[slot.item.itemId] =
-            (remainingDurability[slot.item.itemId] ?? 0) +
-            Math.max(0, slot.item.maxDamage - slot.item.damage) * slot.item.count;
-        }
-        if (slot.area === InventoryArea.MAIN || slot.area === InventoryArea.HOTBAR) {
-          occupiedPlayerSlots += 1;
-        }
-        if (slot.area === InventoryArea.HOTBAR) {
-          hotbar[slot.slot] = slot.item.itemId;
-        }
-      }
-      return {
-        observedAt: new Date().toISOString(),
-        player: {
-          position: toPosition(position),
-          rotation: { yaw: rotation.yaw, pitch: rotation.pitch },
-          velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
-          onGround: player.onGround,
-          equipment,
-          health: player.health,
-          maxHealth: player.maxHealth,
-          food: player.food,
-          air: player.air,
-          maxAir: player.maxAir,
-          fireTicks: player.fireTicks,
-          dead: player.dead,
-          sleeping: player.sleeping,
-          usingItem: player.usingItem,
-          connectionEpoch: player.connectionEpoch,
-          revision: player.revision,
-        },
-        inventory: {
-          revision: inventory.revision,
-          selectedHotbarSlot: inventory.selectedHotbarSlot,
-          emptyPlayerSlots: Math.max(0, 36 - occupiedPlayerSlots),
-          pathBuildingBlockCount: inventory.pathBuildingBlockCount,
-          counts,
-          remainingDurability,
-          hotbar,
-        },
-      };
+        return {
+          observedAt: new Date().toISOString(),
+          player: {
+            position: toPosition(position),
+            rotation: { yaw: rotation.yaw, pitch: rotation.pitch },
+            velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+            onGround: player.onGround,
+            equipment,
+            health: player.health,
+            maxHealth: player.maxHealth,
+            food: player.food,
+            air: player.air,
+            maxAir: player.maxAir,
+            fireTicks: player.fireTicks,
+            dead: player.dead,
+            sleeping: player.sleeping,
+            usingItem: player.usingItem,
+            connectionEpoch: player.connectionEpoch,
+            revision: player.revision,
+          },
+          inventory: {
+            revision: inventory.revision,
+            selectedHotbarSlot: inventory.selectedHotbarSlot,
+            emptyPlayerSlots: Math.max(0, 36 - occupiedPlayerSlots),
+            pathBuildingBlockCount: inventory.pathBuildingBlockCount,
+            counts,
+            remainingDurability,
+            hotbar,
+          },
+        };
+      },
+      onFailure: mapError("observe"),
     }),
-    Effect.mapError(mapError("observe")),
   );
 
   const runTask = (
@@ -1086,8 +1091,10 @@ export function makeSoulFireBeatGameDriver(
           pageSize: query.maximumResults ?? 128,
         })
         .pipe(
-          Effect.map(({ blocks }) => blocks.map((block) => toBeatGameBlockObservation(block))),
-          Effect.mapError(mapError("queryBlocks")),
+          Effect.mapBoth({
+            onSuccess: ({ blocks }) => blocks.map((block) => toBeatGameBlockObservation(block)),
+            onFailure: mapError("queryBlocks"),
+          }),
         ),
     queryEntities: (query) =>
       bot.world
@@ -1099,52 +1106,53 @@ export function makeSoulFireBeatGameDriver(
           pageSize: query.maximumResults ?? 128,
         })
         .pipe(
-          Effect.map(({ entities }) =>
-            entities.map((entity): BeatGameEntityObservation => {
-              const reference = required(entity.reference, "entity.reference");
-              const velocity = required(entity.velocity, "entity.velocity");
-              const creeper =
-                entity.entityType === "minecraft:creeper"
-                  ? creeperObservation(entity.metadata)
-                  : undefined;
-              const sheep =
-                entity.entityType === "minecraft:sheep"
-                  ? sheepObservation(entity.metadata)
-                  : undefined;
-              return {
-                connectionEpoch: reference.connectionEpoch,
-                networkId: reference.networkId,
-                ...(reference.uuid === undefined ? {} : { uuid: reference.uuid }),
-                entityType: entity.entityType,
-                position: toPosition(required(entity.position, "entity.position")),
-                velocity: {
-                  x: velocity.x,
-                  y: velocity.y,
-                  z: velocity.z,
-                },
-                alive: entity.alive,
-                ...(entity.health === undefined ? {} : { health: entity.health }),
-                ...(entity.item === undefined ? {} : { itemId: entity.item.itemId }),
-                ...(entity.target === undefined
-                  ? {}
-                  : {
-                      target: {
-                        connectionEpoch: entity.target.connectionEpoch,
-                        networkId: entity.target.networkId,
-                        ...(entity.target.uuid === undefined ? {} : { uuid: entity.target.uuid }),
-                      },
-                    }),
-                ...(entity.aggressive === undefined ? {} : { aggressive: entity.aggressive }),
-                ...(creeper === undefined ? {} : { creeper }),
-                ...(sheep === undefined ? {} : { sheep }),
-                ...(entity.rotation === undefined
-                  ? {}
-                  : { rotation: { yaw: entity.rotation.yaw, pitch: entity.rotation.pitch } }),
-                observedAt: new Date().toISOString(),
-              };
-            }),
-          ),
-          Effect.mapError(mapError("queryEntities")),
+          Effect.mapBoth({
+            onSuccess: ({ entities }) =>
+              entities.map((entity): BeatGameEntityObservation => {
+                const reference = required(entity.reference, "entity.reference");
+                const velocity = required(entity.velocity, "entity.velocity");
+                const creeper =
+                  entity.entityType === "minecraft:creeper"
+                    ? creeperObservation(entity.metadata)
+                    : undefined;
+                const sheep =
+                  entity.entityType === "minecraft:sheep"
+                    ? sheepObservation(entity.metadata)
+                    : undefined;
+                return {
+                  connectionEpoch: reference.connectionEpoch,
+                  networkId: reference.networkId,
+                  ...(reference.uuid === undefined ? {} : { uuid: reference.uuid }),
+                  entityType: entity.entityType,
+                  position: toPosition(required(entity.position, "entity.position")),
+                  velocity: {
+                    x: velocity.x,
+                    y: velocity.y,
+                    z: velocity.z,
+                  },
+                  alive: entity.alive,
+                  ...(entity.health === undefined ? {} : { health: entity.health }),
+                  ...(entity.item === undefined ? {} : { itemId: entity.item.itemId }),
+                  ...(entity.target === undefined
+                    ? {}
+                    : {
+                        target: {
+                          connectionEpoch: entity.target.connectionEpoch,
+                          networkId: entity.target.networkId,
+                          ...(entity.target.uuid === undefined ? {} : { uuid: entity.target.uuid }),
+                        },
+                      }),
+                  ...(entity.aggressive === undefined ? {} : { aggressive: entity.aggressive }),
+                  ...(creeper === undefined ? {} : { creeper }),
+                  ...(sheep === undefined ? {} : { sheep }),
+                  ...(entity.rotation === undefined
+                    ? {}
+                    : { rotation: { yaw: entity.rotation.yaw, pitch: entity.rotation.pitch } }),
+                  observedAt: new Date().toISOString(),
+                };
+              }),
+            onFailure: mapError("queryEntities"),
+          }),
         ),
     raycast: (query) =>
       bot.world
@@ -1155,13 +1163,15 @@ export function makeSoulFireBeatGameDriver(
           includeEntities: false,
         })
         .pipe(
-          Effect.map((response): BeatGameRaycastObservation => ({
-            ...(response.block === undefined
-              ? {}
-              : { block: toBeatGameBlockObservation(response.block) }),
-            distance: response.distance,
-          })),
-          Effect.mapError(mapError("raycast")),
+          Effect.mapBoth({
+            onSuccess: (response): BeatGameRaycastObservation => ({
+              ...(response.block === undefined
+                ? {}
+                : { block: toBeatGameBlockObservation(response.block) }),
+              distance: response.distance,
+            }),
+            onFailure: mapError("raycast"),
+          }),
         ),
     sampleSurface: (center, radius = 8, sampleStep = 2) =>
       bot.camera
@@ -1172,19 +1182,20 @@ export function makeSoulFireBeatGameDriver(
           sampleStep,
         })
         .pipe(
-          Effect.map(({ columns }) =>
-            columns.map((column): BeatGameSurfaceColumn => ({
-              x: column.x,
-              z: column.z,
-              loaded: column.loaded,
-              ...(column.surfaceY === undefined ? {} : { surfaceY: column.surfaceY }),
-              ...(column.blockId === undefined ? {} : { blockId: column.blockId }),
-              ...(column.biomeId === undefined ? {} : { biomeId: column.biomeId }),
-              skyLight: column.skyLight,
-              blockLight: column.blockLight,
-            })),
-          ),
-          Effect.mapError(mapError("sampleSurface")),
+          Effect.mapBoth({
+            onSuccess: ({ columns }) =>
+              columns.map((column): BeatGameSurfaceColumn => ({
+                x: column.x,
+                z: column.z,
+                loaded: column.loaded,
+                ...(column.surfaceY === undefined ? {} : { surfaceY: column.surfaceY }),
+                ...(column.blockId === undefined ? {} : { blockId: column.blockId }),
+                ...(column.biomeId === undefined ? {} : { biomeId: column.biomeId }),
+                skyLight: column.skyLight,
+                blockLight: column.blockLight,
+              })),
+            onFailure: mapError("sampleSurface"),
+          }),
         ),
     recipesFor: (resultItemId) =>
       bot.recipes
@@ -1193,40 +1204,43 @@ export function makeSoulFireBeatGameDriver(
           pageSize: 256,
         })
         .pipe(
-          Effect.map(({ recipes }) =>
-            recipes.map((recipe): BeatGameRecipe => ({
-              recipeId: recipe.recipeId,
-              recipeType: recipe.recipeType,
-              resultItemId: required(recipe.result, "recipe.result").itemId,
-              resultCount: required(recipe.result, "recipe.result").count,
-              ingredients: recipe.ingredients.map((ingredient) => ({
-                itemIds: ingredient.itemIds,
-                tags: ingredient.tags,
-                count: ingredient.count,
+          Effect.mapBoth({
+            onSuccess: ({ recipes }) =>
+              recipes.map((recipe): BeatGameRecipe => ({
+                recipeId: recipe.recipeId,
+                recipeType: recipe.recipeType,
+                resultItemId: required(recipe.result, "recipe.result").itemId,
+                resultCount: required(recipe.result, "recipe.result").count,
+                ingredients: recipe.ingredients.map((ingredient) => ({
+                  itemIds: ingredient.itemIds,
+                  tags: ingredient.tags,
+                  count: ingredient.count,
+                })),
               })),
-            })),
-          ),
-          Effect.mapError(mapError("recipesFor")),
+            onFailure: mapError("recipesFor"),
+          }),
         ),
     canCraft: (recipeId, count) =>
       bot.recipes.canCraft({ recipeId, count }).pipe(
-        Effect.map((response): BeatGameCraftability => ({
-          canCraft: response.canCraft,
-          maximumCraftCount: response.maximumCraftCount,
-          ...(response.requiredStation === undefined
-            ? {}
-            : { requiredStation: response.requiredStation }),
-          missing: response.missing.map((missing) => {
-            const ingredient = required(missing.ingredient, "missing.ingredient");
-            return {
-              itemIds: ingredient.itemIds,
-              tags: ingredient.tags,
-              available: missing.available,
-              missing: missing.missing,
-            };
+        Effect.mapBoth({
+          onSuccess: (response): BeatGameCraftability => ({
+            canCraft: response.canCraft,
+            maximumCraftCount: response.maximumCraftCount,
+            ...(response.requiredStation === undefined
+              ? {}
+              : { requiredStation: response.requiredStation }),
+            missing: response.missing.map((missing) => {
+              const ingredient = required(missing.ingredient, "missing.ingredient");
+              return {
+                itemIds: ingredient.itemIds,
+                tags: ingredient.tags,
+                available: missing.available,
+                missing: missing.missing,
+              };
+            }),
           }),
-        })),
-        Effect.mapError(mapError("canCraft")),
+          onFailure: mapError("canCraft"),
+        }),
       ),
     waitForChunks: (radiusChunks = 0, timeoutMs = 60_000) =>
       bot

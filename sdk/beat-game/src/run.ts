@@ -1154,7 +1154,7 @@ export function beatGameWithDriver(
             events.end(),
             snapshots.end(),
           ],
-          { discard: true },
+          { discard: true, concurrency: 1 },
         ),
       ),
     );
@@ -2869,7 +2869,7 @@ function openNightShelterEnclosure(
               : Effect.void,
           ),
         ),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     ),
   );
 }
@@ -3244,10 +3244,10 @@ function executeDecision(
     switch (decision.type) {
       case "recover-death": {
         return Effect.gen(function* () {
-          const [pendingDeaths, lastLivingObservation] = yield* Effect.all([
-            Ref.get(state.pendingDeaths),
-            Ref.get(state.lastLivingObservation),
-          ]);
+          const [pendingDeaths, lastLivingObservation] = yield* Effect.all(
+            [Ref.get(state.pendingDeaths), Ref.get(state.lastLivingObservation)],
+            { concurrency: 1 },
+          );
           const pendingDeath = pendingDeaths.find(
             (candidate) => candidate.observedAt === observation.observedAt,
           ) ?? {
@@ -3279,7 +3279,7 @@ function executeDecision(
                   confidence: 1,
                 }),
               ],
-              { discard: true },
+              { discard: true, concurrency: 1 },
             );
           }
           const customRecovery = state.hooks.recoverDeath;
@@ -3809,7 +3809,9 @@ function executeDecision(
               : approachLinkedNetherPortal(state, actionCheckpoint, observation).pipe(
                   Effect.flatMap((approached) =>
                     approached
-                      ? Effect.all([Ref.get(state.checkpoint), state.driver.observe]).pipe(
+                      ? Effect.all([Ref.get(state.checkpoint), state.driver.observe], {
+                          concurrency: 1,
+                        }).pipe(
                           Effect.flatMap(([checkpoint, current]) =>
                             enterKnownPortal(state, checkpoint, current),
                           ),
@@ -3863,7 +3865,7 @@ function executeDecision(
                       },
                     }),
               ],
-              { discard: true },
+              { discard: true, concurrency: 1 },
             ).pipe(
               Effect.as({
                 checkpoint: (checkpoint: BeatGameCheckpoint): BeatGameCheckpoint => ({
@@ -4046,7 +4048,9 @@ function executeDecision(
         return protectedResponse.pipe(
           Effect.flatMap(() =>
             decision.type === "recover-death" && interruptedForSafety
-              ? Effect.all([observeDriverFresh(state), Ref.get(state.pendingDeaths)]).pipe(
+              ? Effect.all([observeDriverFresh(state), Ref.get(state.pendingDeaths)], {
+                  concurrency: 1,
+                }).pipe(
                   Effect.flatMap(([latest, pendingDeaths]) => {
                     const latestDeath = pendingDeaths.at(-1);
                     return latest.player.dead ||
@@ -4461,14 +4465,17 @@ function monitorObservedSafety(
     decision.type !== "eat" &&
     (decision.type !== "recover-death" || !isRecentDeathObservation(actionObservedAt))
   ) {
-    return Effect.all([
-      shouldTakeNightShelter(state, previousObservation, {
-        leavesCover: decision.type === "recover-death",
-      }),
-      shouldTakeNightShelter(state, observation, {
-        leavesCover: decision.type === "recover-death",
-      }),
-    ]).pipe(
+    return Effect.all(
+      [
+        shouldTakeNightShelter(state, previousObservation, {
+          leavesCover: decision.type === "recover-death",
+        }),
+        shouldTakeNightShelter(state, observation, {
+          leavesCover: decision.type === "recover-death",
+        }),
+      ],
+      { concurrency: 1 },
+    ).pipe(
       Effect.flatMap(([previousShelterNeeded, shelterNeeded]) =>
         previousShelterNeeded && shelterNeeded
           ? Effect.succeed({
@@ -4648,36 +4655,39 @@ function findImmediateThreat(
     ...observation.player.position,
     y: observation.player.position.y + 1.62,
   };
-  return Effect.all([
-    state.driver.queryEntities({
-      origin,
-      radius: 24,
-      selector: {
-        categories: [2],
-        alive: true,
-        requireLineOfSight: true,
-      },
-      maximumResults: 32,
-    }),
-    state.driver.queryEntities({
-      origin,
-      radius: PROACTIVE_ESCAPE_ONLY_EVASION_RADIUS,
-      selector: {
-        entityTypes: [...ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES],
-        alive: true,
-      },
-      maximumResults: 8,
-    }),
-    state.driver.queryEntities({
-      origin,
-      radius: PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
-      selector: {
-        entityTypes: DANGEROUS_NEUTRAL_ENTITY_TYPES,
-        alive: true,
-      },
-      maximumResults: 8,
-    }),
-  ]).pipe(
+  return Effect.all(
+    [
+      state.driver.queryEntities({
+        origin,
+        radius: 24,
+        selector: {
+          categories: [2],
+          alive: true,
+          requireLineOfSight: true,
+        },
+        maximumResults: 32,
+      }),
+      state.driver.queryEntities({
+        origin,
+        radius: PROACTIVE_ESCAPE_ONLY_EVASION_RADIUS,
+        selector: {
+          entityTypes: [...ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES],
+          alive: true,
+        },
+        maximumResults: 8,
+      }),
+      state.driver.queryEntities({
+        origin,
+        radius: PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
+        selector: {
+          entityTypes: DANGEROUS_NEUTRAL_ENTITY_TYPES,
+          alive: true,
+        },
+        maximumResults: 8,
+      }),
+    ],
+    { concurrency: 1 },
+  ).pipe(
     Effect.map(([visibleHostiles, nearbyEscapeOnlyThreats, nearbyDangerousNeutralMobs]) => {
       const hostiles = new Map(
         [
@@ -8214,19 +8224,22 @@ function isPlayerInBlocks(
     ...playerBlock,
     y: Math.floor(position.y + 1.62),
   };
-  return Effect.forEach([playerBlock, headBlock], (block) =>
-    driver
-      .queryBlocks({
-        center: blockCenter(block),
-        radius: 0.25,
-        selector: { blockIds },
-        maximumResults: 1,
-      })
-      .pipe(
-        Effect.map((blocks) =>
-          blocks.some(({ position: observed }) => sameBlockPosition(observed, block)),
+  return Effect.forEach(
+    [playerBlock, headBlock],
+    (block) =>
+      driver
+        .queryBlocks({
+          center: blockCenter(block),
+          radius: 0.25,
+          selector: { blockIds },
+          maximumResults: 1,
+        })
+        .pipe(
+          Effect.map((blocks) =>
+            blocks.some(({ position: observed }) => sameBlockPosition(observed, block)),
+          ),
         ),
-      ),
+    { concurrency: 1 },
   ).pipe(Effect.map((results) => results.some(Boolean)));
 }
 
@@ -8436,7 +8449,7 @@ function withGoldCalmedPiglins(
       .queryEntities(query)
       .pipe(
         Effect.flatMap((entities) =>
-          Effect.all([Ref.get(observation), Ref.get(lastDamage)]).pipe(
+          Effect.all([Ref.get(observation), Ref.get(lastDamage)], { concurrency: 1 }).pipe(
             Effect.map(([current, damage]) =>
               Object.values(current.player.equipment).some((itemId) =>
                 GOLD_ARMOR_ITEM_IDS.has(itemId),
@@ -8526,26 +8539,29 @@ function findNearbyAttackThreat(
   observation: BeatGameObservation,
 ): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
   const radius = 16;
-  return Effect.all([
-    state.driver.queryEntities({
-      origin: observation.player.position,
-      radius,
-      selector: {
-        categories: [2],
-        alive: true,
-      },
-      maximumResults: 8,
-    }),
-    state.driver.queryEntities({
-      origin: observation.player.position,
-      radius,
-      selector: {
-        entityTypes: DANGEROUS_NEUTRAL_ENTITY_TYPES,
-        alive: true,
-      },
-      maximumResults: 8,
-    }),
-  ]).pipe(
+  return Effect.all(
+    [
+      state.driver.queryEntities({
+        origin: observation.player.position,
+        radius,
+        selector: {
+          categories: [2],
+          alive: true,
+        },
+        maximumResults: 8,
+      }),
+      state.driver.queryEntities({
+        origin: observation.player.position,
+        radius,
+        selector: {
+          entityTypes: DANGEROUS_NEUTRAL_ENTITY_TYPES,
+          alive: true,
+        },
+        maximumResults: 8,
+      }),
+    ],
+    { concurrency: 1 },
+  ).pipe(
     Effect.map(([hostiles, dangerousNeutralMobs]) => {
       const nearbyGroupCandidates = deduplicateEntityTargets([
         ...hostiles,
@@ -8960,6 +8976,7 @@ function stepOffBurningGround(
     const [floorBlock, ...occupied] = yield* Effect.forEach(
       [{ ...feet, y: feet.y - 1 }, feet, { ...feet, y: feet.y + 1 }],
       (cell) => queryExactBlock(state.driver, cell),
+      { concurrency: 1 },
     );
     if (
       !occupied.some((block) => block !== undefined && FIRE_BLOCK_IDS.has(block.blockId)) &&
@@ -8981,6 +8998,7 @@ function stepOffBurningGround(
       const [floor, body, head] = yield* Effect.forEach(
         [{ ...cell, y: cell.y - 1 }, cell, { ...cell, y: cell.y + 1 }],
         (block) => queryExactBlock(state.driver, block),
+        { concurrency: 1 },
       );
       if (
         !isSolid(floor) ||
@@ -11966,10 +11984,13 @@ function findStableResourceSearchStaircaseOrigin(
         ...support.position,
         y: support.position.y + 1,
       };
-      const [body, head] = yield* Effect.all([
-        queryExactBlockAt(state.driver, stand),
-        queryExactBlockAt(state.driver, { ...stand, y: stand.y + 1 }),
-      ]);
+      const [body, head] = yield* Effect.all(
+        [
+          queryExactBlockAt(state.driver, stand),
+          queryExactBlockAt(state.driver, { ...stand, y: stand.y + 1 }),
+        ],
+        { concurrency: 1 },
+      );
       if (
         body?.replaceable !== true ||
         head?.replaceable !== true ||
@@ -12040,13 +12061,16 @@ function selectResourceSearchStaircaseDestination(
             y: from.y - stepDepth,
             z: from.z + direction.z * stepDepth,
           };
-          return Effect.all([
-            queryExactBlockAt(driver, { ...tread, y: tread.y + 2 }),
-            queryExactBlockAt(driver, { ...tread, y: tread.y + 1 }),
-            queryExactBlockAt(driver, tread),
-            queryExactBlockAt(driver, { ...tread, y: tread.y - 1 }),
-            queryExactBlockAt(driver, { ...tread, y: tread.y - 2 }),
-          ]);
+          return Effect.all(
+            [
+              queryExactBlockAt(driver, { ...tread, y: tread.y + 2 }),
+              queryExactBlockAt(driver, { ...tread, y: tread.y + 1 }),
+              queryExactBlockAt(driver, tread),
+              queryExactBlockAt(driver, { ...tread, y: tread.y - 1 }),
+              queryExactBlockAt(driver, { ...tread, y: tread.y - 2 }),
+            ],
+            { concurrency: 1 },
+          );
         }),
         { concurrency: "unbounded" },
       );
@@ -15418,7 +15442,7 @@ function wearCarriedArmor(
             equipmentSlot: slot,
           });
     },
-    { discard: true },
+    { discard: true, concurrency: 1 },
   );
 }
 

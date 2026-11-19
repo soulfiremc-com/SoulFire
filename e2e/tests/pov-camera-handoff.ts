@@ -45,11 +45,10 @@ export default {
           yield* rcon(`kill @e[tag=${TAG}]`, { check: false });
           yield* Effect.sleep("500 millis");
           yield* placeBot(bot, { x: 3455.5, y: 64, z: 8.5 }, -90);
-          const task = yield* Effect.gen(function* () {
-            if (mode === "sdk-look") {
-              yield* bot.look(-90, 0);
-              return undefined;
-            }
+          let task;
+          if (mode === "sdk-look") {
+            yield* bot.look(-90, 0);
+          } else {
             yield* rcon(
               `summon cow ${mode === "completed-attack" ? 3458.5 : mode === "preempted-attack" ? 3477.5 : 3466.5} 64 8.5 {Tags:["${TAG}"],NoAI:1b}`,
             );
@@ -89,8 +88,8 @@ export default {
                 yield* attack.wait({ call: { timeoutMs: 5000 } });
               }
             }
-            return attack;
-          });
+            task = attack;
+          }
           if (mode !== "preempted-attack") yield* Effect.sleep("700 millis");
           const rotation = async () => {
             const text = await runPromise(rcon(`data get entity ${BOT_NAME} Rotation`));

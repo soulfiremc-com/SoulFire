@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BotService, GameMode } from "@soulfiremc/sdk/generated/soulfire/bot_pb";
 import { PovService, PovInputEvent_Kind as Kind } from "@soulfiremc/sdk/generated/soulfire/pov_pb";
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import {
   BOT_NAME,
   CheckFailed,
@@ -20,8 +20,8 @@ const move = (x: number) => ({ kind: Kind.MOVE, x: x / 427, y: 172 / 240 });
 
 export default {
   name: "pov-inventory-hotkeys",
-  run: ({ bot, client }) => {
-    return Effect.gen(function* () {
+  run: ({ bot, client }) =>
+    Effect.gen(function* () {
       yield* rcon("forceload add 1920 -16 1952 16");
       yield* rcon("fill 1926 63 -2 1930 63 2 stone");
       yield* rcon("fill 1926 64 -2 1930 67 2 air");
@@ -47,6 +47,7 @@ export default {
       if (!tab) return yield* new CheckFailed({ message: "The creative Inventory tab is missing" });
       yield* bot.clickContainerButton(tab.buttonId);
 
+      const clock = yield* Clock.Clock;
       yield* Effect.tryPromise({
         try: async () => {
           const pov = client.service(PovService);
@@ -59,7 +60,7 @@ export default {
           let phase = 0;
           let beforeHover = 0n;
           const expect = async (slot: number, item: string, count: number, label: string) => {
-            const deadline = Date.now() + 3000;
+            const deadline = clock.currentTimeMillisUnsafe() + 3000;
             do {
               const state = await inventory.getInventoryState(scope);
               if (
@@ -71,7 +72,7 @@ export default {
               await new Promise((resolve) => {
                 setTimeout(resolve, 50);
               });
-            } while (Date.now() < deadline);
+            } while (clock.currentTimeMillisUnsafe() < deadline);
             throw new Error(label);
           };
           try {
@@ -171,6 +172,5 @@ export default {
       Effect.ensuring(bot.closeContainer().pipe(Effect.ignore)),
       Effect.ensuring(rcon(`gamemode survival ${BOT_NAME}`).pipe(Effect.ignore)),
       Effect.ensuring(rcon("kill @e[type=item,x=1928,y=64,z=0,distance=..8]").pipe(Effect.ignore)),
-    );
-  },
+    ),
 } satisfies E2ETest;

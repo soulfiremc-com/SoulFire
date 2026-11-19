@@ -239,7 +239,7 @@ const prepareWorld = Effect.forEach(
     "setworldspawn 0 64 0",
   ],
   (command) => rcon(command),
-  { discard: true },
+  { discard: true, concurrency: 1 },
 );
 
 function env(vars: Record<string, string>) {
@@ -320,7 +320,10 @@ export const startSoulFire = Effect.fn("startSoulFire")(function* (
 
   // SoulFire keeps its instances in its database: start from a clean one each run.
   const old = (yield* soulfire.instances()).filter((i) => i.friendlyName === INSTANCE_NAME);
-  yield* Effect.forEach(old, (i) => soulfire.instance(i.id).delete(), { discard: true });
+  yield* Effect.forEach(old, (i) => soulfire.instance(i.id).delete(), {
+    discard: true,
+    concurrency: 1,
+  });
   const instance = yield* Effect.acquireRelease(
     soulfire.getOrCreateInstance(INSTANCE_NAME, { server: `${minecraft.host}:${minecraft.port}` }),
     (i) => i.delete().pipe(Effect.ignore),

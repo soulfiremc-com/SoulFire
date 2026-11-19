@@ -1,7 +1,11 @@
+// oxlint-disable-next-line effecttsgo/node-builtin-import -- Use the native SHA-256 digest for comparison with the checked-in matrix.
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 
-import { Schema } from "effect";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
+import { Effect, FileSystem, Path, Schema } from "effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 
 const ParityMatrix = Schema.fromJsonString(
   Schema.Struct({
@@ -20,16 +24,28 @@ const ParityMatrix = Schema.fromJsonString(
 );
 
 const matrixUrl = new URL("../docs/mineflayer-parity.json", import.meta.url);
-const matrix = Schema.decodeSync(ParityMatrix)(await readFile(matrixUrl, "utf8"));
-const sourceResponse = await fetch(
-  "https://raw.githubusercontent.com/PrismarineJS/mineflayer/master/docs/api.md",
+const { matrix, source } = await Effect.runPromise(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const matrixPath = yield* path.fromFileUrl(matrixUrl);
+    const matrixText = yield* fs.readFileString(matrixPath);
+    const decodedMatrix = yield* Schema.decodeEffect(ParityMatrix)(matrixText);
+    const response = yield* HttpClient.get(
+      "https://raw.githubusercontent.com/PrismarineJS/mineflayer/master/docs/api.md",
+    );
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to fetch Mineflayer API reference: ${response.status}`);
+    }
+
+    const sourceText = yield* response.text;
+    return { matrix: decodedMatrix, source: sourceText };
+  }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer, FetchHttpClient.layer])),
 );
 
-if (!sourceResponse.ok) {
-  throw new Error(`Failed to fetch Mineflayer API reference: ${sourceResponse.status}`);
-}
-
-const headings = (await sourceResponse.text())
+const quote = Schema.encodeSync(Schema.fromJsonString(Schema.String));
+const headings = source
   .split(/\r?\n/u)
   .filter((line) => line.startsWith("#### "))
   .map((line) => line.slice(5));
@@ -56,13 +72,13 @@ for (const heading of headings) {
   });
   const [firstMatch] = matches;
   if (firstMatch === undefined) {
-    throw new Error(`No parity rule covers ${JSON.stringify(heading)}`);
+    throw new Error(`No parity rule covers ${quote(heading)}`);
   }
   if (firstMatch.status === "native" && firstMatch.regex === ".*") {
     continue;
   }
   if (!matches.some((rule) => rule.status === firstMatch.status)) {
-    throw new Error(`Invalid rule resolution for ${JSON.stringify(heading)}`);
+    throw new Error(`Invalid rule resolution for ${quote(heading)}`);
   }
 }
 
