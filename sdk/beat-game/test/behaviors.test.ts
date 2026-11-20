@@ -4769,6 +4769,118 @@ describe("beat-game behavior programs", () => {
     expect(driver.activeControlScopes).toBe(0);
   });
 
+  it("keeps entering a portal when its approach support cannot be placed", async () => {
+    const driver = new FakeBeatGameDriver();
+    const portal = {
+      x: 10,
+      y: 65,
+      z: 20,
+      dimension: "minecraft:overworld",
+    };
+    const support = {
+      x: 11,
+      y: 64,
+      z: 21,
+      dimension: "minecraft:overworld",
+    };
+    const base = { ...support, y: 63 };
+    const portalBlocks = [portal.x, portal.x + 1].map((x) =>
+      blockObservation(
+        { ...portal, x },
+        {
+          blockId: "minecraft:nether_portal",
+          properties: { axis: "x" },
+          diggable: false,
+        },
+      ),
+    );
+    const operations: string[] = [];
+    let supportPlaced = false;
+    driver.currentObservation = observation({
+      position: { x: 11.5, y: 64, z: 23.5 },
+    });
+    // Every support placement is refused, as under a live crafting table.
+    driver.actionResolver = (action) =>
+      action.type === "place-block"
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "place-block",
+              code: "failed_precondition",
+              retryable: true,
+              message: "Block placement is not ready (FACE_OCCLUDED)",
+            }),
+          )
+        : Effect.sync(() => {
+            driver.actionObserver(action);
+            return {};
+          });
+    driver.blockQueryResolver = ({ selector }) => {
+      if (selector.blockIds?.includes("minecraft:nether_portal") === true) {
+        return portalBlocks;
+      }
+      if (selector.replaceable === false) {
+        return supportPlaced
+          ? [blockObservation(support, { blockId: "minecraft:cobblestone" })]
+          : [];
+      }
+      return [
+        blockObservation(support, {
+          blockId: "minecraft:air",
+          replaceable: true,
+        }),
+        blockObservation(base),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        operations.push("pathfind");
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({ position });
+      });
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        operations.push("place-support");
+        supportPlaced = true;
+      }
+    };
+    let entered = false;
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const movement = driver.actions.findLast(
+          (action) => action.type === "set-movement" || action.type === "reset-movement",
+        );
+        if (supportPlaced || (movement?.type === "set-movement" && movement.forward === true)) {
+          entered = true;
+        }
+        const current = driver.currentObservation;
+        const look = driver.actions.findLast((action) => action.type === "look");
+        return {
+          ...current,
+          player: {
+            ...current.player,
+            position: {
+              ...current.player.position,
+              ...(entered ? { dimension: "minecraft:the_nether" } : {}),
+            },
+            rotation: {
+              yaw: look?.type === "look" ? look.yaw : 0,
+              pitch: look?.type === "look" ? look.pitch : 0,
+            },
+          },
+        };
+      });
+
+    const result = await Effect.runPromise(
+      enterPortal(driver, { portal }).pipe(Effect.timeout("1 second"), Effect.result),
+    );
+
+    // The entry carries on to the route finder instead of failing at the
+    // support.
+    expect(supportPlaced).toBe(false);
+    expect(operations).toContain("pathfind");
+    expect(result._tag === "Failure" ? String(result.failure) : "").not.toContain("safe support");
+  });
+
   it("bridges a short gap leading into a generated portal", async () => {
     const driver = new FakeBeatGameDriver();
     const portal = {

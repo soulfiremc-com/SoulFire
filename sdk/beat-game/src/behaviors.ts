@@ -3900,38 +3900,47 @@ function ensurePortalApproachSupport(
         continue;
       }
 
-      yield* driver.withControl(
-        Effect.gen(function* () {
-          yield* driver.act({
-            type: "select-item",
-            selector: {
-              itemIds: [
-                "minecraft:cobblestone",
-                "minecraft:cobbled_deepslate",
-                "minecraft:dirt",
-                "minecraft:netherrack",
-                "minecraft:oak_log",
-                "minecraft:spruce_log",
-                "minecraft:birch_log",
-                "minecraft:jungle_log",
-                "minecraft:acacia_log",
-                "minecraft:dark_oak_log",
-                "minecraft:mangrove_log",
-                "minecraft:cherry_log",
-                "minecraft:pale_oak_log",
-                "minecraft:crimson_stem",
-                "minecraft:warped_stem",
-              ],
-            },
-          });
-          yield* driver.act({
-            type: "place-block",
-            against: anchor.position,
-            face: anchor.face,
-            hand: "main",
-          });
-        }),
-      );
+      // A support is a convenience. A live run kept failing to place one
+      // under a crafting table beside its portal, and every entry attempt
+      // ended there although another side was open. The route finder still
+      // gets its chance when a support cannot go in.
+      const attempted = yield* driver
+        .withControl(
+          Effect.gen(function* () {
+            yield* driver.act({
+              type: "select-item",
+              selector: {
+                itemIds: [
+                  "minecraft:cobblestone",
+                  "minecraft:cobbled_deepslate",
+                  "minecraft:dirt",
+                  "minecraft:netherrack",
+                  "minecraft:oak_log",
+                  "minecraft:spruce_log",
+                  "minecraft:birch_log",
+                  "minecraft:jungle_log",
+                  "minecraft:acacia_log",
+                  "minecraft:dark_oak_log",
+                  "minecraft:mangrove_log",
+                  "minecraft:cherry_log",
+                  "minecraft:pale_oak_log",
+                  "minecraft:crimson_stem",
+                  "minecraft:warped_stem",
+                ],
+              },
+            });
+            yield* driver.act({
+              type: "place-block",
+              against: anchor.position,
+              face: anchor.face,
+              hand: "main",
+            });
+          }),
+        )
+        .pipe(Effect.result);
+      if (attempted._tag === "Failure") {
+        return undefined;
+      }
       yield* Effect.sleep(150);
 
       const placed = yield* driver.queryBlocks({
@@ -3941,10 +3950,7 @@ function ensurePortalApproachSupport(
         maximumResults: 16,
       });
       if (!placed.some(({ position }) => samePosition(position, support))) {
-        return yield* behaviorError(
-          driver,
-          "Could not place a safe support beside the Nether portal",
-        );
+        return undefined;
       }
     }
     return undefined;
