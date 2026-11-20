@@ -9036,17 +9036,24 @@ function defendAndRecover(
 ): Effect.Effect<void, BeatGameDriverError> {
   return defendAgainstTarget(state, target, options).pipe(
     Effect.andThen(retreatAndRecover(state, POST_DEFENSE_RECOVERY_DURATION_MS)),
-    Effect.andThen(
-      collectNearbyDrops(state.driver, {
-        radius: 8,
-        maximumDrops: 16,
-        settleDelayMs: 500,
-        path: {
-          ...state.strategy.path,
-          allowPlacing: false,
-          avoidFluids: true,
-        },
-      }),
+    Effect.andThen(state.driver.observe),
+    // Drop pickup runs inside the safety response, where no monitor watches
+    // for attacks. A live run walked to a zombie's drops while a spider bit
+    // it from 14 health to death, so an attack ends the pickup.
+    Effect.flatMap((afterRecovery) =>
+      Effect.raceFirst(
+        collectNearbyDrops(state.driver, {
+          radius: 8,
+          maximumDrops: 16,
+          settleDelayMs: 500,
+          path: {
+            ...state.strategy.path,
+            allowPlacing: false,
+            avoidFluids: true,
+          },
+        }),
+        waitForMobAttackSince(state, afterRecovery.observedAt),
+      ),
     ),
     Effect.catchTag("BeatGameDriverError", (error) =>
       error.operation === "task.attack-entity" || error.operation === "task.attack-nearest"

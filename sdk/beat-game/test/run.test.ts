@@ -17800,6 +17800,106 @@ describe("beat-game run lifecycle", () => {
     });
   }, 10_000);
 
+  it("stops collecting fight drops when another mob attacks", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 8 };
+    driver.currentObservation = observation({ counts });
+    const zombie = {
+      connectionEpoch: "epoch-1",
+      networkId: 21,
+      entityType: "minecraft:zombie",
+      position: { x: 1.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const drop = {
+      connectionEpoch: "epoch-1",
+      networkId: 22,
+      entityType: "minecraft:item",
+      itemId: "minecraft:rotten_flesh",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityResults = [zombie];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined ||
+            selector.entityTypes.includes(entity.entityType)) &&
+          (selector.categories === undefined || entity.entityType !== "minecraft:item"),
+      );
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity") {
+          // The zombie dies and leaves a drop a few blocks off.
+          driver.entityResults = [drop];
+        }
+        return {};
+      });
+    let resolveDamage!: () => void;
+    const damaged = new Promise<void>((resolve) => {
+      resolveDamage = resolve;
+    });
+    driver.events = Stream.fromEffect(
+      Effect.promise(() => damaged).pipe(
+        Effect.as({
+          type: "bot-damaged",
+          observedAt: "2099-01-01T00:00:00.000Z",
+          amount: 2,
+          health: 18,
+          damageType: "minecraft:mob_attack",
+        } as const),
+      ),
+    ).pipe(Stream.concat(Stream.never));
+    const pickup = { interrupted: false };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        if (Math.floor(position.x) === 6) {
+          // A spider bites the bot on its way to the drop.
+          resolveDamage();
+        }
+      }).pipe(
+        Effect.andThen(Math.floor(position.x) === 6 ? Effect.never : Effect.void),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            if (Math.floor(position.x) === 6) {
+              pickup.interrupted = true;
+            }
+          }),
+        ),
+      );
+
+    const interruptedBeforeStop = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* Effect.gen(function* () {
+            while (!pickup.interrupted) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          const interrupted = pickup.interrupted;
+          yield* run.stop;
+          return interrupted;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
+    expect(interruptedBeforeStop).toBe(true);
+  }, 10_000);
+
   it("stops climbing out after a failed escape when a mob attacks", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
