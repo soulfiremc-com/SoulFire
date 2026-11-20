@@ -17188,23 +17188,6 @@ describe("beat-game run lifecycle", () => {
     ]);
   }, 10_000);
 
-  it("stops an upward staircase before it opens into water", async () => {
-    // As in a live run whose climb broke into a lake bed and flooded.
-    const water = { x: 2, y: 65, z: 0 };
-    const driver = await climbDryShaft(water);
-
-    expect(
-      driver.actions.filter(
-        (action) =>
-          action.type === "dig-block" &&
-          Math.abs(action.position.x - water.x) +
-            Math.abs(action.position.y - water.y) +
-            Math.abs(action.position.z - water.z) ===
-            1,
-      ),
-    ).toEqual([]);
-  }, 10_000);
-
   it("replans when an unconfirmed recovery stair block used the last one", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

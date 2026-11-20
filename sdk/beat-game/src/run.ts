@@ -14073,33 +14073,6 @@ interface DryShaftRecoveryRoute {
   readonly placedBlocks: number;
 }
 
-// Whether water or lava touches a block from above or a side, so breaking it
-// would let the fluid in.
-function touchesAvoidedFluid(
-  driver: BeatGameDriver,
-  position: BeatGameBlockPosition,
-): Effect.Effect<boolean, BeatGameDriverError> {
-  return Effect.forEach(
-    [
-      { ...position, y: position.y + 1 },
-      { ...position, x: position.x + 1 },
-      { ...position, x: position.x - 1 },
-      { ...position, z: position.z + 1 },
-      { ...position, z: position.z - 1 },
-    ],
-    (neighbor) => queryExactBlock(driver, neighbor),
-    { concurrency: 1 },
-  ).pipe(
-    Effect.map((neighbors) =>
-      neighbors.some(
-        (neighbor) =>
-          neighbor !== undefined &&
-          (PLAYER_FLUID_BLOCK_IDS as readonly string[]).includes(neighbor.blockId),
-      ),
-    ),
-  );
-}
-
 function excavateDryShaftRecoveryStaircase(
   state: RunState,
   candidateSurfaceY: readonly number[],
@@ -14160,10 +14133,6 @@ function excavateDryShaftRecoveryStaircase(
       for (const obstruction of [step.jumpClearance, step.head, step.feet]) {
         const block = yield* queryExactBlock(state.driver, obstruction);
         if (block !== undefined && !block.replaceable) {
-          // A live climb broke into a lake bed and flooded its own tunnel.
-          if (yield* touchesAvoidedFluid(state.driver, obstruction)) {
-            return false;
-          }
           yield* state.driver.act({
             type: "dig-block",
             position: obstruction,

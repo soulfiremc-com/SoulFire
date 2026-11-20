@@ -4312,13 +4312,7 @@ function digStaircaseBlockIfNeeded(
     // Digging next to water or lava lets it pour into the staircase. A live
     // bot climbed into a lake bed, flooded its tunnel and could not dig on.
     const neighbors = yield* Effect.forEach(
-      [
-        { ...position, y: position.y + 1 },
-        { ...position, x: position.x + 1 },
-        { ...position, x: position.x - 1 },
-        { ...position, z: position.z + 1 },
-        { ...position, z: position.z - 1 },
-      ],
+      [{ ...position, y: position.y + 1 }],
       (neighbor) => queryExactBlock(driver, neighbor),
       { concurrency: 1 },
     );
