@@ -4906,14 +4906,20 @@ function sealPortalInteriorLava(
     }
     // Only lava cells get filled. A live run also filled the empty cells
     // and stood in one, so its placement never confirmed.
+    //
+    // Each seal is best effort. Lava beside the frame can have its only
+    // solid faces on the far side, which a live run could not see from
+    // anywhere it could stand, and the error ended the run. Lava flows one
+    // block per second and a half, so the dig and ignition that follow can
+    // still beat it, and ignition reports any lava left behind.
     for (const cell of [...frame.interior].toSorted((left, right) => left.y - right.y)) {
       if (lava.has(positionKey(cell))) {
-        yield* placeSealBlock(driver, material, cell, path);
+        yield* placeSealBlock(driver, material, cell, path).pipe(Effect.ignore);
       }
     }
     for (const { position } of neighbors) {
       if (lava.has(positionKey(position))) {
-        yield* placeSealBlock(driver, material, position, path);
+        yield* placeSealBlock(driver, material, position, path).pipe(Effect.ignore);
       }
     }
     return undefined;
