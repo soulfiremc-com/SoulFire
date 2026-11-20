@@ -103,6 +103,7 @@ export const EMERGENCY_FOOD_ITEM_IDS = ["minecraft:rotten_flesh"] as const;
 export const CRITICAL_HUNGER_FOOD_LEVEL = 6;
 export const URGENT_HUNGER_FOOD_LEVEL = 10;
 const PORTAL_LOG_RESERVE = 4;
+const PORTAL_PICKAXE_PRIORITY = 105;
 const FAST_BED_PRIORITY = 114;
 // Below iron (103) and the shield (102).
 const FAST_COOKED_FOOD_PRIORITY = 101;
@@ -434,6 +435,12 @@ function portalRequirements(
           ...definition,
           target: ({ targetFoodCount }: BeatGameStrategy) => Math.min(targetFoodCount, 8),
         };
+      }
+      // Water, lava and iron all take digging. A live run lost its pickaxe,
+      // went for water first, and dug stone by hand for ten minutes while it
+      // carried what it needed for a new stone pickaxe.
+      if (definition.key === "pickaxe") {
+        return { ...definition, priority: PORTAL_PICKAXE_PRIORITY };
       }
       return definition;
     });

@@ -317,13 +317,13 @@ describe("beat-game requirements", () => {
       "cobblestone",
       "diamond-pickaxe",
       "melee-weapon",
+      "pickaxe",
       "food",
       "iron",
       "shield",
       "water-bucket",
       "obsidian",
       "ignition",
-      "pickaxe",
     ]);
 
     expect(

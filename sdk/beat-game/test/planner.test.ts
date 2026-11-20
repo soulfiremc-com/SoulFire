@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { BeatGamePhase, decideBeatGameAction, defaultBeatGameStrategy } from "../src/index.js";
+import {
+  BeatGamePhase,
+  decideBeatGameAction,
+  defaultBeatGameStrategy,
+  PortalStrategy,
+} from "../src/index.js";
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
 
 describe("beat-game planner", () => {
@@ -313,6 +318,7 @@ describe("beat-game planner", () => {
           "minecraft:oak_log": 8,
           "minecraft:cobblestone": 20,
           "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
         },
         food: 17,
       }),
@@ -346,6 +352,31 @@ describe("beat-game planner", () => {
     });
 
     expect(decision).toMatchObject({ type: "satisfy-requirement", action });
+  });
+
+  it("replaces a lost pickaxe before digging for portal water", () => {
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.ENTER_NETHER),
+      observation: observation({
+        counts: {
+          "minecraft:cooked_beef": 8,
+          "minecraft:oak_log": 5,
+          "minecraft:stick": 3,
+          "minecraft:cobblestone": 120,
+          "minecraft:stone_sword": 1,
+          "minecraft:shield": 1,
+          "minecraft:bucket": 1,
+          "minecraft:lava_bucket": 1,
+          "minecraft:flint_and_steel": 1,
+        },
+      }),
+      strategy: { ...defaultBeatGameStrategy, portalStrategy: PortalStrategy.CAST },
+    });
+
+    expect(decision).toMatchObject({
+      type: "satisfy-requirement",
+      action: "satisfy:pickaxe",
+    });
   });
 
   it("secures iron before topping up a useful surface food reserve", () => {
