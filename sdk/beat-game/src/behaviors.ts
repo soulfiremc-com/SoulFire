@@ -246,7 +246,8 @@ export function collectNearbyDrops(
                 !attemptedDrops.has(entityObservationKey(candidate)) &&
                 Math.abs(candidate.position.y - observation.player.position.y) <=
                   maximumVerticalDistance &&
-                (requestedItemIds === undefined || requestedItemIds.has(candidate.itemId)),
+                (requestedItemIds === undefined || requestedItemIds.has(candidate.itemId)) &&
+                canHoldDrop(observation, candidate.itemId),
             )
             .toSorted(
               (left, right) =>
@@ -407,6 +408,14 @@ function clearSubmergedDropCover(
     }
     return false;
   });
+}
+
+/// A full inventory cannot take an item it holds none of. A live run with
+/// no free slot walked over a chicken egg eleven times while a zombie hit it.
+function canHoldDrop(observation: BeatGameObservation, itemId: string): boolean {
+  return (
+    observation.inventory.emptyPlayerSlots !== 0 || (observation.inventory.counts[itemId] ?? 0) > 0
+  );
 }
 
 function tryDirectDropPickup(

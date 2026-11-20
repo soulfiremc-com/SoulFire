@@ -641,6 +641,35 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths).not.toEqual([]);
   });
 
+  it("ignores a drop that a full inventory cannot hold", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 4, y: 64, z: -2, dimension: "minecraft:overworld" };
+    driver.currentObservation = observation({
+      position,
+      emptyPlayerSlots: 0,
+      counts: { "minecraft:cobblestone": 64 },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 10,
+        entityType: "minecraft:item",
+        itemId: "minecraft:egg",
+        position: { ...position, x: 5.5 },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+
+    await Effect.runPromise(collectNearbyDrops(driver, { settleDelayMs: 0 }));
+
+    expect(driver.paths).toEqual([]);
+    expect(driver.actions).not.toContainEqual(
+      objectContaining({ type: "set-movement", forward: true }),
+    );
+  });
+
   it("keeps steering toward a sinking submerged drop", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {
