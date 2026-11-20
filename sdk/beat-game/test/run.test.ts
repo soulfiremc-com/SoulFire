@@ -18344,6 +18344,61 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions).toContainEqual({ type: "use-item", hand: "main" });
   });
 
+  it("escapes lava that keeps burning it when the hitbox check misses it", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 16,
+      fireTicks: 100,
+      counts: { "minecraft:cooked_beef": 4 },
+    });
+    // The lava the bot stands in reads one block over, outside its hitbox.
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:lava") === true
+        ? [
+            blockObservation(
+              { x: 1, y: 64, z: 0, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:lava", replaceable: true },
+            ),
+          ]
+        : [];
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 3,
+      health: 16,
+      damageType: "minecraft:lava",
+    } as const).pipe(Stream.concat(Stream.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* Effect.gen(function* () {
+                while (
+                  !driver.tasks.some((task) => task.type === "auto-eat") &&
+                  !driver.actions.some(
+                    (action) => action.type === "set-movement" && action.jump === true,
+                  )
+                ) {
+                  yield* Effect.sleep(1);
+                }
+              }).pipe(Effect.timeout("5 seconds"), Effect.ignore);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual(
+      objectContaining({ type: "set-movement", forward: true, jump: true }),
+    );
+  });
+
   it("swims to a dry ledge instead of using water in Nether lava", async () => {
     const driver = new FakeBeatGameDriver();
     const dimension = "minecraft:the_nether";

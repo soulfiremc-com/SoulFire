@@ -4247,16 +4247,18 @@ function monitorActionSafety(
                               return Effect.succeed(airSafety);
                             }
                             if (
-                              decision.type !== "retreat" &&
                               decision.type !== "fight-ender-dragon" &&
                               !observation.player.dead
                             ) {
                               // Lava kills in seconds, so it comes before any
                               // threat. A live bot was shot into lava by a
                               // piglin and burned while it kept turning to fight.
+                              // Another ate through a retreat in lava, and its
+                              // hitbox check missed the lava that kept burning
+                              // it, so fresh lava damage counts too.
                               const inLava =
                                 observation.player.fireTicks > 0
-                                  ? isPlayerInLava(state.driver, observation.player.position)
+                                  ? isBurningInLava(state, observation)
                                   : Effect.succeed(false);
                               return inLava.pipe(
                                 Effect.flatMap((burningInLava) =>
@@ -4265,35 +4267,44 @@ function monitorActionSafety(
                                         replanReason: "interrupted an action to escape lava",
                                         environmentalEscapePosition: observation.player.position,
                                       } satisfies ActionResult)
-                                    : findImmediateThreat(state, observation).pipe(
-                                        Effect.flatMap((threat) => {
-                                          if (threat === undefined) {
-                                            return monitorObservedSafety(
-                                              state,
-                                              decision,
-                                              previousObservation,
-                                              observation,
-                                              monitor,
-                                              actionObservation.observedAt,
-                                            );
-                                          }
-                                          const response = threat.response;
-                                          return Effect.succeed({
-                                            replanReason:
-                                              decision.type === "recover-death"
-                                                ? response === "flee"
-                                                  ? "interrupted item recovery to evade a hostile"
-                                                  : "interrupted item recovery to defend against a hostile"
-                                                : response === "flee"
-                                                  ? "interrupted an action to evade an immediate threat"
-                                                  : "interrupted an action to preempt a nearby hostile",
-                                            ...(response === "flee"
-                                              ? { escapeTarget: threat.target }
-                                              : { defenseTarget: threat.target }),
-                                            replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
-                                          } satisfies ActionResult);
-                                        }),
-                                      ),
+                                    : decision.type === "retreat"
+                                      ? monitorObservedSafety(
+                                          state,
+                                          decision,
+                                          previousObservation,
+                                          observation,
+                                          monitor,
+                                          actionObservation.observedAt,
+                                        )
+                                      : findImmediateThreat(state, observation).pipe(
+                                          Effect.flatMap((threat) => {
+                                            if (threat === undefined) {
+                                              return monitorObservedSafety(
+                                                state,
+                                                decision,
+                                                previousObservation,
+                                                observation,
+                                                monitor,
+                                                actionObservation.observedAt,
+                                              );
+                                            }
+                                            const response = threat.response;
+                                            return Effect.succeed({
+                                              replanReason:
+                                                decision.type === "recover-death"
+                                                  ? response === "flee"
+                                                    ? "interrupted item recovery to evade a hostile"
+                                                    : "interrupted item recovery to defend against a hostile"
+                                                  : response === "flee"
+                                                    ? "interrupted an action to evade an immediate threat"
+                                                    : "interrupted an action to preempt a nearby hostile",
+                                              ...(response === "flee"
+                                                ? { escapeTarget: threat.target }
+                                                : { defenseTarget: threat.target }),
+                                              replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
+                                            } satisfies ActionResult);
+                                          }),
+                                        ),
                                 ),
                               );
                             }
@@ -8471,6 +8482,7 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+const RECENT_LAVA_DAMAGE_MS = 1000;
 
 // Piglins leave a player who wears gold alone, but they still report
 // themselves aggressive while they hunt hoglins. A live bot in gold boots
@@ -9077,12 +9089,33 @@ function stepOffBurningGround(
   });
 }
 
+/// The hitbox check can miss lava that still burns the bot, so lava damage
+/// in the last second also counts while the bot is on fire.
+function isBurningInLava(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.all(
+    [isPlayerInLava(state.driver, observation.player.position), Ref.get(state.lastDamage)],
+    { concurrency: 1 },
+  ).pipe(
+    Effect.map(
+      ([hitboxInLava, damage]) =>
+        hitboxInLava ||
+        (observation.player.fireTicks > 0 &&
+          damage?.damageType === "minecraft:lava" &&
+          Date.parse(observation.observedAt) - Date.parse(damage.observedAt) <=
+            RECENT_LAVA_DAMAGE_MS),
+    ),
+  );
+}
+
 function escapeLava(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
-    if (!(yield* isPlayerInLava(state.driver, observation.player.position))) {
+    if (!(yield* isBurningInLava(state, observation))) {
       return;
     }
 
@@ -9119,7 +9152,7 @@ function escapeLava(
     }
 
     let latest = yield* state.driver.observe;
-    if (latest.player.dead || !(yield* isPlayerInLava(state.driver, latest.player.position))) {
+    if (latest.player.dead || !(yield* isBurningInLava(state, latest))) {
       return;
     }
 
