@@ -9149,6 +9149,37 @@ function stepOffBurningGround(
 ): Effect.Effect<boolean, BeatGameDriverError> {
   return Effect.gen(function* () {
     const position = observation.player.position;
+    // The hitbox reaches into a neighboring cell when the bot stands near a
+    // block edge. A live run stood 0.3 blocks from a fire it never checked,
+    // because only its feet cell was queried, and burned to death in place.
+    // Punching fire puts it out, which works from any footing.
+    const fireCells = (yield* Effect.forEach(
+      playerHitboxCells(position),
+      (cell) => queryExactBlock(state.driver, cell),
+      { concurrency: 1 },
+    )).filter(
+      (block): block is BeatGameBlockObservation =>
+        block !== undefined && FIRE_BLOCK_IDS.has(block.blockId),
+    );
+    if (fireCells.length > 0) {
+      yield* state.driver
+        .withControl(
+          Effect.forEach(
+            fireCells,
+            (fire) => state.driver.act({ type: "dig-block", position: fire.position }),
+            { discard: true, concurrency: 1 },
+          ),
+        )
+        .pipe(Effect.ignore);
+      const remaining = yield* Effect.forEach(
+        fireCells,
+        (fire) => queryExactBlock(state.driver, fire.position),
+        { concurrency: 1 },
+      );
+      if (!remaining.some((block) => block !== undefined && FIRE_BLOCK_IDS.has(block.blockId))) {
+        return true;
+      }
+    }
     const feet = {
       x: Math.floor(position.x),
       y: Math.floor(position.y),
@@ -9208,6 +9239,24 @@ function stepOffBurningGround(
     }
     return false;
   });
+}
+
+function playerHitboxCells(position: BeatGamePosition): readonly BeatGameBlockPosition[] {
+  const cells: BeatGameBlockPosition[] = [];
+  const minimumX = Math.floor(position.x - PLAYER_HALF_WIDTH + HITBOX_EPSILON);
+  const maximumX = Math.floor(position.x + PLAYER_HALF_WIDTH - HITBOX_EPSILON);
+  const minimumY = Math.floor(position.y + HITBOX_EPSILON);
+  const maximumY = Math.floor(position.y + PLAYER_HEIGHT - HITBOX_EPSILON);
+  const minimumZ = Math.floor(position.z - PLAYER_HALF_WIDTH + HITBOX_EPSILON);
+  const maximumZ = Math.floor(position.z + PLAYER_HALF_WIDTH - HITBOX_EPSILON);
+  for (let x = minimumX; x <= maximumX; x += 1) {
+    for (let y = minimumY; y <= maximumY; y += 1) {
+      for (let z = minimumZ; z <= maximumZ; z += 1) {
+        cells.push({ x, y, z, dimension: position.dimension });
+      }
+    }
+  }
+  return cells;
 }
 
 /// The hitbox check can miss lava that still burns the bot, so lava damage

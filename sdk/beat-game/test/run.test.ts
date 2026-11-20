@@ -9044,6 +9044,104 @@ describe("beat-game run lifecycle", () => {
     expect(health).toBeGreaterThan(10);
   });
 
+  it("puts out fire that its hitbox reaches beside its feet", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "nether-fire-run",
+          teamId: "nether-fire-team",
+        }),
+        undefined,
+      ),
+    );
+    const nether = "minecraft:the_nether";
+    let health = 20;
+    // The bot stands 0.2 blocks into its cell, so its hitbox reaches the
+    // burning cell beside it while its feet cell stays clear.
+    const position = { x: 0.2, y: 64, z: 0.5, dimension: nether };
+    const fire = { lit: true };
+    const inFire = () => fire.lit;
+    driver.currentObservation = observation({ health, position });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const burning = inFire();
+        if (burning) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          health,
+          position,
+          fireTicks: burning ? 80 : 0,
+        });
+        return driver.currentObservation;
+      });
+    // Ghast fire burns on the netherrack under the bot; the ground around
+    // it is clear.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const block = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (block.y === 63) {
+        return [blockObservation(block, { blockId: "minecraft:netherrack" })];
+      }
+      return [
+        blockObservation(block, {
+          blockId:
+            fire.lit && block.y === 64 && block.x === -1 && block.z === 0
+              ? "minecraft:fire"
+              : "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    driver.actionObserver = (action) => {
+      if (
+        action.type === "dig-block" &&
+        action.position.x === -1 &&
+        action.position.y === 64 &&
+        action.position.z === 0
+      ) {
+        fire.lit = false;
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "nether-fire-run",
+          team: { teamId: "nether-fire-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+          hooks: { satisfyRequirement: () => Effect.never },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (inFire() && driver.currentObservation.player.health > 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeout("3 seconds"),
+        ),
+      ),
+    );
+
+    expect(fire.lit).toBe(false);
+    expect(health).toBeGreaterThan(10);
+  });
+
   it("steps off a magma block in the Nether", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
