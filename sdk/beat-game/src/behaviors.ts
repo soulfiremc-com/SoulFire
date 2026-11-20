@@ -50,6 +50,7 @@ const DIRECT_DROP_PICKUP_MAXIMUM_HORIZONTAL_DISTANCE = 1.9;
 const DIRECT_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 0.75;
 // A blind walk can overshoot the drop by a block or two before it stops.
 const DIRECT_DROP_PICKUP_LAVA_MARGIN = 3;
+const SEAL_APPROACH_RADIUS = 1.5;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_HORIZONTAL_DISTANCE = 2.25;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 8;
 const DIRECT_DROP_PICKUP_POLL_INTERVAL_MS = 100;
@@ -4907,15 +4908,65 @@ function sealPortalInteriorLava(
       if (block !== undefined && !block.replaceable) {
         continue;
       }
-      yield* driver.pathfind(cell, 3, mergePathPolicy(path));
-      yield* placeStaircaseBlock(driver, material, { ...cell, y: cell.y - 1 }, "up", cell);
+      yield* placeSealBlock(driver, material, cell, path);
     }
-    for (const { cell, face, position } of neighbors) {
+    for (const { position } of neighbors) {
       if (lava.has(positionKey(position))) {
-        yield* placeStaircaseBlock(driver, material, cell, face, position);
+        yield* placeSealBlock(driver, material, position, path);
       }
     }
     return undefined;
+  });
+}
+
+const SEAL_PLACEMENT_FACES: readonly {
+  readonly face: BeatGameBlockFace;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}[] = [
+  { face: "up", x: 0, y: -1, z: 0 },
+  { face: "north", x: 0, y: 0, z: 1 },
+  { face: "south", x: 0, y: 0, z: -1 },
+  { face: "west", x: 1, y: 0, z: 0 },
+  { face: "east", x: -1, y: 0, z: 0 },
+  { face: "down", x: 0, y: 1, z: 0 },
+];
+
+/// A live run stood 2.5 blocks off and failed every placement against a
+/// frame face it could not see. Stand close and try each solid side.
+function placeSealBlock(
+  driver: BeatGameDriver,
+  material: string,
+  target: BeatGameBlockPosition,
+  path?: Partial<BeatGamePathPolicy>,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    yield* driver.pathfind(target, SEAL_APPROACH_RADIUS, mergePathPolicy(path));
+    let lastFailure: BeatGameDriverError | undefined;
+    for (const { face, x, y, z } of SEAL_PLACEMENT_FACES) {
+      const against = { ...target, x: target.x + x, y: target.y + y, z: target.z + z };
+      const support = yield* queryExactBlock(driver, against);
+      if (support === undefined || support.replaceable) {
+        continue;
+      }
+      const placed = yield* placeStaircaseBlock(driver, material, against, face, target, 1).pipe(
+        Effect.result,
+      );
+      if (placed._tag === "Failure") {
+        lastFailure = placed.failure;
+        continue;
+      }
+      // Fluid already fills the cell, so only a solid block proves the seal.
+      const sealed = yield* queryExactBlock(driver, target);
+      if (sealed !== undefined && !sealed.replaceable) {
+        return undefined;
+      }
+    }
+    return yield* (
+      lastFailure ??
+      behaviorError(driver, `No solid side to seal lava against at ${positionKey(target)}`)
+    );
   });
 }
 

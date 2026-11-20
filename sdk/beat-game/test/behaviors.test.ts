@@ -3557,6 +3557,72 @@ describe("beat-game behavior programs", () => {
     expect(world.blocks.get(world.key(outside))?.blockId).toBe("minecraft:cobblestone");
   });
 
+  it("seals portal lava against a side face when the floor face is hidden", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });
+    const origin = {
+      x: 10,
+      y: 64,
+      z: 20,
+      dimension: "minecraft:overworld",
+    };
+    const frame = createNetherPortalFrame(origin);
+    const flooded = frame.interior.find(({ y }) => y === origin.y + 1);
+    if (flooded === undefined) {
+      throw new Error("Expected a bottom portal interior cell");
+    }
+    const outside = { ...flooded, z: flooded.z + 1 };
+    const lava = (position: typeof flooded) =>
+      blockObservation(position, { blockId: "minecraft:lava", replaceable: true, solid: false });
+    const world = installPortalWorld(driver, frame, {
+      initialBlocks: [
+        ...frame.blocks.map((block) => blockObservation(block, { blockId: "minecraft:obsidian" })),
+        lava(flooded),
+        lava(outside),
+      ],
+    });
+    const resolveAction = driver.actionResolver;
+    // The frame floor under the flooded cell is hidden from where the bot stands.
+    driver.actionResolver = (action) =>
+      action.type === "place-block" &&
+      action.face === "up" &&
+      world.key({ ...action.against, y: action.against.y + 1 }) === world.key(flooded)
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "place-block",
+              code: "failed_precondition",
+              retryable: true,
+              message: "Block placement is not ready (FACE_OCCLUDED)",
+            }),
+          )
+        : resolveAction(action);
+    const observeAction = driver.actionObserver;
+    const lavaInInteriorAtIgnition: boolean[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-block") {
+        lavaInInteriorAtIgnition.push(
+          frame.interior.some(
+            (cell) => world.blocks.get(world.key(cell))?.blockId === "minecraft:lava",
+          ),
+        );
+      }
+      observeAction(action);
+      // Lava beside the frame flows back into an emptied interior cell.
+      if (
+        action.type === "dig-block" &&
+        world.key(action.position) === world.key(flooded) &&
+        world.blocks.get(world.key(outside))?.blockId === "minecraft:lava"
+      ) {
+        world.blocks.set(world.key(flooded), lava(flooded));
+      }
+    };
+
+    await Effect.runPromise(castNetherPortal(driver, { origin }));
+
+    expect(lavaInInteriorAtIgnition).toEqual([false]);
+    expect(world.blocks.get(world.key(outside))?.blockId).toBe("minecraft:cobblestone");
+  });
+
   it("cancels portal navigation when the dimension changes", async () => {
     const driver = new FakeBeatGameDriver();
     const portal = {
