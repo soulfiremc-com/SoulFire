@@ -1913,7 +1913,10 @@ export function enterPortal(
       }
       yield* Effect.sleep(NETHER_PORTAL_REENTRY_COOLDOWN_MS);
     }
-    const approachTarget = portalApproachTarget(entryOrigin, target, axis, passage);
+    const approachTarget = yield* chooseOpenPortalApproach(
+      driver,
+      portalApproachCandidates(entryOrigin, target, axis, passage, observedPortals),
+    );
     const approachObservation = yield* driver.observe;
     if (canReachPortalApproachSupports(approachObservation.player.position, approachTarget)) {
       yield* ensurePortalApproachSupport(
@@ -3808,6 +3811,70 @@ function hasPortalContact(position: BeatGamePosition, passage: PortalPassage): b
 
 function hasPortalEntryContact(position: BeatGamePosition, passage: PortalPassage): boolean {
   return hasPortalContact(position, passage);
+}
+
+/// The preferred approach first, then the other portal column on the same
+/// side, then both columns on the far side.
+function portalApproachCandidates(
+  player: BeatGamePosition,
+  portal: BeatGameBlockPosition,
+  axis: string | undefined,
+  passage: PortalPassage,
+  portals: readonly BeatGameBlockObservation[],
+): readonly [BeatGamePosition, ...BeatGamePosition[]] {
+  const preferred = portalApproachTarget(player, portal, axis, passage);
+  if (axis !== "x" && axis !== "z") {
+    return [preferred];
+  }
+  const along = axis === "x" ? "x" : "z";
+  const across = axis === "x" ? "z" : "x";
+  const columns = [
+    preferred[along],
+    ...new Set(
+      portals
+        .filter(({ position }) => position.y === Math.floor(passage.y))
+        .map(({ position }) => position[along] + 0.5),
+    ),
+  ].filter((column, index, all) => all.indexOf(column) === index);
+  const sides = [preferred[across], 2 * portal[across] + 1 - preferred[across]];
+  const alternatives = sides
+    .flatMap((side) =>
+      columns.map((column) => ({
+        x: along === "x" ? column : side,
+        y: preferred.y,
+        z: along === "z" ? column : side,
+        dimension: preferred.dimension,
+      })),
+    )
+    .slice(1);
+  return [preferred, ...alternatives];
+}
+
+/// A live run kept routing into a crafting table that stood in front of one
+/// portal column while the other side stayed open.
+function chooseOpenPortalApproach(
+  driver: BeatGameDriver,
+  [preferred, ...alternatives]: readonly [BeatGamePosition, ...BeatGamePosition[]],
+): Effect.Effect<BeatGamePosition, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    for (const candidate of [preferred, ...alternatives]) {
+      const feet = {
+        x: Math.floor(candidate.x),
+        y: Math.floor(candidate.y),
+        z: Math.floor(candidate.z),
+        dimension: candidate.dimension,
+      };
+      const cells = yield* Effect.forEach(
+        [feet, { ...feet, y: feet.y + 1 }],
+        (cell) => queryExactBlock(driver, cell),
+        { concurrency: 1 },
+      );
+      if (cells.every((block) => block === undefined || block.replaceable)) {
+        return candidate;
+      }
+    }
+    return preferred;
+  });
 }
 
 function portalApproachTarget(

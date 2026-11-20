@@ -4670,6 +4670,55 @@ describe("beat-game behavior programs", () => {
     expect(driver.activeControlScopes).toBe(0);
   });
 
+  it("approaches a portal around a block standing in front of it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const portal = { x: 10, y: 65, z: 20, dimension: "minecraft:overworld" };
+    const portalBlocks = [portal.x, portal.x + 1].map((x) =>
+      blockObservation(
+        { ...portal, x },
+        { blockId: "minecraft:nether_portal", properties: { axis: "x" }, diggable: false },
+      ),
+    );
+    driver.currentObservation = observation({ position: { x: 10.5, y: 65, z: 17.5 } });
+    // A crafting table stands in the preferred approach cell.
+    const blocked = { x: 11, y: 65, z: 19 };
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:nether_portal") === true) {
+        return portalBlocks;
+      }
+      const cell = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (cell.x === blocked.x && cell.y === blocked.y && cell.z === blocked.z) {
+        return [blockObservation(cell, { blockId: "minecraft:crafting_table" })];
+      }
+      return [
+        cell.y < 65
+          ? blockObservation(cell)
+          : blockObservation(cell, { blockId: "minecraft:air", replaceable: true }),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      enterPortal(driver, { portal }).pipe(Effect.timeout("500 millis"), Effect.ignore),
+    );
+
+    const approach = driver.paths[0]?.position;
+    expect(approach).toBeDefined();
+    expect([
+      Math.floor(approach?.x ?? 0),
+      Math.floor(approach?.y ?? 0),
+      Math.floor(approach?.z ?? 0),
+    ]).not.toEqual([blocked.x, blocked.y, blocked.z]);
+  });
+
   it("defers a distant portal support until it is within reach", async () => {
     const driver = new FakeBeatGameDriver();
     const portal = {
