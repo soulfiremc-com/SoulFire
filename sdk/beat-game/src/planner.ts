@@ -29,6 +29,36 @@ const DURABLE_PICKAXE_ITEM_IDS = [
   "minecraft:netherite_pickaxe",
 ] as const;
 const PRACTICAL_OVERWORLD_FOOD_REFILL_MINIMUM_Y = 50;
+const MINING_PICKAXE_ITEM_IDS = [
+  "minecraft:wooden_pickaxe",
+  "minecraft:stone_pickaxe",
+  ...DURABLE_PICKAXE_ITEM_IDS,
+] as const;
+const WOOD_ITEM_IDS = [
+  "minecraft:oak_log",
+  "minecraft:spruce_log",
+  "minecraft:birch_log",
+  "minecraft:jungle_log",
+  "minecraft:acacia_log",
+  "minecraft:dark_oak_log",
+  "minecraft:mangrove_log",
+  "minecraft:cherry_log",
+  "minecraft:pale_oak_log",
+  "minecraft:crimson_stem",
+  "minecraft:warped_stem",
+  "minecraft:oak_planks",
+  "minecraft:spruce_planks",
+  "minecraft:birch_planks",
+  "minecraft:jungle_planks",
+  "minecraft:acacia_planks",
+  "minecraft:dark_oak_planks",
+  "minecraft:mangrove_planks",
+  "minecraft:cherry_planks",
+  "minecraft:pale_oak_planks",
+  "minecraft:bamboo_planks",
+  "minecraft:crimson_planks",
+  "minecraft:warped_planks",
+] as const;
 
 const COOKABLE_RAW_FOOD_ITEM_IDS = new Set(Object.keys(RAW_FOOD_TO_COOKED));
 
@@ -198,7 +228,11 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
     }
     return { type: "retreat", action: "retreat" };
   }
-  if (needsOverworldForPreparation(phase, observation)) {
+  if (
+    needsOverworldForPreparation(phase, observation) ||
+    (needsOverworldWoodForPickaxe(phase, observation) &&
+      hasReusablePortalCandidate(checkpoint, observation))
+  ) {
     return { type: "return-through-portal", action: "return-through-portal" };
   }
   if (phase === BeatGamePhase.PREPARE_OVERWORLD) {
@@ -358,6 +392,25 @@ function shouldDeferReserveRefill(
     : DEEP_WORK_MINIMUM_FOOD_RESERVE;
   return (
     observation.player.food > strategy.eatBelowFood && requirement.currentCount >= minimumReserve
+  );
+}
+
+/// Nether forests are far apart, and nothing else in the Nether makes a
+/// pickaxe handle. A live run searched an hour for stems with six iron
+/// ingots, one stick and no pickaxe while its portal stood nearby.
+function needsOverworldWoodForPickaxe(
+  phase: BeatGamePhase,
+  observation: BeatGameObservation,
+): boolean {
+  const counts = observation.inventory.counts;
+  const count = (itemIds: readonly string[]) =>
+    itemIds.reduce((total, itemId) => total + (counts[itemId] ?? 0), 0);
+  return (
+    phase === BeatGamePhase.COLLECT_NETHER_RESOURCES &&
+    isNether(observation.player.position.dimension) &&
+    count(MINING_PICKAXE_ITEM_IDS) === 0 &&
+    (counts["minecraft:stick"] ?? 0) < 2 &&
+    count(WOOD_ITEM_IDS) === 0
   );
 }
 

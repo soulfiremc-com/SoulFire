@@ -379,6 +379,44 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("goes back for wood when the Nether leaves it without a pickaxe or a handle", () => {
+    const base = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES);
+    const observedAt = "2026-01-01T00:00:00.000Z";
+    const portal = blockObservation(
+      { x: 0, y: 64, z: 0, dimension: "minecraft:the_nether" },
+      { blockId: "minecraft:nether_portal", diggable: false, solid: false, observedAt },
+    );
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...base,
+        memory: {
+          ...base.memory,
+          portals: [
+            {
+              key: "portal:minecraft:the_nether:0:64:0",
+              value: portal,
+              observedAt,
+              confidence: 0.25,
+            },
+          ],
+        },
+      },
+      observation: observation({
+        dimension: "minecraft:the_nether",
+        counts: {
+          "minecraft:golden_boots": 1,
+          "minecraft:cooked_beef": 8,
+          "minecraft:stone_sword": 1,
+          "minecraft:iron_ingot": 6,
+          "minecraft:stick": 1,
+        },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "return-through-portal" });
+  });
+
   it("secures iron before topping up a useful surface food reserve", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
