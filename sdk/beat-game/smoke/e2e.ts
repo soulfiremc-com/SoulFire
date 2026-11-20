@@ -138,7 +138,8 @@ if (riskProfile !== "SAFE" && riskProfile !== "FAST") {
 }
 const baseBeatGameStrategy =
   riskProfile === "FAST" ? fastBeatGameStrategy : defaultBeatGameStrategy;
-const minecraftPort = 25_565;
+// A second probe can run beside the first on its own port.
+const minecraftPort = positiveIntegerEnvironment("SOULFIRE_E2E_MINECRAFT_PORT", 25_565);
 const attachedMinecraftContainer = optionalEnvironment("SOULFIRE_E2E_MINECRAFT_CONTAINER");
 const timeoutMs = positiveIntegerEnvironment(
   "SOULFIRE_E2E_TIMEOUT_MS",
