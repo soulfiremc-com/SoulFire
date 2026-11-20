@@ -326,6 +326,28 @@ describe("beat-game planner", () => {
     });
   });
 
+  it.each([
+    { y: 64, action: "satisfy:logs" },
+    { y: 20, action: "satisfy:iron" },
+  ])("refills the wood reserve only near the surface (y $y)", ({ y, action }) => {
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.ENTER_NETHER),
+      observation: observation({
+        counts: {
+          "minecraft:cooked_cod": 16,
+          "minecraft:oak_log": 3,
+          "minecraft:cobblestone": 20,
+          "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
+        },
+        position: { y },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement", action });
+  });
+
   it("secures iron before topping up a useful surface food reserve", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),

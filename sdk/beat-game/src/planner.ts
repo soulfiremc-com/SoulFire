@@ -23,6 +23,11 @@ import {
 const FOOD_RESERVE_REFILL_TOLERANCE = 3;
 const DEEP_WORK_MINIMUM_FOOD_RESERVE = 3;
 const MINIMUM_LOG_RESERVE = 2;
+const DURABLE_PICKAXE_ITEM_IDS = [
+  "minecraft:iron_pickaxe",
+  "minecraft:diamond_pickaxe",
+  "minecraft:netherite_pickaxe",
+] as const;
 const PRACTICAL_OVERWORLD_FOOD_REFILL_MINIMUM_Y = 50;
 
 const COOKABLE_RAW_FOOD_ITEM_IDS = new Set(Object.keys(RAW_FOOD_TO_COOKED));
@@ -334,7 +339,16 @@ function shouldDeferReserveRefill(
   strategy: BeatGameStrategy,
 ): boolean {
   if (requirement.key === "logs") {
-    return requirement.currentCount >= Math.min(requirement.targetCount, MINIMUM_LOG_RESERVE);
+    // Without a durable pickaxe, wood is the only way to replace a broken one, so refill the
+    // full reserve on the surface, where trees are close. Underground work keeps going while a
+    // minimal reserve remains.
+    const minimumReserve =
+      !hasDurablePickaxe(observation) &&
+      shouldRefillDeferredFoodReserve(observation) &&
+      observation.player.food > strategy.eatBelowFood
+        ? requirement.targetCount
+        : Math.min(requirement.targetCount, MINIMUM_LOG_RESERVE);
+    return requirement.currentCount >= minimumReserve;
   }
   if (requirement.key !== "food-supply" && requirement.key !== "food") {
     return false;
@@ -345,6 +359,10 @@ function shouldDeferReserveRefill(
   return (
     observation.player.food > strategy.eatBelowFood && requirement.currentCount >= minimumReserve
   );
+}
+
+function hasDurablePickaxe(observation: BeatGameObservation): boolean {
+  return DURABLE_PICKAXE_ITEM_IDS.some((itemId) => (observation.inventory.counts[itemId] ?? 0) > 0);
 }
 
 function shouldRefillDeferredFoodReserve(observation: BeatGameObservation): boolean {
