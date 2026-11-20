@@ -5034,6 +5034,242 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("fights out of finished cover once healed", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:dirt": 16, "minecraft:stone_sword": 1 },
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 20,
+    });
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    // The walls went up during an earlier escape.
+    const placed = new Set<string>([
+      "1:64:0",
+      "-1:64:0",
+      "0:64:1",
+      "0:64:-1",
+      "1:65:0",
+      "-1:65:0",
+      "0:65:1",
+      "0:65:-1",
+      "1:66:0",
+      "0:66:0",
+    ]);
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (position.y === 63) {
+        // Undiggable, so cover falls back to walls on open ground.
+        return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
+      }
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          blockKey({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    // The live bot stood on a mountain top where every flee route failed.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.filter(
+              (event) =>
+                event.type === "diagnostic" &&
+                event.message === "Fighting out of finished cover at full health",
+            ),
+            Stream.runHead,
+          );
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to fight out of cover: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
+              ),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
+  });
+
+  it("eats while it waits in cover so it can heal", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:dirt": 16, "minecraft:stone_sword": 1, "minecraft:cooked_beef": 4 },
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 16,
+      food: 15,
+    });
+    driver.entityResults = [skeletonAt(31, 12, 0), skeletonAt(32, 0, 12)];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (position.y === 63) {
+        // Undiggable, so cover falls back to walls on open ground.
+        return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
+      }
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          blockKey({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    // The live bot stood on a mountain top where every flee route failed.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.tasks.some((task) => task.type === "auto-eat") || placed.size < 10) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to eat in cover: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
+              ),
+          }),
+        ),
+      ),
+    );
+
+    const firstEat = driver.tasks.findIndex((task) => task.type === "auto-eat");
+    const firstFlee = driver.tasks.findIndex((task) => task.type === "flee");
+    expect(firstEat).toBeGreaterThan(firstFlee);
+  });
+
   it("walls itself in when skeleton fire wears down a running escape", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

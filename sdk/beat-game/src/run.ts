@@ -5474,6 +5474,27 @@ function takeCoverFromRangedFire(
     if (cover === undefined) {
       return false;
     }
+    // Walls that were already up keep a cave full of mobs out, but they
+    // never leave. A live run hid behind finished walls for half an hour
+    // while three zombies and two skeletons waited outside. Once healed, an
+    // armed bot fights its way out instead.
+    const sheltered = yield* state.driver.observe;
+    if (
+      cover.placedBlocks === 0 &&
+      sheltered.player.health >= state.strategy.minimumHealth &&
+      hasMeleeWeapon(sheltered)
+    ) {
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Fighting out of finished cover at full health",
+        data: {
+          threatNetworkId: threat.networkId,
+          threatType: threat.entityType,
+          health: sheltered.player.health,
+        },
+      });
+      return false;
+    }
     yield* emit(state, {
       type: "diagnostic",
       message: "Took cover from a ranged attacker after the escape route failed",
@@ -5485,6 +5506,17 @@ function takeCoverFromRangedFire(
         placedBlocks: cover.placedBlocks,
       },
     });
+    // Health only regenerates on a nearly full stomach, and a live run sat
+    // in cover at 13 health and 15 food for eleven minutes without healing.
+    if (sheltered.player.food < 20 && hasUsableFood(sheltered)) {
+      yield* eatWhenNeeded(state.driver, {
+        foodItemIds: preferredUsableFoodItemIds(sheltered),
+        foodLevel: 20,
+        maximumMeals: 1,
+        completeWhenNoFood: true,
+        path: state.strategy.path,
+      }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+    }
     yield* Effect.sleep(RANGED_COVER_WAIT_MS);
     return true;
   });
