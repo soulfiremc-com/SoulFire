@@ -10102,6 +10102,23 @@ function ensureNetherExplorationPickaxe(
   if (ironIngots >= 3) {
     return craftNetherPickaxe(state, observation, "minecraft:iron_pickaxe", 1);
   }
+  // An iron pickaxe lasts about twice as long as stone. A live fortress
+  // search carried seven raw iron while it broke five stone pickaxes in half
+  // an hour and kept leaving the search to find stems for new handles.
+  const rawIron = observation.inventory.counts["minecraft:raw_iron"] ?? 0;
+  const fuel =
+    (observation.inventory.counts["minecraft:coal"] ?? 0) +
+    (observation.inventory.counts["minecraft:charcoal"] ?? 0);
+  if (ironIngots + rawIron >= 3 && fuel > 0) {
+    return satisfyIronRequirement(state, observation, 3 - ironIngots).pipe(
+      Effect.andThen(state.driver.observe),
+      Effect.flatMap((current) =>
+        (current.inventory.counts["minecraft:iron_ingot"] ?? 0) >= 3
+          ? craftNetherPickaxe(state, current, "minecraft:iron_pickaxe", 1)
+          : Effect.void,
+      ),
+    );
+  }
   if (stoneToolMaterials >= 3) {
     // A live fortress search wore out a stone pickaxe every three minutes,
     // so spare ones save a trip back to the crafting table each time.

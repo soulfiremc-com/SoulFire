@@ -1481,6 +1481,101 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
   });
 
+  it("smelts carried raw iron for a Nether pickaxe that lasts longer", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "fortress-iron-pickaxe-run";
+    const teamId = "fortress-iron-pickaxe-team";
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:crafting_table": 1,
+        "minecraft:ender_pearl": 14,
+        "minecraft:netherrack": 64,
+        "minecraft:oak_log": 8,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:raw_iron": 7,
+        "minecraft:coal": 4,
+        "minecraft:furnace": 1,
+      },
+    });
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:wooden_pickaxe"
+        ? [
+            {
+              recipeId: "wooden-pickaxe",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 2,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:furnace") === true
+        ? [
+            blockObservation(
+              { x: 2, y: 64, z: 0, dimension: "minecraft:the_nether" },
+              { blockId: "minecraft:furnace" },
+            ),
+          ]
+        : query.selector.blockIds?.includes("minecraft:crafting_table") === true
+          ? [
+              blockObservation(
+                {
+                  x: 1,
+                  y: 64,
+                  z: 0,
+                  dimension: "minecraft:the_nether",
+                },
+                { blockId: "minecraft:crafting_table" },
+              ),
+            ]
+          : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "craft" ? Effect.never : Effect.void));
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "craft" || task.type === "smelt")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      driver.tasks.find((task) => task.type === "craft" || task.type === "smelt"),
+    ).toMatchObject({ type: "smelt", input: { itemIds: ["minecraft:raw_iron"] } });
+  });
+
   it("crafts and wears gold boots so piglins leave it alone in the Nether", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
