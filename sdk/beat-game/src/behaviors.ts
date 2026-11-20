@@ -4825,6 +4825,10 @@ function ignitePortal(
       (block) => block.y === frame.origin.y && (block.x === interior.x || block.z === interior.z),
     ) ?? frame.origin;
   const program = Effect.gen(function* () {
+    // A finished frame can hold lava or a scaffold block that arrived after
+    // it was built. A live run lit a complete cast frame without clearing it
+    // and failed on the lava inside until its retries ran out.
+    yield* clearPortalInterior(driver, frame, path);
     yield* driver.act({
       type: "select-item",
       selector: {
@@ -5171,9 +5175,7 @@ function castNetherPortalFromLavaPool(
         }
         if (options.ignite ?? true) {
           // A work-position route can bridge an otherwise unreachable ledge.
-          // Remove any bridge block which landed inside the frame before
-          // ignition.
-          yield* clearPortalInterior(driver, frame, options.path);
+          // Ignition clears any bridge block which landed inside the frame.
           yield* ignitePortal(driver, frame, false, options.path);
         }
       }).pipe(Effect.ensuring(driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
