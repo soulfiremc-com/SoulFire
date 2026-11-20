@@ -288,6 +288,16 @@ export function latestResumablePortalWorkspace(
   if (active !== undefined && active.status !== "ABANDONED") {
     return active;
   }
+  // A finished frame beats a new one, even one abandoned before failures
+  // kept complete frames: lighting it only needs flint and steel.
+  const completeFrame = checkpoint.memory.portalWorkspaces.findLast(
+    (workspace) => workspace.status !== "ENTERED" && hasCompletePortalFrame(workspace),
+  );
+  if (completeFrame !== undefined) {
+    return completeFrame.status === "ABANDONED"
+      ? { ...completeFrame, status: "BUILDING" }
+      : completeFrame;
+  }
   return checkpoint.memory.portalWorkspaces.findLast(
     (workspace) => workspace.status !== "ABANDONED" && workspace.status !== "ENTERED",
   );

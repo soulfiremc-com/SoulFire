@@ -137,6 +137,28 @@ describe("durable beat-game skills", () => {
     expect(latestResumablePortalWorkspace(abandoned)).toEqual(workspace);
   });
 
+  it("resumes a complete abandoned frame before an unfinished one", () => {
+    const incomplete = portalWorkspace();
+    const finished = {
+      ...incomplete,
+      workspaceId: "finished:portal",
+      observedFrame: incomplete.targetFrame,
+      status: "ABANDONED" as const,
+      abandonedReason: "ignition rejected",
+    };
+    const unfinished = { ...incomplete, workspaceId: "unfinished:portal" };
+    const base = checkpoint(BeatGamePhase.ENTER_NETHER);
+    const withWorkspaces = {
+      ...base,
+      memory: { ...base.memory, portalWorkspaces: [finished, unfinished] },
+    };
+
+    expect(latestResumablePortalWorkspace(withWorkspaces)).toMatchObject({
+      workspaceId: "finished:portal",
+      status: "BUILDING",
+    });
+  });
+
   it("archives completion evidence and clears only the active handle", () => {
     const initial = checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON);
     const started = startOrResumeDurableSkill(
