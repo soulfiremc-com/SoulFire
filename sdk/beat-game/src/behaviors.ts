@@ -4831,59 +4831,127 @@ function ignitePortal(
   return acquireControl ? driver.withControl(program) : program;
 }
 
+/// Lava that flows into the frame blocks ignition, and digging only clears it until it
+/// flows back. Fills the interior bottom-up, then seals lava beside it across the frame
+/// plane, so the interior dig that follows leaves it empty.
+function sealPortalInteriorLava(
+  driver: BeatGameDriver,
+  frame: PortalFrame,
+  path?: Partial<BeatGamePathPolicy>,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const across: readonly {
+      readonly face: BeatGameBlockFace;
+      readonly x: number;
+      readonly z: number;
+    }[] =
+      frame.axis === "x"
+        ? [
+            { face: "north", x: 0, z: -1 },
+            { face: "south", x: 0, z: 1 },
+          ]
+        : [
+            { face: "west", x: -1, z: 0 },
+            { face: "east", x: 1, z: 0 },
+          ];
+    const neighbors = frame.interior.flatMap((cell) =>
+      across.map(({ face, x, z }) => ({
+        cell,
+        face,
+        position: { ...cell, x: cell.x + x, z: cell.z + z },
+      })),
+    );
+    const lava = new Set<string>();
+    for (const candidate of [...frame.interior, ...neighbors.map(({ position }) => position)]) {
+      const block = yield* queryExactBlock(driver, candidate);
+      if (block?.blockId === "minecraft:lava") {
+        lava.add(positionKey(candidate));
+      }
+    }
+    if (lava.size === 0) {
+      return undefined;
+    }
+    const observation = yield* driver.observe;
+    const material = staircaseSupportMaterial(observation);
+    if (material === undefined) {
+      return yield* behaviorError(driver, "No block to seal lava out of the portal interior");
+    }
+    for (const cell of [...frame.interior].toSorted((left, right) => left.y - right.y)) {
+      const block = yield* queryExactBlock(driver, cell);
+      if (block !== undefined && !block.replaceable) {
+        continue;
+      }
+      yield* driver.pathfind(cell, 3, mergePathPolicy(path));
+      yield* placeStaircaseBlock(driver, material, { ...cell, y: cell.y - 1 }, "up", cell);
+    }
+    for (const { cell, face, position } of neighbors) {
+      if (lava.has(positionKey(position))) {
+        yield* placeStaircaseBlock(driver, material, cell, face, position);
+      }
+    }
+    return undefined;
+  });
+}
+
 function clearPortalInterior(
   driver: BeatGameDriver,
   frame: PortalFrame,
   path?: Partial<BeatGamePathPolicy>,
 ): Effect.Effect<void, BeatGameDriverError> {
-  return Effect.forEach(
-    [...frame.interior].toSorted((left, right) => right.y - left.y),
-    (position) =>
-      driver
-        .queryBlocks({
-          center: {
-            ...position,
-            x: position.x + 0.5,
-            y: position.y + 0.5,
-            z: position.z + 0.5,
-          },
-          radius: 0.25,
-          selector: {},
-          maximumResults: 1,
-        })
-        .pipe(
-          Effect.flatMap((blocks) => {
-            const block = blocks.find((candidate) => samePosition(candidate.position, position));
-            if (
-              block === undefined ||
-              block.replaceable ||
-              block.blockId === "minecraft:nether_portal"
-            ) {
-              return Effect.void;
-            }
-            if (!block.diggable) {
-              return Effect.fail(
-                behaviorError(
-                  driver,
-                  `Portal interior is not diggable at ${positionKey(position)}`,
-                ),
-              );
-            }
-            return Effect.gen(function* () {
-              yield* driver.pathfind(position, 3, mergePathPolicy(path));
-              const observation = yield* driver.observe;
-              const tool = preferredPortalDigTool(observation);
-              if (tool !== undefined) {
-                yield* driver.act({
-                  type: "select-item",
-                  selector: { itemIds: [tool] },
+  return sealPortalInteriorLava(driver, frame, path).pipe(
+    Effect.andThen(
+      Effect.forEach(
+        [...frame.interior].toSorted((left, right) => right.y - left.y),
+        (position) =>
+          driver
+            .queryBlocks({
+              center: {
+                ...position,
+                x: position.x + 0.5,
+                y: position.y + 0.5,
+                z: position.z + 0.5,
+              },
+              radius: 0.25,
+              selector: {},
+              maximumResults: 1,
+            })
+            .pipe(
+              Effect.flatMap((blocks) => {
+                const block = blocks.find((candidate) =>
+                  samePosition(candidate.position, position),
+                );
+                if (
+                  block === undefined ||
+                  block.replaceable ||
+                  block.blockId === "minecraft:nether_portal"
+                ) {
+                  return Effect.void;
+                }
+                if (!block.diggable) {
+                  return Effect.fail(
+                    behaviorError(
+                      driver,
+                      `Portal interior is not diggable at ${positionKey(position)}`,
+                    ),
+                  );
+                }
+                return Effect.gen(function* () {
+                  yield* driver.pathfind(position, 3, mergePathPolicy(path));
+                  const observation = yield* driver.observe;
+                  const tool = preferredPortalDigTool(observation);
+                  if (tool !== undefined) {
+                    yield* driver.act({
+                      type: "select-item",
+                      selector: { itemIds: [tool] },
+                    });
+                  }
+                  yield* driver.act({ type: "dig-block", position });
                 });
-              }
-              yield* driver.act({ type: "dig-block", position });
-            });
-          }),
-        ),
-    { discard: true, concurrency: 1 },
+              }),
+            ),
+        { discard: true, concurrency: 1 },
+      ),
+    ),
   );
 }
 
