@@ -9599,6 +9599,91 @@ describe("beat-game run lifecycle", () => {
     });
   }, 10_000);
 
+  it("treats a distant blaze's fireball as an attack, not environmental damage", async () => {
+    const driver = new FakeBeatGameDriver();
+    let actionStarted = false;
+    let health = 20;
+    const position = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" };
+    const counts = { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 8 };
+    driver.currentObservation = observation({ health, position, counts });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 17.5;
+        }
+        driver.currentObservation = observation({ health, position, counts });
+        return driver.currentObservation;
+      });
+    // The blaze hovers thirty blocks off, beyond the nearby attacker search.
+    const blaze = {
+      connectionEpoch: "epoch-1",
+      networkId: 31,
+      entityType: "minecraft:blaze",
+      position: { x: 30.5, y: 70, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      origin !== undefined &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(blaze.entityType)) &&
+      distanceSquared(origin, blaze.position) <= radius ** 2
+        ? [blaze]
+        : [];
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 2.5,
+      health: 17.5,
+      damageType: "minecraft:fireball",
+    } as const).pipe(Stream.concat(Stream.never));
+
+    const failures: string[] = [];
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  actionStarted = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.gen(function* () {
+            while (
+              !driver.tasks.some(
+                (task) =>
+                  task.type === "attack-entity" && task.target.networkId === blaze.networkId,
+              ) &&
+              !failures.some((detail) => detail.includes("environmental damage"))
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(failures.filter((detail) => detail.includes("environmental damage"))).toEqual([]);
+    expect(driver.tasks).toContainEqual(
+      objectContaining({ type: "attack-entity", target: objectContaining({ networkId: 31 }) }),
+    );
+  });
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;

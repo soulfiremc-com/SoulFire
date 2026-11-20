@@ -4382,6 +4382,50 @@ function isPositionDimensionTransitionRace(error: BeatGameDriverError): boolean 
   );
 }
 
+/// Blazes and archers shoot from well beyond the nearby attacker search. A
+/// live run took blaze fireballs as environmental damage, retreated in the
+/// open to eat and burned to death, so a fresh projectile hit looks for a
+/// visible ranged shooter further out.
+function findDistantRangedAttacker(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const damage = yield* Ref.get(state.lastDamage);
+    if (
+      damage?.damageType === undefined ||
+      !RANGED_ATTACK_DAMAGE_TYPES.has(damage.damageType) ||
+      Date.parse(observation.observedAt) - Date.parse(damage.observedAt) > RECENT_ATTACK_MS
+    ) {
+      return undefined;
+    }
+    const shooters = yield* state.driver.queryEntities({
+      origin: { ...observation.player.position, y: observation.player.position.y + 1.62 },
+      radius: DISTANT_RANGED_ATTACKER_RADIUS,
+      selector: {
+        entityTypes: [...DISTANT_RANGED_ATTACKER_ENTITY_TYPES],
+        alive: true,
+        requireLineOfSight: true,
+      },
+      maximumResults: 8,
+    });
+    const shooter = shooters
+      .filter(({ entityType }) => DISTANT_RANGED_ATTACKER_ENTITY_TYPES.has(entityType))
+      .toSorted(
+        (left, right) =>
+          distanceSquared(observation.player.position, left.position) -
+          distanceSquared(observation.player.position, right.position),
+      )[0];
+    if (shooter === undefined) {
+      return undefined;
+    }
+    return {
+      target: shooter,
+      response: shooter.entityType === "minecraft:ghast" ? "flee" : "attack",
+    } satisfies ImmediateThreat;
+  });
+}
+
 function monitorObservedSafety(
   state: RunState,
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
@@ -4426,6 +4470,10 @@ function monitorObservedSafety(
     observation.player.health < previousObservation.player.health
   ) {
     return findNearbyAttackThreat(state, observation).pipe(
+      Effect.filterOrElse(
+        (nearbyThreat): nearbyThreat is ImmediateThreat => nearbyThreat !== undefined,
+        () => findDistantRangedAttacker(state, observation),
+      ),
       Effect.flatMap((threat): Effect.Effect<ActionResult, BeatGameError | BeatGameDriverError> => {
         if (threat === undefined) {
           if (decision.type === "eat") {
@@ -8614,6 +8662,21 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+const RANGED_ATTACK_DAMAGE_TYPES = new Set([
+  "minecraft:arrow",
+  "minecraft:trident",
+  "minecraft:fireball",
+  "minecraft:mob_projectile",
+]);
+const DISTANT_RANGED_ATTACKER_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:blaze",
+  "minecraft:ghast",
+  "minecraft:skeleton",
+  "minecraft:stray",
+  "minecraft:bogged",
+  "minecraft:pillager",
+]);
+const DISTANT_RANGED_ATTACKER_RADIUS = 48;
 const SURFACE_ESCAPE_PROGRESS_HEIGHT = 1;
 const SURFACE_ESCAPE_MAXIMUM_TOTAL_ATTEMPTS = 20;
 const WORKSTATION_SETTLE_POLLS = 10;
