@@ -28422,6 +28422,85 @@ describe("beat-game run lifecycle", () => {
     expect([...dug].some((key) => Number(key.split(":")[1]) < 64)).toBe(true);
   });
 
+  it("keeps climbing out of a deep cave while each attempt gains height", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: -50, z: 0.5 },
+      counts: { "minecraft:cooked_beef": 8 },
+    });
+    driver.surfaceColumns = [
+      {
+        x: 0,
+        z: 0,
+        loaded: true,
+        surfaceY: 63,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.blockQueryResolver = () => [];
+    // Each surface route gains five blocks before the next leg is needed.
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        const current = driver.currentObservation;
+        driver.currentObservation = {
+          ...current,
+          player: {
+            ...current.player,
+            position: { ...current.player.position, y: current.player.position.y + 5 },
+          },
+        };
+      }).pipe(
+        Effect.andThen(
+          Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfind",
+              code: "unreachable",
+              retryable: true,
+              message: "The surface route ended partway up",
+            }),
+          ),
+        ),
+      );
+    const failures: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.gen(function* () {
+            while (
+              driver.currentObservation.player.position.y < 0 &&
+              !failures.some((detail) => detail.includes("below the Overworld surface"))
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(failures.filter((detail) => detail.includes("below the Overworld surface"))).toEqual([]);
+    expect(driver.currentObservation.player.position.y).toBeGreaterThanOrEqual(0);
+  }, 10_000);
+
   it("keeps climbing a deep aquifer after surface pathfinding fails", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceColumns = [

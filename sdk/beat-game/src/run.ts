@@ -7730,7 +7730,17 @@ function escapeToOverworldSurface(
   return Effect.gen(function* () {
     let currentPosition = position;
     let lastPathFailure: BeatGameDriverError | undefined;
-    for (let attempt = 0; attempt < AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS; attempt += 1) {
+    // A climb that gains height is working. A live run climbed fifty blocks
+    // from a deep portal in three attempts and was cut off at y -3, so only
+    // attempts that fail to rise count against the limit.
+    let stalledAttempts = 0;
+    for (
+      let attempt = 0;
+      stalledAttempts < AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS &&
+      attempt < SURFACE_ESCAPE_MAXIMUM_TOTAL_ATTEMPTS;
+      attempt += 1
+    ) {
+      const startY = currentPosition.y;
       if (!(yield* needsOverworldSurfaceRecovery(state, currentPosition))) {
         return undefined;
       }
@@ -7753,6 +7763,8 @@ function escapeToOverworldSurface(
         return undefined;
       }
       currentPosition = current.player.position;
+      stalledAttempts =
+        currentPosition.y >= startY + SURFACE_ESCAPE_PROGRESS_HEIGHT ? 0 : stalledAttempts + 1;
     }
     if (!(yield* needsOverworldSurfaceRecovery(state, currentPosition))) {
       return undefined;
@@ -7763,7 +7775,7 @@ function escapeToOverworldSurface(
       retryable: true,
       message: `The bot remained below the Overworld surface at ${positionKey(
         currentPosition,
-      )} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts`,
+      )} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts without rising`,
       ...(lastPathFailure === undefined ? {} : { cause: lastPathFailure }),
     });
   });
@@ -8602,6 +8614,8 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+const SURFACE_ESCAPE_PROGRESS_HEIGHT = 1;
+const SURFACE_ESCAPE_MAXIMUM_TOTAL_ATTEMPTS = 20;
 const WORKSTATION_SETTLE_POLLS = 10;
 const WORKSTATION_SETTLE_POLL_MS = 100;
 const RECENT_LAVA_DAMAGE_MS = 1000;
