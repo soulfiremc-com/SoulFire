@@ -44022,6 +44022,14 @@ describe("beat-game run lifecycle", () => {
       health: 13,
       foodItems: { "minecraft:red_mushroom": 3 },
     },
+    // As in a live run whose trip back for food was interrupted for the
+    // hunger that sent it, after it had eaten its last raw pork.
+    {
+      name: "urgent hunger and no food",
+      food: 9,
+      health: 20,
+      foodItems: {},
+    },
   ])("keeps walking back to a portal with $name", async ({ food, health, foodItems }) => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

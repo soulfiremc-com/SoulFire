@@ -4446,6 +4446,9 @@ function monitorObservedSafety(
     (decision.type !== "recover-death" || observation.player.food <= CRITICAL_HUNGER_FOOD_LEVEL) &&
     observation.player.food <= URGENT_HUNGER_FOOD_LEVEL &&
     !hasUsableFood(observation) &&
+    // Going back to the Overworld is how a starving Nether bot finds food. A
+    // live trip back was interrupted 132 times for this very hunger.
+    decision.type !== "return-through-portal" &&
     !(
       decision.type === "satisfy-requirement" &&
       (decision.requirement.key === "food" || decision.requirement.key === "food-supply")
