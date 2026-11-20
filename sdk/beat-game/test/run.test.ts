@@ -17259,6 +17259,137 @@ describe("beat-game run lifecycle", () => {
     });
   }, 10_000);
 
+  it("stops climbing out after a failed escape when a mob attacks", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 0, y: 58, z: 0 },
+      counts: {
+        "minecraft:dirt": 16,
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_pickaxe": 1,
+        "minecraft:wooden_sword": 1,
+      },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 42,
+        entityType: "minecraft:creeper",
+        position: {
+          x: 5,
+          y: 64,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.surfaceColumns = [
+      {
+        x: 0,
+        z: 0,
+        loaded: true,
+        surfaceY: 57,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+      {
+        x: 3,
+        z: 0,
+        loaded: true,
+        surfaceY: 64,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "The bot is trapped below the creeper",
+                }),
+              )
+            : Effect.never,
+        ),
+      );
+    let resolveDamage!: () => void;
+    const damaged = new Promise<void>((resolve) => {
+      resolveDamage = resolve;
+    });
+    driver.events = Stream.fromEffect(
+      Effect.promise(() => damaged).pipe(
+        Effect.as({
+          type: "bot-damaged",
+          observedAt: "2026-01-01T00:00:05.000Z",
+          amount: 2,
+          health: 18,
+          damageType: "minecraft:mob_attack",
+        } as const),
+      ),
+    ).pipe(Stream.concat(Stream.never));
+    const climb = { interrupted: false };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        if (policy.allowMining && policy.allowPlacing && policy.maxSearchTimeMs === 5000) {
+          // A zombie hits the bot while it climbs out.
+          resolveDamage();
+        }
+      }).pipe(
+        Effect.andThen(Effect.never),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            if (policy.allowMining && policy.allowPlacing && policy.maxSearchTimeMs === 5000) {
+              climb.interrupted = true;
+            }
+          }),
+        ),
+      );
+
+    const interruptedBeforeStop = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (
+            !driver.tasks.some((task) => task.type === "flee") ||
+            !driver.paths.some(
+              ({ policy }) =>
+                policy.allowMining && policy.allowPlacing && policy.maxSearchTimeMs === 5000,
+            )
+          ) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.gen(function* () {
+            while (!climb.interrupted) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("2 seconds"), Effect.ignore);
+          const interrupted = climb.interrupted;
+          yield* run.stop;
+          return interrupted;
+        }),
+      ),
+    );
+
+    expect(interruptedBeforeStop).toBe(true);
+  }, 10_000);
+
   it("carves an upward staircase out of a dry shaft", async () => {
     const driver = await climbDryShaft();
 

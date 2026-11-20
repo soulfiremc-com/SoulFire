@@ -5589,7 +5589,30 @@ function recoverAfterFailedEscape(
     }
     const current = yield* state.driver.observe;
     if (!current.player.dead) {
-      yield* recoverLocalNavigationTrap(state, current.player.position);
+      // This climb can run for minutes inside a safety response, where no
+      // monitor watches for attacks. A live run climbed from y -22 while a
+      // zombie hit it ten times to death, so an attack ends the climb.
+      yield* Effect.raceFirst(
+        recoverLocalNavigationTrap(state, current.player.position).pipe(Effect.asVoid),
+        waitForMobAttackSince(state, current.observedAt),
+      );
+    }
+  });
+}
+
+function waitForMobAttackSince(state: RunState, since: string): Effect.Effect<void> {
+  const sinceMs = Date.parse(since);
+  return Effect.gen(function* () {
+    for (;;) {
+      const damage = yield* Ref.get(state.lastDamage);
+      if (
+        damage?.damageType !== undefined &&
+        ATTACK_DAMAGE_TYPES.has(damage.damageType) &&
+        Date.parse(damage.observedAt) > sinceMs
+      ) {
+        return;
+      }
+      yield* Effect.sleep(MINIMUM_RECOVERY_POLL_MS);
     }
   });
 }
