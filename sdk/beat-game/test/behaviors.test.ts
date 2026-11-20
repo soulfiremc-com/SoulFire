@@ -599,6 +599,48 @@ describe("beat-game behavior programs", () => {
     expect(driver.actions.at(-1)).toEqual({ type: "reset-movement" });
   });
 
+  it("paths to a close drop instead of walking blind beside lava", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = {
+      x: 4,
+      y: 64,
+      z: -2,
+      dimension: "minecraft:overworld",
+    };
+    const drop = {
+      connectionEpoch: "epoch-1",
+      networkId: 10,
+      entityType: "minecraft:item",
+      itemId: "minecraft:cobblestone",
+      position: {
+        x: 5.5,
+        y: 64,
+        z: -2,
+        dimension: "minecraft:overworld",
+      },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.currentObservation = observation({ position });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:lava") === true
+        ? [blockObservation({ ...position, x: 7, y: 63 }, { blockId: "minecraft:lava" })]
+        : [];
+    driver.entityQueryResolver = () => (driver.paths.length > 0 ? [] : [drop]);
+
+    await Effect.runPromise(
+      collectNearbyDrops(driver, {
+        settleDelayMs: 0,
+      }),
+    );
+
+    expect(driver.actions).not.toContainEqual(
+      objectContaining({ type: "set-movement", forward: true }),
+    );
+    expect(driver.paths).not.toEqual([]);
+  });
+
   it("keeps steering toward a sinking submerged drop", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {

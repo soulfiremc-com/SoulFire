@@ -48,6 +48,8 @@ const SUBMERGED_DROP_PICKUP_PATH_RADIUS = 0.75;
 const DROP_PICKUP_MAXIMUM_ATTEMPTS = 3;
 const DIRECT_DROP_PICKUP_MAXIMUM_HORIZONTAL_DISTANCE = 1.9;
 const DIRECT_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 0.75;
+// A blind walk can overshoot the drop by a block or two before it stops.
+const DIRECT_DROP_PICKUP_LAVA_MARGIN = 3;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_HORIZONTAL_DISTANCE = 2.25;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 8;
 const DIRECT_DROP_PICKUP_POLL_INTERVAL_MS = 100;
@@ -433,6 +435,17 @@ function tryDirectDropPickup(
   }
 
   return Effect.gen(function* () {
+    // A live run walked straight at a drop beside a lava pool, overshot it,
+    // and burned to death. Near lava the pathfinder collects the drop.
+    const nearbyLava = yield* driver.queryBlocks({
+      center: playerPosition,
+      radius: horizontalDistance + DIRECT_DROP_PICKUP_LAVA_MARGIN,
+      selector: { blockIds: ["minecraft:lava"] },
+      maximumResults: 1,
+    });
+    if (nearbyLava.some(({ blockId }) => blockId === "minecraft:lava")) {
+      return false;
+    }
     yield* steerTowardDrop(driver, observation, drop, allowVerticalMovement);
 
     const maximumPolls = allowVerticalMovement
