@@ -410,6 +410,24 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:smooth_basalt",
   "minecraft:lapis_lazuli",
   "minecraft:bone",
+  // Overworld pickups that nothing crafts or uses. A live run reached the
+  // Nether full of them and could not free the slots to craft gold boots.
+  "minecraft:wildflowers",
+  "minecraft:rose_bush",
+  "minecraft:lilac",
+  "minecraft:peony",
+  "minecraft:sunflower",
+  "minecraft:dandelion",
+  "minecraft:poppy",
+  "minecraft:short_grass",
+  "minecraft:tall_grass",
+  "minecraft:fern",
+  "minecraft:fishing_rod",
+  "minecraft:redstone",
+  "minecraft:gunpowder",
+  "minecraft:string",
+  "minecraft:leather",
+  "minecraft:potion",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left

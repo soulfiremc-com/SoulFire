@@ -177,6 +177,24 @@ describe("inventory discards", () => {
     });
   });
 
+  it("frees slots held by Overworld pickups that nothing uses", () => {
+    // As in a live run that reached the Nether too full to craft gold boots.
+    expect(
+      selectInventoryDiscard({
+        "minecraft:wildflowers": 22,
+        "minecraft:cobblestone": 64,
+        "minecraft:cooked_porkchop": 4,
+        "minecraft:flint_and_steel": 1,
+      }),
+    ).toEqual({ itemId: "minecraft:wildflowers", count: 22 });
+    expect(
+      selectInventoryDiscard({
+        "minecraft:fishing_rod": 1,
+        "minecraft:cobblestone": 64,
+      }),
+    ).toEqual({ itemId: "minecraft:fishing_rod", count: 1 });
+  });
+
   it("frees slots held by Nether junk", () => {
     // As in a live run whose inventory was full of Nether plants and magma,
     // so it could not make room for food.
