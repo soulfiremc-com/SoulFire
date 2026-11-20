@@ -8561,6 +8561,8 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+const WORKSTATION_SETTLE_POLLS = 10;
+const WORKSTATION_SETTLE_POLL_MS = 100;
 const RECENT_LAVA_DAMAGE_MS = 1000;
 
 // Piglins leave a player who wears gold alone, but they still report
@@ -15861,6 +15863,17 @@ function prepareDryWorkstationSite(
     for (let attempt = 0; attempt < AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS; attempt += 1) {
       const inFluid = yield* isPlayerInFluid(state.driver, current.player.position);
       if (!inFluid && current.player.onGround) {
+        return current;
+      }
+      // Off the ground but dry is a step or a short drop, not a reason to
+      // leave. A live run read onGround false deep in a cave and dug a
+      // staircase 35 blocks to the surface by hand to place a table it
+      // carried. Placing works from where the bot settles.
+      if (!inFluid && !current.player.dead) {
+        for (let poll = 0; poll < WORKSTATION_SETTLE_POLLS && !current.player.onGround; poll += 1) {
+          yield* Effect.sleep(WORKSTATION_SETTLE_POLL_MS);
+          current = yield* state.driver.observe;
+        }
         return current;
       }
       if (current.player.dead) {

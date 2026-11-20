@@ -42273,6 +42273,154 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("places a workstation where it stands when briefly off the ground", async () => {
+    const driver = new FakeBeatGameDriver();
+    // The bot reads as off the ground on dry footing, which once sent it
+    // digging to the surface to place a table.
+    driver.currentObservation = observation({
+      onGround: false,
+      position: { y: 54 },
+      counts: {
+        "minecraft:cooked_beef": 8,
+        "minecraft:oak_log": 5,
+        "minecraft:oak_planks": 3,
+        "minecraft:stick": 2,
+        "minecraft:wooden_pickaxe": 1,
+        "minecraft:cobblestone": 20,
+      },
+    });
+    const unreachableTable = blockObservation(
+      {
+        x: 8,
+        y: 54,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      { blockId: "minecraft:crafting_table" },
+    );
+    const undergroundTable = blockObservation(
+      {
+        x: 2,
+        y: 40,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      { blockId: "minecraft:crafting_table" },
+    );
+    const localTable = blockObservation(
+      {
+        x: 1,
+        y: 54,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      { blockId: "minecraft:crafting_table" },
+    );
+    let localTablePlaced = false;
+    driver.recipeResolver = (resultItemId) => [
+      {
+        recipeId: resultItemId,
+        recipeType: "minecraft:crafting",
+        resultItemId,
+        resultCount: 1,
+        ingredients: [],
+      },
+    ];
+    driver.craftabilityResolver = (recipeId) => ({
+      canCraft: true,
+      maximumCraftCount: 1,
+      ...(recipeId === "minecraft:stone_sword"
+        ? { requiredStation: "minecraft:crafting_table" }
+        : {}),
+      missing: [],
+    });
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:crafting_table") === true) {
+        return localTablePlaced ? [localTable] : [undergroundTable, unreachableTable];
+      }
+      if (selector.replaceable === false) {
+        return [
+          blockObservation({
+            x: 1,
+            y: 53,
+            z: 0,
+            dimension: "minecraft:overworld",
+          }),
+        ];
+      }
+      if (selector.replaceable === true) {
+        return [
+          blockObservation(
+            {
+              x: Math.floor(center.x),
+              y: Math.floor(center.y),
+              z: Math.floor(center.z),
+              dimension: center.dimension,
+            },
+            { replaceable: true },
+          ),
+        ];
+      }
+      return [];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          position.x === unreachableTable.position.x + 0.5
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "unreachable_goal",
+                  retryable: false,
+                  message: "No route found to the goal",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    let resolveSwordCraft!: () => void;
+    const swordCraftStarted = new Promise<void>((resolve) => {
+      resolveSwordCraft = resolve;
+    });
+    driver.taskResolver = (task) => {
+      driver.tasks.push(task);
+      if (
+        task.type === "craft" &&
+        (task.recipeId === "minecraft:wooden_sword" || task.recipeId === "minecraft:stone_sword")
+      ) {
+        resolveSwordCraft();
+        return Effect.never;
+      }
+      return Effect.void;
+    };
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "place-block") {
+          localTablePlaced = true;
+        }
+        return {};
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.race(
+            Effect.promise(() => swordCraftStarted),
+            Effect.sleep(1000),
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.surfaceQueries).toEqual([]);
+  });
+
   it("reaches actual dry ground before resuming iron smelting", async () => {
     const driver = new FakeBeatGameDriver();
     const furnace = blockObservation(
