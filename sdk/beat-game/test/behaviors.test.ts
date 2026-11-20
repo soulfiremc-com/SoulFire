@@ -3455,6 +3455,32 @@ describe("beat-game behavior programs", () => {
     );
   });
 
+  it("does not strike a portal frame that is already lit", async () => {
+    const driver = new FakeBeatGameDriver();
+    const origin = { x: 10, y: 64, z: 20, dimension: "minecraft:overworld" };
+    const frame = createNetherPortalFrame(origin);
+    installPortalWorld(driver, frame, {
+      initialBlocks: frame.blocks.map((block) =>
+        blockObservation(block, { blockId: "minecraft:obsidian" }),
+      ),
+    });
+    const resolveBlocks = driver.blockQueryResolver;
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:nether_portal") === true
+        ? frame.interior.map((cell) =>
+            blockObservation(cell, {
+              blockId: "minecraft:nether_portal",
+              diggable: false,
+              replaceable: false,
+            }),
+          )
+        : resolveBlocks(query);
+
+    await Effect.runPromise(castNetherPortal(driver, { origin }));
+
+    expect(driver.actions).not.toContainEqual(objectContaining({ type: "interact-block" }));
+  });
+
   it("seals lava that flows into the portal before ignition", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });

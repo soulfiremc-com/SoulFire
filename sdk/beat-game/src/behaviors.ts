@@ -4827,6 +4827,17 @@ function ignitePortal(
       (block) => block.y === frame.origin.y && (block.x === interior.x || block.z === interior.z),
     ) ?? frame.origin;
   const program = Effect.gen(function* () {
+    // A live run came back to its lit portal, struck the frame below the
+    // portal blocks until every retry was refused, and ended the run.
+    const alreadyLit = yield* driver.queryBlocks({
+      center: interior,
+      radius: 3,
+      selector: { blockIds: ["minecraft:nether_portal"] },
+      maximumResults: frame.interior.length,
+    });
+    if (alreadyLit.some(({ position }) => samePosition(position, interior))) {
+      return undefined;
+    }
     // A finished frame can hold lava or a scaffold block that arrived after
     // it was built. A live run lit a complete cast frame without clearing it
     // and failed on the lava inside until its retries ran out.
