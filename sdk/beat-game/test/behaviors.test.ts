@@ -3506,6 +3506,80 @@ describe("beat-game behavior programs", () => {
     expect(world.blocks.get(world.key(outside))?.blockId).toBe("minecraft:cobblestone");
   });
 
+  it("fills only the lava cells while sealing a portal", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });
+    const origin = {
+      x: 10,
+      y: 64,
+      z: 20,
+      dimension: "minecraft:overworld",
+    };
+    const frame = createNetherPortalFrame(origin);
+    const flooded = frame.interior.find(({ y }) => y === origin.y + 1);
+    if (flooded === undefined) {
+      throw new Error("Expected a bottom portal interior cell");
+    }
+    const outside = { ...flooded, z: flooded.z + 1 };
+    const lava = (position: typeof flooded) =>
+      blockObservation(position, { blockId: "minecraft:lava", replaceable: true, solid: false });
+    const world = installPortalWorld(driver, frame, {
+      initialBlocks: [
+        ...frame.blocks.map((block) => blockObservation(block, { blockId: "minecraft:obsidian" })),
+        lava(flooded),
+        lava(outside),
+      ],
+    });
+    const observeAction = driver.actionObserver;
+    const lavaInInteriorAtIgnition: boolean[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-block") {
+        lavaInInteriorAtIgnition.push(
+          frame.interior.some(
+            (cell) => world.blocks.get(world.key(cell))?.blockId === "minecraft:lava",
+          ),
+        );
+      }
+      observeAction(action);
+      // Lava beside the frame flows back into an emptied interior cell.
+      if (
+        action.type === "dig-block" &&
+        world.key(action.position) === world.key(flooded) &&
+        world.blocks.get(world.key(outside))?.blockId === "minecraft:lava"
+      ) {
+        world.blocks.set(world.key(flooded), lava(flooded));
+      }
+    };
+
+    await Effect.runPromise(buildNetherPortal(driver, { origin }));
+
+    const offsets = {
+      down: { x: 0, y: -1, z: 0 },
+      up: { x: 0, y: 1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    const placedTargets = driver.actions.flatMap((action) =>
+      action.type === "place-block"
+        ? [
+            world.key({
+              ...action.against,
+              x: action.against.x + offsets[action.face].x,
+              y: action.against.y + offsets[action.face].y,
+              z: action.against.z + offsets[action.face].z,
+            }),
+          ]
+        : [],
+    );
+    const interiorKeys = new Set(frame.interior.map((cell) => world.key(cell)));
+    // The empty interior cells stay empty, so the bot can stand in them.
+    expect(new Set(placedTargets.filter((key) => interiorKeys.has(key)))).toEqual(
+      new Set([world.key(flooded)]),
+    );
+  });
+
   it("seals lava out of a finished cast frame before lighting it", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });

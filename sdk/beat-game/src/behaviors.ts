@@ -4860,8 +4860,8 @@ function ignitePortal(
 }
 
 /// Lava that flows into the frame blocks ignition, and digging only clears it until it
-/// flows back. Fills the interior bottom-up, then seals lava beside it across the frame
-/// plane, so the interior dig that follows leaves it empty.
+/// flows back. Fills the lava inside the frame bottom-up, then seals lava beside it across
+/// the frame plane, so the interior dig that follows leaves it empty.
 function sealPortalInteriorLava(
   driver: BeatGameDriver,
   frame: PortalFrame,
@@ -4904,12 +4904,12 @@ function sealPortalInteriorLava(
     if (material === undefined) {
       return yield* behaviorError(driver, "No block to seal lava out of the portal interior");
     }
+    // Only lava cells get filled. A live run also filled the empty cells
+    // and stood in one, so its placement never confirmed.
     for (const cell of [...frame.interior].toSorted((left, right) => left.y - right.y)) {
-      const block = yield* queryExactBlock(driver, cell);
-      if (block !== undefined && !block.replaceable) {
-        continue;
+      if (lava.has(positionKey(cell))) {
+        yield* placeSealBlock(driver, material, cell, path);
       }
-      yield* placeSealBlock(driver, material, cell, path);
     }
     for (const { position } of neighbors) {
       if (lava.has(positionKey(position))) {
