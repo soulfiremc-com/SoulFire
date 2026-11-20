@@ -61,6 +61,20 @@ import {
   stringMatching,
 } from "./matchers.js";
 
+function aggressiveSpiderAt(x: number) {
+  return {
+    connectionEpoch: "epoch-1",
+    networkId: 12,
+    entityType: "minecraft:spider",
+    position: { x, y: 64, z: 0, dimension: "minecraft:overworld" },
+    velocity: { x: 0, y: 0, z: 0 },
+    alive: true,
+    health: 16,
+    target: { connectionEpoch: "epoch-1", networkId: 99 },
+    observedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
 describe("direct escape sprint directions", () => {
   it("does not sprint along a ledge with a drop beside it", () => {
     const player = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" } as const;
@@ -19072,6 +19086,47 @@ describe("beat-game run lifecycle", () => {
         maximumEscapes: 2,
       }),
     ]);
+  });
+
+  it("fights a spider that catches the bot while it recovers", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 1 };
+    driver.currentObservation = observation({ health: 10, counts });
+    driver.entityResults = [aggressiveSpiderAt(12)];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          // The spider outruns the bot and bites it while the escape runs.
+          driver.entityResults = [aggressiveSpiderAt(1)];
+          driver.currentObservation = observation({ health: 8, counts });
+        }
+      }).pipe(Effect.andThen(task.type === "flee" ? Effect.never : Effect.succeed({})));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* Effect.gen(function* () {
+                while (!driver.actions.some((action) => action.type === "attack-entity")) {
+                  yield* Effect.sleep(1);
+                }
+              }).pipe(Effect.timeout(2000), Effect.ignore);
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "flee" }));
+    expect(driver.actions).toContainEqual(
+      objectContaining({ type: "attack-entity", networkId: 12 }),
+    );
   });
 
   it("flees a ranged hostile at critical health despite carrying a shield", async () => {

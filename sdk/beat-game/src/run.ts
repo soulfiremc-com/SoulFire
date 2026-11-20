@@ -9250,7 +9250,14 @@ function retreatAndRecover(
             if (threat.entityType === "minecraft:enderman") {
               return escapeFromTarget(state, threat);
             }
-            const selector = hasNearbyGroupAggroMember(threat, entities)
+            const groupAggro = hasNearbyGroupAggroMember(threat, entities);
+            // A spider outruns the bot. A live run fled one here with a sword
+            // in hand and took seven bites without striking back, so a lone
+            // fast pursuer gets the monitored escape that fights when caught.
+            if (!groupAggro && FAST_MELEE_PURSUER_ENTITY_TYPES.has(threat.entityType)) {
+              return escapeFromTarget(state, threat);
+            }
+            const selector = groupAggro
               ? ({ categories: [2], alive: true } as const)
               : ({ networkId: threat.networkId, alive: true } as const);
             return flee(state.driver, {
