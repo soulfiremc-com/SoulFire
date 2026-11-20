@@ -4389,9 +4389,10 @@ function monitorObservedSafety(
   }
   // A live bot broke its last pickaxe three minutes into a fortress search
   // and dug netherrack by hand for seven more minutes before it replanned.
+  // Another broke one climbing a staircase toward portal lava and dug stone
+  // by hand until the portal build timed out.
   if (
-    decision.type === "satisfy-requirement" &&
-    isNether(observation.player.position.dimension) &&
+    (decision.type === "satisfy-requirement" || decision.type === "build-and-enter-nether") &&
     hasMiningPickaxe(previousObservation) &&
     !hasMiningPickaxe(observation)
   ) {

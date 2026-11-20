@@ -1703,6 +1703,72 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("replans a portal build as soon as its last pickaxe breaks", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "portal-broken-pickaxe-run";
+    const teamId = "portal-broken-pickaxe-team";
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId }), undefined),
+    );
+    const counts: Record<string, number> = {
+      "minecraft:cooked_beef": 16,
+      "minecraft:oak_log": 8,
+      "minecraft:cobblestone": 64,
+      "minecraft:stone_sword": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:shield": 1,
+      "minecraft:water_bucket": 1,
+      "minecraft:lava_bucket": 1,
+      "minecraft:flint_and_steel": 1,
+    };
+    driver.currentObservation = observation({ counts });
+    const failures: string[] = [];
+    const build = { started: false };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1, portalStrategy: "CAST" },
+            hooks: {
+              buildAndEnterNether: () =>
+                Effect.sync(() => {
+                  build.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed" && event.action === "build-and-enter-nether"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!build.started) {
+            yield* Effect.sleep(1);
+          }
+          const { "minecraft:stone_pickaxe": _, ...withoutPickaxe } = counts;
+          driver.currentObservation = observation({ counts: withoutPickaxe });
+          while (failures.length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("3 seconds")),
+      ),
+    );
+
+    expect(failures).toContain(
+      "Interrupted for replanning: interrupted an action to replace a broken pickaxe",
+    );
+  });
+
   it("leaves a crafting table beside a portal and crafts away from it", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
