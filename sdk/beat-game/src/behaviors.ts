@@ -51,6 +51,7 @@ const DIRECT_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 0.75;
 // A blind walk can overshoot the drop by a block or two before it stops.
 const DIRECT_DROP_PICKUP_LAVA_MARGIN = 3;
 const SEAL_APPROACH_RADIUS = 1.5;
+const SEAL_FALLBACK_APPROACH_RADIUS = 3;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_HORIZONTAL_DISTANCE = 2.25;
 const SUBMERGED_DROP_PICKUP_MAXIMUM_VERTICAL_DISTANCE = 8;
 const DIRECT_DROP_PICKUP_POLL_INTERVAL_MS = 100;
@@ -4942,7 +4943,17 @@ function placeSealBlock(
   path?: Partial<BeatGamePathPolicy>,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
-    yield* driver.pathfind(target, SEAL_APPROACH_RADIUS, mergePathPolicy(path));
+    // A lava cell outside the frame cannot be stood beside, and a live run
+    // retried that approach 373 times. Get as close as a route allows and
+    // place from there.
+    const approached = yield* driver
+      .pathfind(target, SEAL_APPROACH_RADIUS, mergePathPolicy(path))
+      .pipe(Effect.result);
+    if (approached._tag === "Failure") {
+      yield* driver
+        .pathfind(target, SEAL_FALLBACK_APPROACH_RADIUS, mergePathPolicy(path))
+        .pipe(Effect.ignore);
+    }
     let lastFailure: BeatGameDriverError | undefined;
     for (const { face, x, y, z } of SEAL_PLACEMENT_FACES) {
       const against = { ...target, x: target.x + x, y: target.y + y, z: target.z + z };
