@@ -4309,6 +4309,29 @@ function digStaircaseBlockIfNeeded(
     if (block.replaceable) {
       return undefined;
     }
+    // Digging next to water or lava lets it pour into the staircase. A live
+    // bot climbed into a lake bed, flooded its tunnel and could not dig on.
+    const neighbors = yield* Effect.forEach(
+      [
+        { ...position, y: position.y + 1 },
+        { ...position, x: position.x + 1 },
+        { ...position, x: position.x - 1 },
+        { ...position, z: position.z + 1 },
+        { ...position, z: position.z - 1 },
+      ],
+      (neighbor) => queryExactBlock(driver, neighbor),
+      { concurrency: 1 },
+    );
+    const fluid = neighbors.find(
+      (neighbor) => neighbor !== undefined && isAvoidedFluidBlockId(neighbor.blockId),
+    );
+    if (fluid !== undefined) {
+      return yield* behaviorError(
+        driver,
+        `Refused to open a staircase into ${fluid.blockId} at ${positionKey(fluid.position)}`,
+        "fluid_exposed",
+      );
+    }
     yield* driver.act({ type: "dig-block", position });
     return undefined;
   });

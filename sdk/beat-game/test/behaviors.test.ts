@@ -1335,6 +1335,37 @@ describe("beat-game behavior programs", () => {
     expect(driver.activeControlScopes).toBe(0);
   });
 
+  it("stops a staircase before it opens into water", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run whose staircase broke into a lake bed and flooded.
+    const water = { x: 2, y: 13, z: 2, dimension: "minecraft:overworld" };
+    driver.blockQueryResolver = ({ center }) => {
+      const position = queriedBlockPosition(center);
+      return [
+        position.x === water.x && position.y === water.y && position.z === water.z
+          ? blockObservation(position, { blockId: "minecraft:water", replaceable: true })
+          : blockObservation(position),
+      ];
+    };
+    const from = { x: 4, y: 14, z: 1, dimension: "minecraft:overworld" };
+    const to = { x: 0, y: 10, z: 1, dimension: "minecraft:overworld" };
+    installStaircaseMovementSimulation(driver, from);
+
+    const error = await Effect.runPromise(Effect.flip(excavateStaircase(driver, { from, to })));
+
+    expect(error).toMatchObject({ code: "fluid_exposed" });
+    const touchesWater = (position: { x: number; y: number; z: number }) =>
+      Math.abs(position.x - water.x) +
+        Math.abs(position.y - water.y) +
+        Math.abs(position.z - water.z) ===
+      1;
+    expect(
+      driver.actions.filter(
+        (action) => action.type === "dig-block" && touchesWater(action.position),
+      ),
+    ).toEqual([]);
+  });
+
   it("delegates staircase tread movement to constrained pathfinding", async () => {
     const driver = new FakeBeatGameDriver();
     driver.blockQueryResolver = ({ center }) => [blockObservation(queriedBlockPosition(center))];
