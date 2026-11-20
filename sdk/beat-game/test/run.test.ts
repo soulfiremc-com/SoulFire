@@ -197,6 +197,20 @@ describe("inventory discards", () => {
     );
   });
 
+  it("keeps a cobblestone reserve for pickaxes", () => {
+    // As in a live run that threw away all its cobblestone and then had no
+    // stone for pickaxes in the Nether.
+    expect(selectInventoryDiscard({ "minecraft:cobblestone": 40 })).toBeUndefined();
+    expect(selectInventoryDiscard({ "minecraft:cobblestone": 289 })).toEqual({
+      itemId: "minecraft:cobblestone",
+      count: 64,
+    });
+    expect(selectInventoryDiscard({ "minecraft:cobblestone": 100 })).toEqual({
+      itemId: "minecraft:cobblestone",
+      count: 36,
+    });
+  });
+
   it("keeps the netherrack building reserve", () => {
     expect(selectInventoryDiscard({ "minecraft:netherrack": 64 })).toBeUndefined();
   });
@@ -40515,6 +40529,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:wooden_pickaxe": 1,
         "minecraft:cobblestone": 14,
         "minecraft:raw_copper": 26,
+        "minecraft:gravel": 10,
       },
     });
     driver.recipeResolver = (resultItemId) => [
@@ -40710,12 +40725,21 @@ describe("beat-game run lifecycle", () => {
         task.type === "craft" ? `${task.type}:${task.recipeId}` : task.type,
       ),
     ).toEqual(["collect-blocks", "craft:minecraft:wooden_pickaxe", "collect-blocks"]);
+    // The cobblestone it collects is the stone for its next pickaxes, so it
+    // keeps it and frees slots with junk.
     expect(
       driver.actions.filter(
         (action) =>
           action.type === "toss-items" &&
-          action.selector.itemIds?.includes("minecraft:cobblestone") === true &&
-          action.count === 18,
+          action.selector.itemIds?.includes("minecraft:cobblestone") === true,
+      ),
+    ).toEqual([]);
+    expect(
+      driver.actions.filter(
+        (action) =>
+          action.type === "toss-items" &&
+          action.selector.itemIds?.includes("minecraft:gravel") === true &&
+          action.count === 10,
       ),
     ).toHaveLength(1);
     expect(
@@ -40740,8 +40764,8 @@ describe("beat-game run lifecycle", () => {
       "dig:-6:64:-1",
       "dig:-6:65:-2",
       "dig:-6:64:-2",
+      "toss:minecraft:gravel",
       "toss:minecraft:raw_copper",
-      "toss:minecraft:cobblestone",
       "path:return",
     ]);
     expect(

@@ -411,10 +411,14 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:lapis_lazuli",
   "minecraft:bone",
 ] as const;
-const NETHER_BUILDING_BLOCK_DISCARD_IDS = [
+// Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
+// a live run threw all of it away to make room and then had no stone left
+// for pickaxes in the Nether.
+const BUILDING_BLOCK_DISCARD_IDS = [
   "minecraft:netherrack",
   "minecraft:basalt",
   "minecraft:blackstone",
+  "minecraft:cobblestone",
 ] as const;
 const REDUNDANT_EQUIPMENT_FAMILIES = [
   [
@@ -16073,15 +16077,11 @@ export function selectInventoryDiscard(
   // it and could not free the slots to craft a new pickaxe.
   // Basalt deltas fill it with basalt and blackstone the same way. A live run
   // held 332 basalt and could not free slots for food.
-  for (const itemId of NETHER_BUILDING_BLOCK_DISCARD_IDS) {
+  for (const itemId of BUILDING_BLOCK_DISCARD_IDS) {
     const excess = (counts[itemId] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
     if (excess > 0) {
       return { itemId, count: Math.min(64, excess) };
     }
-  }
-  const cobblestoneCount = counts["minecraft:cobblestone"] ?? 0;
-  if (cobblestoneCount > 0) {
-    return { itemId: "minecraft:cobblestone", count: Math.min(64, cobblestoneCount) };
   }
   return selectRedundantEquipmentDiscard(counts);
 }
