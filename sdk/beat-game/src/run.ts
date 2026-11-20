@@ -7738,14 +7738,18 @@ function digAirEscapeObstruction(
     }
     const settled = yield* settleForSubmergedDig(state);
     const inFluid = yield* isPlayerInFluid(state.driver, settled.player.position);
+    // Vanilla slows digging, and the bot spends air, only while its eyes are
+    // under water. A live bot stood in a flooded tunnel with its head in air
+    // and refused every dig as if it were submerged.
+    const eyesSubmerged = !(yield* hasBreathableHeadSpace(state.driver, settled.player.position));
     const estimatedTicks = estimatedBlockBreakTicks(
       block,
       selectedTool,
-      inFluid,
+      eyesSubmerged,
       settled.player.onGround,
     );
     const usableAirTicks =
-      settled.player.maxAir <= 0
+      settled.player.maxAir <= 0 || !eyesSubmerged
         ? Number.POSITIVE_INFINITY
         : settled.player.air - AIR_ESCAPE_DIG_AIR_RESERVE_TICKS;
     if (!Number.isFinite(estimatedTicks) || estimatedTicks > usableAirTicks) {
