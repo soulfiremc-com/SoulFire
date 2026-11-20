@@ -1661,17 +1661,19 @@ interface NightBedPlacementSite {
   readonly support: BeatGameBlockPosition;
 }
 
+type SleepOutcome = "slept" | "attacked" | "unavailable";
+
 function trySleepThroughNight(
   state: RunState,
   observation: BeatGameObservation,
-): Effect.Effect<boolean, BeatGameError | BeatGameDriverError> {
+): Effect.Effect<SleepOutcome, BeatGameError | BeatGameDriverError> {
   if (state.driver.environment === undefined) {
-    return Effect.succeed(false);
+    return Effect.succeed("unavailable" as const);
   }
   return Effect.gen(function* () {
     const environment = yield* observeEnvironment(state);
     if (!isHostileNight(environment.gameTime)) {
-      return true;
+      return "slept";
     }
     let current = observation;
     let beds = yield* findNearbyNightBeds(state.driver, current);
@@ -1697,6 +1699,7 @@ function trySleepThroughNight(
       }
     }
     for (const bed of beds) {
+      const healthBeforeBed = (yield* state.driver.observe).player.health;
       const sleepAttempt = yield* state.driver
         .runTask(
           {
@@ -1723,7 +1726,11 @@ function trySleepThroughNight(
       if (sleepAttempt._tag === "Failure") {
         continue;
       }
-      if (yield* waitForMorningAfterBed(state)) {
+      const outcome = yield* waitForMorningAfterBed(state, healthBeforeBed);
+      if (outcome === "attacked") {
+        return "attacked";
+      }
+      if (outcome === "morning") {
         yield* persist(state, (checkpoint) =>
           rememberWorldPlace(checkpoint, "SHELTER", bed.position, 1),
         );
@@ -1733,10 +1740,10 @@ function trySleepThroughNight(
           data: { position: bed.position },
         });
         yield* pickUpBed(state, bed);
-        return true;
+        return "slept";
       }
     }
-    return false;
+    return "unavailable";
   });
 }
 
@@ -1964,10 +1971,16 @@ function findNightBedPlacementSites(
     );
 }
 
-function waitForMorningAfterBed(state: RunState): Effect.Effect<boolean, BeatGameDriverError> {
+type BedWaitOutcome = "morning" | "attacked" | "timeout";
+
+function waitForMorningAfterBed(
+  state: RunState,
+  healthBeforeBed: number,
+): Effect.Effect<BedWaitOutcome, BeatGameDriverError> {
   return Effect.gen(function* () {
     const deadline = (yield* Clock.currentTimeMillis) + NIGHT_BED_MORNING_TIMEOUT_MS;
     let daylightConfirmations = 0;
+    let previousHealth = healthBeforeBed;
     while ((yield* Clock.currentTimeMillis) < deadline) {
       const environment = yield* observeEnvironment(state);
       daylightConfirmations =
@@ -1975,15 +1988,18 @@ function waitForMorningAfterBed(state: RunState): Effect.Effect<boolean, BeatGam
           ? daylightConfirmations + 1
           : 0;
       if (daylightConfirmations >= NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS) {
-        return true;
+        return "morning";
       }
       const current = yield* state.driver.observe;
-      if (current.player.dead) {
-        return false;
+      // A hit wakes the bot. A live run lay waiting for morning beside its
+      // bed while a zombie hit it to death, so damage ends the wait.
+      if (current.player.dead || current.player.health < previousHealth) {
+        return "attacked";
       }
+      previousHealth = current.player.health;
       yield* Effect.sleep(250);
     }
-    return false;
+    return "timeout";
   });
 }
 
@@ -1993,25 +2009,6 @@ function shelterUntilMorning(
 ): Effect.Effect<boolean, BeatGameError | BeatGameDriverError> {
   return Effect.gen(function* () {
     let shelterObservation = observation;
-    const needsRecoveryMeal =
-      shelterObservation.player.health < state.strategy.minimumHealth &&
-      shelterObservation.player.food < 18;
-    if (
-      (shelterObservation.player.food <= state.strategy.eatBelowFood || needsRecoveryMeal) &&
-      hasUsableFood(shelterObservation)
-    ) {
-      yield* eatWhenNeeded(state.driver, {
-        foodItemIds: preferredUsableFoodItemIds(shelterObservation),
-        foodLevel: 20,
-        maximumMeals: 1,
-        completeWhenNoFood: true,
-        path: state.strategy.path,
-      });
-      shelterObservation = yield* state.driver.observe;
-      if (shelterObservation.player.dead) {
-        return false;
-      }
-    }
     const nearbyThreat = yield* findImmediateThreat(state, shelterObservation);
     if (nearbyThreat !== undefined) {
       yield* emit(state, {
@@ -2042,6 +2039,27 @@ function shelterUntilMorning(
         return false;
       }
     }
+    // A live run ate here while a zombie hit it from 7 health to 1, so
+    // nearby hostiles come first.
+    const needsRecoveryMeal =
+      shelterObservation.player.health < state.strategy.minimumHealth &&
+      shelterObservation.player.food < 18;
+    if (
+      (shelterObservation.player.food <= state.strategy.eatBelowFood || needsRecoveryMeal) &&
+      hasUsableFood(shelterObservation)
+    ) {
+      yield* eatWhenNeeded(state.driver, {
+        foodItemIds: preferredUsableFoodItemIds(shelterObservation),
+        foodLevel: 20,
+        maximumMeals: 1,
+        completeWhenNoFood: true,
+        path: state.strategy.path,
+      });
+      shelterObservation = yield* state.driver.observe;
+      if (shelterObservation.player.dead) {
+        return false;
+      }
+    }
     if (yield* isPlayerInFluid(state.driver, shelterObservation.player.position)) {
       const reachedDrySurface = yield* swimToNearbyDrySurface(state);
       if (!reachedDrySurface) {
@@ -2069,7 +2087,7 @@ function shelterUntilMorning(
       }
       shelterObservation = yield* state.driver.observe;
     }
-    const sleptThroughNight = yield* trySleepThroughNight(state, shelterObservation).pipe(
+    const bedOutcome = yield* trySleepThroughNight(state, shelterObservation).pipe(
       Effect.catch((error) =>
         emit(state, {
           type: "diagnostic",
@@ -2078,11 +2096,16 @@ function shelterUntilMorning(
             position: shelterObservation.player.position,
             error: error.message,
           },
-        }).pipe(Effect.as(false)),
+        }).pipe(Effect.as<SleepOutcome>("unavailable")),
       ),
     );
-    if (sleptThroughNight) {
+    if (bedOutcome === "slept") {
       return true;
+    }
+    // An attacker beside the bed would keep hitting the bot while it builds
+    // walls, so the shelter ends and the main loop answers the attack.
+    if (bedOutcome === "attacked") {
+      return false;
     }
     shelterObservation = yield* state.driver.observe;
     const initialPlayerBlock = {

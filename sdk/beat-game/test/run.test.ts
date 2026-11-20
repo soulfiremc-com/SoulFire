@@ -2755,6 +2755,64 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("leaves its bed when a mob attacks it there", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    const position = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" };
+    driver.currentObservation = observation({
+      counts: { "minecraft:white_bed": 1 },
+      position,
+    });
+    installNightBedTestWorld(driver);
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "sleep") {
+          // A zombie hits the bot in bed, and the night goes on.
+          driver.currentObservation = observation({
+            counts: {},
+            position,
+            health: 16,
+          });
+        }
+      });
+    const failed: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failed.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!failed.includes("survive:night-shelter")) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "3 seconds",
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting to leave the bed" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(failed).toContain("survive:night-shelter");
+  });
+
   it("crafts bed planks from a carried log before sheltering", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
