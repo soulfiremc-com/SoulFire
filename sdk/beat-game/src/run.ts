@@ -600,6 +600,7 @@ const DEEP_LAVA_SEARCH_MAX_Y = -48;
 const DEEP_LAVA_DESCENT_STEP = 12;
 const PORTAL_CASTING_ADDITIONAL_LAVA_SOURCE_COUNT = NETHER_PORTAL_FRAME_OBSIDIAN_COUNT - 1;
 const EXPLORATION_REANCHOR_DISTANCE = 16;
+const STRUCTURE_SEARCH_HOP_FACTOR = 1.5;
 const EXPLORATION_FRONTIER_LIMIT = 64;
 const EXPLORATION_DEATH_DISPLACEMENT_WINDOW_MS = 10 * 60 * 1000;
 const EXPLORATION_MAXIMUM_SEARCH_TIME_MS = 5000;
@@ -13178,10 +13179,18 @@ function huntOrExplore(
           // fortress search scanned and hopped 48 blocks at a time and spent
           // an hour within 150 blocks of a portal 820 blocks from the fortress.
           const structureScanRadius = targetPreference?.structureSearch?.scanRadius;
+          // A fortress spans a hundred blocks or more, so scans can step
+          // further apart than one scan reaches and still overlap its walls.
+          // A live run took 90 minutes to circle a spiral 128 blocks per hop
+          // and never reached a fortress 420 blocks from its start.
+          const structureHop =
+            structureScanRadius === undefined
+              ? undefined
+              : Math.round(structureScanRadius * STRUCTURE_SEARCH_HOP_FACTOR);
           const frontierScanRadius =
             current.player.health < state.strategy.minimumHealth
               ? Math.min(32, state.strategy.entitySearchRadius)
-              : 2 * Math.max(state.strategy.entitySearchRadius, structureScanRadius ?? 0);
+              : 2 * Math.max(state.strategy.entitySearchRadius, structureHop ?? 0);
           const directedExplorationTarget =
             targetPreference?.explorationTarget?.dimension === current.player.position.dimension &&
             horizontalDistanceSquared(targetPreference.explorationTarget, current.player.position) >
@@ -13203,7 +13212,7 @@ function huntOrExplore(
                   true,
                   allowFluidFallback,
                   0,
-                  structureScanRadius ?? DISCOVERY_MAXIMUM_HOP,
+                  structureHop ?? DISCOVERY_MAXIMUM_HOP,
                 )
               : pathfindExplorationTarget(
                   state,

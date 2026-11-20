@@ -1194,9 +1194,10 @@ describe("beat-game run lifecycle", () => {
     const saved = await Effect.runPromise(store.load(runId));
     const frontier =
       saved?.memory.explorationFrontiers?.["minecraft:the_nether:find-nether-fortress"];
-    // Each hop moves as far as one scan reaches, so the next scan starts
-    // where this one ends.
-    expect(frontier?.target).toMatchObject({ x: 0.5, z: 128.5 });
+    // Each hop moves half again as far as one scan reaches, up to the
+    // exploration radius. A fortress is wide enough that the scans still
+    // overlap its walls.
+    expect(frontier?.target).toMatchObject({ x: 0.5, z: 192.5 });
   });
 
   it("keeps its fortress search spiral after a detour", async () => {
