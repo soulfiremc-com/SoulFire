@@ -857,6 +857,7 @@ export const DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH = 1;
 // the bot to regain a few hearts.
 const RANGED_COVER_WAIT_MS = 15_000;
 const COVER_MELEE_EXCLUSION_RADIUS = 6;
+const COVER_WALL_RING_RADIUS = 1.5;
 const ENDERMAN_COVER_WAIT_MS = 30_000;
 const RANGED_COVER_HEALTH = 8;
 const RECENT_ARROW_HIT_MS = 5000;
@@ -5462,6 +5463,27 @@ function takeCoverFromRangedFire(
         distanceSquared(observation.player.position, entity.position) <=
           COVER_MELEE_EXCLUSION_RADIUS ** 2,
     );
+    // Walls go up one block around the bot, so a melee mob already inside
+    // that ring stays in. A live run walled itself in with a zombie half a
+    // block away and was hit to death while the walls went up. An armed bot
+    // fights that mob instead.
+    const meleeHostileInsideWalls = (yield* state.driver.queryEntities({
+      origin: observation.player.position,
+      radius: COVER_WALL_RING_RADIUS,
+      selector: { categories: [2], alive: true },
+      maximumResults: 4,
+    })).some(
+      (entity) =>
+        isActiveMeleeHostile(entity) &&
+        !PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+        Math.hypot(
+          entity.position.x - observation.player.position.x,
+          entity.position.z - observation.player.position.z,
+        ) <= COVER_WALL_RING_RADIUS,
+    );
+    if (meleeHostileInsideWalls && hasMeleeWeapon(observation)) {
+      return false;
+    }
     // The supervisors that started this escape cancelled a live wall-in
     // halfway when the next arrow hit. Stop moving first, and let the few
     // placements finish.
