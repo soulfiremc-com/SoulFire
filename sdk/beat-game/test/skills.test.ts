@@ -117,6 +117,26 @@ describe("durable beat-game skills", () => {
     ]);
   });
 
+  it("keeps a complete portal frame resumable when its skill is abandoned", () => {
+    const started = startOrResumeDurableSkill(
+      checkpoint(BeatGamePhase.ENTER_NETHER),
+      { type: "build-and-enter-nether", action: "build-and-enter-nether" },
+      now,
+      () => "portal-skill",
+    );
+    const incomplete = portalWorkspace();
+    const workspace = { ...incomplete, observedFrame: incomplete.targetFrame };
+    const building = advanceDurableSkill(started, "ignite", now, {
+      portalWorkspace: workspace,
+    });
+
+    const abandoned = abandonActiveDurableSkill(building, "ignition rejected", now, {
+      abandonPortalWorkspace: true,
+    });
+
+    expect(latestResumablePortalWorkspace(abandoned)).toEqual(workspace);
+  });
+
   it("archives completion evidence and clears only the active handle", () => {
     const initial = checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON);
     const started = startOrResumeDurableSkill(

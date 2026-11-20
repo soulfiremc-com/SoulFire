@@ -236,7 +236,9 @@ export function abandonActiveDurableSkill(
     status: BeatGameDurableSkillStatus.ABANDONED,
     completionEvidence: evidence,
     updatedAt: now,
-    ...(options.abandonPortalWorkspace === true && skill.portalWorkspace !== undefined
+    ...(options.abandonPortalWorkspace === true &&
+    skill.portalWorkspace !== undefined &&
+    !hasCompletePortalFrame(skill.portalWorkspace)
       ? {
           portalWorkspace: {
             ...skill.portalWorkspace,
@@ -259,6 +261,24 @@ export function abandonActiveDurableSkill(
           : upsertPortalWorkspace(checkpoint.memory.portalWorkspaces, abandoned.portalWorkspace),
     },
   };
+}
+
+/// A finished frame only needs lighting. A live run abandoned a complete
+/// cast frame after lava kept flowing into it and cast a new one beside it,
+/// which cost another lava search, so failures there keep the site.
+function hasCompletePortalFrame(workspace: BeatGamePortalWorkspace): boolean {
+  return (
+    workspace.targetFrame.length > 0 &&
+    workspace.targetFrame.every((target) =>
+      workspace.observedFrame.some(
+        (observed) =>
+          observed.x === target.x &&
+          observed.y === target.y &&
+          observed.z === target.z &&
+          observed.dimension === target.dimension,
+      ),
+    )
+  );
 }
 
 export function latestResumablePortalWorkspace(
