@@ -4917,9 +4917,11 @@ function sealPortalInteriorLava(
         yield* placeSealBlock(driver, material, cell, path).pipe(Effect.ignore);
       }
     }
+    // Walking toward lava outside the frame led a live run into it, and it
+    // burned to death. Those seals are tried from where the bot stands.
     for (const { position } of neighbors) {
       if (lava.has(positionKey(position))) {
-        yield* placeSealBlock(driver, material, position, path).pipe(Effect.ignore);
+        yield* placeSealBlock(driver, material, position, path, false).pipe(Effect.ignore);
       }
     }
     return undefined;
@@ -4947,18 +4949,21 @@ function placeSealBlock(
   material: string,
   target: BeatGameBlockPosition,
   path?: Partial<BeatGamePathPolicy>,
+  approach = true,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
     // A lava cell outside the frame cannot be stood beside, and a live run
     // retried that approach 373 times. Get as close as a route allows and
     // place from there.
-    const approached = yield* driver
-      .pathfind(target, SEAL_APPROACH_RADIUS, mergePathPolicy(path))
-      .pipe(Effect.result);
-    if (approached._tag === "Failure") {
-      yield* driver
-        .pathfind(target, SEAL_FALLBACK_APPROACH_RADIUS, mergePathPolicy(path))
-        .pipe(Effect.ignore);
+    if (approach) {
+      const approached = yield* driver
+        .pathfind(target, SEAL_APPROACH_RADIUS, mergePathPolicy(path))
+        .pipe(Effect.result);
+      if (approached._tag === "Failure") {
+        yield* driver
+          .pathfind(target, SEAL_FALLBACK_APPROACH_RADIUS, mergePathPolicy(path))
+          .pipe(Effect.ignore);
+      }
     }
     let lastFailure: BeatGameDriverError | undefined;
     for (const { face, x, y, z } of SEAL_PLACEMENT_FACES) {

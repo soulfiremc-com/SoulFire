@@ -3506,6 +3506,58 @@ describe("beat-game behavior programs", () => {
     expect(world.blocks.get(world.key(outside))?.blockId).toBe("minecraft:cobblestone");
   });
 
+  it("never walks toward lava outside the portal frame to seal it", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });
+    const origin = {
+      x: 10,
+      y: 64,
+      z: 20,
+      dimension: "minecraft:overworld",
+    };
+    const frame = createNetherPortalFrame(origin);
+    const flooded = frame.interior.find(({ y }) => y === origin.y + 1);
+    if (flooded === undefined) {
+      throw new Error("Expected a bottom portal interior cell");
+    }
+    const outside = { ...flooded, z: flooded.z + 1 };
+    const lava = (position: typeof flooded) =>
+      blockObservation(position, { blockId: "minecraft:lava", replaceable: true, solid: false });
+    const world = installPortalWorld(driver, frame, {
+      initialBlocks: [
+        ...frame.blocks.map((block) => blockObservation(block, { blockId: "minecraft:obsidian" })),
+        lava(flooded),
+        lava(outside),
+      ],
+    });
+    const observeAction = driver.actionObserver;
+    const lavaInInteriorAtIgnition: boolean[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-block") {
+        lavaInInteriorAtIgnition.push(
+          frame.interior.some(
+            (cell) => world.blocks.get(world.key(cell))?.blockId === "minecraft:lava",
+          ),
+        );
+      }
+      observeAction(action);
+      // Lava beside the frame flows back into an emptied interior cell.
+      if (
+        action.type === "dig-block" &&
+        world.key(action.position) === world.key(flooded) &&
+        world.blocks.get(world.key(outside))?.blockId === "minecraft:lava"
+      ) {
+        world.blocks.set(world.key(flooded), lava(flooded));
+      }
+    };
+
+    await Effect.runPromise(buildNetherPortal(driver, { origin }));
+
+    expect(driver.paths.map(({ position }) => world.key(position))).not.toContain(
+      world.key(outside),
+    );
+  });
+
   it("fills only the lava cells while sealing a portal", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({ counts: { "minecraft:cobblestone": 16 } });
