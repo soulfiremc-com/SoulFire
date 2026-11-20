@@ -10781,30 +10781,43 @@ function reclaimPlacedFurnace(
   if (!workstation.placed) {
     return Effect.void;
   }
+  const reclaim = (observation: BeatGameObservation) =>
+    ensureMiningPickaxe(
+      state,
+      observation,
+      "minecraft:wooden_pickaxe",
+      MINING_PICKAXE_ITEM_IDS,
+    ).pipe(
+      Effect.andThen(
+        state.driver.act({
+          type: "select-item",
+          selector: { itemIds: MINING_PICKAXE_ITEM_IDS },
+        }),
+      ),
+      Effect.andThen(
+        state.driver.act({
+          type: "dig-block",
+          position: workstation.position,
+        }),
+      ),
+      Effect.andThen(
+        collectNearbyDrops(state.driver, {
+          itemIds: ["minecraft:furnace"],
+          radius: 4,
+          maximumDrops: 4,
+          settleDelayMs: 500,
+          path: state.strategy.path,
+        }),
+      ),
+    );
   return state.driver.observe.pipe(
     Effect.flatMap((observation) =>
-      ensureMiningPickaxe(state, observation, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
-    ),
-    Effect.andThen(
-      state.driver.act({
-        type: "select-item",
-        selector: { itemIds: MINING_PICKAXE_ITEM_IDS },
-      }),
-    ),
-    Effect.andThen(
-      state.driver.act({
-        type: "dig-block",
-        position: workstation.position,
-      }),
-    ),
-    Effect.andThen(
-      collectNearbyDrops(state.driver, {
-        itemIds: ["minecraft:furnace"],
-        radius: 4,
-        maximumDrops: 4,
-        settleDelayMs: 500,
-        path: state.strategy.path,
-      }),
+      // A live run stopped smelting for an approaching zombie, then dug up
+      // and collected the furnace for ten seconds while the zombie hit it
+      // from 17 health to 2. The furnace stays for later batches instead.
+      findImmediateThreat(state, observation).pipe(
+        Effect.flatMap((threat) => (threat === undefined ? reclaim(observation) : Effect.void)),
+      ),
     ),
     // Reclaiming a temporary workstation is cleanup. A lost container drop or
     // control lease must not suspend the main planner indefinitely. This can

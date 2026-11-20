@@ -43282,6 +43282,136 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("leaves a placed furnace behind when a zombie interrupts cooking", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 8,
+      food: 17,
+      counts: {
+        "minecraft:porkchop": 1,
+        "minecraft:coal": 1,
+        "minecraft:furnace": 1,
+        "minecraft:wooden_pickaxe": 1,
+      },
+    });
+    const furnace = blockObservation(
+      {
+        x: 2,
+        y: 64,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      { blockId: "minecraft:furnace" },
+    );
+    const craftingTable = blockObservation(
+      {
+        x: 1,
+        y: 64,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      { blockId: "minecraft:crafting_table" },
+    );
+    const nearbyZombie = {
+      connectionEpoch: "epoch-1",
+      networkId: 21,
+      entityType: "minecraft:zombie",
+      position: { x: 1.5, y: 64, z: 1.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    let furnacePlaced = false;
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:furnace") === true) {
+        return furnacePlaced ? [furnace] : [];
+      }
+      if (selector.blockIds?.includes("minecraft:crafting_table") === true) {
+        return [craftingTable];
+      }
+      if (selector.replaceable === false) {
+        return [
+          blockObservation({
+            x: furnace.position.x,
+            y: furnace.position.y - 1,
+            z: furnace.position.z,
+            dimension: furnace.position.dimension,
+          }),
+        ];
+      }
+      if (selector.replaceable === true) {
+        return [
+          blockObservation(
+            {
+              x: Math.floor(center.x),
+              y: Math.floor(center.y),
+              z: Math.floor(center.z),
+              dimension: center.dimension,
+            },
+            { replaceable: true },
+          ),
+        ];
+      }
+      return [];
+    };
+    let resolveSmeltStarted!: () => void;
+    const smeltStarted = new Promise<void>((resolve) => {
+      resolveSmeltStarted = resolve;
+    });
+    driver.taskResolver = (task) => {
+      driver.tasks.push(task);
+      if (task.type === "build") {
+        furnacePlaced = true;
+      }
+      if (task.type === "smelt") {
+        // A zombie walks up while the furnace works.
+        driver.entityResults = [nearbyZombie];
+        resolveSmeltStarted();
+        return Effect.never;
+      }
+      return Effect.void;
+    };
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (
+          action.type === "dig-block" &&
+          action.position.x === furnace.position.x &&
+          action.position.y === furnace.position.y &&
+          action.position.z === furnace.position.z
+        ) {
+          furnacePlaced = false;
+        }
+        return {};
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.promise(() => smeltStarted).pipe(Effect.timeout("5 seconds"));
+          yield* Effect.gen(function* () {
+            while (
+              !driver.actions.some((action) => action.type === "attack-entity") &&
+              !driver.tasks.some((task) => task.type === "attack-entity" || task.type === "flee")
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.actions).not.toContainEqual({
+      type: "dig-block",
+      position: furnace.position,
+    });
+  });
+
   it("skips an unreachable recovery furnace and hunts for food", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
