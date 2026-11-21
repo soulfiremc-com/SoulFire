@@ -1605,6 +1605,107 @@ describe("beat-game run lifecycle", () => {
     expect(built.blocks.every(({ blockId }) => blockId === "minecraft:netherrack")).toBe(true);
   });
 
+  it("fights the blazes around it once fleeing them keeps failing", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:blaze_rod": 6,
+      },
+    });
+    // Three blazes hover around the bot in a spawner room it cannot run from,
+    // just past the reach where a failed escape turns to fight a pursuer.
+    const blazes = [
+      { x: 4.3, z: 0.5 },
+      { x: 0.5, z: 4.4 },
+      { x: -3.4, z: -2.5 },
+    ].map(({ x, z }, index) => ({
+      connectionEpoch: "epoch-1",
+      networkId: 50 + index,
+      entityType: "minecraft:blaze",
+      position: { x, y: 64, z, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    }));
+    driver.entityQueryResolver = ({ selector }) =>
+      blazes.filter(
+        (blaze) =>
+          (selector.networkId === undefined || selector.networkId === blaze.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(blaze.entityType)),
+      );
+    const flees = { count: 0 };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          flees.count += 1;
+        }
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "blaze-room-run",
+          teamId: "blaze-room-team",
+        }),
+        undefined,
+      ),
+    );
+    const attacked = () =>
+      driver.tasks.some(
+        (task) =>
+          task.type === "attack-entity" &&
+          blazes.some(({ networkId }) => networkId === task.target.networkId),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "blaze-room-run",
+            team: { teamId: "blaze-room-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!attacked() && flees.count < 40) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("8 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(attacked()).toBe(true);
+  }, 15_000);
+
   it("digs toward a blaze spawner it cannot walk to", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {

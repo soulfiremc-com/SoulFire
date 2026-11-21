@@ -848,6 +848,8 @@ const FAST_MELEE_PURSUER_ENTITY_TYPES = new Set([
   "minecraft:zombified_piglin",
 ]);
 const ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES = new Set(["minecraft:creeper", "minecraft:witch"]);
+const FAILED_ESCAPE_FIGHT_THRESHOLD = 3;
+const FAILED_ESCAPE_STREAK_WINDOW_MS = 30_000;
 const PROACTIVE_ESCAPE_ONLY_EVASION_RADIUS = 12;
 const PROACTIVE_MELEE_DISENGAGEMENT_RADIUS = 12;
 const MELEE_ENGAGEMENT_RADIUS = 4;
@@ -1007,6 +1009,8 @@ interface RunState {
   // reset when the action succeeds.
   readonly abandonedActionRounds: Ref.Ref<ReadonlyMap<string, number>>;
   readonly lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>;
+  // Escapes whose route failed in a row, reset by one that gets away.
+  readonly failedEscapes: Ref.Ref<{ readonly count: number; readonly atMs: number }>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1157,6 +1161,7 @@ export function beatGameWithDriver(
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
       abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       lastDamage,
+      failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -5452,7 +5457,13 @@ function escapeFromTarget(
       yield* emergencyAirAscent(state, current.player.position);
       return;
     }
+    if (outcome.type === "escaped") {
+      yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
+    }
     if (outcome.type === "escape-route-failed") {
+      if (yield* fightAfterRepeatedFailedEscapes(state, target)) {
+        return;
+      }
       yield* recoverAfterFailedEscape(state, target);
       return;
     }
@@ -5657,6 +5668,48 @@ function takeCoverInPlace(
     Effect.uninterruptible,
     Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
   );
+}
+
+/// A live bot at full health with a sword stood in a blaze spawner room and
+/// tried to flee its three blazes 557 times in fifteen minutes. Each flee
+/// found no route and the next began a second later. After a few failed
+/// escapes in a row, a healthy armed bot fights instead.
+function fightAfterRepeatedFailedEscapes(
+  state: RunState,
+  target: BeatGameEntityObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+    const previous = yield* Ref.get(state.failedEscapes);
+    const count = now - previous.atMs <= FAILED_ESCAPE_STREAK_WINDOW_MS ? previous.count + 1 : 1;
+    yield* Ref.set(state.failedEscapes, { count, atMs: now });
+    const current = yield* state.driver.observe;
+    if (
+      count < FAILED_ESCAPE_FIGHT_THRESHOLD ||
+      current.player.dead ||
+      current.player.health < state.strategy.minimumHealth ||
+      !hasMeleeWeapon(current) ||
+      ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) ||
+      target.entityType === "minecraft:enderman"
+    ) {
+      return false;
+    }
+    yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Fighting after repeated failed escapes",
+      data: {
+        threatNetworkId: target.networkId,
+        threatType: target.entityType,
+        failedEscapes: count,
+        health: current.player.health,
+      },
+    });
+    yield* defendAgainstTarget(state, target, { commitThroughWound: true }).pipe(
+      Effect.catchTag("BeatGameDriverError", () => Effect.void),
+    );
+    return true;
+  });
 }
 
 function recoverAfterFailedEscape(
