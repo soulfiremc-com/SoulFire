@@ -2951,7 +2951,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.taskPolicies[index]).toEqual(objectContaining({ avoidFluids: true }));
   });
 
-  it("moves away from piglins before mining gold for pearls", async () => {
+  it("hunts endermen for pearls when it has no gold to trade", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
     driver.currentObservation = observation({
@@ -2966,10 +2966,68 @@ describe("beat-game run lifecycle", () => {
         "minecraft:iron_pickaxe": 1,
         "minecraft:shield": 1,
         "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "pearl-hunt-run",
+          teamId: "pearl-hunt-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "pearl-hunt-run",
+            team: { teamId: "pearl-hunt-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (
+              driver.xzPaths.length === 0 &&
+              !driver.tasks.some(({ type }) => type === "collect-blocks")
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // A live hour of mining and trading gold left the bot at three pearls.
+    expect(driver.tasks).not.toContainEqual(
+      objectContaining({ type: "collect-blocks", blockIds: ["minecraft:nether_gold_ore"] }),
+    );
+    expect(driver.xzPaths.length).toBeGreaterThan(0);
+  });
+
+  it("moves away from piglins before mining gold for boots", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
       },
     });
     // A calm piglin eight blocks east, as beside the live bot that mined
-    // gold there and was killed by the piglins it angered.
+    // gold there and was killed by the piglins it angered. Without boots the
+    // bot needs gold for them.
     const piglin = {
       connectionEpoch: "epoch-1",
       networkId: 71,

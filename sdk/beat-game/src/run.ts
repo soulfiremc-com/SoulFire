@@ -16207,15 +16207,17 @@ function acquireEnderPearls(
       return;
     }
 
-    if (yield* leavePiglinsBeforeMiningGold(state, observation)) {
-      return;
-    }
-    yield* collectBlocks(state.driver, {
-      blockIds: ["minecraft:nether_gold_ore"],
-      count: Math.max(1, Math.min(state.strategy.targetGoldCount, Math.max(8, missing * 4))),
-      searchRadius: state.strategy.blockSearchRadius,
-      path: state.strategy.path,
-    });
+    // A piglin trades a pearl about once in 46 ingots, and an ore yields
+    // half an ingot. A live bot mined and traded for an hour and held three
+    // pearls of twelve. An enderman drops one about half the time, so with
+    // no gold in hand the bot goes looking for endermen instead.
+    yield* huntOrExplore(
+      state,
+      observation,
+      { entityTypes: ["minecraft:enderman"], alive: true },
+      missing,
+      "hunt-endermen",
+    );
   });
 }
 
