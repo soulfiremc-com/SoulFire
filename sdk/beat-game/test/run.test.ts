@@ -2488,6 +2488,96 @@ describe("beat-game run lifecycle", () => {
     expect(trades[0]?.pathX).toBe(wandered.position.x);
   });
 
+  it("keeps running when a piglin refuses a barter", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:gold_ingot": 2,
+      },
+    });
+    // Spotted six blocks east, the piglin has wandered to ten by the time
+    // the bot comes to trade.
+    const spotted = {
+      connectionEpoch: "epoch-1",
+      networkId: 72,
+      entityType: "minecraft:piglin",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const wandered = { ...spotted, position: { ...spotted.position, x: 10.5 } };
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.networkId === spotted.networkId
+        ? [wandered]
+        : selector.entityTypes?.includes(spotted.entityType) === true
+          ? [spotted]
+          : [];
+    // As in the live run: the piglin turns the gold down.
+    const trades: { readonly pathX: number | undefined }[] = [];
+    driver.actionResolver = (action) =>
+      action.type === "interact-entity"
+        ? Effect.sync(() => trades.push({ pathX: undefined })).pipe(
+            Effect.andThen(
+              Effect.fail(
+                new BeatGameDriverError({
+                  operation: "act.interact-entity",
+                  code: "failed_precondition",
+                  retryable: false,
+                  message: "FAILED_PRECONDITION: The target entity rejected the interaction",
+                }),
+              ),
+            ),
+          )
+        : Effect.succeed({});
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "piglin-refusal-run",
+          teamId: "piglin-refusal-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "piglin-refusal-run",
+            team: { teamId: "piglin-refusal-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (trades.length < 4) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("8 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // The run goes on and offers again rather than ending after the three
+    // attempts an action gets.
+    expect(trades.length).toBeGreaterThanOrEqual(4);
+  }, 15_000);
+
   it("moves away from piglins before mining gold for pearls", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

@@ -16237,12 +16237,23 @@ function barterWithPiglin(
           type: "select-item",
           selector: { itemIds: ["minecraft:gold_ingot"] },
         });
-        yield* state.driver.act({
-          type: "interact-entity",
-          connectionEpoch: piglin.connectionEpoch,
-          networkId: piglin.networkId,
-          hand: "main",
-        });
+        // A piglin still admiring the last ingot, or a baby or angry one,
+        // refuses the trade. A live refusal ended the whole run, so it ends
+        // only this barter and the next plan tries again.
+        const offered = yield* state.driver
+          .act({
+            type: "interact-entity",
+            connectionEpoch: piglin.connectionEpoch,
+            networkId: piglin.networkId,
+            hand: "main",
+          })
+          .pipe(
+            Effect.as(true),
+            Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+          );
+        if (!offered) {
+          return;
+        }
         yield* Effect.sleep(6500);
         const drops = yield* state.driver.queryEntities({
           origin: current.position,
