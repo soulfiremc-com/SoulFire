@@ -3270,6 +3270,61 @@ describe("beat-game run lifecycle", () => {
     expect(first?.z).toBeLessThan(-100.5);
   });
 
+  it("climbs out of the netherrack below the lava sea to explore", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: -100.5, y: 12, z: -100.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // As in the live run: the bot is down at y 12, in solid netherrack
+    // under the lava sea, with nothing in view.
+    driver.blockQueryResolver = () => [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "nether-climb-run",
+          teamId: "nether-climb-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "nether-climb-run",
+            team: { teamId: "nether-climb-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.xzPaths.length === 0 && driver.paths.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // Its first leg rises to the caverns instead of tunnelling at y 12.
+    expect(driver.paths[0]?.position.y).toBe(50);
+  });
+
   it("remembers an enderman it could not catch before its chase ran out", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

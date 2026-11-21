@@ -199,6 +199,10 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const NETHER_LAVA_SEA_LEVEL = 32;
+const NETHER_EXPLORATION_CAVERN_Y = 50;
+// The goal only needs the bot up in open ground near the leg's end.
+const NETHER_CAVERN_LEG_RADIUS = 16;
 const OUTWARD_SEARCH_DISTANCE = 1024;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
@@ -16047,6 +16051,21 @@ function pathfindExplorationTarget(
           dimension: position.dimension,
         },
         radius,
+        policy,
+      );
+    }
+    // Below the lava sea everything is solid netherrack. A live search kept
+    // tunnelling there at y 7 to 12, ran out of search on every leg, and met
+    // no mobs. From down there a leg climbs to the caverns above.
+    if (isNether(position.dimension) && position.y < NETHER_LAVA_SEA_LEVEL) {
+      return state.driver.pathfind(
+        {
+          x: legTarget.x,
+          y: NETHER_EXPLORATION_CAVERN_Y,
+          z: legTarget.z,
+          dimension: position.dimension,
+        },
+        Math.max(radius, NETHER_CAVERN_LEG_RADIUS),
         policy,
       );
     }
