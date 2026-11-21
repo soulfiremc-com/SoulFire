@@ -5198,6 +5198,14 @@ function escapeFromTarget(
     if (observation.player.dead) {
       return;
     }
+    // Running from a hoglin is what threw a live run off ledges and into
+    // lava, so it stands on a pillar instead when it can.
+    if (
+      PILLAR_DEFENSE_ENTITY_TYPES.has(target.entityType) &&
+      (yield* fightFromPillar(state, target))
+    ) {
+      return;
+    }
     if (shouldShieldCreeperExplosion(observation, target)) {
       yield* blockCreeperExplosion(state, observation, target);
       return;
@@ -8662,6 +8670,16 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:hoglin",
+  "minecraft:zoglin",
+]);
+const PILLAR_DEFENSE_HEIGHT = 2;
+const PILLAR_DEFENSE_SEARCH_MS = 2000;
+const PILLAR_DEFENSE_DURATION_MS = 30_000;
+const PILLAR_DEFENSE_WATCH_RADIUS = 12;
+const PILLAR_STRIKE_REACH = 3.5;
+const PILLAR_STRIKE_INTERVAL_MS = 650;
 const RANGED_ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:arrow",
   "minecraft:trident",
@@ -8887,6 +8905,13 @@ function defendAgainstTarget(
   target: BeatGameEntityObservation,
   options: DefenseOptions = {},
 ): Effect.Effect<void, BeatGameDriverError> {
+  if (PILLAR_DEFENSE_ENTITY_TYPES.has(target.entityType)) {
+    return fightFromPillar(state, target).pipe(
+      Effect.flatMap((handled) =>
+        handled ? Effect.void : defendAgainstSingleTarget(state, target, options),
+      ),
+    );
+  }
   if (!PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)) {
     return defendAgainstSingleTarget(state, target, options);
   }
@@ -8898,6 +8923,79 @@ function defendAgainstTarget(
       closer === undefined ? Effect.void : defendAgainstTarget(state, closer, options),
     ),
   );
+}
+
+/// Hoglins hit hard, take many hits and throw the bot back. A live run died
+/// to three of them in a Nether fortress: knocked off a ledge, knocked into
+/// lava while fleeing, and beaten in a straight fight. They cannot climb, so
+/// the bot stands on a two-block pillar and strikes down at them.
+function fightFromPillar(
+  state: RunState,
+  target: BeatGameEntityObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const observation = yield* state.driver.observe;
+    if (
+      observation.player.dead ||
+      pathBuildingBlockCount(observation) < PILLAR_DEFENSE_HEIGHT + 1
+    ) {
+      return false;
+    }
+    const base = observation.player.position;
+    const top = {
+      x: Math.floor(base.x) + 0.5,
+      y: Math.floor(base.y) + PILLAR_DEFENSE_HEIGHT,
+      z: Math.floor(base.z) + 0.5,
+      dimension: base.dimension,
+    };
+    const climbed = yield* state.driver
+      .pathfind(top, 0, {
+        ...state.strategy.path,
+        allowMining: false,
+        allowPlacing: true,
+        maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, PILLAR_DEFENSE_SEARCH_MS),
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+      );
+    if (!climbed) {
+      return false;
+    }
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Fighting a ground attacker from a pillar",
+      data: { attackerNetworkId: target.networkId, attackerType: target.entityType, top },
+    });
+    const deadline = (yield* Clock.currentTimeMillis) + PILLAR_DEFENSE_DURATION_MS;
+    while ((yield* Clock.currentTimeMillis) < deadline) {
+      const current = yield* state.driver.observe;
+      if (current.player.dead) {
+        return true;
+      }
+      if (current.player.position.y < top.y - 0.5) {
+        return false;
+      }
+      const [threat] = yield* state.driver.queryEntities({
+        origin: current.player.position,
+        radius: PILLAR_DEFENSE_WATCH_RADIUS,
+        selector: { networkId: target.networkId, alive: true },
+        maximumResults: 1,
+      });
+      if (threat === undefined) {
+        return true;
+      }
+      // Reach is measured to the middle of the mob's body, not its feet,
+      // since the bot strikes down at it from above.
+      const eye = { ...current.player.position, y: current.player.position.y + 1.62 };
+      const body = { ...threat.position, y: threat.position.y + 1 };
+      if (distanceSquared(eye, body) <= PILLAR_STRIKE_REACH ** 2) {
+        yield* state.driver.withControl(performKnockbackStrike(state, current, threat));
+      }
+      yield* Effect.sleep(PILLAR_STRIKE_INTERVAL_MS);
+    }
+    return true;
+  });
 }
 
 function waitForCloserMeleeAttacker(
