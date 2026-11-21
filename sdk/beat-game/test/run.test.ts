@@ -1088,6 +1088,119 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("digs toward a blaze spawner it cannot walk to", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = {
+      x: 0,
+      y: 64,
+      z: 0,
+      dimension: "minecraft:the_nether",
+    } as const;
+    const fortress = blockObservation(
+      { ...position, x: 20 },
+      {
+        blockId: "minecraft:nether_bricks",
+        replaceable: false,
+        solid: true,
+      },
+    );
+    const spawner = blockObservation(
+      { ...position, x: 24 },
+      {
+        blockId: "minecraft:spawner",
+        replaceable: false,
+        solid: true,
+      },
+    );
+    driver.currentObservation = observation({
+      dimension: position.dimension,
+      position,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:oak_log": 8,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:spawner") === true
+        ? [spawner]
+        : selector.blockIds?.includes("minecraft:nether_bricks") === true
+          ? [fortress]
+          : [];
+    // The spawner sits on a floor the bot can only reach by digging.
+    driver.pathResolver = (target, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position: target, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          policy.allowMining
+            ? Effect.sync(() => {
+                driver.currentObservation = observation({
+                  dimension: target.dimension,
+                  position: target,
+                  counts: driver.currentObservation.inventory.counts,
+                });
+              })
+            : Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              ),
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "fortress-spawner-dig-run",
+          teamId: "fortress-spawner-dig-team",
+        }),
+        undefined,
+      ),
+    );
+
+    const snapshot = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "fortress-spawner-dig-run",
+            team: { teamId: "fortress-spawner-dig-team" },
+            checkpointStore: store,
+            strategy: {
+              observationPollMs: 1,
+              blockSearchRadius: 48,
+            },
+          });
+          while (!driver.paths.some(({ policy }) => policy.allowMining)) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(10);
+          const currentSnapshot = yield* run.snapshot;
+          yield* run.stop;
+          return currentSnapshot;
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: { ...spawner.position, y: spawner.position.y + 1 },
+        policy: objectContaining({ allowMining: true, allowPlacing: true }),
+      }),
+    );
+    expect(snapshot.checkpoint.memory.places).toContainEqual(
+      objectContaining({ kind: "FORTRESS" }),
+    );
+  });
+
   it("allows terrain changes while exploring enclosed Nether terrain", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

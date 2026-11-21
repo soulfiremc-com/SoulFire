@@ -13206,19 +13206,24 @@ function huntOrExplore(
               ...stationaryStructureTarget.position,
               y: stationaryStructureTarget.position.y + 1,
             };
-            const approached = yield* state.driver
-              .pathfind(spawnerApproach, 4, {
-                ...explorationPath,
-                allowMining: false,
-                allowPlacing: false,
-              })
-              .pipe(
-                Effect.as(true),
-                Effect.catchIf(
-                  (cause) => cause.operation === "pathfind",
-                  () => Effect.succeed(false),
-                ),
-              );
+            const approachSpawner = (allowBlockChanges: boolean) =>
+              state.driver
+                .pathfind(spawnerApproach, 4, {
+                  ...explorationPath,
+                  allowMining: allowBlockChanges,
+                  allowPlacing: allowBlockChanges,
+                })
+                .pipe(
+                  Effect.as(true),
+                  Effect.catchIf(
+                    (cause) => cause.operation === "pathfind",
+                    () => Effect.succeed(false),
+                  ),
+                );
+            // Fortress floors keep the spawner out of reach without
+            // digging. A live run sat 19 blocks below one and retried the
+            // same walking-only route every second for half an hour.
+            const approached = (yield* approachSpawner(false)) || (yield* approachSpawner(true));
             if (!approached) {
               stationaryStructureTarget = undefined;
             }
