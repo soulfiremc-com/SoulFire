@@ -8882,6 +8882,7 @@ const FLYING_HOSTILE_ENTITY_TYPES: ReadonlySet<string> = new Set([
 // A bridge leaves six of the eight cells around the bot open.
 const NARROW_FOOTING_MINIMUM_OPEN_CELLS = 5;
 const NARROW_FOOTING_FILL_TIMEOUT_MS = 4000;
+const NARROW_FOOTING_RECENT_HIT_MS = 2000;
 // A live run spent 35 and then 48 seconds trying to climb a pillar beside a
 // hoglin, which hit it the whole time until it died.
 const PILLAR_CLIMB_TIMEOUT_MS = 8000;
@@ -9370,6 +9371,17 @@ function widenNarrowFooting(
   observation: BeatGameObservation,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
+    // Filling the floor takes a second or more with the shield down. A live
+    // bot did it while an enderman was already hitting it and died there.
+    const lastDamage = yield* Ref.get(state.lastDamage);
+    if (
+      lastDamage?.damageType !== undefined &&
+      ATTACK_DAMAGE_TYPES.has(lastDamage.damageType) &&
+      (yield* Clock.currentTimeMillis) - Date.parse(lastDamage.observedAt) <=
+        NARROW_FOOTING_RECENT_HIT_MS
+    ) {
+      return;
+    }
     const blockId = NARROW_FOOTING_FILL_BLOCK_IDS.find(
       (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
     );
