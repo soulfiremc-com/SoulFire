@@ -84,7 +84,7 @@
     "effect": "4.1.4",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "peerDependencies": {
     "effect": "^4.0.0"
