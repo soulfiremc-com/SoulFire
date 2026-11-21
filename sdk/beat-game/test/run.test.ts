@@ -1088,6 +1088,91 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("walks to its lit portal workspace after the portal memory is invalidated", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "lit-workspace-portal-run";
+    const teamId = "lit-workspace-portal-team";
+    const origin = { x: 0, y: 64, z: 20, dimension: "minecraft:overworld" } as const;
+    const frame = createNetherPortalFrame(origin, "x");
+    const now = "2026-01-01T00:00:00.000Z";
+    const base = checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...base,
+          memory: {
+            ...base.memory,
+            portalWorkspaces: [
+              {
+                workspaceId: "lit-workspace",
+                origin,
+                axis: "x",
+                method: "CAST",
+                status: "ENTERED",
+                targetFrame: frame.blocks,
+                observedFrame: frame.blocks,
+                interior: frame.interior,
+                protectedBlocks: frame.blocks,
+                candidateLavaSources: [],
+                rejectedLavaSources: [],
+                waterFlow: [],
+                bucketState: "EMPTY",
+                ignitionState: "IGNITED",
+                interiorState: "PORTAL",
+                entryAttempts: 1,
+                observedAt: now,
+                updatedAt: now,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 64, z: 0.5 },
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:cooked_beef": 8,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:oak_log": 4,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:lava_bucket": 1,
+      },
+    });
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(Effect.andThen(Effect.never));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1, portalStrategy: "CAST" },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.paths.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.paths.some(({ position }) => distanceSquared(position, origin) <= 12 ** 2)).toBe(
+      true,
+    );
+  });
+
   it("fights a hoglin from a two-block pillar", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

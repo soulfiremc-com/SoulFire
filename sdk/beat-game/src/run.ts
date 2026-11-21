@@ -17478,15 +17478,39 @@ function enterKnownPortal(
       }
     }
 
-    const remembered = checkpoint.memory.portals
+    // A lit workspace counts as portal evidence for the planner, so entry
+    // tries it too. A live run's portal memory was invalidated while its
+    // entered workspace stayed lit, and the planner asked for that portal
+    // 1520 times while entry found nothing to try.
+    const litWorkspacePortals = checkpoint.memory.portalWorkspaces
       .filter(
-        ({ confidence, value }) =>
-          confidence > 0 &&
+        (workspace) =>
+          workspace.status !== "ABANDONED" &&
+          workspace.interiorState === "PORTAL" &&
+          workspace.origin.dimension === observation.player.position.dimension,
+      )
+      .map((workspace) => ({
+        position: workspace.interior[0] ?? workspace.origin,
+        confidence: 0.5,
+        observedAt: workspace.updatedAt,
+      }));
+    const remembered = [
+      ...checkpoint.memory.portals
+        .filter(({ confidence }) => confidence > 0)
+        .map(({ value, confidence, observedAt }) => ({
+          position: value.position,
+          confidence,
+          observedAt,
+        })),
+      ...litWorkspacePortals,
+    ]
+      .filter(
+        ({ position }) =>
           !attemptedPortalAreas.some(
-            (attempted) => distanceSquared(attempted, value.position) <= 8 ** 2,
+            (attempted) => distanceSquared(attempted, position) <= 8 ** 2,
           ) &&
-          !isPortalRouteOnCooldown(checkpoint, value.position) &&
-          value.position.dimension === observation.player.position.dimension,
+          !isPortalRouteOnCooldown(checkpoint, position) &&
+          position.dimension === observation.player.position.dimension,
       )
       .toSorted(
         (left, right) =>
@@ -17494,20 +17518,20 @@ function enterKnownPortal(
           Date.parse(right.observedAt) - Date.parse(left.observedAt),
       );
     for (const memory of remembered) {
-      const approached = yield* approachRememberedPortal(state, memory.value.position).pipe(
+      const approached = yield* approachRememberedPortal(state, memory.position).pipe(
         Effect.result,
       );
       if (approached._tag === "Failure") {
         yield* markPortalRouteUnavailable(
           state,
-          memory.value.position,
+          memory.position,
           `remembered portal route failed: ${approached.failure.message}`,
           approached.failure.code,
         );
         continue;
       }
       const revalidated = yield* state.driver.queryBlocks({
-        center: memory.value.position,
+        center: memory.position,
         radius: 8,
         selector: { blockIds: ["minecraft:nether_portal"] },
         maximumResults: 16,
@@ -17516,7 +17540,7 @@ function enterKnownPortal(
       if (portal === undefined) {
         yield* invalidatePortalEvidence(
           state,
-          memory.value.position,
+          memory.position,
           "remembered portal was absent after revalidation",
         );
         continue;
