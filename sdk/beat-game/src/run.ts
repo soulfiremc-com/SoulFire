@@ -676,6 +676,8 @@ const DEATH_RECOVERY_BUILDING_BLOCK_IDS = [
 const DEATH_RECOVERY_BUILDING_ITEM_IDS = ["minecraft:dirt", "minecraft:coarse_dirt"] as const;
 const DEATH_RECOVERY_ADDITIONAL_PLACE_ITEM_IDS = [...LOG_ITEM_IDS, ...PLANK_ITEM_IDS] as const;
 const FURNACE_FUEL_ITEM_IDS = ["minecraft:coal", "minecraft:charcoal"] as const;
+// Faster than a step down, slower than a jump's fall: the bot is dropping.
+const EAT_FALLING_VELOCITY = -0.5;
 // Crimson and warped wood neither burns nor smelts into charcoal. A live bot
 // offered its crimson planks as charcoal fuel and the furnace rejected them,
 // which ended the run.
@@ -2132,7 +2134,7 @@ function shelterUntilMorning(
       (shelterObservation.player.food <= state.strategy.eatBelowFood || needsRecoveryMeal) &&
       hasUsableFood(shelterObservation)
     ) {
-      yield* eatWhenNeeded(state.driver, {
+      yield* eatUnlessEndangered(state, {
         foodItemIds: preferredUsableFoodItemIds(shelterObservation),
         foodLevel: 20,
         maximumMeals: 1,
@@ -2332,7 +2334,7 @@ function shelterUntilMorning(
         current.player.food < 18 &&
         hasUsableFood(current)
       ) {
-        yield* eatWhenNeeded(state.driver, {
+        yield* eatUnlessEndangered(state, {
           foodItemIds: preferredUsableFoodItemIds(current),
           foodLevel: 20,
           maximumMeals: 1,
@@ -3539,7 +3541,7 @@ function executeDecision(
               (respawned.player.health <= LETHAL_MELEE_DISENGAGE_HEALTH ||
                 deathRecoveryTravelFoodCount(respawned) >= DEATH_RECOVERY_FOOD_RESERVE_COUNT)
             ) {
-              yield* eatWhenNeeded(state.driver, {
+              yield* eatUnlessEndangered(state, {
                 foodItemIds: preferredUsableFoodItemIds(respawned),
                 foodLevel: Math.min(20, Math.max(18, state.strategy.eatBelowFood + 2)),
                 maximumMeals: 1,
@@ -3829,7 +3831,7 @@ function executeDecision(
       case "eat": {
         return (
           state.hooks.eat?.(policyContext) ??
-          eatWhenNeeded(state.driver, {
+          eatUnlessEndangered(state, {
             foodItemIds: preferredUsableFoodItemIds(observation),
             foodLevel: state.strategy.eatBelowFood,
             maximumMeals: 1,
@@ -4141,7 +4143,7 @@ function executeDecision(
                       : result.travelMealRequested === true
                         ? state.driver.observe.pipe(
                             Effect.flatMap((latest) =>
-                              eatWhenNeeded(state.driver, {
+                              eatUnlessEndangered(state, {
                                 foodItemIds: preferredUsableFoodItemIds(latest),
                                 foodLevel: Math.min(
                                   20,
@@ -5697,7 +5699,7 @@ function takeCoverFromRangedFire(
     // Health only regenerates on a nearly full stomach, and a live run sat
     // in cover at 13 health and 15 food for eleven minutes without healing.
     if (sheltered.player.food < 20 && hasUsableFood(sheltered)) {
-      yield* eatWhenNeeded(state.driver, {
+      yield* eatUnlessEndangered(state, {
         foodItemIds: preferredUsableFoodItemIds(sheltered),
         foodLevel: 20,
         maximumMeals: 1,
@@ -5809,7 +5811,7 @@ function fightAfterRepeatedFailedEscapes(
           message: "Eating where it stands after repeated failed escapes",
           data: { threatNetworkId: target.networkId, failedEscapes: count },
         });
-        yield* eatWhenNeeded(state.driver, {
+        yield* eatUnlessEndangered(state, {
           foodItemIds: preferredUsableFoodItemIds(current),
           foodLevel: 20,
           maximumMeals: 1,
@@ -8616,6 +8618,25 @@ const PLAYER_HALF_WIDTH = 0.3;
 const PLAYER_HEIGHT = 1.8;
 const HITBOX_EPSILON = 0.001;
 
+/// A live bot started a meal three times while it fell into the lava sea or
+/// burned in it, and died each time with food in its mouth. A meal waits
+/// until the bot has landed and is out of lava.
+function eatUnlessEndangered(
+  state: RunState,
+  options: Parameters<typeof eatWhenNeeded>[1],
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const current = yield* state.driver.observe;
+    if (
+      (!current.player.onGround && current.player.velocity.y <= EAT_FALLING_VELOCITY) ||
+      (yield* isPlayerInLava(state.driver, current.player.position))
+    ) {
+      return;
+    }
+    yield* eatWhenNeeded(state.driver, options);
+  });
+}
+
 function isPlayerInLava(
   driver: BeatGameDriver,
   position: BeatGamePosition,
@@ -8640,7 +8661,8 @@ function isPlayerInLava(
     .pipe(
       Effect.map((blocks) =>
         blocks.some(
-          ({ position: block }) =>
+          ({ blockId, position: block }) =>
+            blockId === "minecraft:lava" &&
             block.dimension === position.dimension &&
             block.x >= minimum.x &&
             block.x <= maximum.x &&
@@ -8680,7 +8702,10 @@ function isPlayerInBlocks(
         })
         .pipe(
           Effect.map((blocks) =>
-            blocks.some(({ position: observed }) => sameBlockPosition(observed, block)),
+            blocks.some(
+              ({ blockId, position: observed }) =>
+                blockIds.includes(blockId) && sameBlockPosition(observed, block),
+            ),
           ),
         ),
     { concurrency: 1 },
@@ -10096,7 +10121,7 @@ function retreatAndRecover(
           ) {
             return Effect.void;
           }
-          return eatWhenNeeded(state.driver, {
+          return eatUnlessEndangered(state, {
             foodItemIds: preferredUsableFoodItemIds(observation),
             foodLevel: 20,
             maximumMeals: 1,
@@ -11036,7 +11061,7 @@ function satisfyFoodRequirement(
   }
   if (observation.player.health < state.strategy.minimumHealth) {
     const eatRawFoodAndRecover = () =>
-      eatWhenNeeded(state.driver, {
+      eatUnlessEndangered(state, {
         foodItemIds: [batch.rawItemId],
         foodLevel: Math.max(18, state.strategy.eatBelowFood),
         maximumMeals: batch.count,
@@ -16367,7 +16392,7 @@ function acquireEnderPearls(
         return;
       }
       if (observation.player.food < 20 && hasUsableFood(observation)) {
-        yield* eatWhenNeeded(state.driver, {
+        yield* eatUnlessEndangered(state, {
           foodItemIds: preferredUsableFoodItemIds(observation),
           foodLevel: 20,
           maximumMeals: 1,

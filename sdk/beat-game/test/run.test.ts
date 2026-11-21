@@ -9738,6 +9738,38 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toHaveLength(0);
   }, 10_000);
 
+  it("does not start a meal while it falls", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    // As in the live run: knocked off a Nether ledge, hungry, dropping fast.
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 80, z: 0.5, dimension: nether },
+      onGround: false,
+      velocity: { x: 0, y: -1.2, z: 0 },
+      food: 10,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_sword": 1,
+      },
+    });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.sleep(500);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "auto-eat" }));
+  });
+
   it("rechecks wounded hunger while waiting in a shelter", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
