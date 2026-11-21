@@ -10211,25 +10211,34 @@ function satisfyRequirementFromWorld(
           },
         });
       }
-      return huntOrExplore(
-        state,
-        observation,
-        { entityTypes: ["minecraft:blaze"], alive: true },
-        bufferedCollectionCount("blaze-rods", missing),
-        "find-nether-fortress",
-        {
-          preferredEntityTypes: new Set(["minecraft:blaze"]),
-          preferredRadius: state.strategy.entitySearchRadius,
-          maximumExplorationHops: 64,
-          path: state.strategy.path,
-          structureSearch: {
-            anchorBlockIds: new Set(NETHER_FORTRESS_BLOCK_IDS),
-            stationaryBlockIds: new Set(["minecraft:spawner"]),
-            placeKind: "FORTRESS",
-            scanRadius: NETHER_WIDE_SEARCH_RADIUS,
-            maximumResults: 2048,
-          },
-        },
+      return Ref.get(state.checkpoint).pipe(
+        Effect.flatMap((checkpoint) => {
+          const explorationTarget = rememberedFortressTarget(
+            checkpoint.memory.places,
+            observation.player.position,
+          );
+          return huntOrExplore(
+            state,
+            observation,
+            { entityTypes: ["minecraft:blaze"], alive: true },
+            bufferedCollectionCount("blaze-rods", missing),
+            "find-nether-fortress",
+            {
+              preferredEntityTypes: new Set(["minecraft:blaze"]),
+              preferredRadius: state.strategy.entitySearchRadius,
+              maximumExplorationHops: 64,
+              path: state.strategy.path,
+              ...(explorationTarget === undefined ? {} : { explorationTarget }),
+              structureSearch: {
+                anchorBlockIds: new Set(NETHER_FORTRESS_BLOCK_IDS),
+                stationaryBlockIds: new Set(["minecraft:spawner"]),
+                placeKind: "FORTRESS",
+                scanRadius: NETHER_WIDE_SEARCH_RADIUS,
+                maximumResults: 2048,
+              },
+            },
+          );
+        }),
       );
     }
     case "ender-pearls": {
@@ -13046,6 +13055,23 @@ interface HuntTargetPreference {
     scanRadius: number;
     maximumResults: number;
   }>;
+}
+
+/// A live run came back to the Nether 130 blocks from the fortress where it
+/// had already killed blazes, just past its scan, and spent half an hour
+/// exploring the other way. The nearest remembered fortress in this
+/// dimension is where the search heads first.
+function rememberedFortressTarget(
+  places: readonly BeatGameWorldPlace[],
+  position: BeatGamePosition,
+): BeatGamePosition | undefined {
+  return places
+    .filter((place) => place.kind === "FORTRESS" && place.position.dimension === position.dimension)
+    .toSorted(
+      (left, right) =>
+        horizontalDistanceSquared(left.position, position) -
+        horizontalDistanceSquared(right.position, position),
+    )[0]?.position;
 }
 
 function huntOrExplore(

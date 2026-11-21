@@ -1352,6 +1352,79 @@ describe("beat-game run lifecycle", () => {
     20_000,
   );
 
+  it("heads for a remembered fortress beyond its scan", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    // The fortress it fought blazes in lies east, past the scan, and nothing
+    // of it is in view from here.
+    const fortress = { x: 200, y: 50, z: 0, dimension: nether };
+    const initial = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+      runId: "remembered-fortress-run",
+      teamId: "remembered-fortress-team",
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            places: [
+              {
+                key: "FORTRESS:minecraft:the_nether:200:50:0",
+                kind: "FORTRESS",
+                position: fortress,
+                observedAt: "2026-01-01T00:00:00.000Z",
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "remembered-fortress-run",
+            team: { teamId: "remembered-fortress-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.xzPaths.length + driver.paths.length < 3) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const legs = [
+      ...driver.xzPaths.map(({ x, z }) => ({ x, z })),
+      ...driver.paths.map(({ position }) => position),
+    ];
+    expect(legs.length).toBeGreaterThan(0);
+    // Every leg heads east toward the fortress.
+    expect(legs.every(({ x, z }) => x > 0.5 && Math.abs(z) < x)).toBe(true);
+  });
+
   it("digs toward a blaze spawner it cannot walk to", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {
