@@ -5272,14 +5272,20 @@ function escapeFromTarget(
       }
       // A blocked hoglin hit does not throw the bot, so with a shield it
       // stands and fights rather than run along a ledge.
+      // A shield does not stop every enderman hit. A live bot stood its
+      // ground against one from 13 health to 4 and died, so a wounded bot
+      // takes cover from an enderman instead.
+      const endermanTarget = target.entityType === "minecraft:enderman";
       if (
         SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
-        hasItemInInventoryOrEquipment(observation, "minecraft:shield")
+        hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
+        !(endermanTarget && observation.player.health < state.strategy.minimumHealth)
       ) {
         // This fight is the escape, so a hit must not break it off. A live
         // bot left and restarted it every 0.4 seconds, never struck, and
-        // died to four hoglin hits in three seconds.
-        yield* defendAgainstSingleTarget(state, target, { commitThroughWound: true });
+        // died to four hoglin hits in three seconds. An enderman fight
+        // breaks off below the minimum health.
+        yield* defendAgainstSingleTarget(state, target, { commitThroughWound: !endermanTarget });
         return;
       }
     }
