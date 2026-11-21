@@ -3009,6 +3009,95 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths.length).toBeGreaterThan(0);
   });
 
+  it("remembers an enderman it could not catch before its chase ran out", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // As in the live run: an enderman on a ledge the bot cannot reach, which
+    // it chased until the chase timed out, 68 times.
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 91,
+      entityType: "minecraft:enderman",
+      position: { x: 18.5, y: 76, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => driver.tasks.push(task)).pipe(
+        Effect.andThen(
+          task.type === "attack-entity"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.attack-entity",
+                  code: "land_chase_timeout",
+                  retryable: true,
+                  message: "Stopped chasing moving land target 91",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "stuck-enderman-run",
+          teamId: "stuck-enderman-team",
+        }),
+        undefined,
+      ),
+    );
+
+    const snapshot = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stuck-enderman-run",
+            team: { teamId: "stuck-enderman-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* Effect.sleep(50);
+          const current = yield* run.snapshot;
+          yield* run.stop;
+          return current;
+        }),
+      ),
+    );
+
+    expect(snapshot.checkpoint.memory.unreachable).toContainEqual(
+      objectContaining({ key: "target:epoch-1:91" }),
+    );
+  });
+
   it("moves away from piglins before mining gold for boots", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

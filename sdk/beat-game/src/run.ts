@@ -14007,10 +14007,12 @@ function huntOrExplore(
         ? Effect.raceFirst(timedAttack, waitForUnsafeAquaticHunt(state))
         : timedAttack;
       const defeated = yield* boundedAttack.pipe(
+        // A land chase that runs out of time is remembered too: the entry
+        // is ignored once the target moves away from where it was. A live
+        // bot chased an enderman on an unreachable ledge for twenty seconds
+        // at a time, 68 times, because no timed-out chase was remembered.
         Effect.tapError((cause) =>
-          cause.code === "aquatic_chase_timeout" ||
-          cause.code === "land_chase_timeout" ||
-          cause.code === "aquatic_air_low"
+          cause.code === "aquatic_chase_timeout" || cause.code === "aquatic_air_low"
             ? Effect.void
             : persist(state, (latestCheckpoint) => ({
                 ...latestCheckpoint,
