@@ -3098,6 +3098,103 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("leaves a thrice-unreachable enderman and digs out to look elsewhere", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 91,
+      entityType: "minecraft:enderman",
+      position: { x: 18.5, y: 76, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    // As in the live run: the same enderman has been out of reach three
+    // times, long enough ago that the short retry delay has passed.
+    const recorded = await Effect.runPromise(
+      DateTime.now.pipe(
+        Effect.map((now) => DateTime.formatIso(DateTime.subtract(now, { minutes: 1 }))),
+      ),
+    );
+    const expires = await Effect.runPromise(
+      DateTime.now.pipe(
+        Effect.map((now) => DateTime.formatIso(DateTime.add(now, { minutes: 10 }))),
+      ),
+    );
+    const initial = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+      runId: "given-up-enderman-run",
+      teamId: "given-up-enderman-team",
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            unreachable: [1, 2, 3].map(() => ({
+              key: "target:epoch-1:91",
+              value: enderman.position,
+              observedAt: recorded,
+              expiresAt: expires,
+              confidence: 1,
+            })),
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "given-up-enderman-run",
+            team: { teamId: "given-up-enderman-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (
+              driver.xzPaths.length === 0 &&
+              !driver.tasks.some(({ type }) => type === "attack-entity")
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
+    // A walled-in Nether ledge needs digging to leave.
+    expect(driver.xzPaths[0]?.policy).toEqual(objectContaining({ allowMining: true }));
+  });
+
   it("moves away from piglins before mining gold for boots", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

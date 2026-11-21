@@ -548,6 +548,7 @@ const FURNACE_FUEL_SEARCH_RADIUS = 16;
 const HUNT_ATTACK_APPROACH_RADIUS = 24;
 const AQUATIC_HUNT_ATTACK_APPROACH_RADIUS = 4;
 const HUNT_UNREACHABLE_TARGET_RETRY_DISTANCE = 4;
+const HUNT_UNREACHABLE_GIVE_UP_COUNT = 3;
 const HUNT_NEARBY_UNREACHABLE_RETRY_DELAY_MS = 5000;
 const HUNT_DISTANT_UNREACHABLE_RETRY_DELAY_MS = 15_000;
 const AQUATIC_HUNT_VERTICAL_ROUTE_COST = 4;
@@ -13459,7 +13460,10 @@ function huntOrExplore(
           : survivalPath;
       const explorationPath = {
         ...huntingPath,
-        ...(targetPreference?.structureSearch === undefined
+        // The Nether has no open surface to walk out along. A live hunt on a
+        // walled-in ledge failed 56 explorations that could not dig or build.
+        ...(targetPreference?.structureSearch === undefined &&
+        !isNether(current.player.position.dimension)
           ? {
               allowMining: false,
               allowPlacing: false,
@@ -13562,11 +13566,24 @@ function huntOrExplore(
         stationaryStructureTarget = stationaryEvidence;
       }
       const now = yield* Clock.currentTimeMillis;
-      const rememberedUnreachableTargets = new Map(
-        checkpoint.memory.unreachable
-          .filter(({ expiresAt }) => expiresAt === undefined || Date.parse(expiresAt) > now)
-          .map((entry) => [entry.key, entry] as const),
+      const currentUnreachable = checkpoint.memory.unreachable.filter(
+        ({ expiresAt }) => expiresAt === undefined || Date.parse(expiresAt) > now,
       );
+      const rememberedUnreachableTargets = new Map(
+        currentUnreachable.map((entry) => [entry.key, entry] as const),
+      );
+      // A remembered target is retried after a short delay. A live bot went
+      // back to the same unreachable enderman 16 more times that way, so a
+      // target remembered three times is left alone until those expire.
+      const unreachableCounts = new Map<string, number>();
+      for (const { key } of currentUnreachable) {
+        unreachableCounts.set(key, (unreachableCounts.get(key) ?? 0) + 1);
+      }
+      for (const [key, count] of unreachableCounts) {
+        if (count >= HUNT_UNREACHABLE_GIVE_UP_COUNT) {
+          locallyUnreachable.add(key);
+        }
+      }
       const observedTargets = (yield* state.driver.queryEntities({
         origin: current.player.position,
         radius: state.strategy.entitySearchRadius,
