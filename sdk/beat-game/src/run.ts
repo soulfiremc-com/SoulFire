@@ -850,6 +850,8 @@ const FAST_MELEE_PURSUER_ENTITY_TYPES = new Set([
 const ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES = new Set(["minecraft:creeper", "minecraft:witch"]);
 const FAILED_ESCAPE_FIGHT_THRESHOLD = 3;
 const FAILED_ESCAPE_STREAK_WINDOW_MS = 30_000;
+const FAILED_ESCAPE_RECENT_HIT_MS = 5000;
+const FAILED_ESCAPE_HEAL_WAIT_MS = 3000;
 const PROACTIVE_ESCAPE_ONLY_EVASION_RADIUS = 12;
 const PROACTIVE_MELEE_DISENGAGEMENT_RADIUS = 12;
 const MELEE_ENGAGEMENT_RADIUS = 4;
@@ -5672,8 +5674,11 @@ function takeCoverInPlace(
 
 /// A live bot at full health with a sword stood in a blaze spawner room and
 /// tried to flee its three blazes 557 times in fifteen minutes. Each flee
-/// found no route and the next began a second later. After a few failed
-/// escapes in a row, a healthy armed bot fights instead.
+/// found no route and the next began a second later. Later it sat walled in
+/// at 11 health and 17 food for twenty minutes, untouched, and never ate
+/// because every pass of its recovery fled again. After a few failed escapes
+/// in a row, a bot that nothing is hitting eats or waits to heal, and one
+/// that is being hit fights back.
 function fightAfterRepeatedFailedEscapes(
   state: RunState,
   target: BeatGameEntityObservation,
@@ -5687,11 +5692,39 @@ function fightAfterRepeatedFailedEscapes(
     if (
       count < FAILED_ESCAPE_FIGHT_THRESHOLD ||
       current.player.dead ||
-      current.player.health < state.strategy.minimumHealth ||
-      !hasMeleeWeapon(current) ||
       ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) ||
       target.entityType === "minecraft:enderman"
     ) {
+      return false;
+    }
+    const lastDamage = yield* Ref.get(state.lastDamage);
+    const recentlyHit =
+      lastDamage !== undefined &&
+      now - Date.parse(lastDamage.observedAt) <= FAILED_ESCAPE_RECENT_HIT_MS;
+    if (!recentlyHit) {
+      if (current.player.food < 20 && hasUsableFood(current)) {
+        yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Eating where it stands after repeated failed escapes",
+          data: { threatNetworkId: target.networkId, failedEscapes: count },
+        });
+        yield* eatWhenNeeded(state.driver, {
+          foodItemIds: preferredUsableFoodItemIds(current),
+          foodLevel: 20,
+          maximumMeals: 1,
+          completeWhenNoFood: true,
+          path: state.strategy.path,
+        }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+        return true;
+      }
+      if (current.player.health < state.strategy.minimumHealth) {
+        yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
+        yield* Effect.sleep(FAILED_ESCAPE_HEAL_WAIT_MS);
+        return true;
+      }
+    }
+    if (!hasMeleeWeapon(current)) {
       return false;
     }
     yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
