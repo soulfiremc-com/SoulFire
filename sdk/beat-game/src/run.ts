@@ -850,6 +850,11 @@ const FAST_MELEE_PURSUER_ENTITY_TYPES = new Set([
 const ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES = new Set(["minecraft:creeper", "minecraft:witch"]);
 const FAILED_ESCAPE_FIGHT_THRESHOLD = 3;
 const FAILED_ESCAPE_STREAK_WINDOW_MS = 30_000;
+const ESCAPE_BURNING_DAMAGE_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:in_fire",
+  "minecraft:hot_floor",
+  "minecraft:lava",
+]);
 const FAILED_ESCAPE_RECENT_HIT_MS = 5000;
 const FAILED_ESCAPE_HEAL_WAIT_MS = 3000;
 const PROACTIVE_ESCAPE_ONLY_EVASION_RADIUS = 12;
@@ -5459,6 +5464,11 @@ function escapeFromTarget(
       yield* emergencyAirAscent(state, current.player.position);
       return;
     }
+    if (outcome.type === "burning") {
+      const current = yield* state.driver.observe;
+      yield* escapeEnvironmentalDamage(state, current.player.position);
+      return;
+    }
     if (outcome.type === "escaped") {
       yield* Ref.set(state.failedEscapes, { count: 0, atMs: 0 });
     }
@@ -5926,7 +5936,7 @@ function monitorEscapeSafety(
   continueEscapingWhenHit: boolean,
   rangedGroupEscape = false,
 ): Effect.Effect<
-  | { readonly type: "dead" | "safe" | "unsafe-air" }
+  | { readonly type: "dead" | "safe" | "unsafe-air" | "burning" }
   | {
       readonly type: "defend" | "escape" | "knockback";
       readonly target: BeatGameEntityObservation;
@@ -5943,13 +5953,26 @@ function monitorEscapeSafety(
       ? MINIMUM_RECOVERY_POLL_MS
       : Math.max(MINIMUM_RECOVERY_POLL_MS, state.strategy.observationPollMs);
   return Effect.sleep(pollInterval).pipe(
-    Effect.andThen(state.driver.observe),
-    Effect.flatMap((observation) => {
+    Effect.andThen(
+      Effect.all([state.driver.observe, Ref.get(state.lastDamage), Clock.currentTimeMillis], {
+        concurrency: 1,
+      }),
+    ),
+    Effect.flatMap(([observation, lastDamage, now]) => {
       if (observation.player.dead) {
         return Effect.succeed({ type: "dead" } as const);
       }
       if (hasUnsafeAir(observation)) {
         return Effect.succeed({ type: "unsafe-air" } as const);
+      }
+      // A live flee stood in fire left by a blaze fireball for fourteen
+      // seconds and burned to death. Burning ground ends the escape.
+      if (
+        lastDamage?.damageType !== undefined &&
+        ESCAPE_BURNING_DAMAGE_TYPES.has(lastDamage.damageType) &&
+        now - Date.parse(lastDamage.observedAt) <= RECENT_LAVA_DAMAGE_MS
+      ) {
+        return Effect.succeed({ type: "burning" } as const);
       }
       return state.driver
         .queryEntities({

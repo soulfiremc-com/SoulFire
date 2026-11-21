@@ -1499,6 +1499,112 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths.some(isSpawnerApproach)).toBe(true);
   });
 
+  it("stops fleeing to put out the fire it stands in", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+      },
+    });
+    const creeper = {
+      connectionEpoch: "epoch-1",
+      networkId: 61,
+      entityType: "minecraft:creeper",
+      position: { x: 3.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === creeper.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(creeper.entityType))
+        ? [creeper]
+        : [];
+    // As in the live run: a fireball left fire where the bot stands, and the
+    // flee it is running never gets it out.
+    const fire = { x: 0, y: 64, z: 0, dimension: nether };
+    const fireState = { lit: true };
+    driver.blockQueryResolver = ({ center }) =>
+      fireState.lit &&
+      Math.floor(center.x) === fire.x &&
+      Math.floor(center.y) === fire.y &&
+      Math.floor(center.z) === fire.z
+        ? [blockObservation(fire, { blockId: "minecraft:fire", solid: false, replaceable: true })]
+        : [];
+    driver.actionObserver = (action) => {
+      if (
+        action.type === "dig-block" &&
+        action.position.x === fire.x &&
+        action.position.y === fire.y &&
+        action.position.z === fire.z
+      ) {
+        fireState.lit = false;
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => driver.tasks.push(task)).pipe(
+        Effect.andThen(task.type === "flee" ? Effect.never : Effect.void),
+      );
+    driver.events = Stream.fromEffect(
+      Effect.sleep(300).pipe(
+        Effect.andThen(DateTime.now),
+        Effect.map(
+          (now) =>
+            ({
+              type: "bot-damaged",
+              observedAt: DateTime.formatIso(now),
+              amount: 1,
+              health: 19,
+              damageType: "minecraft:in_fire",
+            }) as const,
+        ),
+      ),
+    ).pipe(Stream.concat(Stream.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "flee-fire-run",
+          teamId: "flee-fire-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "flee-fire-run",
+            team: { teamId: "flee-fire-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (fireState.lit) {
+              yield* Effect.sleep(5);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "flee" }));
+    expect(fireState.lit).toBe(false);
+  }, 10_000);
+
   it("abandons a pillar climb the moment a hoglin hits it", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
