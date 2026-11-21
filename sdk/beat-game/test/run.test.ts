@@ -2411,6 +2411,83 @@ describe("beat-game run lifecycle", () => {
     expect(attacked()).toBe(true);
   }, 15_000);
 
+  it("walks to where a piglin is now before bartering with it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:gold_ingot": 2,
+      },
+    });
+    // Spotted six blocks east, the piglin has wandered to ten by the time
+    // the bot comes to trade.
+    const spotted = {
+      connectionEpoch: "epoch-1",
+      networkId: 72,
+      entityType: "minecraft:piglin",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const wandered = { ...spotted, position: { ...spotted.position, x: 10.5 } };
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.networkId === spotted.networkId
+        ? [wandered]
+        : selector.entityTypes?.includes(spotted.entityType) === true
+          ? [spotted]
+          : [];
+    const trades: { readonly pathX: number | undefined }[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-entity") {
+        trades.push({ pathX: driver.paths.at(-1)?.position.x });
+      }
+    };
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "piglin-barter-run",
+          teamId: "piglin-barter-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "piglin-barter-run",
+            team: { teamId: "piglin-barter-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (trades.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(trades[0]?.pathX).toBe(wandered.position.x);
+  });
+
   it("moves away from piglins before mining gold for pearls", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

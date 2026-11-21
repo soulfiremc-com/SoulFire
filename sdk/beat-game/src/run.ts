@@ -199,6 +199,9 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const PIGLIN_BARTER_SEARCH_RADIUS = 24;
+// Entity interaction reaches about three blocks, so the bot closes in nearer.
+const PIGLIN_BARTER_APPROACH_RADIUS = 2;
 const GOLD_GUARDING_PIGLIN_ENTITY_TYPES = ["minecraft:piglin", "minecraft:piglin_brute"] as const;
 // Piglins guard gold within 16 blocks. The margin covers ore a little away
 // from the bot and piglins that wander closer while it digs.
@@ -16211,12 +16214,29 @@ function barterWithPiglin(
 ): Effect.Effect<void, BeatGameDriverError> {
   return state.driver.withControl(
     Effect.gen(function* () {
-      yield* state.driver.pathfind(piglin.position, 3, state.strategy.path);
-      yield* state.driver.act({
-        type: "select-item",
-        selector: { itemIds: ["minecraft:gold_ingot"] },
-      });
       for (let trade = 0; trade < trades; trade += 1) {
+        // Piglins wander. A live bot walked to where one had been, found it
+        // out of reach, and abandoned the barter three times in a row. It
+        // walks to where the piglin is now before each trade.
+        const observed = yield* state.driver.observe;
+        const [current] = yield* state.driver.queryEntities({
+          origin: observed.player.position,
+          radius: PIGLIN_BARTER_SEARCH_RADIUS,
+          selector: { networkId: piglin.networkId, alive: true },
+          maximumResults: 1,
+        });
+        if (current === undefined) {
+          return;
+        }
+        yield* state.driver.pathfind(
+          current.position,
+          PIGLIN_BARTER_APPROACH_RADIUS,
+          state.strategy.path,
+        );
+        yield* state.driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:gold_ingot"] },
+        });
         yield* state.driver.act({
           type: "interact-entity",
           connectionEpoch: piglin.connectionEpoch,
@@ -16225,7 +16245,7 @@ function barterWithPiglin(
         });
         yield* Effect.sleep(6500);
         const drops = yield* state.driver.queryEntities({
-          origin: piglin.position,
+          origin: current.position,
           radius: 12,
           selector: {
             categories: [6],
