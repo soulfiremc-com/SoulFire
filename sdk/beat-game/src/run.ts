@@ -199,6 +199,7 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const STRUCTURE_SPAWNER_ANCHOR_RADIUS = 8;
 const DISCOVERY_MAXIMUM_HOP = 64;
 const WOODEN_PICKAXE_MAXIMUM_DURABILITY = 59;
 const EXPLORATION_MAXIMUM_LEG_DISTANCE = 32;
@@ -13247,10 +13248,33 @@ function huntOrExplore(
                 },
                 maximumResults: 32,
               });
-        const stationaryEvidence = stationaryBlocks.find(
-          ({ position }) =>
-            distanceSquared(position, structureEvidence?.position ?? position) <= 48 ** 2,
-        );
+        // A fortress spans more than a hundred blocks, and the scan returns
+        // the anchors nearest the bot. A live run saw two blaze spawners 62
+        // blocks from the first anchor it got back and never went to them.
+        // A spawner counts when the structure's blocks lie right around it.
+        let stationaryEvidence: BeatGameBlockObservation | undefined;
+        for (const block of stationaryBlocks.toSorted(
+          (left, right) =>
+            distanceSquared(left.position, current.player.position) -
+            distanceSquared(right.position, current.player.position),
+        )) {
+          const besideStructure =
+            anchorBlocks.some(
+              ({ blockId, position }) =>
+                structureSearch.anchorBlockIds.has(blockId) &&
+                distanceSquared(position, block.position) <= 48 ** 2,
+            ) ||
+            (yield* state.driver.queryBlocks({
+              center: block.position,
+              radius: STRUCTURE_SPAWNER_ANCHOR_RADIUS,
+              selector: { blockIds: [...structureSearch.anchorBlockIds] },
+              maximumResults: 1,
+            })).length > 0;
+          if (besideStructure) {
+            stationaryEvidence = block;
+            break;
+          }
+        }
         observedStructureBlocks = [...anchorBlocks, ...stationaryBlocks];
         const rememberedEvidence = stationaryEvidence ?? structureEvidence;
         if (rememberedEvidence !== undefined) {

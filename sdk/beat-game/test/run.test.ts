@@ -20,6 +20,7 @@ import {
   type BeatGameBlockPosition,
   type BeatGameDriverEvent,
   type BeatGameEntityObservation,
+  type BeatGamePosition,
 } from "../src/index.js";
 import {
   DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
@@ -1423,6 +1424,79 @@ describe("beat-game run lifecycle", () => {
     expect(legs.length).toBeGreaterThan(0);
     // Every leg heads east toward the fortress.
     expect(legs.every(({ x, z }) => x > 0.5 && Math.abs(z) < x)).toBe(true);
+  });
+
+  it("goes to a blaze spawner far from the first fortress block it sees", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 0, y: 64, z: 0, dimension: "minecraft:the_nether" } as const;
+    // As in the live fortress: the nearest bricks are 70 blocks from the
+    // spawner, which sits on bricks of its own.
+    const nearBricks = blockObservation(
+      { ...position, x: 20 },
+      { blockId: "minecraft:nether_bricks", replaceable: false, solid: true },
+    );
+    const spawner = blockObservation(
+      { ...position, x: 90 },
+      { blockId: "minecraft:spawner", replaceable: false, solid: true },
+    );
+    const spawnerFloor = blockObservation(
+      { ...position, x: 90, y: 63 },
+      { blockId: "minecraft:nether_bricks", replaceable: false, solid: true },
+    );
+    driver.currentObservation = observation({
+      dimension: position.dimension,
+      position,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    driver.blockQueryResolver = ({ center, selector }) =>
+      selector.blockIds?.includes("minecraft:spawner") === true
+        ? [spawner]
+        : selector.blockIds?.includes("minecraft:nether_bricks") === true
+          ? distanceSquared(center, spawner.position) <= 10 ** 2
+            ? [spawnerFloor]
+            : [nearBricks]
+          : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "far-spawner-run",
+          teamId: "far-spawner-team",
+        }),
+        undefined,
+      ),
+    );
+    const isSpawnerApproach = ({ position: target }: { position: BeatGamePosition }) =>
+      target.x === spawner.position.x && target.y === spawner.position.y + 1;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "far-spawner-run",
+            team: { teamId: "far-spawner-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1, blockSearchRadius: 48 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.paths.some(isSpawnerApproach)) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.paths.some(isSpawnerApproach)).toBe(true);
   });
 
   it("digs toward a blaze spawner it cannot walk to", async () => {
