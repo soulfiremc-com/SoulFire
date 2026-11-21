@@ -676,6 +676,17 @@ const DEATH_RECOVERY_BUILDING_BLOCK_IDS = [
 const DEATH_RECOVERY_BUILDING_ITEM_IDS = ["minecraft:dirt", "minecraft:coarse_dirt"] as const;
 const DEATH_RECOVERY_ADDITIONAL_PLACE_ITEM_IDS = [...LOG_ITEM_IDS, ...PLANK_ITEM_IDS] as const;
 const FURNACE_FUEL_ITEM_IDS = ["minecraft:coal", "minecraft:charcoal"] as const;
+// Crimson and warped wood neither burns nor smelts into charcoal. A live bot
+// offered its crimson planks as charcoal fuel and the furnace rejected them,
+// which ended the run.
+const isBurnableWood = (itemId: string): boolean =>
+  !itemId.startsWith("minecraft:crimson_") && !itemId.startsWith("minecraft:warped_");
+const BURNABLE_PLANK_ITEM_IDS: readonly string[] = PLANK_ITEM_IDS.filter((itemId) =>
+  isBurnableWood(itemId),
+);
+const BURNABLE_LOG_ITEM_IDS: readonly string[] = LOG_ITEM_IDS.filter((itemId) =>
+  isBurnableWood(itemId),
+);
 const MINING_PICKAXE_ITEM_IDS = [
   "minecraft:netherite_pickaxe",
   "minecraft:diamond_pickaxe",
@@ -11437,10 +11448,10 @@ function directWoodFurnaceFuelItemIds(
   }
   const countItems = (itemIds: readonly string[]): number =>
     itemIds.reduce((count, itemId) => count + (observation.inventory.counts[itemId] ?? 0), 0);
-  if (countItems(PLANK_ITEM_IDS) >= requiredWoodFuel) {
-    return PLANK_ITEM_IDS;
+  if (countItems(BURNABLE_PLANK_ITEM_IDS) >= requiredWoodFuel) {
+    return BURNABLE_PLANK_ITEM_IDS;
   }
-  return countItems(LOG_ITEM_IDS) >= requiredWoodFuel ? LOG_ITEM_IDS : undefined;
+  return countItems(BURNABLE_LOG_ITEM_IDS) >= requiredWoodFuel ? BURNABLE_LOG_ITEM_IDS : undefined;
 }
 
 function preferDirectWoodFurnaceFuel(
@@ -11637,20 +11648,20 @@ function ensureEfficientFurnaceFuel(
     const charcoalCount = bufferedCollectionCount("fuel", missingFuel);
     const starterFuelItems = Math.ceil(charcoalCount / 1.5);
     const hasEnoughCharcoalMaterials = (current: BeatGameObservation): boolean => {
-      const plankCount = countInventoryItems(current, PLANK_ITEM_IDS);
-      const logCount = countInventoryItems(current, LOG_ITEM_IDS);
+      const plankCount = countInventoryItems(current, BURNABLE_PLANK_ITEM_IDS);
+      const logCount = countInventoryItems(current, BURNABLE_LOG_ITEM_IDS);
       return plankCount >= starterFuelItems
         ? logCount >= charcoalCount
         : logCount >= charcoalCount + starterFuelItems;
     };
     if (!hasEnoughCharcoalMaterials(currentObservation)) {
-      const plankCount = countInventoryItems(currentObservation, PLANK_ITEM_IDS);
-      const logCount = countInventoryItems(currentObservation, LOG_ITEM_IDS);
+      const plankCount = countInventoryItems(currentObservation, BURNABLE_PLANK_ITEM_IDS);
+      const logCount = countInventoryItems(currentObservation, BURNABLE_LOG_ITEM_IDS);
       const requiredLogs = charcoalCount + (plankCount >= starterFuelItems ? 0 : starterFuelItems);
       yield* collectBlocksOrExplore(state, currentObservation, {
-        blockIds: LOG_ITEM_IDS,
+        blockIds: BURNABLE_LOG_ITEM_IDS,
         count: bufferedCollectionCount("logs", Math.max(1, requiredLogs - logCount)),
-        progressItemIds: LOG_ITEM_IDS,
+        progressItemIds: BURNABLE_LOG_ITEM_IDS,
         purpose: "find-furnace-fuel",
         avoidSubmergedTargets: true,
         requireSurfaceTargets: true,
@@ -11672,11 +11683,11 @@ function ensureEfficientFurnaceFuel(
     }
 
     const charcoalFuelItemIds =
-      countInventoryItems(currentObservation, PLANK_ITEM_IDS) >= starterFuelItems
-        ? PLANK_ITEM_IDS
-        : LOG_ITEM_IDS;
+      countInventoryItems(currentObservation, BURNABLE_PLANK_ITEM_IDS) >= starterFuelItems
+        ? BURNABLE_PLANK_ITEM_IDS
+        : BURNABLE_LOG_ITEM_IDS;
     yield* smelt(state.driver, {
-      input: { itemIds: LOG_ITEM_IDS },
+      input: { itemIds: BURNABLE_LOG_ITEM_IDS },
       count: charcoalCount,
       fuel: { itemIds: charcoalFuelItemIds },
       station: activeWorkstation.position,

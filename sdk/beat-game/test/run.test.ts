@@ -49178,8 +49178,6 @@ describe("beat-game run lifecycle", () => {
             "minecraft:mangrove_planks",
             "minecraft:cherry_planks",
             "minecraft:pale_oak_planks",
-            "minecraft:crimson_planks",
-            "minecraft:warped_planks",
           ],
         },
       }),
@@ -49191,6 +49189,70 @@ describe("beat-game run lifecycle", () => {
         },
       }),
     ]);
+  });
+
+  it("does not burn Nether wood to make charcoal", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:white_bed": 1,
+        // As in the live run: the only planks are crimson, which do not burn.
+        "minecraft:oak_log": 10,
+        "minecraft:crimson_planks": 3,
+        "minecraft:cobblestone": 20,
+        "minecraft:stone_sword": 1,
+        "minecraft:beef": 8,
+        "minecraft:iron_ingot": 7,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:shield": 1,
+      },
+    });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:furnace") === true
+        ? [
+            blockObservation(
+              {
+                x: 1,
+                y: 64,
+                z: 0,
+                dimension: "minecraft:overworld",
+              },
+              { blockId: "minecraft:furnace" },
+            ),
+          ]
+        : [];
+    let resolveFoodSmelt!: () => void;
+    const foodSmeltStarted = new Promise<void>((resolve) => {
+      resolveFoodSmelt = resolve;
+    });
+    driver.taskResolver = (task) => {
+      driver.tasks.push(task);
+      if (task.type !== "smelt" || !task.input.itemIds?.includes("minecraft:beef")) {
+        return Effect.void;
+      }
+      resolveFoodSmelt();
+      return Effect.never;
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.promise(() => foodSmeltStarted).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const charcoal = driver.tasks.find((task) => task.type === "smelt");
+    assert(charcoal?.type === "smelt");
+    expect(charcoal.fuel?.itemIds).toContain("minecraft:oak_log");
+    expect(charcoal.fuel?.itemIds).not.toContain("minecraft:crimson_planks");
+    expect(charcoal.input.itemIds).not.toContain("minecraft:crimson_stem");
   });
 
   it("gathers distinct starter fuel before turning the last log into charcoal", async () => {
@@ -49523,8 +49585,6 @@ describe("beat-game run lifecycle", () => {
             "minecraft:mangrove_planks",
             "minecraft:cherry_planks",
             "minecraft:pale_oak_planks",
-            "minecraft:crimson_planks",
-            "minecraft:warped_planks",
           ],
         },
       }),
