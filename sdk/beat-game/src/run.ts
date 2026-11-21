@@ -5705,8 +5705,38 @@ function takeCoverFromRangedFire(
         path: state.strategy.path,
       }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
     }
-    yield* Effect.sleep(RANGED_COVER_WAIT_MS);
+    // A fireball can set the cell inside the cover alight. A live bot sat in
+    // fire inside its own walls for six seconds and burned to death.
+    const waitStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    const burning = yield* waitForBurningDamageSince(state, waitStartedAt).pipe(
+      Effect.as(true),
+      Effect.timeoutOrElse({
+        duration: RANGED_COVER_WAIT_MS,
+        orElse: () => Effect.succeed(false),
+      }),
+    );
+    if (burning) {
+      const current = yield* state.driver.observe;
+      yield* stepOffBurningGround(state, current);
+    }
     return true;
+  });
+}
+
+function waitForBurningDamageSince(state: RunState, since: string): Effect.Effect<void> {
+  const sinceMs = Date.parse(since);
+  return Effect.gen(function* () {
+    for (;;) {
+      const damage = yield* Ref.get(state.lastDamage);
+      if (
+        damage?.damageType !== undefined &&
+        ESCAPE_BURNING_DAMAGE_TYPES.has(damage.damageType) &&
+        Date.parse(damage.observedAt) > sinceMs
+      ) {
+        return;
+      }
+      yield* Effect.sleep(MINIMUM_RECOVERY_POLL_MS);
+    }
   });
 }
 
