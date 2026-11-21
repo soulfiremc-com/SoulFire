@@ -8781,6 +8781,16 @@ const NARROW_FOOTING_FILL_BLOCK_IDS = [
   "minecraft:blackstone",
   "minecraft:dirt",
 ] as const;
+// These never stand on the bot's floor, so widening it only spends time under
+// their fire. A live bot spent 3.4 seconds filling its footing while blazes
+// shot it from 10.8 to 6.8 health, then died in the same fight.
+const FLYING_HOSTILE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:blaze",
+  "minecraft:breeze",
+  "minecraft:ghast",
+  "minecraft:phantom",
+  "minecraft:vex",
+]);
 // A bridge leaves six of the eight cells around the bot open.
 const NARROW_FOOTING_MINIMUM_OPEN_CELLS = 5;
 const NARROW_FOOTING_FILL_TIMEOUT_MS = 4000;
@@ -9241,7 +9251,11 @@ function defendAgainstSingleTarget(
         ),
       );
       return prepareShield.pipe(
-        Effect.andThen(isRangedTarget ? Effect.void : widenNarrowFooting(state, observation)),
+        Effect.andThen(
+          isRangedTarget || FLYING_HOSTILE_ENTITY_TYPES.has(target.entityType)
+            ? Effect.void
+            : widenNarrowFooting(state, observation),
+        ),
         Effect.andThen(guardedAttack),
       );
     }),
