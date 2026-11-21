@@ -204,6 +204,7 @@ const NETHER_EXPLORATION_CAVERN_Y = 50;
 // The goal only needs the bot up in open ground near the leg's end.
 const NETHER_CAVERN_LEG_RADIUS = 16;
 const OUTWARD_SEARCH_DISTANCE = 1024;
+const OUTWARD_SEARCH_TURN_INTERVAL_MS = 10 * 60_000;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
 const PIGLIN_REFUSAL_WAIT_MS = 8000;
@@ -16273,6 +16274,9 @@ function acquireEnderPearls(
           horizontalDistanceSquared(left.position, observation.player.position) -
           horizontalDistanceSquared(right.position, observation.player.position),
       )[0]?.position;
+    const searchTurns = Math.floor(
+      ((yield* Clock.currentTimeMillis) - state.startedAtMs) / OUTWARD_SEARCH_TURN_INTERVAL_MS,
+    );
     yield* huntOrExplore(
       state,
       observation,
@@ -16283,7 +16287,8 @@ function acquireEnderPearls(
         ? {
             preferredEntityTypes: new Set(["minecraft:enderman"]),
             preferredRadius: state.strategy.entitySearchRadius,
-            explorationTarget: rememberedForest ?? outwardSearchTarget(observation.player.position),
+            explorationTarget:
+              rememberedForest ?? outwardSearchTarget(observation.player.position, searchTurns),
             structureSearch: {
               anchorBlockIds: new Set(["minecraft:warped_nylium"]),
               stationaryBlockIds: new Set<string>(),
@@ -16301,10 +16306,15 @@ function acquireEnderPearls(
 /// hour, each stop scanning ground the last had already covered. With nothing
 /// remembered, the search heads straight outward from the dimension origin
 /// instead, so every stop scans new ground.
-function outwardSearchTarget(position: BeatGamePosition): BeatGamePosition {
+///
+/// A live search found its outward way blocked by the lava sea and detoured
+/// around one spot for forty minutes, so the heading turns a quarter every
+/// interval and the search tries each side in turn.
+function outwardSearchTarget(position: BeatGamePosition, turns = 0): BeatGamePosition {
   const distance = Math.hypot(position.x, position.z);
-  const directionX = distance < 1 ? 1 : position.x / distance;
-  const directionZ = distance < 1 ? 0 : position.z / distance;
+  const angle = (distance < 1 ? 0 : Math.atan2(position.z, position.x)) + (turns * Math.PI) / 2;
+  const directionX = Math.cos(angle);
+  const directionZ = Math.sin(angle);
   return {
     ...position,
     x: position.x + directionX * OUTWARD_SEARCH_DISTANCE,
