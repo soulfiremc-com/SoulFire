@@ -5516,7 +5516,7 @@ function takeCoverFromRangedFire(
     const lastDamage = yield* Ref.get(state.lastDamage);
     const recentArrowHit =
       lastDamage?.damageType !== undefined &&
-      PROJECTILE_DAMAGE_TYPES.has(lastDamage.damageType) &&
+      RANGED_ATTACK_DAMAGE_TYPES.has(lastDamage.damageType) &&
       (yield* Clock.currentTimeMillis) - Date.parse(lastDamage.observedAt) <= RECENT_ARROW_HIT_MS;
     const archerNearby =
       recentArrowHit ||
@@ -9705,40 +9705,68 @@ function retreatAndRecover(
         return findNearbyAttackThreat(state, observation).pipe(
           Effect.flatMap((threat) => {
             if (threat === undefined) {
-              if (observation.player.health >= state.strategy.minimumHealth) {
-                return Effect.void;
-              }
-              if (observation.player.food < 18 && !hasUsableFood(observation)) {
-                return Effect.void;
-              }
-              if (observation.player.food < 20 && hasUsableFood(observation)) {
-                if (
-                  options.preserveFoodBelowCount !== undefined &&
-                  observation.player.health > LETHAL_MELEE_DISENGAGE_HEALTH &&
-                  deathRecoveryTravelFoodCount(observation) < options.preserveFoodBelowCount
-                ) {
-                  return Effect.void;
-                }
-                return eatWhenNeeded(state.driver, {
-                  foodItemIds: preferredUsableFoodItemIds(observation),
-                  foodLevel: 20,
-                  maximumMeals: 1,
-                  completeWhenNoFood: true,
-                  path: state.strategy.path,
-                }).pipe(
-                  Effect.andThen(Effect.sleep(recoveryPollMs)),
-                  Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
-                );
-              }
-              return Effect.sleep(recoveryPollMs).pipe(
-                Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
-              );
+              return recoverWithoutNearbyThreat(observation, attemptsRemaining);
             }
             return respondToRecoveryThreatWithSupervision(state, threat).pipe(
               Effect.andThen(Effect.sleep(recoveryPollMs)),
               Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
             );
           }),
+        );
+      }),
+    );
+  // A live run fled a blaze, then stood eating in the open while it and the
+  // blazes behind it kept firing from about 21 blocks, past the nearby
+  // threat check, until it burned to death. A recent hit from a shooter
+  // that far sends the bot into cover, or into the fight when it cannot.
+  const recoverWithoutNearbyThreat = (
+    observation: BeatGameObservation,
+    attemptsRemaining: number,
+  ): Effect.Effect<void, BeatGameDriverError> =>
+    findDistantRangedAttacker(state, observation).pipe(
+      Effect.flatMap((shooter) =>
+        shooter === undefined
+          ? Effect.succeed(false)
+          : takeCoverFromRangedFire(state, observation, shooter.target).pipe(
+              Effect.flatMap((covered) =>
+                covered ? Effect.void : respondToRecoveryThreatWithSupervision(state, shooter),
+              ),
+              Effect.as(true),
+            ),
+      ),
+      Effect.flatMap((answered) => {
+        if (answered) {
+          return Effect.sleep(recoveryPollMs).pipe(
+            Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
+          );
+        }
+        if (observation.player.health >= state.strategy.minimumHealth) {
+          return Effect.void;
+        }
+        if (observation.player.food < 18 && !hasUsableFood(observation)) {
+          return Effect.void;
+        }
+        if (observation.player.food < 20 && hasUsableFood(observation)) {
+          if (
+            options.preserveFoodBelowCount !== undefined &&
+            observation.player.health > LETHAL_MELEE_DISENGAGE_HEALTH &&
+            deathRecoveryTravelFoodCount(observation) < options.preserveFoodBelowCount
+          ) {
+            return Effect.void;
+          }
+          return eatWhenNeeded(state.driver, {
+            foodItemIds: preferredUsableFoodItemIds(observation),
+            foodLevel: 20,
+            maximumMeals: 1,
+            completeWhenNoFood: true,
+            path: state.strategy.path,
+          }).pipe(
+            Effect.andThen(Effect.sleep(recoveryPollMs)),
+            Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
+          );
+        }
+        return Effect.sleep(recoveryPollMs).pipe(
+          Effect.andThen(recoverUntilSafe(attemptsRemaining - 1)),
         );
       }),
     );
