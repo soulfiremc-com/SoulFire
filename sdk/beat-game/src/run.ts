@@ -9429,13 +9429,22 @@ function widenNarrowFooting(
       message: "Widening narrow footing before a melee fight",
       data: { position: observation.player.position, openCells: openCells.length },
     });
-    yield* buildStructure(state.driver, {
-      origin: feet,
-      blocks: openCells.map((offset) => ({ offset, blockId })),
-      path: { ...state.strategy.path, allowMining: false, allowPlacing: true },
-    }).pipe(
-      Effect.timeoutOrElse({ duration: NARROW_FOOTING_FILL_TIMEOUT_MS, orElse: () => Effect.void }),
-      Effect.ignore,
+    // A live bot started the fill before a zombie reached it and kept placing
+    // blocks through five of its hits. The first hit ends the fill.
+    const fillStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    yield* Effect.raceFirst(
+      buildStructure(state.driver, {
+        origin: feet,
+        blocks: openCells.map((offset) => ({ offset, blockId })),
+        path: { ...state.strategy.path, allowMining: false, allowPlacing: true },
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: NARROW_FOOTING_FILL_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
+        Effect.ignore,
+      ),
+      waitForMobAttackSince(state, fillStartedAt),
     );
   });
 }
