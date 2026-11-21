@@ -1260,6 +1260,98 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
   }, 10_000);
 
+  it.each([
+    {
+      name: "fights a hoglin too close to outbuild behind a shield",
+      shields: 1,
+      climb: "instant",
+    },
+    {
+      name: "fights a hoglin when the pillar climb stalls",
+      shields: 0,
+      climb: "stalls",
+    },
+  ] as const)(
+    "$name",
+    async ({ shields, climb }) => {
+      const driver = new FakeBeatGameDriver();
+      const nether = "minecraft:the_nether";
+      const counts = {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:shield": shields,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+      };
+      driver.currentObservation = observation({
+        dimension: nether,
+        position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+        pathBuildingBlockCount: 64,
+        counts,
+      });
+      const hoglin = {
+        connectionEpoch: "epoch-1",
+        networkId: 41,
+        entityType: "minecraft:hoglin",
+        position: { x: 1.5, y: 64, z: 0.5, dimension: nether },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        aggressive: true,
+        health: 40,
+        target: { connectionEpoch: "epoch-1", networkId: 99 },
+        observedAt: "2026-01-01T00:00:00.000Z",
+      };
+      driver.entityQueryResolver = ({ selector }) =>
+        (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
+        (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
+          ? [hoglin]
+          : [];
+      driver.pathResolver = (position, radius, policy) =>
+        climb === "stalls" && position.y > 64
+          ? Effect.sync(() => driver.paths.push({ position, radius, policy })).pipe(
+              Effect.andThen(Effect.never),
+            )
+          : Effect.sync(() => {
+              driver.paths.push({ position, radius, policy });
+            });
+      const store = new InMemoryBeatGameCheckpointStore();
+      await Effect.runPromise(
+        store.save(
+          checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+            runId: "hoglin-shield-run",
+            teamId: "hoglin-shield-team",
+          }),
+          undefined,
+        ),
+      );
+
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const run = yield* beatGameWithDriver(driver, {
+              runId: "hoglin-shield-run",
+              team: { teamId: "hoglin-shield-team" },
+              checkpointStore: store,
+              strategy: { observationPollMs: 1 },
+            });
+            yield* Effect.gen(function* () {
+              while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
+                yield* Effect.sleep(5);
+              }
+            }).pipe(Effect.timeout("12 seconds"), Effect.ignore);
+            yield* run.stop;
+          }),
+        ),
+      );
+
+      expect(driver.tasks).toContainEqual(
+        objectContaining({ type: "attack-entity", useOffhandShield: shields > 0 }),
+      );
+    },
+    20_000,
+  );
+
   it("digs toward a blaze spawner it cannot walk to", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {

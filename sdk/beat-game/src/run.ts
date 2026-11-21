@@ -811,10 +811,12 @@ const PROACTIVE_MELEE_HOSTILE_ENTITY_TYPES = new Set([
 const SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES = new Set([
   "minecraft:bogged",
   "minecraft:drowned",
+  "minecraft:hoglin",
   "minecraft:piglin",
   "minecraft:pillager",
   "minecraft:skeleton",
   "minecraft:stray",
+  "minecraft:zoglin",
   "minecraft:zombified_piglin",
 ]);
 const PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES = new Set([
@@ -5200,11 +5202,16 @@ function escapeFromTarget(
     }
     // Running from a hoglin is what threw a live run off ledges and into
     // lava, so it stands on a pillar instead when it can.
-    if (
-      PILLAR_DEFENSE_ENTITY_TYPES.has(target.entityType) &&
-      (yield* fightFromPillar(state, target))
-    ) {
-      return;
+    if (PILLAR_DEFENSE_ENTITY_TYPES.has(target.entityType)) {
+      if (yield* fightFromPillar(state, target)) {
+        return;
+      }
+      // A blocked hoglin hit does not throw the bot, so with a shield it
+      // stands and fights rather than run along a ledge.
+      if (hasItemInInventoryOrEquipment(observation, "minecraft:shield")) {
+        yield* defendAgainstSingleTarget(state, target);
+        return;
+      }
     }
     if (shouldShieldCreeperExplosion(observation, target)) {
       yield* blockCreeperExplosion(state, observation, target);
@@ -8680,6 +8687,13 @@ const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
 // reach and otherwise waits for it to leave.
 const PILLAR_DEFENSE_HEIGHT = 3;
 const PILLAR_DEFENSE_SEARCH_MS = 2000;
+// A live run spent 35 and then 48 seconds trying to climb a pillar beside a
+// hoglin, which hit it the whole time until it died.
+const PILLAR_CLIMB_TIMEOUT_MS = 8000;
+// A hoglin closer than this reaches the bot before the pillar is built. A
+// live run was struck one block up and thrown off a cliff into lava. A hit
+// the shield blocks does not throw, so a bot with a shield fights it there.
+const PILLAR_BUILD_LEAD_DISTANCE = 5;
 const PILLAR_DEFENSE_DURATION_MS = 30_000;
 const PILLAR_DEFENSE_WATCH_RADIUS = 12;
 const PILLAR_STRIKE_REACH = 3.5;
@@ -8946,6 +8960,12 @@ function fightFromPillar(
       return false;
     }
     const base = observation.player.position;
+    if (
+      hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
+      distanceSquared(base, target.position) < PILLAR_BUILD_LEAD_DISTANCE ** 2
+    ) {
+      return false;
+    }
     const top = {
       x: Math.floor(base.x) + 0.5,
       y: Math.floor(base.y) + PILLAR_DEFENSE_HEIGHT,
@@ -8962,6 +8982,10 @@ function fightFromPillar(
       .pipe(
         Effect.as(true),
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        Effect.timeoutOrElse({
+          duration: PILLAR_CLIMB_TIMEOUT_MS,
+          orElse: () => Effect.succeed(false),
+        }),
       );
     if (!climbed) {
       return false;
