@@ -5235,7 +5235,10 @@ function escapeFromTarget(
         SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
         hasItemInInventoryOrEquipment(observation, "minecraft:shield")
       ) {
-        yield* defendAgainstSingleTarget(state, target);
+        // This fight is the escape, so a hit must not break it off. A live
+        // bot left and restarted it every 0.4 seconds, never struck, and
+        // died to four hoglin hits in three seconds.
+        yield* defendAgainstSingleTarget(state, target, { commitThroughWound: true });
         return;
       }
     }

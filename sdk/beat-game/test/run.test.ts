@@ -1729,6 +1729,106 @@ describe("beat-game run lifecycle", () => {
     expect(fireState.lit).toBe(false);
   }, 10_000);
 
+  it("keeps up a shield fight with a hoglin while it takes hits", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const counts = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:netherrack": 64,
+      "minecraft:shield": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:iron_pickaxe": 1,
+    };
+    const vitals = { health: 20 };
+    const observe = () =>
+      observation({
+        dimension: nether,
+        position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+        pathBuildingBlockCount: 64,
+        health: vitals.health,
+        counts,
+      });
+    driver.currentObservation = observe();
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        driver.currentObservation = observe();
+        return driver.currentObservation;
+      });
+    const hoglin = {
+      connectionEpoch: "epoch-1",
+      networkId: 41,
+      entityType: "minecraft:hoglin",
+      position: { x: 1.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 40,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
+        ? [hoglin]
+        : [];
+    // The attack runs until it is called off, and the hoglin keeps landing
+    // hits as it did in the live fight.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => driver.tasks.push(task)).pipe(
+        Effect.andThen(task.type === "attack-entity" ? Effect.never : Effect.void),
+      );
+    const hit = Effect.sleep(300).pipe(
+      Effect.andThen(DateTime.now),
+      Effect.map((now) => {
+        vitals.health = Math.max(14, vitals.health - 1);
+        return {
+          type: "bot-damaged",
+          observedAt: DateTime.formatIso(now),
+          amount: 1,
+          health: vitals.health,
+          damageType: "minecraft:mob_attack",
+        } as const;
+      }),
+    );
+    driver.events = Stream.fromEffect(hit).pipe(
+      Stream.concat(Stream.fromEffect(hit)),
+      Stream.concat(Stream.fromEffect(hit)),
+      Stream.concat(Stream.fromEffect(hit)),
+      Stream.concat(Stream.never),
+    );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "hoglin-shield-hits-run",
+          teamId: "hoglin-shield-hits-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "hoglin-shield-hits-run",
+            team: { teamId: "hoglin-shield-hits-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.sleep(2500);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const attacks = driver.tasks.filter(({ type }) => type === "attack-entity");
+    expect(attacks.length).toBeGreaterThan(0);
+    // The live fight restarted six times in two and a half seconds.
+    expect(attacks.length).toBeLessThanOrEqual(2);
+  }, 10_000);
+
   it("abandons a pillar climb the moment a hoglin hits it", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
