@@ -16443,9 +16443,12 @@ function craftWithTable(
   count: number,
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const workstation = yield* ensureWorkstation(state, observation, "minecraft:crafting_table");
+    // Space comes first: making it walks to a discard site and may dig on
+    // the way. A live bot placed its table, dug through it on that walk,
+    // picked it back up, and then tried to craft at the empty spot.
+    yield* ensureInventorySpace(state, observation, craftResultSlots(resultItemId, count));
     const current = yield* state.driver.observe;
-    yield* ensureInventorySpace(state, current, craftResultSlots(resultItemId, count));
+    const workstation = yield* ensureWorkstation(state, current, "minecraft:crafting_table");
     yield* craftItem(state.driver, {
       resultItemId,
       count,
