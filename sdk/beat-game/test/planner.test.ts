@@ -896,6 +896,60 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("goes back to the Nether on a full stomach with a smaller food stock", () => {
+    const base = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES);
+    const observedAt = "2026-01-01T00:00:00.000Z";
+    const portal = blockObservation(
+      {
+        x: 0,
+        y: 64,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      {
+        blockId: "minecraft:nether_portal",
+        diggable: false,
+        solid: false,
+        observedAt,
+      },
+    );
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...base,
+        memory: {
+          ...base.memory,
+          portals: [
+            {
+              key: "portal:minecraft:overworld:0:64:0",
+              value: portal,
+              observedAt,
+              confidence: 0.25,
+            },
+          ],
+        },
+      },
+      // As in a live run: animals near spawn were gone, and over two hours
+      // the bot ate what it caught and never kept more than four.
+      observation: observation({
+        food: 20,
+        counts: {
+          "minecraft:cooked_beef": 3,
+          "minecraft:oak_log": 4,
+          "minecraft:cobblestone": 20,
+          "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:shield": 1,
+        },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({
+      type: "build-and-enter-nether",
+      action: "build-and-enter-nether",
+    });
+  });
+
   it("uses a shared stronghold estimate without making every bot throw eyes", () => {
     const base = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD);
     const decision = decideBeatGameAction({

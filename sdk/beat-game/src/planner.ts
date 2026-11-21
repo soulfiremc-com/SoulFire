@@ -22,6 +22,7 @@ import {
 
 const FOOD_RESERVE_REFILL_TOLERANCE = 3;
 const DEEP_WORK_MINIMUM_FOOD_RESERVE = 3;
+const NETHER_REENTRY_MINIMUM_HUNGER = 18;
 const MINIMUM_LOG_RESERVE = 2;
 const DURABLE_PICKAXE_ITEM_IDS = [
   "minecraft:iron_pickaxe",
@@ -280,7 +281,9 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
           { reusablePortalAvailable },
         ).find(
           (requirement) =>
-            !requirement.satisfied && !shouldDeferReserveRefill(requirement, observation, strategy),
+            !requirement.satisfied &&
+            !shouldDeferReserveRefill(requirement, observation, strategy) &&
+            !hasNetherReentryFood(requirement, observation),
         );
         if (reentryRequirement !== undefined) {
           return requirementDecision(reentryRequirement);
@@ -364,6 +367,21 @@ function needsOverworldForPreparation(
 ): boolean {
   return (
     phase === BeatGamePhase.PREPARE_OVERWORLD && isNether(observation.player.position.dimension)
+  );
+}
+
+/// A live run with the Nether half done spent over two hours near a
+/// hunted-out spawn refilling its food stock to eight. It ate what it caught
+/// as fast as it caught it and never kept more than four. A bot on a full
+/// stomach goes back with the reserve it would take into any deep work.
+function hasNetherReentryFood(
+  requirement: BeatGameItemRequirement,
+  observation: BeatGameObservation,
+): boolean {
+  return (
+    (requirement.key === "food-supply" || requirement.key === "food") &&
+    observation.player.food >= NETHER_REENTRY_MINIMUM_HUNGER &&
+    requirement.currentCount >= DEEP_WORK_MINIMUM_FOOD_RESERVE
   );
 }
 
