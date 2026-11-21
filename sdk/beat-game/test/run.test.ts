@@ -1261,6 +1261,93 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
   }, 10_000);
 
+  it("waits out an angry enderman on a pillar instead of digging in", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const counts = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:netherrack": 64,
+      "minecraft:stone_sword": 1,
+      "minecraft:iron_pickaxe": 1,
+    };
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts,
+    });
+    const hoglin = {
+      connectionEpoch: "epoch-1",
+      networkId: 41,
+      entityType: "minecraft:enderman",
+      position: { x: 1.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 40,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    // The enderman calms down after the bot has waited on its pillar a while.
+    const watch = { onPillarQueries: 0 };
+    driver.entityQueryResolver = ({ selector }) =>
+      (driver.currentObservation.player.position.y < 67 || (watch.onPillarQueries += 1) < 20) &&
+      (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
+        ? [hoglin]
+        : [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: nether,
+          position,
+          pathBuildingBlockCount: 64,
+          counts,
+        });
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "enderman-pillar-run",
+          teamId: "enderman-pillar-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-pillar-run",
+            team: { teamId: "enderman-pillar-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (watch.onPillarQueries < 20) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: { x: 0.5, y: 67, z: 0.5, dimension: nether },
+        radius: 0,
+        policy: objectContaining({ allowPlacing: true, allowMining: false }),
+      }),
+    );
+    // It builds up rather than digging a shaft, which took too long live.
+    expect(driver.actions).not.toContainEqual(objectContaining({ type: "dig-block" }));
+  }, 10_000);
+
   it.each([
     {
       name: "fights a hoglin too close to outbuild behind a shield",

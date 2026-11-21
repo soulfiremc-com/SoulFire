@@ -5221,7 +5221,10 @@ function escapeFromTarget(
       }
       // A blocked hoglin hit does not throw the bot, so with a shield it
       // stands and fights rather than run along a ledge.
-      if (hasItemInInventoryOrEquipment(observation, "minecraft:shield")) {
+      if (
+        SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
+        hasItemInInventoryOrEquipment(observation, "minecraft:shield")
+      ) {
         yield* defendAgainstSingleTarget(state, target);
         return;
       }
@@ -8787,7 +8790,12 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
+// Like a hoglin, an enderman cannot reach a bot three blocks up or climb to it.
+// A live bot dug a cover shaft one block every second and a half while an
+// enderman hit it three times for 4.5 and killed it. A pillar goes up as
+// fast as blocks can be placed, and waiting on it outlasts the anger.
 const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:enderman",
   "minecraft:hoglin",
   "minecraft:zoglin",
 ]);
@@ -9091,6 +9099,7 @@ function fightFromPillar(
     }
     const base = observation.player.position;
     if (
+      SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
       hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
       distanceSquared(base, target.position) < PILLAR_BUILD_LEAD_DISTANCE ** 2
     ) {
