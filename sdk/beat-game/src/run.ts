@@ -202,6 +202,7 @@ const NETHER_WIDE_SEARCH_RADIUS = 128;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
 const PIGLIN_REFUSAL_WAIT_MS = 8000;
+const PIGLIN_OUT_OF_REACH_RETRIES = 3;
 const GOLD_GUARDING_PIGLIN_ENTITY_TYPES = ["minecraft:piglin", "minecraft:piglin_brute"] as const;
 // Piglins guard gold within 16 blocks. The margin covers ore a little away
 // from the bot and piglins that wander closer while it digs.
@@ -447,6 +448,12 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:firefly_bush",
   "minecraft:wither_skeleton_skull",
   "minecraft:nether_brick_fence",
+  // A live bot bartering for pearls held these and could not free three
+  // slots. Nether bricks are not among its building blocks.
+  "minecraft:nether_bricks",
+  "minecraft:nether_brick",
+  "minecraft:copper_ingot",
+  "minecraft:splash_potion",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left
@@ -16219,6 +16226,7 @@ function barterWithPiglin(
 ): Effect.Effect<void, BeatGameDriverError> {
   return state.driver.withControl(
     Effect.gen(function* () {
+      let outOfReachOffers = 0;
       for (let trade = 0; trade < trades; trade += 1) {
         // Piglins wander. A live bot walked to where one had been, found it
         // out of reach, and abandoned the barter three times in a row. It
@@ -16254,7 +16262,7 @@ function barterWithPiglin(
         // A piglin still admiring the last ingot, or a baby or angry one,
         // refuses the trade. A live refusal ended the whole run, so it ends
         // only this barter and the next plan tries again.
-        const offered = yield* state.driver
+        const offer = yield* state.driver
           .act({
             type: "interact-entity",
             connectionEpoch: piglin.connectionEpoch,
@@ -16262,10 +16270,19 @@ function barterWithPiglin(
             hand: "main",
           })
           .pipe(
-            Effect.as(true),
-            Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+            Effect.as("offered" as const),
+            Effect.catchTag("BeatGameDriverError", (error) =>
+              Effect.succeed(error.code === "out_of_range" ? "out-of-reach" : "refused"),
+            ),
           );
-        if (!offered) {
+        // A piglin that wandered off between the approach and the offer is
+        // followed again. A live bot treated three such misses as refusals.
+        if (offer === "out-of-reach" && outOfReachOffers < PIGLIN_OUT_OF_REACH_RETRIES) {
+          outOfReachOffers += 1;
+          trade -= 1;
+          continue;
+        }
+        if (offer !== "offered") {
           // Offering again a second later was refused four more times live.
           // A piglin admires an ingot for about six seconds.
           yield* Effect.sleep(PIGLIN_REFUSAL_WAIT_MS);

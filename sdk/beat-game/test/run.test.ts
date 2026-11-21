@@ -233,6 +233,36 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("frees slots held by what a pearl barter run carries", () => {
+    // Part of the inventory a live bot held when it could not free three
+    // slots to keep bartering.
+    const counts: Record<string, number> = {
+      "minecraft:blaze_rod": 7,
+      "minecraft:cobblestone": 64,
+      "minecraft:copper_ingot": 1,
+      "minecraft:ender_pearl": 3,
+      "minecraft:fire_charge": 1,
+      "minecraft:gold_ingot": 4,
+      "minecraft:nether_brick": 2,
+      "minecraft:nether_bricks": 38,
+      "minecraft:netherrack": 42,
+      "minecraft:splash_potion": 1,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded.toSorted()).toEqual([
+      "minecraft:copper_ingot",
+      "minecraft:nether_brick",
+      "minecraft:nether_bricks",
+      "minecraft:splash_potion",
+    ]);
+  });
+
   it("frees slots held by Nether junk", () => {
     // As in a live run whose inventory was full of Nether plants and magma,
     // so it could not make room for food.
@@ -2752,6 +2782,103 @@ describe("beat-game run lifecycle", () => {
     expect(trades.length).toBeGreaterThanOrEqual(2);
     expect((trades[1]?.at ?? 0) - (trades[0]?.at ?? 0)).toBeGreaterThanOrEqual(6000);
   }, 25_000);
+
+  it("follows a piglin that wandered out of reach before offering again", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:gold_ingot": 2,
+      },
+    });
+    // Spotted six blocks east, the piglin has wandered to ten by the time
+    // the bot comes to trade.
+    const spotted = {
+      connectionEpoch: "epoch-1",
+      networkId: 72,
+      entityType: "minecraft:piglin",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const wandered = { ...spotted, position: { ...spotted.position, x: 10.5 } };
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.networkId === spotted.networkId
+        ? [wandered]
+        : selector.entityTypes?.includes(spotted.entityType) === true
+          ? [spotted]
+          : [];
+    // As in the live run: the piglin steps out of reach before the first
+    // offer lands, and the second offer reaches it.
+    const trades: { readonly at: number }[] = [];
+    driver.actionResolver = (action) =>
+      action.type === "interact-entity"
+        ? Clock.currentTimeMillis.pipe(
+            Effect.map((at) => trades.push({ at })),
+            Effect.andThen(
+              Effect.suspend(() =>
+                trades.length === 1
+                  ? Effect.fail(
+                      new BeatGameDriverError({
+                        operation: "act.interact-entity",
+                        code: "out_of_range",
+                        retryable: false,
+                        message:
+                          "OUT_OF_RANGE: Target entity is outside the bot's interaction reach",
+                      }),
+                    )
+                  : Effect.succeed({}),
+              ),
+            ),
+          )
+        : Effect.succeed({});
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "piglin-reach-run",
+          teamId: "piglin-reach-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "piglin-reach-run",
+            team: { teamId: "piglin-reach-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (trades.length < 2) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It walks back and offers again at once, not after the refusal pause.
+    expect(trades.length).toBeGreaterThanOrEqual(2);
+    expect((trades[1]?.at ?? Number.POSITIVE_INFINITY) - (trades[0]?.at ?? 0)).toBeLessThan(3000);
+  }, 10_000);
 
   it("keeps out of lava when it engages a skeleton in the Nether", async () => {
     const driver = new FakeBeatGameDriver();
