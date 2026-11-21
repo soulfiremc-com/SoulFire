@@ -12135,6 +12135,87 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("treats a ghast's fireball from 56 blocks as an attack, not environmental damage", async () => {
+    const driver = new FakeBeatGameDriver();
+    let actionStarted = false;
+    let health = 20;
+    const position = { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" };
+    const counts = { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 8 };
+    driver.currentObservation = observation({ health, position, counts });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 17.5;
+        }
+        driver.currentObservation = observation({ health, position, counts });
+        return driver.currentObservation;
+      });
+    // As in the live run: a ghast fires from beyond 48 blocks.
+    const blaze = {
+      connectionEpoch: "epoch-1",
+      networkId: 31,
+      entityType: "minecraft:ghast",
+      position: { x: 56.5, y: 70, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      origin !== undefined &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(blaze.entityType)) &&
+      distanceSquared(origin, blaze.position) <= radius ** 2
+        ? [blaze]
+        : [];
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 2.5,
+      health: 17.5,
+      damageType: "minecraft:fireball",
+    } as const).pipe(Stream.concat(Stream.never));
+
+    const failures: string[] = [];
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  actionStarted = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.gen(function* () {
+            while (
+              driver.xzPaths.length === 0 &&
+              !failures.some((detail) => detail.includes("environmental damage"))
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(failures.filter((detail) => detail.includes("environmental damage"))).toEqual([]);
+    // It moves away from the ghast, which hovers to the east.
+    expect(driver.xzPaths[0]?.x).toBeLessThan(0);
+  });
+
   it("answers a distant blaze while it recovers instead of eating under fire", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

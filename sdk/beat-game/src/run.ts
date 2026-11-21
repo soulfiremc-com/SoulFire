@@ -8888,7 +8888,10 @@ const DISTANT_RANGED_ATTACKER_ENTITY_TYPES: ReadonlySet<string> = new Set([
   "minecraft:bogged",
   "minecraft:pillager",
 ]);
-const DISTANT_RANGED_ATTACKER_RADIUS = 48;
+// A ghast fires from up to 64 blocks. A live bot was hit by one it did not
+// look far enough to see, took the hit for environmental damage, and was
+// blown off a Nether ledge into the lava sea.
+const DISTANT_RANGED_ATTACKER_RADIUS = 64;
 const SURFACE_ESCAPE_PROGRESS_HEIGHT = 1;
 const SURFACE_ESCAPE_MAXIMUM_TOTAL_ATTEMPTS = 20;
 const WORKSTATION_SETTLE_POLLS = 10;
