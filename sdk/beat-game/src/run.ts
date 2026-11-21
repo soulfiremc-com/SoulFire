@@ -16358,6 +16358,14 @@ function acquireEnderPearls(
     // An enderman hits for about 4.5 through iron and takes eight stone sword
     // strikes. A live bot started one at 13 health and died to three hits.
     if (observation.player.health < ENDERMAN_HUNT_MINIMUM_HEALTH) {
+      // A live bot thrown into lava started this meal there and burned to
+      // death while eating. Lava and fire come first.
+      if (
+        observation.player.fireTicks > 0 ||
+        (yield* isPlayerInLava(state.driver, observation.player.position))
+      ) {
+        return;
+      }
       if (observation.player.food < 20 && hasUsableFood(observation)) {
         yield* eatWhenNeeded(state.driver, {
           foodItemIds: preferredUsableFoodItemIds(observation),
