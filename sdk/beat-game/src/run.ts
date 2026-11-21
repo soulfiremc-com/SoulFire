@@ -9079,21 +9079,28 @@ function fightFromPillar(
       z: Math.floor(base.z) + 0.5,
       dimension: base.dimension,
     };
-    const climbed = yield* state.driver
-      .pathfind(top, 0, {
-        ...state.strategy.path,
-        allowMining: false,
-        allowPlacing: true,
-        maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, PILLAR_DEFENSE_SEARCH_MS),
-      })
-      .pipe(
-        Effect.as(true),
-        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
-        Effect.timeoutOrElse({
-          duration: PILLAR_CLIMB_TIMEOUT_MS,
-          orElse: () => Effect.succeed(false),
-        }),
-      );
+    // A live climb stalled for eight seconds beside a hoglin, which hit the
+    // bot twice for five each and killed it. A hit during the climb means the
+    // pillar is not going up in time, so the bot fights instead.
+    const climbStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    const climbed = yield* Effect.raceFirst(
+      state.driver
+        .pathfind(top, 0, {
+          ...state.strategy.path,
+          allowMining: false,
+          allowPlacing: true,
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, PILLAR_DEFENSE_SEARCH_MS),
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+          Effect.timeoutOrElse({
+            duration: PILLAR_CLIMB_TIMEOUT_MS,
+            orElse: () => Effect.succeed(false),
+          }),
+        ),
+      waitForMobAttackSince(state, climbStartedAt).pipe(Effect.as(false)),
+    );
     if (!climbed) {
       return false;
     }

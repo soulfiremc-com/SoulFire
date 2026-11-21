@@ -1,4 +1,4 @@
-import { Schema, Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
+import { DateTime, Schema, Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { assert, describe, expect, it } from "vitest";
 
@@ -1498,6 +1498,100 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.paths.some(isSpawnerApproach)).toBe(true);
   });
+
+  it("abandons a pillar climb the moment a hoglin hits it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const counts = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:netherrack": 64,
+      "minecraft:stone_sword": 1,
+      "minecraft:iron_pickaxe": 1,
+    };
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts,
+    });
+    const hoglin = {
+      connectionEpoch: "epoch-1",
+      networkId: 41,
+      entityType: "minecraft:hoglin",
+      position: { x: 1.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 40,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
+        ? [hoglin]
+        : [];
+    // The climb never finishes, and the hoglin strikes once it has begun.
+    driver.events = Stream.fromEffect(
+      Effect.sleep(300).pipe(
+        Effect.andThen(DateTime.now),
+        Effect.map(
+          (now) =>
+            ({
+              type: "bot-damaged",
+              observedAt: DateTime.formatIso(now),
+              amount: 5,
+              health: 15,
+              damageType: "minecraft:mob_attack",
+            }) as const,
+        ),
+      ),
+    ).pipe(Stream.concat(Stream.never));
+    driver.pathResolver = (position, radius, policy) =>
+      position.y > 64
+        ? Effect.sync(() => driver.paths.push({ position, radius, policy })).pipe(
+            Effect.andThen(Effect.never),
+          )
+        : Effect.sync(() => {
+            driver.paths.push({ position, radius, policy });
+          });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "hoglin-climb-hit-run",
+          teamId: "hoglin-climb-hit-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "hoglin-climb-hit-run",
+            team: { teamId: "hoglin-climb-hit-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          // Well short of the eight seconds a stalled climb gets on its own.
+          yield* Effect.gen(function* () {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
+              yield* Effect.sleep(5);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual(
+      objectContaining({ position: objectContaining({ y: 67 }) }),
+    );
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
+  }, 10_000);
 
   it("widens a one-block bridge before fighting a hoglin on it", async () => {
     const driver = new FakeBeatGameDriver();
