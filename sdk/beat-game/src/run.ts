@@ -204,6 +204,8 @@ const NETHER_EXPLORATION_CAVERN_Y = 50;
 // The goal only needs the bot up in open ground near the leg's end.
 const NETHER_CAVERN_LEG_RADIUS = 16;
 const OUTWARD_SEARCH_DISTANCE = 1024;
+const ENDERMAN_HUNT_MINIMUM_HEALTH = 18;
+const ENDERMAN_HUNT_HEAL_WAIT_MS = 3000;
 const OUTWARD_SEARCH_TURN_INTERVAL_MS = 10 * 60_000;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
@@ -14010,11 +14012,28 @@ function huntOrExplore(
           networkId: target.networkId,
         },
       });
+      // A hunted enderman fights back. A live bot hunting pearls struck one
+      // with its shield down and died to three of its hits.
+      const huntWithShield =
+        SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
+        hasItemInInventoryOrEquipment(current, "minecraft:shield");
+      if (huntWithShield && current.player.equipment["offhand"] !== "minecraft:shield") {
+        yield* state.driver
+          .withControl(
+            state.driver.act({
+              type: "equip-item",
+              selector: { itemIds: ["minecraft:shield"] },
+              equipmentSlot: "offhand",
+            }),
+          )
+          .pipe(Effect.ignore);
+      }
       const attack = attackEntity(state.driver, {
         target,
         targetUnavailableTimeoutSeconds: 3,
         selectBestWeapon: true,
         sprinting: true,
+        ...(huntWithShield ? { useOffhandShield: true } : {}),
         path: targetHuntingPath,
       });
       const timedAttack = attack.pipe(
@@ -16274,6 +16293,22 @@ function acquireEnderPearls(
           horizontalDistanceSquared(left.position, observation.player.position) -
           horizontalDistanceSquared(right.position, observation.player.position),
       )[0]?.position;
+    // An enderman hits for about 4.5 through iron and takes eight stone sword
+    // strikes. A live bot started one at 13 health and died to three hits.
+    if (observation.player.health < ENDERMAN_HUNT_MINIMUM_HEALTH) {
+      if (observation.player.food < 20 && hasUsableFood(observation)) {
+        yield* eatWhenNeeded(state.driver, {
+          foodItemIds: preferredUsableFoodItemIds(observation),
+          foodLevel: 20,
+          maximumMeals: 1,
+          completeWhenNoFood: true,
+          path: state.strategy.path,
+        });
+      } else {
+        yield* Effect.sleep(ENDERMAN_HUNT_HEAL_WAIT_MS);
+      }
+      return;
+    }
     const searchTurns = Math.floor(
       ((yield* Clock.currentTimeMillis) - state.startedAtMs) / OUTWARD_SEARCH_TURN_INTERVAL_MS,
     );
