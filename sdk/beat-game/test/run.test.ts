@@ -3212,6 +3212,64 @@ describe("beat-game run lifecycle", () => {
     expect(first?.z).toBeLessThan(0);
   });
 
+  it("searches outward for a warped forest when it knows none", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: -100.5, y: 64, z: -100.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // As in the live run: no forest in view and none remembered, a hundred
+    // and forty blocks north-west of the Nether origin.
+    driver.blockQueryResolver = () => [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "warped-outward-run",
+          teamId: "warped-outward-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "warped-outward-run",
+            team: { teamId: "warped-outward-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.xzPaths.length === 0 && driver.paths.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It heads further out, north-west, rather than circling back over
+    // ground it has already scanned.
+    const first = driver.paths[0]?.position ?? driver.xzPaths[0];
+    expect(first?.x).toBeLessThan(-100.5);
+    expect(first?.z).toBeLessThan(-100.5);
+  });
+
   it("remembers an enderman it could not catch before its chase ran out", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

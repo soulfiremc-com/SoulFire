@@ -199,6 +199,7 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const OUTWARD_SEARCH_DISTANCE = 1024;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
 const PIGLIN_REFUSAL_WAIT_MS = 8000;
@@ -16263,7 +16264,7 @@ function acquireEnderPearls(
         ? {
             preferredEntityTypes: new Set(["minecraft:enderman"]),
             preferredRadius: state.strategy.entitySearchRadius,
-            ...(rememberedForest === undefined ? {} : { explorationTarget: rememberedForest }),
+            explorationTarget: rememberedForest ?? outwardSearchTarget(observation.player.position),
             structureSearch: {
               anchorBlockIds: new Set(["minecraft:warped_nylium"]),
               stationaryBlockIds: new Set<string>(),
@@ -16275,6 +16276,21 @@ function acquireEnderPearls(
         : undefined,
     );
   });
+}
+
+/// A live forest search circled within 200 blocks of where it began for an
+/// hour, each stop scanning ground the last had already covered. With nothing
+/// remembered, the search heads straight outward from the dimension origin
+/// instead, so every stop scans new ground.
+function outwardSearchTarget(position: BeatGamePosition): BeatGamePosition {
+  const distance = Math.hypot(position.x, position.z);
+  const directionX = distance < 1 ? 1 : position.x / distance;
+  const directionZ = distance < 1 ? 0 : position.z / distance;
+  return {
+    ...position,
+    x: position.x + directionX * OUTWARD_SEARCH_DISTANCE,
+    z: position.z + directionZ * OUTWARD_SEARCH_DISTANCE,
+  };
 }
 
 function barterWithPiglin(
