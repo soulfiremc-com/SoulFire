@@ -196,6 +196,43 @@ describe("inventory discards", () => {
     ).toEqual({ itemId: "minecraft:fishing_rod", count: 1 });
   });
 
+  it("frees slots held by everything a long run picked up on the way", () => {
+    // The inventory a live bot held when its gold boots failed 54 times.
+    const counts: Record<string, number> = {
+      "minecraft:arrow": 8,
+      "minecraft:black_wool": 3,
+      "minecraft:blaze_rod": 6,
+      "minecraft:bow": 1,
+      "minecraft:cobblestone": 58,
+      "minecraft:firefly_bush": 1,
+      "minecraft:flint": 9,
+      "minecraft:glowstone_dust": 14,
+      "minecraft:gold_nugget": 14,
+      "minecraft:music_disc_lava_chicken": 1,
+      "minecraft:nautilus_shell": 1,
+      "minecraft:nether_brick_fence": 4,
+      "minecraft:phantom_membrane": 1,
+      "minecraft:white_wool": 5,
+      "minecraft:wither_skeleton_skull": 1,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded.toSorted()).toEqual([
+      "minecraft:firefly_bush",
+      "minecraft:glowstone_dust",
+      "minecraft:music_disc_lava_chicken",
+      "minecraft:nautilus_shell",
+      "minecraft:nether_brick_fence",
+      "minecraft:phantom_membrane",
+      "minecraft:wither_skeleton_skull",
+    ]);
+  });
+
   it("frees slots held by Nether junk", () => {
     // As in a live run whose inventory was full of Nether plants and magma,
     // so it could not make room for food.

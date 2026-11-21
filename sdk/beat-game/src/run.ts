@@ -431,6 +431,14 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:string",
   "minecraft:leather",
   "minecraft:potion",
+  // A live bot back in the Nether held all of these and failed its gold
+  // boots craft 54 times for want of three empty slots.
+  "minecraft:glowstone_dust",
+  "minecraft:nautilus_shell",
+  "minecraft:phantom_membrane",
+  "minecraft:firefly_bush",
+  "minecraft:wither_skeleton_skull",
+  "minecraft:nether_brick_fence",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left
@@ -16858,7 +16866,11 @@ function ensureInventorySpace(
 export function selectInventoryDiscard(
   counts: Readonly<Record<string, number>>,
 ): { readonly itemId: string; readonly count: number } | undefined {
-  const priorityItemId = INVENTORY_DISCARD_PRIORITY.find((itemId) => (counts[itemId] ?? 0) > 0);
+  const priorityItemId =
+    INVENTORY_DISCARD_PRIORITY.find((itemId) => (counts[itemId] ?? 0) > 0) ??
+    Object.keys(counts).find(
+      (itemId) => itemId.startsWith("minecraft:music_disc_") && (counts[itemId] ?? 0) > 0,
+    );
   if (priorityItemId !== undefined) {
     return { itemId: priorityItemId, count: counts[priorityItemId] ?? 0 };
   }
