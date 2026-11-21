@@ -5360,7 +5360,12 @@ function escapeFromTarget(
         allowMining: needsRecovery && !rangedThreat,
         allowPlacing:
           !rangedThreat && isActiveMeleeHostile(target) && pathBuildingBlockCount(latest) > 0,
-        avoidFluids: !(currentlyInFluid || fluidFallbackAllowed || rangedThreat),
+        // Crossing water outruns arrows, but the only fluid in the Nether is
+        // lava. A live bot fled a skeleton there straight into the lava sea.
+        avoidFluids: !(
+          currentlyInFluid ||
+          ((fluidFallbackAllowed || rangedThreat) && !isNether(latest.player.position.dimension))
+        ),
         maxFallDistance: Math.min(escapePath.maxFallDistance, MAXIMUM_DAMAGE_FREE_FALL_DISTANCE),
       },
     });
@@ -9242,7 +9247,7 @@ function defendAgainstSingleTarget(
     ...state.strategy.path,
     allowMining: false,
     allowPlacing: false,
-    avoidFluids: !isRangedTarget,
+    avoidFluids: !isRangedTarget || isNether(target.position.dimension),
     maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3000),
   };
   return state.driver.observe.pipe(

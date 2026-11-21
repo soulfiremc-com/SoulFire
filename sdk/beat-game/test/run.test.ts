@@ -2674,6 +2674,77 @@ describe("beat-game run lifecycle", () => {
     expect((trades[1]?.at ?? 0) - (trades[0]?.at ?? 0)).toBeGreaterThanOrEqual(6000);
   }, 25_000);
 
+  it("keeps out of lava when it engages a skeleton in the Nether", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+      },
+    });
+    // A fortress skeleton shooting from close range, as before a live bot
+    // took its arrows and moved straight into the lava sea.
+    const skeleton = {
+      connectionEpoch: "epoch-1",
+      networkId: 81,
+      entityType: "minecraft:skeleton",
+      position: { x: 5.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === skeleton.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(skeleton.entityType))
+        ? [skeleton]
+        : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "nether-skeleton-run",
+          teamId: "nether-skeleton-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "nether-skeleton-run",
+            team: { teamId: "nether-skeleton-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity" || type === "flee")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const index = driver.tasks.findIndex(({ type }) => type === "attack-entity" || type === "flee");
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(driver.taskPolicies[index]).toEqual(objectContaining({ avoidFluids: true }));
+  });
+
   it("moves away from piglins before mining gold for pearls", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
