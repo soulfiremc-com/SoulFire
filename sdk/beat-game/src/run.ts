@@ -199,7 +199,6 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
-const PIGLIN_BARTER_SEARCH_RADIUS = 24;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
 const PIGLIN_REFUSAL_WAIT_MS = 8000;
@@ -16227,7 +16226,10 @@ function barterWithPiglin(
         const observed = yield* state.driver.observe;
         const [current] = yield* state.driver.queryEntities({
           origin: observed.player.position,
-          radius: PIGLIN_BARTER_SEARCH_RADIUS,
+          // The piglin was found within the entity search radius, so it is
+          // looked up again just as far. A live bot looked only 24 blocks out,
+          // lost a piglin 30 blocks away, and gave up 256 times in a row.
+          radius: state.strategy.entitySearchRadius,
           selector: { networkId: piglin.networkId, alive: true },
           maximumResults: 1,
         });
