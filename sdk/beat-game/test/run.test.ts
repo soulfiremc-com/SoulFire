@@ -1173,7 +1173,7 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
-  it("fights a hoglin from a two-block pillar", async () => {
+  it("waits out a hoglin on a pillar beyond its reach", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
     const counts = {
@@ -1193,7 +1193,7 @@ describe("beat-game run lifecycle", () => {
       connectionEpoch: "epoch-1",
       networkId: 41,
       entityType: "minecraft:hoglin",
-      position: { x: 2.5, y: 64, z: 0.5, dimension: nether },
+      position: { x: 1.5, y: 64, z: 0.5, dimension: nether },
       velocity: { x: 0, y: 0, z: 0 },
       alive: true,
       aggressive: true,
@@ -1201,18 +1201,14 @@ describe("beat-game run lifecycle", () => {
       target: { connectionEpoch: "epoch-1", networkId: 99 },
       observedAt: "2026-01-01T00:00:00.000Z",
     };
-    const strikes = { count: 0 };
+    // The hoglin wanders off after the bot has waited on its pillar a while.
+    const watch = { onPillarQueries: 0 };
     driver.entityQueryResolver = ({ selector }) =>
-      strikes.count < 3 &&
+      (driver.currentObservation.player.position.y < 67 || (watch.onPillarQueries += 1) < 20) &&
       (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
       (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
         ? [hoglin]
         : [];
-    driver.actionObserver = (action) => {
-      if (action.type === "attack-entity" && action.networkId === hoglin.networkId) {
-        strikes.count += 1;
-      }
-    };
     driver.pathResolver = (position, radius, policy) =>
       Effect.sync(() => {
         driver.paths.push({ position, radius, policy });
@@ -1244,7 +1240,7 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           yield* Effect.gen(function* () {
-            while (strikes.count < 3) {
+            while (watch.onPillarQueries < 20) {
               yield* Effect.sleep(1);
             }
           }).pipe(Effect.timeout("5 seconds"), Effect.ignore);
@@ -1255,12 +1251,13 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.paths).toContainEqual(
       objectContaining({
-        position: { x: 0.5, y: 66, z: 0.5, dimension: nether },
+        position: { x: 0.5, y: 67, z: 0.5, dimension: nether },
         radius: 0,
         policy: objectContaining({ allowPlacing: true, allowMining: false }),
       }),
     );
-    expect(strikes.count).toBe(3);
+    // Out of reach, it waits rather than stepping down to chase the hoglin.
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
   }, 10_000);
 
   it("digs toward a blaze spawner it cannot walk to", async () => {

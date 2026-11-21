@@ -8674,7 +8674,11 @@ const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
   "minecraft:hoglin",
   "minecraft:zoglin",
 ]);
-const PILLAR_DEFENSE_HEIGHT = 2;
+// A hoglin reaches about 2.9 blocks from its feet to its target's feet, so
+// a live bot on a two-block pillar was struck and thrown off. Three blocks
+// is out of its reach. The bot strikes when the mob comes within its own
+// reach and otherwise waits for it to leave.
+const PILLAR_DEFENSE_HEIGHT = 3;
 const PILLAR_DEFENSE_SEARCH_MS = 2000;
 const PILLAR_DEFENSE_DURATION_MS = 30_000;
 const PILLAR_DEFENSE_WATCH_RADIUS = 12;
@@ -8928,7 +8932,7 @@ function defendAgainstTarget(
 /// Hoglins hit hard, take many hits and throw the bot back. A live run died
 /// to three of them in a Nether fortress: knocked off a ledge, knocked into
 /// lava while fleeing, and beaten in a straight fight. They cannot climb, so
-/// the bot stands on a two-block pillar and strikes down at them.
+/// the bot stands on a pillar out of their reach until they leave.
 function fightFromPillar(
   state: RunState,
   target: BeatGameEntityObservation,
