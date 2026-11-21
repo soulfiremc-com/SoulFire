@@ -9304,7 +9304,13 @@ function widenNarrowFooting(
     const blockId = NARROW_FOOTING_FILL_BLOCK_IDS.find(
       (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
     );
-    if (blockId === undefined) {
+    // Water breaks a fall rather than causing one. A live bot fought a
+    // drowned under water and spent four seconds filling the water around
+    // it as if it were a drop while the drowned hit it.
+    if (
+      blockId === undefined ||
+      (yield* isPlayerInFluid(state.driver, observation.player.position))
+    ) {
       return;
     }
     const feet = {
@@ -9329,7 +9335,7 @@ function widenNarrowFooting(
           ({ position }) =>
             position.x === feet.x + x && position.y === feet.y - 1 && position.z === feet.z + z,
         );
-        if (!cell?.solid) {
+        if (cell?.solid !== true && cell?.blockId !== "minecraft:water") {
           openCells.push({ x, y: -1, z });
         }
       }

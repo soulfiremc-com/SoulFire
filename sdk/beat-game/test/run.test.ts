@@ -1805,6 +1805,97 @@ describe("beat-game run lifecycle", () => {
     expect(built.blocks.every(({ blockId }) => blockId === "minecraft:netherrack")).toBe(true);
   });
 
+  it("does not fill water around it as if it were a drop", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const counts = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:netherrack": 64,
+      "minecraft:shield": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:iron_pickaxe": 1,
+    };
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts,
+    });
+    // A one-block strip of floor between two pools of water.
+    driver.blockQueryResolver = ({ center, radius, selector }) => {
+      if (Object.keys(selector).length > 0) {
+        return [];
+      }
+      const cells = [];
+      for (let x = Math.floor(center.x - radius); x <= Math.floor(center.x + radius); x += 1) {
+        for (let z = Math.floor(center.z - radius); z <= Math.floor(center.z + radius); z += 1) {
+          const position = { x, y: 63, z, dimension: nether };
+          cells.push(
+            z === 0
+              ? blockObservation(position, { blockId: "minecraft:netherrack", solid: true })
+              : blockObservation(position, {
+                  blockId: "minecraft:water",
+                  solid: false,
+                  replaceable: true,
+                }),
+          );
+        }
+      }
+      return cells;
+    };
+    const hoglin = {
+      connectionEpoch: "epoch-1",
+      networkId: 41,
+      entityType: "minecraft:hoglin",
+      position: { x: 2.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 40,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
+        ? [hoglin]
+        : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "water-footing-run",
+          teamId: "water-footing-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "water-footing-run",
+            team: { teamId: "water-footing-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // Water breaks a fall, so there is nothing to fill.
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "build" }));
+  });
+
   it("fights a blaze from a bridge without widening it first", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
