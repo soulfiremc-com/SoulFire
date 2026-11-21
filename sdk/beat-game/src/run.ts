@@ -8688,6 +8688,16 @@ const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
 // reach and otherwise waits for it to leave.
 const PILLAR_DEFENSE_HEIGHT = 3;
 const PILLAR_DEFENSE_SEARCH_MS = 2000;
+const NARROW_FOOTING_FILL_BLOCK_IDS = [
+  "minecraft:netherrack",
+  "minecraft:cobblestone",
+  "minecraft:cobbled_deepslate",
+  "minecraft:blackstone",
+  "minecraft:dirt",
+] as const;
+// A bridge leaves six of the eight cells around the bot open.
+const NARROW_FOOTING_MINIMUM_OPEN_CELLS = 5;
+const NARROW_FOOTING_FILL_TIMEOUT_MS = 4000;
 // A live run spent 35 and then 48 seconds trying to climb a pillar beside a
 // hoglin, which hit it the whole time until it died.
 const PILLAR_CLIMB_TIMEOUT_MS = 8000;
@@ -9144,9 +9154,73 @@ function defendAgainstSingleTarget(
                 }),
         ),
       );
-      return prepareShield.pipe(Effect.andThen(guardedAttack));
+      return prepareShield.pipe(
+        Effect.andThen(isRangedTarget ? Effect.void : widenNarrowFooting(state, observation)),
+        Effect.andThen(guardedAttack),
+      );
     }),
   );
+}
+
+/// A live bot fought a hoglin on a one-block bridge it had built over a
+/// twelve-block drop. The hoglin pressed into its cell and the bot went over
+/// the edge into lava without taking a hit. Before a melee fight on footing
+/// that narrow, the bot fills the floor around it into a small platform.
+function widenNarrowFooting(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const blockId = NARROW_FOOTING_FILL_BLOCK_IDS.find(
+      (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
+    );
+    if (blockId === undefined) {
+      return;
+    }
+    const feet = {
+      x: Math.floor(observation.player.position.x),
+      y: Math.floor(observation.player.position.y),
+      z: Math.floor(observation.player.position.z),
+      dimension: observation.player.position.dimension,
+    };
+    const floor = yield* state.driver.queryBlocks({
+      center: { x: feet.x + 0.5, y: feet.y - 0.5, z: feet.z + 0.5, dimension: feet.dimension },
+      radius: 1.5,
+      selector: {},
+      maximumResults: 27,
+    });
+    const openCells: { x: number; y: number; z: number }[] = [];
+    for (const x of [-1, 0, 1]) {
+      for (const z of [-1, 0, 1]) {
+        if (x === 0 && z === 0) {
+          continue;
+        }
+        const cell = floor.find(
+          ({ position }) =>
+            position.x === feet.x + x && position.y === feet.y - 1 && position.z === feet.z + z,
+        );
+        if (!cell?.solid) {
+          openCells.push({ x, y: -1, z });
+        }
+      }
+    }
+    if (openCells.length < NARROW_FOOTING_MINIMUM_OPEN_CELLS) {
+      return;
+    }
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Widening narrow footing before a melee fight",
+      data: { position: observation.player.position, openCells: openCells.length },
+    });
+    yield* buildStructure(state.driver, {
+      origin: feet,
+      blocks: openCells.map((offset) => ({ offset, blockId })),
+      path: { ...state.strategy.path, allowMining: false, allowPlacing: true },
+    }).pipe(
+      Effect.timeoutOrElse({ duration: NARROW_FOOTING_FILL_TIMEOUT_MS, orElse: () => Effect.void }),
+      Effect.ignore,
+    );
+  });
 }
 
 function monitorDefenseHealth(
