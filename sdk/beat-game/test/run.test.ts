@@ -3123,10 +3123,7 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           yield* Effect.gen(function* () {
-            while (
-              driver.xzPaths.length === 0 &&
-              !driver.tasks.some(({ type }) => type === "collect-blocks")
-            ) {
+            while (driver.xzPaths.length === 0 && driver.paths.length === 0) {
               yield* Effect.sleep(1);
             }
           }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
@@ -3137,7 +3134,80 @@ describe("beat-game run lifecycle", () => {
 
     // A live hunt that wandered the Nether at random found two endermen in
     // twenty minutes.
-    const first = driver.xzPaths[0];
+    const first = driver.paths[0]?.position ?? driver.xzPaths[0];
+    expect(first?.x).toBeLessThan(0);
+    expect(first?.z).toBeLessThan(0);
+  });
+
+  it("goes back to a warped forest it has seen to hunt endermen", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // A warped forest seen earlier lies 400 blocks north-west, far past the
+    // scan, and nothing of it is in view.
+    driver.blockQueryResolver = () => [];
+    const initial = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+      runId: "warped-memory-run",
+      teamId: "warped-memory-team",
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            places: [
+              {
+                key: "WARPED_FOREST:minecraft:the_nether:-400:64:-400",
+                kind: "WARPED_FOREST",
+                position: { x: -400, y: 64, z: -400, dimension: nether },
+                observedAt: "2026-01-01T00:00:00.000Z",
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "warped-memory-run",
+            team: { teamId: "warped-memory-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.xzPaths.length === 0 && driver.paths.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // A live hunt that wandered the Nether at random found two endermen in
+    // twenty minutes.
+    const first = driver.paths[0]?.position ?? driver.xzPaths[0];
     expect(first?.x).toBeLessThan(0);
     expect(first?.z).toBeLessThan(0);
   });

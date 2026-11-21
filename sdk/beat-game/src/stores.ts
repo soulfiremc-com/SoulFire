@@ -271,6 +271,7 @@ function worldMemory(value: unknown): void {
         "SHELTER",
         "END_ENTRY",
         "END_FIGHT",
+        "WARPED_FOREST",
       ],
       `${name}.kind`,
     );

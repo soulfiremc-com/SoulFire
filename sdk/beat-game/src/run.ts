@@ -16238,28 +16238,41 @@ function acquireEnderPearls(
     // pearls of twelve. An enderman drops one about half the time, so with
     // no gold in hand the bot goes looking for endermen instead.
     // Endermen in the Nether spawn mostly in warped forests. A live hunt that
-    // wandered the Nether at random found two in twenty minutes.
-    const [warpedForest] = isNether(observation.player.position.dimension)
-      ? yield* state.driver.queryBlocks({
-          center: observation.player.position,
-          radius: NETHER_WIDE_SEARCH_RADIUS,
-          selector: { blockIds: ["minecraft:warped_nylium"] },
-          maximumResults: 1,
-        })
-      : [];
+    // wandered the Nether at random found two in twenty minutes, so the hunt
+    // searches for warped nylium the way the blaze hunt searches for a
+    // fortress, and heads for a forest it has seen before.
+    const checkpoint = yield* Ref.get(state.checkpoint);
+    const rememberedForest = checkpoint.memory.places
+      .filter(
+        (place) =>
+          place.kind === "WARPED_FOREST" &&
+          place.position.dimension === observation.player.position.dimension,
+      )
+      .toSorted(
+        (left, right) =>
+          horizontalDistanceSquared(left.position, observation.player.position) -
+          horizontalDistanceSquared(right.position, observation.player.position),
+      )[0]?.position;
     yield* huntOrExplore(
       state,
       observation,
       { entityTypes: ["minecraft:enderman"], alive: true },
       missing,
       "hunt-endermen",
-      warpedForest === undefined
-        ? undefined
-        : {
+      isNether(observation.player.position.dimension)
+        ? {
             preferredEntityTypes: new Set(["minecraft:enderman"]),
             preferredRadius: state.strategy.entitySearchRadius,
-            explorationTarget: warpedForest.position,
-          },
+            ...(rememberedForest === undefined ? {} : { explorationTarget: rememberedForest }),
+            structureSearch: {
+              anchorBlockIds: new Set(["minecraft:warped_nylium"]),
+              stationaryBlockIds: new Set<string>(),
+              placeKind: "WARPED_FOREST",
+              scanRadius: NETHER_WIDE_SEARCH_RADIUS,
+              maximumResults: 256,
+            },
+          }
+        : undefined,
     );
   });
 }

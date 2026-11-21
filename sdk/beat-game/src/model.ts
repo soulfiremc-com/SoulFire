@@ -391,7 +391,8 @@ export interface BeatGameWorldPlace {
     | "SAFE_CORRIDOR"
     | "SHELTER"
     | "END_ENTRY"
-    | "END_FIGHT";
+    | "END_FIGHT"
+    | "WARPED_FOREST";
   readonly position: BeatGamePosition;
   readonly observedAt: string;
   readonly confidence: number;
