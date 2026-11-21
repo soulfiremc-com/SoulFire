@@ -2411,6 +2411,76 @@ describe("beat-game run lifecycle", () => {
     expect(attacked()).toBe(true);
   }, 15_000);
 
+  it("moves away from piglins before mining gold for pearls", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+      },
+    });
+    // A calm piglin eight blocks east, as beside the live bot that mined
+    // gold there and was killed by the piglins it angered.
+    const piglin = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:piglin",
+      position: { x: 8.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.entityTypes?.includes(piglin.entityType) === true ? [piglin] : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "piglin-gold-run",
+          teamId: "piglin-gold-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "piglin-gold-run",
+            team: { teamId: "piglin-gold-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (
+              driver.xzPaths.length === 0 &&
+              !driver.tasks.some(({ type }) => type === "collect-blocks")
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "collect-blocks" }));
+    // It heads west, away from the piglin.
+    expect(driver.xzPaths[0]?.x).toBeLessThan(0);
+  });
+
   it("digs toward a blaze spawner it cannot walk to", async () => {
     const driver = new FakeBeatGameDriver();
     const position = {

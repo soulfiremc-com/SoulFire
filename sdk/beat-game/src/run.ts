@@ -199,6 +199,11 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const GOLD_GUARDING_PIGLIN_ENTITY_TYPES = ["minecraft:piglin", "minecraft:piglin_brute"] as const;
+// Piglins guard gold within 16 blocks. The margin covers ore a little away
+// from the bot and piglins that wander closer while it digs.
+const PIGLIN_GOLD_GUARD_RADIUS = 24;
+const PIGLIN_GOLD_LEAVE_DISTANCE = 32;
 const UNSTACKABLE_CRAFT_RESULT_PATTERN =
   /_(?:pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots|bed|bucket)$|:(?:bow|crossbow|shield|flint_and_steel)$/u;
 const STRUCTURE_SPAWNER_ANCHOR_RADIUS = 8;
@@ -10496,16 +10501,22 @@ function satisfyRequirementFromWorld(
       return craftGoldenBoots(state, observation);
     }
     case "gold": {
-      return collectBlocks(state.driver, {
-        blockIds: [
-          "minecraft:nether_gold_ore",
-          "minecraft:gold_ore",
-          "minecraft:deepslate_gold_ore",
-        ],
-        count: bufferedCollectionCount("gold", missing),
-        searchRadius: state.strategy.blockSearchRadius,
-        path: state.strategy.path,
-      });
+      return leavePiglinsBeforeMiningGold(state, observation).pipe(
+        Effect.flatMap((moved) =>
+          moved
+            ? Effect.void
+            : collectBlocks(state.driver, {
+                blockIds: [
+                  "minecraft:nether_gold_ore",
+                  "minecraft:gold_ore",
+                  "minecraft:deepslate_gold_ore",
+                ],
+                count: bufferedCollectionCount("gold", missing),
+                searchRadius: state.strategy.blockSearchRadius,
+                path: state.strategy.path,
+              }),
+        ),
+      );
     }
     case "eyes-of-ender": {
       return craftItem(state.driver, {
@@ -16181,6 +16192,9 @@ function acquireEnderPearls(
       return;
     }
 
+    if (yield* leavePiglinsBeforeMiningGold(state, observation)) {
+      return;
+    }
     yield* collectBlocks(state.driver, {
       blockIds: ["minecraft:nether_gold_ore"],
       count: Math.max(1, Math.min(state.strategy.targetGoldCount, Math.max(8, missing * 4))),
@@ -16283,14 +16297,62 @@ function craftGoldenBoots(
   ) {
     return ensureNetherExplorationPickaxe(state, observation);
   }
-  return collectBlocksOrExplore(state, observation, {
-    blockIds: ["minecraft:nether_gold_ore"],
-    // Each ore drops two to six nuggets.
-    count: Math.ceil((missingNuggets - nuggets) / 4),
-    progressItemIds: ["minecraft:gold_nugget"],
-    purpose: "find-nether-gold-ore",
-    preferSurfaceExploration: false,
-    path: state.strategy.path,
+  return leavePiglinsBeforeMiningGold(state, observation).pipe(
+    Effect.flatMap((moved) =>
+      moved
+        ? Effect.void
+        : collectBlocksOrExplore(state, observation, {
+            blockIds: ["minecraft:nether_gold_ore"],
+            // Each ore drops two to six nuggets.
+            count: Math.ceil((missingNuggets - nuggets) / 4),
+            progressItemIds: ["minecraft:gold_nugget"],
+            purpose: "find-nether-gold-ore",
+            preferSurfaceExploration: false,
+            path: state.strategy.path,
+          }),
+    ),
+  );
+}
+
+/// Breaking gold ore angers every piglin within 16 blocks, seen or not, and
+/// gold armor does not calm them. A live bot mined nether gold beside the
+/// piglins it had just bartered with and died to four of their hits in three
+/// seconds. With piglins close, the bot moves away from them first.
+function leavePiglinsBeforeMiningGold(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    if (!isNether(observation.player.position.dimension)) {
+      return false;
+    }
+    const position = observation.player.position;
+    const [piglin] = (yield* state.driver.queryEntities({
+      origin: position,
+      radius: PIGLIN_GOLD_GUARD_RADIUS,
+      selector: { entityTypes: [...GOLD_GUARDING_PIGLIN_ENTITY_TYPES], alive: true },
+      maximumResults: 8,
+    })).toSorted(
+      (left, right) =>
+        distanceSquared(left.position, position) - distanceSquared(right.position, position),
+    );
+    if (piglin === undefined) {
+      return false;
+    }
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Leaving piglins before mining gold",
+      data: { piglinNetworkId: piglin.networkId, position },
+    });
+    const away = positionAwayFrom(position, piglin.position, PIGLIN_GOLD_LEAVE_DISTANCE);
+    yield* state.driver
+      .pathfindXZ(away.x, away.z, position.dimension, 4, {
+        ...state.strategy.path,
+        allowMining: true,
+        allowPlacing: true,
+      })
+      .pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+    return true;
   });
 }
 
