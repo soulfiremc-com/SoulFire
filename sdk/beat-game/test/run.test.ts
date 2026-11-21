@@ -1,4 +1,4 @@
-import { DateTime, Schema, Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
+import { Clock, DateTime, Schema, Effect, Fiber, Option, PubSub, Result, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { assert, describe, expect, it } from "vitest";
 
@@ -2488,6 +2488,100 @@ describe("beat-game run lifecycle", () => {
     expect(trades[0]?.pathX).toBe(wandered.position.x);
   });
 
+  it("keeps running when it cannot reach a piglin to barter", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:gold_ingot": 2,
+      },
+    });
+    // Spotted six blocks east, the piglin has wandered to ten by the time
+    // the bot comes to trade.
+    const spotted = {
+      connectionEpoch: "epoch-1",
+      networkId: 72,
+      entityType: "minecraft:piglin",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const wandered = { ...spotted, position: { ...spotted.position, x: 10.5 } };
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.networkId === spotted.networkId
+        ? [wandered]
+        : selector.entityTypes?.includes(spotted.entityType) === true
+          ? [spotted]
+          : [];
+    // As in the live run: every route to the piglin misses its quality bound.
+    const approaches: number[] = [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => driver.paths.push({ position, radius, policy })).pipe(
+        Effect.andThen(
+          position.x === wandered.position.x
+            ? Effect.sync(() => approaches.push(position.x)).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    new BeatGameDriverError({
+                      operation: "pathfind",
+                      code: "unknown",
+                      retryable: false,
+                      message:
+                        "Pathfinding found a route with certified bound 1.25 but the request requires 1.2",
+                    }),
+                  ),
+                ),
+              )
+            : Effect.void,
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "piglin-unreachable-run",
+          teamId: "piglin-unreachable-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "piglin-unreachable-run",
+            team: { teamId: "piglin-unreachable-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (approaches.length < 4) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("8 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // The run goes on rather than ending after an action's three attempts.
+    expect(approaches.length).toBeGreaterThanOrEqual(4);
+  }, 15_000);
+
   it("keeps running when a piglin refuses a barter", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
@@ -2527,10 +2621,11 @@ describe("beat-game run lifecycle", () => {
           ? [spotted]
           : [];
     // As in the live run: the piglin turns the gold down.
-    const trades: { readonly pathX: number | undefined }[] = [];
+    const trades: { readonly pathX: number | undefined; readonly at: number }[] = [];
     driver.actionResolver = (action) =>
       action.type === "interact-entity"
-        ? Effect.sync(() => trades.push({ pathX: undefined })).pipe(
+        ? Clock.currentTimeMillis.pipe(
+            Effect.map((at) => trades.push({ pathX: undefined, at })),
             Effect.andThen(
               Effect.fail(
                 new BeatGameDriverError({
@@ -2564,19 +2659,20 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           yield* Effect.gen(function* () {
-            while (trades.length < 4) {
+            while (trades.length < 2) {
               yield* Effect.sleep(1);
             }
-          }).pipe(Effect.timeout("8 seconds"), Effect.ignore);
+          }).pipe(Effect.timeout("15 seconds"), Effect.ignore);
           yield* run.stop;
         }),
       ),
     );
 
-    // The run goes on and offers again rather than ending after the three
-    // attempts an action gets.
-    expect(trades.length).toBeGreaterThanOrEqual(4);
-  }, 15_000);
+    // The run goes on and offers again, after a pause long enough for the
+    // piglin to finish admiring its last ingot.
+    expect(trades.length).toBeGreaterThanOrEqual(2);
+    expect((trades[1]?.at ?? 0) - (trades[0]?.at ?? 0)).toBeGreaterThanOrEqual(6000);
+  }, 25_000);
 
   it("moves away from piglins before mining gold for pearls", async () => {
     const driver = new FakeBeatGameDriver();

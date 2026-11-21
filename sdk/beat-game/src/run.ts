@@ -202,6 +202,7 @@ const NETHER_WIDE_SEARCH_RADIUS = 128;
 const PIGLIN_BARTER_SEARCH_RADIUS = 24;
 // Entity interaction reaches about three blocks, so the bot closes in nearer.
 const PIGLIN_BARTER_APPROACH_RADIUS = 2;
+const PIGLIN_REFUSAL_WAIT_MS = 8000;
 const GOLD_GUARDING_PIGLIN_ENTITY_TYPES = ["minecraft:piglin", "minecraft:piglin_brute"] as const;
 // Piglins guard gold within 16 blocks. The margin covers ore a little away
 // from the bot and piglins that wander closer while it digs.
@@ -16228,11 +16229,17 @@ function barterWithPiglin(
         if (current === undefined) {
           return;
         }
-        yield* state.driver.pathfind(
-          current.position,
-          PIGLIN_BARTER_APPROACH_RADIUS,
-          state.strategy.path,
-        );
+        // A route that misses its quality bound ended a live run, so a
+        // failed approach ends only this barter.
+        const approached = yield* state.driver
+          .pathfind(current.position, PIGLIN_BARTER_APPROACH_RADIUS, state.strategy.path)
+          .pipe(
+            Effect.as(true),
+            Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+          );
+        if (!approached) {
+          return;
+        }
         yield* state.driver.act({
           type: "select-item",
           selector: { itemIds: ["minecraft:gold_ingot"] },
@@ -16252,6 +16259,9 @@ function barterWithPiglin(
             Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
           );
         if (!offered) {
+          // Offering again a second later was refused four more times live.
+          // A piglin admires an ingot for about six seconds.
+          yield* Effect.sleep(PIGLIN_REFUSAL_WAIT_MS);
           return;
         }
         yield* Effect.sleep(6500);
