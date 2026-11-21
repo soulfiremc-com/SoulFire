@@ -9681,6 +9681,17 @@ function stepOffBurningGround(
         return true;
       }
     }
+    // Magma does not burn a sneaking player. A live bot in a fortress
+    // basement found no cell to step to and stood on magma until it died.
+    if (floorBlock !== undefined && HOT_FLOOR_BLOCK_IDS.has(floorBlock.blockId)) {
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Sneaking on hot floor with no safe cell to step to",
+        data: { position },
+      });
+      yield* state.driver.act({ type: "set-movement", sneak: true });
+      return true;
+    }
     return false;
   });
 }
