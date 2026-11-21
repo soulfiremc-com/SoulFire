@@ -3078,6 +3078,70 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths.length).toBeGreaterThan(0);
   });
 
+  it("heads for a warped forest to hunt endermen", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // Warped nylium a hundred blocks north-west, where Nether endermen gather.
+    const nylium = { x: -100, y: 64, z: -100, dimension: nether };
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:warped_nylium") === true
+        ? [blockObservation(nylium, { blockId: "minecraft:warped_nylium", solid: true })]
+        : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "warped-hunt-run",
+          teamId: "warped-hunt-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "warped-hunt-run",
+            team: { teamId: "warped-hunt-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (
+              driver.xzPaths.length === 0 &&
+              !driver.tasks.some(({ type }) => type === "collect-blocks")
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // A live hunt that wandered the Nether at random found two endermen in
+    // twenty minutes.
+    const first = driver.xzPaths[0];
+    expect(first?.x).toBeLessThan(0);
+    expect(first?.z).toBeLessThan(0);
+  });
+
   it("remembers an enderman it could not catch before its chase ran out", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

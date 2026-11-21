@@ -16237,12 +16237,29 @@ function acquireEnderPearls(
     // half an ingot. A live bot mined and traded for an hour and held three
     // pearls of twelve. An enderman drops one about half the time, so with
     // no gold in hand the bot goes looking for endermen instead.
+    // Endermen in the Nether spawn mostly in warped forests. A live hunt that
+    // wandered the Nether at random found two in twenty minutes.
+    const [warpedForest] = isNether(observation.player.position.dimension)
+      ? yield* state.driver.queryBlocks({
+          center: observation.player.position,
+          radius: NETHER_WIDE_SEARCH_RADIUS,
+          selector: { blockIds: ["minecraft:warped_nylium"] },
+          maximumResults: 1,
+        })
+      : [];
     yield* huntOrExplore(
       state,
       observation,
       { entityTypes: ["minecraft:enderman"], alive: true },
       missing,
       "hunt-endermen",
+      warpedForest === undefined
+        ? undefined
+        : {
+            preferredEntityTypes: new Set(["minecraft:enderman"]),
+            preferredRadius: state.strategy.entitySearchRadius,
+            explorationTarget: warpedForest.position,
+          },
     );
   });
 }
