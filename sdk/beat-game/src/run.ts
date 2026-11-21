@@ -16336,10 +16336,10 @@ function ensureInventorySpace(
   observation: BeatGameObservation,
   minimumEmptySlots = 1,
 ): Effect.Effect<void, BeatGameDriverError> {
-  const discardPath = (allowMining: boolean) => ({
+  const discardPath = (allowMining: boolean, allowPlacing = false) => ({
     ...state.strategy.path,
     allowMining,
-    allowPlacing: false,
+    allowPlacing,
     avoidFluids: true,
     maxSearchTimeMs: Math.min(
       state.strategy.path.maxSearchTimeMs,
@@ -16353,6 +16353,7 @@ function ensureInventorySpace(
     allowMining: boolean,
     yawOffsets: readonly number[] = [0, 90, -90, 180],
     baseYaw = origin.player.rotation.yaw,
+    allowPlacing = false,
   ) =>
     Effect.gen(function* () {
       for (const yawOffset of yawOffsets) {
@@ -16366,7 +16367,7 @@ function ensureInventorySpace(
               dimension: origin.player.position.dimension,
             },
             0.75,
-            discardPath(allowMining),
+            discardPath(allowMining, allowPlacing),
           )
           .pipe(Effect.result);
         if (escaped._tag === "Success") {
@@ -16390,12 +16391,24 @@ function ensureInventorySpace(
     ) {
       if (discardPocketYaw === undefined) {
         const discardSiteOrigin = current.player.position;
-        const relocated = yield* tryRelativeDiscardPath(
-          current,
-          INVENTORY_DISCARD_SITE_DISTANCE,
-          true,
-          [90, -90, 180, 0],
-        );
+        // A live bot stood on a one-block bridge over a drop beside a
+        // fortress, where every discard site lay off the bridge. It failed
+        // the same discard six times, so it may build its way to the site.
+        const relocated =
+          (yield* tryRelativeDiscardPath(
+            current,
+            INVENTORY_DISCARD_SITE_DISTANCE,
+            true,
+            [90, -90, 180, 0],
+          )) ||
+          (yield* tryRelativeDiscardPath(
+            current,
+            INVENTORY_DISCARD_SITE_DISTANCE,
+            true,
+            [90, -90, 180, 0],
+            current.player.rotation.yaw,
+            true,
+          ));
         if (relocated) {
           current = yield* state.driver.observe;
         }

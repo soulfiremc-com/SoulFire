@@ -13498,6 +13498,191 @@ describe("beat-game run lifecycle", () => {
     expect(timeline.indexOf("toss")).toBeLessThan(timeline.indexOf("corpse-path"));
   });
 
+  it("builds its way to a discard site off a narrow bridge", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const deathPosition = {
+      x: 4,
+      y: 64,
+      z: 0,
+      dimension: "minecraft:overworld",
+    };
+    const observedAt = new Date().toISOString();
+    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, {
+      runId: "bridge-discard-run",
+      teamId: "bridge-discard-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            deathPositions: [
+              {
+                key: `death:${observedAt}`,
+                value: {
+                  ...deathPosition,
+                  inventoryCounts: {
+                    "minecraft:diamond": 1,
+                    "minecraft:furnace": 2,
+                  },
+                },
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:stone_sword": 1,
+        "minecraft:leaf_litter": 64,
+      },
+      emptyPlayerSlots: 0,
+    });
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(6)
+        ? [
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 91,
+              entityType: "minecraft:item",
+              itemId: "minecraft:diamond",
+              position: deathPosition,
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              health: 5,
+              observedAt,
+            },
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 92,
+              entityType: "minecraft:item",
+              itemId: "minecraft:furnace",
+              position: deathPosition,
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              health: 5,
+              observedAt,
+            },
+          ]
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) =>
+      selector.diggable === true
+        ? [
+            blockObservation({
+              x: Math.floor(center.x) + 3,
+              y: Math.floor(center.y),
+              z: Math.floor(center.z),
+              dimension: center.dimension,
+            }),
+          ]
+        : [];
+    const timeline: string[] = [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        const isCorpsePath =
+          position.x === deathPosition.x &&
+          position.y === deathPosition.y &&
+          position.z === deathPosition.z &&
+          radius === 2;
+        timeline.push(isCorpsePath ? "corpse-path" : "inventory-path");
+        if (isCorpsePath) {
+          return;
+        }
+        // On a one-block bridge, every discard site lies off the bridge.
+        if (!policy.allowPlacing) {
+          return;
+        }
+        const current = driver.currentObservation;
+        driver.currentObservation = observation({
+          counts: current.inventory.counts,
+          ...(current.inventory.emptyPlayerSlots === undefined
+            ? {}
+            : {
+                emptyPlayerSlots: current.inventory.emptyPlayerSlots,
+              }),
+          position,
+          rotation: current.player.rotation,
+        });
+      }).pipe(
+        Effect.andThen(
+          position.x === deathPosition.x &&
+            position.y === deathPosition.y &&
+            position.z === deathPosition.z &&
+            radius === 2
+            ? Effect.never
+            : policy.allowPlacing
+              ? Effect.void
+              : Effect.fail(
+                  new BeatGameDriverError({
+                    operation: "pathfind",
+                    code: "unreachable",
+                    retryable: true,
+                    message: "Pathfinding reached its search limit after 50000 expanded states",
+                  }),
+                ),
+        ),
+      );
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        const current = driver.currentObservation;
+        if (action.type === "look") {
+          driver.currentObservation = observation({
+            counts: current.inventory.counts,
+            ...(current.inventory.emptyPlayerSlots === undefined
+              ? {}
+              : {
+                  emptyPlayerSlots: current.inventory.emptyPlayerSlots,
+                }),
+            position: current.player.position,
+            rotation: { yaw: action.yaw, pitch: action.pitch },
+          });
+        }
+        if (action.type === "toss-items") {
+          timeline.push("toss");
+          const counts = { ...current.inventory.counts };
+          delete counts["minecraft:leaf_litter"];
+          driver.currentObservation = observation({
+            counts,
+            emptyPlayerSlots: 4,
+            position: current.player.position,
+            rotation: current.player.rotation,
+          });
+        }
+        return {};
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "bridge-discard-run",
+          team: { teamId: "bridge-discard-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!timeline.includes("corpse-path")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(timeline).toContain("toss");
+    expect(timeline.indexOf("toss")).toBeLessThan(timeline.indexOf("corpse-path"));
+  });
+
   it("heads for a surveyed forest when no logs are within reach", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
