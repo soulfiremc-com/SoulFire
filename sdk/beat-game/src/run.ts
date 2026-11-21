@@ -835,9 +835,13 @@ const PROACTIVE_MELEE_HOSTILE_ENTITY_TYPES = new Set([
   "minecraft:zombie",
   "minecraft:zombie_villager",
 ]);
+// An enderman hit is a melee hit a raised shield blocks. A live bot hunting
+// pearls fought one with a stone sword and no shield up and died to four hits
+// in three seconds.
 const SHIELD_BLOCKING_HOSTILE_ENTITY_TYPES = new Set([
   "minecraft:bogged",
   "minecraft:drowned",
+  "minecraft:enderman",
   "minecraft:hoglin",
   "minecraft:piglin",
   "minecraft:pillager",
