@@ -14175,6 +14175,143 @@ describe("beat-game run lifecycle", () => {
     expect(await discardPocketDigs(Number.POSITIVE_INFINITY)).toBe(0);
   }, 20_000);
 
+  it("frees a slot for each pickaxe before crafting a batch", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const slots = { empty: 1 };
+    const counts: Record<string, number> = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cooked_beef": 16,
+      "minecraft:cobblestone": 64,
+      "minecraft:oak_log": 8,
+      "minecraft:crafting_table": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:leaf_litter": 64,
+      "minecraft:feather": 16,
+      "minecraft:sand": 32,
+      "minecraft:gravel": 32,
+    };
+    const observe = (position = driver.currentObservation.player.position) =>
+      observation({
+        dimension: nether,
+        position,
+        counts: { ...counts },
+        emptyPlayerSlots: slots.empty,
+        rotation: driver.currentObservation.player.rotation,
+      });
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      counts: { ...counts },
+      emptyPlayerSlots: slots.empty,
+    });
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:stone_pickaxe"
+        ? [
+            {
+              recipeId: "stone-pickaxe",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 3,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    const table = blockObservation(
+      { x: 1, y: 64, z: 0, dimension: nether },
+      { blockId: "minecraft:crafting_table", solid: true },
+    );
+    driver.blockQueryResolver = ({ center, selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [table]
+        : selector.diggable === true
+          ? [
+              blockObservation({
+                x: Math.floor(center.x),
+                y: Math.floor(center.y),
+                z: Math.floor(center.z),
+                dimension: center.dimension,
+              }),
+            ]
+          : [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observe(position);
+      });
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "look") {
+          driver.currentObservation = {
+            ...driver.currentObservation,
+            player: {
+              ...driver.currentObservation.player,
+              rotation: { yaw: action.yaw, pitch: action.pitch },
+            },
+          };
+        }
+        if (action.type === "toss-items") {
+          const [itemId] = action.selector.itemIds ?? [];
+          if (itemId !== undefined && (counts[itemId] ?? 0) > 0) {
+            counts[itemId] = 0;
+            slots.empty += 1;
+          }
+          driver.currentObservation = observe();
+        }
+        return {};
+      });
+    // As in the live run: the craft fails when the batch does not fit.
+    const crafts: { count: number; emptySlots: number }[] = [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "craft") {
+          crafts.push({ count: task.count, emptySlots: slots.empty });
+        }
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "pickaxe-batch-run",
+          teamId: "pickaxe-batch-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "pickaxe-batch-run",
+            team: { teamId: "pickaxe-batch-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!crafts.some(({ count }) => count > 1)) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // Each pickaxe needs its own slot, and the live run first crafted the
+    // planks and sticks for them, which took one more.
+    const batch = crafts.find(({ count }) => count > 1);
+    expect(batch).toBeDefined();
+    expect(batch?.emptySlots).toBeGreaterThan(batch?.count ?? Number.POSITIVE_INFINITY);
+  }, 10_000);
+
   it("clears inventory slots before collecting nearby corpse drops", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

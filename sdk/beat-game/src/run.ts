@@ -199,6 +199,8 @@ const NETHER_STEM_RESERVE = 4;
 // The farthest a block search reaches, and within the Nether view distance.
 // Fortresses and Nether forests are far apart, so their searches use it.
 const NETHER_WIDE_SEARCH_RADIUS = 128;
+const UNSTACKABLE_CRAFT_RESULT_PATTERN =
+  /_(?:pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots|bed|bucket)$|:(?:bow|crossbow|shield|flint_and_steel)$/u;
 const STRUCTURE_SPAWNER_ANCHOR_RADIUS = 8;
 const DISCOVERY_MAXIMUM_HOP = 64;
 const WOODEN_PICKAXE_MAXIMUM_DURABILITY = 59;
@@ -16295,6 +16297,13 @@ function wearCarriedArmor(
   );
 }
 
+/// Tools, armor and the like do not stack, so each one crafted takes its own
+/// slot. A live run crafted three stone pickaxes with one slot free, and the
+/// craft failed with no room for the result and ended the run.
+function craftResultSlots(resultItemId: string, count: number): number {
+  return UNSTACKABLE_CRAFT_RESULT_PATTERN.test(resultItemId) ? count : 1;
+}
+
 function craftWithTable(
   state: RunState,
   observation: BeatGameObservation,
@@ -16304,7 +16313,7 @@ function craftWithTable(
   return Effect.gen(function* () {
     const workstation = yield* ensureWorkstation(state, observation, "minecraft:crafting_table");
     const current = yield* state.driver.observe;
-    yield* ensureInventorySpace(state, current);
+    yield* ensureInventorySpace(state, current, craftResultSlots(resultItemId, count));
     yield* craftItem(state.driver, {
       resultItemId,
       count,
