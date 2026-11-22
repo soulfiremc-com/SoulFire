@@ -227,6 +227,20 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("counts worn items while a crafting menu hides their slots", async () => {
+    // As in the live run: with a crafting table open, the inventory snapshot
+    // has no armor or offhand slots, but the player still wears them.
+    const { bot } = effectBot();
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const current = await Effect.runPromise(driver.observe);
+
+    expect(current.inventory.counts).toEqual({
+      "minecraft:spruce_log": 5,
+      "minecraft:shield": 1,
+    });
+  });
+
   it("maps sheep wool color and shearing metadata", async () => {
     const { bot } = effectBot(Effect.succeed({}), Effect.succeed({}), Stream.empty, [
       {

@@ -619,27 +619,40 @@ export function makeSoulFireBeatGameDriver(
         const equipment = Object.fromEntries(
           Object.entries(player.equipment).map(([slot, item]) => [slot, item.itemId]),
         );
+        const countItem = (item: {
+          readonly itemId: string;
+          readonly count: number;
+          readonly damage?: number;
+          readonly maxDamage?: number;
+        }) => {
+          counts[item.itemId] = (counts[item.itemId] ?? 0) + item.count;
+          if ((item.maxDamage ?? 0) > 0) {
+            remainingDurability[item.itemId] =
+              (remainingDurability[item.itemId] ?? 0) +
+              Math.max(0, (item.maxDamage ?? 0) - (item.damage ?? 0)) * item.count;
+          }
+        };
         for (const slot of inventory.slots) {
           if (
             slot.item === undefined ||
-            (slot.area !== InventoryArea.MAIN &&
-              slot.area !== InventoryArea.HOTBAR &&
-              slot.area !== InventoryArea.ARMOR &&
-              slot.area !== InventoryArea.OFFHAND)
+            (slot.area !== InventoryArea.MAIN && slot.area !== InventoryArea.HOTBAR)
           ) {
             continue;
           }
-          counts[slot.item.itemId] = (counts[slot.item.itemId] ?? 0) + slot.item.count;
-          if (slot.item.maxDamage > 0) {
-            remainingDurability[slot.item.itemId] =
-              (remainingDurability[slot.item.itemId] ?? 0) +
-              Math.max(0, slot.item.maxDamage - slot.item.damage) * slot.item.count;
-          }
-          if (slot.area === InventoryArea.MAIN || slot.area === InventoryArea.HOTBAR) {
-            occupiedPlayerSlots += 1;
-          }
+          countItem(slot.item);
+          occupiedPlayerSlots += 1;
           if (slot.area === InventoryArea.HOTBAR) {
             hotbar[slot.slot] = slot.item.itemId;
+          }
+        }
+        // Worn armor and the offhand item come from the player, not the
+        // inventory slots: with a crafting table or furnace open, those slots
+        // are missing from the inventory snapshot. A live bot read its shield
+        // as gone after a craft and spent four minutes mining iron for a new
+        // one. The main hand is a hotbar slot, counted above.
+        for (const [slot, item] of Object.entries(player.equipment)) {
+          if (slot !== "mainhand" && item.itemId.length > 0 && item.count > 0) {
+            countItem(item);
           }
         }
         return {
