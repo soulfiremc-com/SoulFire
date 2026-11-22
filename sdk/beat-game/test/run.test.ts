@@ -233,6 +233,35 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("frees slots held by what a pearl hunt brings back to the Overworld", () => {
+    // Part of the inventory a live bot held when its food search could not
+    // free three slots.
+    const counts: Record<string, number> = {
+      "minecraft:azure_bluet": 1,
+      "minecraft:blaze_rod": 7,
+      "minecraft:cobblestone": 59,
+      "minecraft:cooked_porkchop": 3,
+      "minecraft:cornflower": 1,
+      "minecraft:ender_pearl": 10,
+      "minecraft:rail": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:warped_nylium": 4,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded.toSorted()).toEqual([
+      "minecraft:azure_bluet",
+      "minecraft:cornflower",
+      "minecraft:rail",
+      "minecraft:warped_nylium",
+    ]);
+  });
+
   it("frees slots held by what a pearl barter run carries", () => {
     // Part of the inventory a live bot held when it could not free three
     // slots to keep bartering.

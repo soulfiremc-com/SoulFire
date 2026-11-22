@@ -463,6 +463,23 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:nether_brick",
   "minecraft:copper_ingot",
   "minecraft:splash_potion",
+  // A live bot back in the Overworld held these and failed its food search
+  // 89 times for want of three empty slots.
+  "minecraft:allium",
+  "minecraft:azure_bluet",
+  "minecraft:blue_orchid",
+  "minecraft:cornflower",
+  "minecraft:lily_of_the_valley",
+  "minecraft:orange_tulip",
+  "minecraft:oxeye_daisy",
+  "minecraft:pink_petals",
+  "minecraft:pink_tulip",
+  "minecraft:red_tulip",
+  "minecraft:torchflower",
+  "minecraft:white_tulip",
+  "minecraft:rail",
+  "minecraft:warped_nylium",
+  "minecraft:crimson_nylium",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left
