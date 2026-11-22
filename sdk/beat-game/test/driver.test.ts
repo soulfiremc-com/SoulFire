@@ -850,6 +850,47 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("keeps a route that ran out of search states retryable", async () => {
+    // As in the live run: a long walk down to the stronghold hit the state
+    // limit, and the failure ended the whole run.
+    const task = create(BotTaskSchema, {
+      taskId: "deep-route",
+      failure: create(BotTaskFailureSchema, {
+        code: "search_limit",
+        message: "Pathfinding reached its search limit after 50000 expanded states",
+        retryable: false,
+      }),
+    });
+    const cause = new SoulFireTaskError(task);
+    let attempts = 0;
+    const { bot, calls } = effectBot(
+      Effect.suspend(() => {
+        attempts += 1;
+        return Effect.fail(new SoulFireTaskFailed({ task, cause, message: cause.message }));
+      }),
+    );
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.pathfind(
+          { x: 10, y: 29, z: 20, dimension: "minecraft:overworld" },
+          16,
+          defaultBeatGameStrategy.path,
+        ),
+      ),
+    );
+
+    // It tries once more with a looser search, then leaves the walk to a
+    // later attempt instead of ending the run.
+    expect(attempts).toBe(2);
+    expect(calls.goTo?.[1]).toMatchObject({
+      path: objectContaining({ searchMode: PathfindSearchMode.URGENT }),
+    });
+    expect(error.code).toBe("search_limit");
+    expect(error.retryable).toBe(true);
+  });
+
   it("cancels durable pathfinding when interrupted", async () => {
     const { bot, calls } = effectBot(Effect.never);
     const driver = makeSoulFireBeatGameDriver(bot);

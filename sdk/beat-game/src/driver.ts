@@ -1559,11 +1559,18 @@ function required<T>(value: T | undefined, name: string): T {
   return value;
 }
 
-// A route that only misses the requested quality bound still exists. A live
-// stronghold search ended the whole run after five such misses in a row, on
-// SoulFire's default bound of 1.2. The route is tried once more in urgent
-// mode with a looser bound before the failure stands.
+// A route that only misses the requested quality bound still exists, and a
+// search that runs out of states may finish with a looser bound. A live
+// stronghold search ended the whole run after five quality misses on
+// SoulFire's default bound of 1.2, and another ended it at the state limit
+// on its way down. The route is tried once more in urgent mode with a
+// looser bound, and if that fails too the failure stays retryable: another
+// start point or a later attempt may find the way.
 const QUALITY_BOUND_FALLBACK = 3;
+const ROUTE_SEARCH_LIMIT_CODES: ReadonlySet<string> = new Set([
+  "path_quality_bound_not_met",
+  "search_limit",
+]);
 
 function withQualityBoundFallback(
   policy: BeatGamePathPolicy,
@@ -1572,16 +1579,32 @@ function withQualityBoundFallback(
   return attempt(policy).pipe(
     Effect.catchIf(
       (error) =>
-        error.code === "path_quality_bound_not_met" &&
-        (policy.maximumQualityBound ?? 0) < QUALITY_BOUND_FALLBACK,
+        isSearchLimit(error) &&
+        (policy.searchMode !== BeatGamePathSearchMode.URGENT ||
+          (policy.maximumQualityBound ?? 0) < QUALITY_BOUND_FALLBACK),
       () =>
         attempt({
           ...policy,
           searchMode: BeatGamePathSearchMode.URGENT,
-          maximumQualityBound: QUALITY_BOUND_FALLBACK,
+          maximumQualityBound: Math.max(policy.maximumQualityBound ?? 0, QUALITY_BOUND_FALLBACK),
         }),
     ),
+    Effect.mapError((error) =>
+      isSearchLimit(error) && !error.retryable
+        ? new BeatGameDriverError({
+            operation: error.operation,
+            ...(error.code === undefined ? {} : { code: error.code }),
+            retryable: true,
+            message: error.message,
+            ...(error.cause === undefined ? {} : { cause: error.cause }),
+          })
+        : error,
+    ),
   );
+}
+
+function isSearchLimit(error: BeatGameDriverError): boolean {
+  return error.code !== undefined && ROUTE_SEARCH_LIMIT_CODES.has(error.code);
 }
 
 function driverError(operation: string, cause: unknown): BeatGameDriverError {
