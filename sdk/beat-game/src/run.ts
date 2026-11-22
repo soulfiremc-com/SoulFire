@@ -15069,7 +15069,10 @@ function excavateDryShaftRecoveryStaircase(
 ): Effect.Effect<boolean, BeatGameDriverError> {
   return Effect.gen(function* () {
     const observation = yield* state.driver.observe;
-    const position = observation.player.position;
+    const position = yield* standingSupportColumn(state.driver, observation.player.position);
+    if (position === undefined) {
+      return false;
+    }
     const startingY = Math.floor(position.y);
     const surfaceY = [...candidateSurfaceY]
       .filter((y) => y - startingY >= 2)
@@ -15176,6 +15179,40 @@ function excavateDryShaftRecoveryStaircase(
       }
     }
     return true;
+  });
+}
+
+/// The block a player stands on is not always the one under its center: its
+/// body overhangs an edge by up to 0.3 blocks. A live bot stood 0.07 past the
+/// edge of a stone block over air, its staircase found no support under its
+/// center, and the climb out of a mine never started. Returns the center of a
+/// column the bot covers that has support under it.
+function standingSupportColumn(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+): Effect.Effect<BeatGamePosition | undefined, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const offsets = [0, -PLAYER_HALF_WIDTH + HITBOX_EPSILON, PLAYER_HALF_WIDTH - HITBOX_EPSILON];
+    const columns = new Map<string, { readonly x: number; readonly z: number }>();
+    for (const dx of offsets) {
+      for (const dz of offsets) {
+        const x = Math.floor(position.x + dx);
+        const z = Math.floor(position.z + dz);
+        columns.set(`${x}:${z}`, { x, z });
+      }
+    }
+    for (const { x, z } of columns.values()) {
+      const support = yield* queryExactBlock(driver, {
+        x,
+        y: Math.floor(position.y) - 1,
+        z,
+        dimension: position.dimension,
+      });
+      if (isStableDryShaftSupport(support)) {
+        return { ...position, x: x + 0.5, z: z + 0.5 };
+      }
+    }
+    return undefined;
   });
 }
 

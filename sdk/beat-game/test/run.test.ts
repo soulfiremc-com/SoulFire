@@ -747,14 +747,17 @@ function botOfflineError(): BeatGameDriverError {
 
 // Runs a bot out of a dry shaft up an upward staircase. `water` puts water
 // beside the route.
-async function climbDryShaft(water?: {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-}): Promise<FakeBeatGameDriver> {
+async function climbDryShaft(
+  water?: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  },
+  startX = 0.5,
+): Promise<FakeBeatGameDriver> {
   const driver = new FakeBeatGameDriver();
   driver.currentObservation = observation({
-    position: { x: 0.5, y: 61.2, z: 0.5 },
+    position: { x: startX, y: 61.2, z: 0.5 },
     counts: {
       "minecraft:cooked_beef": 4,
       "minecraft:stone_pickaxe": 1,
@@ -22378,6 +22381,22 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.currentObservation.player.position.y).toBe(65);
     expect(driver.actions.filter((action) => action.type === "dig-block")).toHaveLength(6);
+    expect(
+      driver.paths.filter(({ radius }) => radius === 0.35).map(({ position }) => position),
+    ).toEqual([
+      objectContaining({ x: 1.5, y: 62, z: 0.5 }),
+      objectContaining({ x: 2.5, y: 63, z: 0.5 }),
+      objectContaining({ x: 3.5, y: 64, z: 0.5 }),
+      objectContaining({ x: 4.5, y: 65, z: 0.5 }),
+    ]);
+  }, 10_000);
+
+  it("carves a staircase while standing on the edge of its block", async () => {
+    // As in the live run: the bot's center hangs past the edge of the block
+    // it stands on, over air.
+    const driver = await climbDryShaft(undefined, -0.07);
+
+    expect(driver.currentObservation.player.position.y).toBe(65);
     expect(
       driver.paths.filter(({ radius }) => radius === 0.35).map(({ position }) => position),
     ).toEqual([
