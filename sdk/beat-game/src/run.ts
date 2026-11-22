@@ -5666,8 +5666,18 @@ function takeCoverFromRangedFire(
     // which the eyes cannot see from below, and a live run died while every
     // roof placement was refused. Digging down and sealing the shaft only
     // places against a shaft wall the eyes face, so it goes first.
+    const coverStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
     const cover = yield* takeCoverInPlace(state, { allowShaft: !closeMeleeHostile });
     if (cover === undefined) {
+      const coverDamage = yield* Ref.get(state.lastDamage);
+      if (
+        coverDamage?.damageType !== undefined &&
+        ESCAPE_BURNING_DAMAGE_TYPES.has(coverDamage.damageType) &&
+        Date.parse(coverDamage.observedAt) > Date.parse(coverStartedAt)
+      ) {
+        const burning = yield* state.driver.observe;
+        yield* stepOffBurningGround(state, burning);
+      }
       return false;
     }
     // Walls that were already up keep a cave full of mobs out, but they
@@ -5750,9 +5760,30 @@ function waitForBurningDamageSince(state: RunState, since: string): Effect.Effec
 
 // Digs down and seals the shaft, or walls the bot in where it stands. Both
 // keep out arrows, and a three-block-tall enderman cannot reach into either.
+//
+// The cover goes up even when a supervisor asks it to stop, but fire stops
+// it. A live bot dug a shaft by hand where a fireball had lit the ground,
+// and burned from 17 health to 0 before the shaft was done.
 function takeCoverInPlace(
   state: RunState,
   options: { readonly allowShaft?: boolean } = {},
+): Effect.Effect<RangedCover | undefined> {
+  return DateTime.now.pipe(
+    Effect.map(DateTime.formatIso),
+    Effect.flatMap((startedAt) =>
+      Effect.uninterruptibleMask((restore) =>
+        Effect.raceFirst(
+          restore(buildCoverInPlace(state, options)),
+          waitForBurningDamageSince(state, startedAt).pipe(Effect.as(undefined)),
+        ),
+      ),
+    ),
+  );
+}
+
+function buildCoverInPlace(
+  state: RunState,
+  options: { readonly allowShaft?: boolean },
 ): Effect.Effect<RangedCover | undefined> {
   return state.driver.act({ type: "reset-movement" }).pipe(
     Effect.andThen(state.driver.observe),
@@ -5775,7 +5806,6 @@ function takeCoverInPlace(
         ),
       ),
     ),
-    Effect.uninterruptible,
     Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
   );
 }
