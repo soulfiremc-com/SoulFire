@@ -966,7 +966,12 @@ describe("beat-game planner", () => {
         },
       },
       observation: observation({
-        counts: { "minecraft:stone_sword": 1, "minecraft:stone_pickaxe": 1 },
+        counts: {
+          "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:cooked_beef": 4,
+          "minecraft:water_bucket": 1,
+        },
       }),
       strategy: defaultBeatGameStrategy,
     });

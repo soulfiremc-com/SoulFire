@@ -264,6 +264,17 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     // The way down to the stronghold is dug. A live bot wore out its last
     // pickaxe on the staircase and the run ended with no tool to dig on.
     itemRequirement("pickaxe", ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"], () => 1, 104),
+    // The search takes long enough to eat through a pack. A live bot dug
+    // down with one raw porkchop and could not heal between zombie fights.
+    itemRequirement(
+      "food-supply",
+      EDIBLE_FOOD_ITEM_IDS,
+      ({ targetFoodCount }) => Math.min(targetFoodCount, 4),
+      103,
+    ),
+    // A live bot placed its water to break one ravine fall, then died to
+    // the next fall with an empty bucket.
+    itemRequirement("water-bucket", ["minecraft:water_bucket"], () => 1, 102),
     itemRequirement(
       "eyes-of-ender",
       ["minecraft:ender_eye"],

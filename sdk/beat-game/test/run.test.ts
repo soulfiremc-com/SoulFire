@@ -2321,6 +2321,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_sword": 1,
         "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
       },
     });
     const enderman = {
@@ -2389,6 +2390,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_sword": 1,
         "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
       },
     });
     const enderman = {
@@ -43949,6 +43951,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_sword": 1,
         "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
         "minecraft:gold_ingot": 2,
       },
       position: { x: 100, y: 70, z: 200, dimension: "minecraft:overworld" },
@@ -44020,6 +44023,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
       },
       position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
     });
@@ -44078,6 +44082,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
       },
       position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
     });
@@ -44154,6 +44159,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
       },
       position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
     });

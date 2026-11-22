@@ -368,6 +368,33 @@ describe("beat-game requirements", () => {
     ).not.toContain("pickaxe");
   });
 
+  it("restocks food and water before the stronghold search", () => {
+    // As in the live run: one raw porkchop and an empty bucket after a clutch.
+    const ready = {
+      "minecraft:ender_eye": 12,
+      "minecraft:stone_sword": 1,
+      "minecraft:stone_pickaxe": 1,
+    };
+
+    expect(
+      missingStrongholdKeys({ ...ready, "minecraft:porkchop": 1, "minecraft:bucket": 1 }),
+    ).toEqual(arrayContaining(["food-supply", "water-bucket"]));
+    expect(
+      missingStrongholdKeys({
+        ...ready,
+        "minecraft:cooked_beef": 4,
+        "minecraft:water_bucket": 1,
+      }),
+    ).not.toEqual(arrayContaining(["food-supply"]));
+    expect(
+      missingStrongholdKeys({
+        ...ready,
+        "minecraft:cooked_beef": 4,
+        "minecraft:water_bucket": 1,
+      }),
+    ).not.toContain("water-bucket");
+  });
+
   it("replaces gold boots before they wear out", () => {
     expect(goldBootsSatisfied(91)).toBe(true);
     // Nearly broken: a new pair is due while the old one still works.
