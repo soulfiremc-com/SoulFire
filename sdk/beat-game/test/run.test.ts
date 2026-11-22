@@ -6661,6 +6661,73 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("stops placing its bed when a creeper closes in", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: { "minecraft:white_bed": 1 },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    const creeper = {
+      connectionEpoch: "epoch-1",
+      networkId: 61,
+      entityType: "minecraft:creeper",
+      position: { x: 3.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:01.000Z",
+    } as const;
+    const world = { creeperClose: false };
+    driver.entityQueryResolver = (query) =>
+      world.creeperClose &&
+      (query.selector.categories?.includes(2) === true ||
+        query.selector.entityTypes?.includes("minecraft:creeper") === true)
+        ? [creeper]
+        : [];
+    const resolveAction = driver.actionResolver;
+    driver.actionResolver = (action) => {
+      if (action.type !== "place-block") {
+        return resolveAction(action);
+      }
+      // As in the live run: the placement stalls while a creeper walks up.
+      world.creeperClose = true;
+      return Effect.never;
+    };
+    const failed: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failed.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => !failed.includes("survive:night-shelter")).pipe(
+            Effect.timeout("3 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(world.creeperClose).toBe(true);
+    expect(failed).toContain("survive:night-shelter");
+  });
+
   it("leaves its bed when a mob attacks it there", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

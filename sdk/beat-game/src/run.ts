@@ -2126,6 +2126,23 @@ function waitForMorningAfterBed(
   });
 }
 
+function waitForImmediateThreat(state: RunState): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    for (;;) {
+      yield* Effect.sleep(Math.max(100, state.strategy.observationPollMs));
+      const threat = yield* state.driver.observe.pipe(
+        Effect.flatMap((current) =>
+          current.player.dead ? Effect.undefined : findImmediateThreat(state, current),
+        ),
+        Effect.catchTag("BeatGameDriverError", () => Effect.undefined),
+      );
+      if (threat !== undefined) {
+        return;
+      }
+    }
+  });
+}
+
 function shelterUntilMorning(
   state: RunState,
   observation: BeatGameObservation,
@@ -2210,17 +2227,23 @@ function shelterUntilMorning(
       }
       shelterObservation = yield* state.driver.observe;
     }
-    const bedOutcome = yield* trySleepThroughNight(state, shelterObservation).pipe(
-      Effect.catch((error) =>
-        emit(state, {
-          type: "diagnostic",
-          message: "Could not use a bed before constructing a night shelter",
-          data: {
-            position: shelterObservation.player.position,
-            error: error.message,
-          },
-        }).pipe(Effect.as<SleepOutcome>("unavailable")),
+    // A live bot placed its bed with a creeper nine blocks off, just
+    // outside the check above. Three placements failed while it walked up,
+    // and its blast killed the bot, so a threat that closes in ends the bed.
+    const bedOutcome = yield* Effect.raceFirst(
+      trySleepThroughNight(state, shelterObservation).pipe(
+        Effect.catch((error) =>
+          emit(state, {
+            type: "diagnostic",
+            message: "Could not use a bed before constructing a night shelter",
+            data: {
+              position: shelterObservation.player.position,
+              error: error.message,
+            },
+          }).pipe(Effect.as<SleepOutcome>("unavailable")),
+        ),
       ),
+      waitForImmediateThreat(state).pipe(Effect.as<SleepOutcome>("attacked")),
     );
     if (bedOutcome === "slept") {
       return true;
