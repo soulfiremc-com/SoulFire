@@ -19,6 +19,14 @@ const goldBootsSatisfied = (remainingDurability: number, count = 1) =>
     },
     fastBeatGameStrategy,
   ).find(({ key }) => key === "gold-boots")?.satisfied;
+const missingStrongholdKeys = (counts: Record<string, number>) =>
+  requirementsForPhase(
+    BeatGamePhase.LOCATE_STRONGHOLD,
+    observation({ counts }).inventory,
+    fastBeatGameStrategy,
+  )
+    .filter(({ satisfied }) => !satisfied)
+    .map(({ key }) => key);
 const reentryArmorKeys = (blazeRods: number) =>
   requirementsForPhase(
     BeatGamePhase.ENTER_NETHER,
@@ -343,6 +351,21 @@ describe("beat-game requirements", () => {
       targetCount: 12,
       satisfied: false,
     });
+  });
+
+  it("needs a pickaxe to dig down to the stronghold", () => {
+    // As in the live run: eleven eyes and no pickaxe left after the staircase.
+
+    expect(
+      missingStrongholdKeys({ "minecraft:ender_eye": 12, "minecraft:stone_sword": 1 }),
+    ).toContain("pickaxe");
+    expect(
+      missingStrongholdKeys({
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+      }),
+    ).not.toContain("pickaxe");
   });
 
   it("replaces gold boots before they wear out", () => {

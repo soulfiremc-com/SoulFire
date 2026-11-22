@@ -261,6 +261,9 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
   [BeatGamePhase.RETURN_TO_OVERWORLD]: [],
   [BeatGamePhase.LOCATE_STRONGHOLD]: [
     MELEE_WEAPON_REQUIREMENT,
+    // The way down to the stronghold is dug. A live bot wore out its last
+    // pickaxe on the staircase and the run ended with no tool to dig on.
+    itemRequirement("pickaxe", ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"], () => 1, 104),
     itemRequirement(
       "eyes-of-ender",
       ["minecraft:ender_eye"],

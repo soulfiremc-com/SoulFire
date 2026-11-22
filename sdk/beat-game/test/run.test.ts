@@ -2319,6 +2319,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:ender_eye": 11,
         "minecraft:blaze_rod": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
       },
     });
@@ -2386,6 +2387,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:ender_eye": 11,
         "minecraft:blaze_rod": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
       },
     });
@@ -43775,6 +43777,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:ender_eye": 11,
         "minecraft:blaze_rod": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:gold_ingot": 2,
       },
