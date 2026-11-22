@@ -4784,6 +4784,111 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("finishes a batch of pickaxes after the inventory fills mid-craft", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "full-craft-pickaxes-run";
+    const teamId = "full-craft-pickaxes-team";
+    const counts: Record<string, number> = {
+      "minecraft:golden_boots": 1,
+      "minecraft:cobblestone": 64,
+      "minecraft:cooked_beef": 16,
+      "minecraft:crafting_table": 1,
+      "minecraft:ender_pearl": 14,
+      "minecraft:oak_log": 8,
+      "minecraft:shield": 1,
+      "minecraft:stone_sword": 1,
+    };
+    const updateInventory = () => {
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_nether",
+        pathBuildingBlockCount: 64,
+        counts: { ...counts },
+      });
+    };
+    updateInventory();
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:stone_pickaxe"
+        ? [
+            {
+              recipeId: "stone-pickaxe",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 3,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 1, y: 64, z: 0, dimension: "minecraft:the_nether" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    // As in the live run: the third pickaxe of the batch has no slot left.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "craft") {
+          counts["minecraft:stone_pickaxe"] =
+            (counts["minecraft:stone_pickaxe"] ?? 0) + Math.min(task.count, 2);
+          updateInventory();
+        }
+      }).pipe(
+        Effect.andThen(
+          task.type === "craft" && task.count > 2
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.craft",
+                  code: "RESOURCE_EXHAUSTED",
+                  retryable: false,
+                  message: "RESOURCE_EXHAUSTED: Inventory has no room for the crafted result",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "craft" && task.count === 1)) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("3 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    // The two made before the inventory filled are kept, and only the last is
+    // crafted again once there is room.
+    expect(driver.tasks.filter((task) => task.type === "craft").map((task) => task.count)).toEqual([
+      3, 1,
+    ]);
+  });
+
   it("replans a Nether search as soon as its last pickaxe breaks", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

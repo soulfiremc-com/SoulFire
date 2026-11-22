@@ -16772,13 +16772,47 @@ function craftWithTable(
     // picked it back up, and then tried to craft at the empty spot.
     yield* ensureInventorySpace(state, observation, craftResultSlots(resultItemId, count));
     const current = yield* state.driver.observe;
+    const countBefore = current.inventory.counts[resultItemId] ?? 0;
     const workstation = yield* ensureWorkstation(state, current, "minecraft:crafting_table");
+    // The empty-slot count can miss a slot the craft needs. A live bot made
+    // two of three pickaxes, found no room for the third, and the run ended.
+    // Whatever was made is kept, and the rest is crafted after making room.
     yield* craftItem(state.driver, {
       resultItemId,
       count,
       station: workstation.position,
       path: state.strategy.path,
-    });
+    }).pipe(
+      Effect.catchIf(
+        (error) => error.code?.toLowerCase() === "resource_exhausted",
+        () =>
+          Effect.gen(function* () {
+            const latest = yield* state.driver.observe;
+            const made = (latest.inventory.counts[resultItemId] ?? 0) - countBefore;
+            const remaining = count - Math.max(0, made);
+            if (remaining <= 0) {
+              return;
+            }
+            yield* ensureInventorySpace(
+              state,
+              latest,
+              craftResultSlots(resultItemId, remaining) + 1,
+            );
+            const afterCleanup = yield* state.driver.observe;
+            const station = yield* ensureWorkstation(
+              state,
+              afterCleanup,
+              "minecraft:crafting_table",
+            );
+            yield* craftItem(state.driver, {
+              resultItemId,
+              count: remaining,
+              station: station.position,
+              path: state.strategy.path,
+            });
+          }),
+      ),
+    );
   });
 }
 
