@@ -17212,12 +17212,26 @@ function ensureWorkstation(
     );
     if ((placementObservation.inventory.counts[blockId] ?? 0) === 0) {
       yield* ensureInventorySpace(state, placementObservation);
-      yield* craftItem(state.driver, {
+      const craftWorkstation = craftItem(state.driver, {
         resultItemId: blockId,
         count: 1,
         ...(craftingTable === undefined ? {} : { station: craftingTable.position }),
         path: state.strategy.path,
       });
+      // A live bot needed a furnace to cook with one plank in its pack, and
+      // failed to craft the table for it every few seconds for ten minutes.
+      yield* craftWorkstation.pipe(
+        Effect.catchIf(
+          (error) =>
+            blockId === "minecraft:crafting_table" &&
+            error.code?.toLowerCase().replace("_", "-") === "resource-exhausted",
+          () =>
+            state.driver.observe.pipe(
+              Effect.flatMap((latest) => ensureWoodForCraftingTable(state, latest)),
+              Effect.andThen(craftWorkstation),
+            ),
+        ),
+      );
     }
     for (const target of targets) {
       const built = yield* buildStructure(state.driver, {

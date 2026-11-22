@@ -44082,6 +44082,91 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("fetches logs when the table for a furnace is short of planks", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: raw meat and one plank, with no table or furnace.
+    driver.currentObservation = observation({
+      food: 14,
+      counts: {
+        "minecraft:chicken": 1,
+        "minecraft:coal": 1,
+        "minecraft:cobblestone": 16,
+        "minecraft:oak_planks": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:ender_eye": 12,
+      },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "furnace-table-run",
+          teamId: "furnace-table-team",
+        }),
+        undefined,
+      ),
+    );
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.replaceable === false) {
+        return [blockObservation({ x: 2, y: 63, z: 0, dimension: "minecraft:overworld" })];
+      }
+      if (selector.replaceable === true) {
+        return [
+          blockObservation(
+            {
+              x: Math.floor(center.x),
+              y: Math.floor(center.y),
+              z: Math.floor(center.z),
+              dimension: center.dimension,
+            },
+            { replaceable: true },
+          ),
+        ];
+      }
+      return [];
+    };
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:crafting_table"
+        ? [
+            {
+              recipeId: "minecraft:crafting_table",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [{ itemIds: ["minecraft:oak_planks"], tags: [], count: 4 }],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: false,
+      maximumCraftCount: 0,
+      missing: [{ itemIds: ["minecraft:oak_planks"], tags: [], available: 1, missing: 3 }],
+    });
+    const collectsLogs = () =>
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:oak_log"),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "furnace-table-run",
+            team: { teamId: "furnace-table-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !collectsLogs()).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(collectsLogs()).toBe(true);
+  });
+
   it("cooks in a carried furnace without crafting a table", async () => {
     const driver = new FakeBeatGameDriver();
     // As in the live run: raw meat, one plank and a furnace in the pack.
