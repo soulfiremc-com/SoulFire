@@ -44,6 +44,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -403,7 +404,12 @@ public final class AttackEntityTaskProvider
         approachRange = effectiveRange;
       }
       var attackTarget = CombatTaskSupport.preferredTarget(entity);
-      var visiblePoint = attackTarget.getEyePosition();
+      // An enderman turns on a player who looks at its head, and a chase that
+      // stared at its eyes angered it 11 blocks away. Its body center is still
+      // inside its hitbox.
+      var visiblePoint = attackTarget instanceof Enderman
+        ? attackTarget.getBoundingBox().getCenter()
+        : attackTarget.getEyePosition();
       var distance = distanceToBoundingBox(
         player.getEyePosition(),
         attackTarget.getBoundingBox()
