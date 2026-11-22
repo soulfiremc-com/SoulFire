@@ -856,7 +856,7 @@ describe("production SoulFire beat-game driver", () => {
     const task = create(BotTaskSchema, {
       taskId: "deep-route",
       failure: create(BotTaskFailureSchema, {
-        code: "search_limit",
+        code: "path_search_limit",
         message: "Pathfinding reached its search limit after 50000 expanded states",
         retryable: false,
       }),
@@ -887,7 +887,7 @@ describe("production SoulFire beat-game driver", () => {
     expect(calls.goTo?.[1]).toMatchObject({
       path: objectContaining({ searchMode: PathfindSearchMode.URGENT }),
     });
-    expect(error.code).toBe("search_limit");
+    expect(error.code).toBe("path_search_limit");
     expect(error.retryable).toBe(true);
   });
 

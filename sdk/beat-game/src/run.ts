@@ -18804,7 +18804,10 @@ function pathfindRememberedPortalStep(
 ): Effect.Effect<void, BeatGameDriverError> {
   return state.driver.pathfind(position, radius, policy).pipe(
     Effect.catchIf(
-      (error) => error.code === "path_quality_bound_not_met" || error.code === "search_limit",
+      (error) =>
+        error.code === "path_quality_bound_not_met" ||
+        error.code === "path_search_limit" ||
+        error.code === "search_limit",
       () =>
         state.driver.pathfind(position, radius, {
           ...policy,
@@ -18830,7 +18833,9 @@ function pathfindRememberedPortalLeg(
   };
   return state.driver.pathfindXZ(x, z, dimension, radius, preferredPolicy).pipe(
     Effect.catchTag("BeatGameDriverError", (error) =>
-      error.code === "path_quality_bound_not_met" || error.code === "search_limit"
+      error.code === "path_quality_bound_not_met" ||
+      error.code === "path_search_limit" ||
+      error.code === "search_limit"
         ? state.driver.pathfindXZ(x, z, dimension, radius, {
             ...basePolicy,
             searchMode: BeatGamePathSearchMode.URGENT,
@@ -19066,14 +19071,25 @@ function searchStronghold(
     });
     let surveyedFrames = yield* surveyPortalFrames;
     if (surveyedFrames.length === 0) {
-      yield* state.driver.pathfind(
-        {
-          ...estimate,
-          y: Math.floor(approachObservation.player.position.y),
-        },
-        16,
-        state.strategy.path,
-      );
+      // A live run ended when this level walk to the estimate kept hitting
+      // the search limit 33 blocks short of it, underground. The descent
+      // below digs its own way if it has to, so a failed approach goes on
+      // to it from where the bot stands.
+      yield* state.driver
+        .pathfind(
+          {
+            ...estimate,
+            y: Math.floor(approachObservation.player.position.y),
+          },
+          16,
+          state.strategy.path,
+        )
+        .pipe(
+          Effect.catchIf(
+            (error) => error.operation === "pathfind" && error.retryable,
+            () => Effect.void,
+          ),
+        );
       approachObservation = yield* state.driver.observe;
       surveyedFrames = yield* surveyPortalFrames;
     }

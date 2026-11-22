@@ -1567,8 +1567,10 @@ function required<T>(value: T | undefined, name: string): T {
 // looser bound, and if that fails too the failure stays retryable: another
 // start point or a later attempt may find the way.
 const QUALITY_BOUND_FALLBACK = 3;
+// SoulFire reports a search that ran out of states as "path_search_limit".
 const ROUTE_SEARCH_LIMIT_CODES: ReadonlySet<string> = new Set([
   "path_quality_bound_not_met",
+  "path_search_limit",
   "search_limit",
 ]);
 
