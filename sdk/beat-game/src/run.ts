@@ -13875,25 +13875,35 @@ function huntOrExplore(
             const cell = structureCellKey(structureTarget.position);
             attemptedStructureCells.add(cell);
             explorationHops += 1;
-            yield* state.driver
-              .pathfind(
-                {
-                  ...structureTarget.position,
-                  y: structureTarget.position.y + 1,
-                },
-                3,
-                {
-                  ...explorationPath,
-                  allowMining: false,
-                  allowPlacing: false,
-                },
-              )
+            const structureGoal = {
+              ...structureTarget.position,
+              y: structureTarget.position.y + 1,
+            };
+            const walked = yield* state.driver
+              .pathfind(structureGoal, 3, {
+                ...explorationPath,
+                allowMining: false,
+                allowPlacing: false,
+              })
               .pipe(
+                Effect.as(true),
+                Effect.catchIf(
+                  (cause) => cause.operation === "pathfind",
+                  () => Effect.succeed(false),
+                ),
+              );
+            // Warped nylium often lies on ledges no walking route reaches. A
+            // live Nether hunt tried the same walks to it fifty times in an
+            // hour, so a failed walk is followed by the exploration route,
+            // which may dig and build.
+            if (!walked && (explorationPath.allowMining || explorationPath.allowPlacing)) {
+              yield* state.driver.pathfind(structureGoal, 3, explorationPath).pipe(
                 Effect.catchIf(
                   (cause) => cause.operation === "pathfind",
                   () => Effect.void,
                 ),
               );
+            }
             continue;
           }
         }

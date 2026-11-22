@@ -3462,6 +3462,87 @@ describe("beat-game run lifecycle", () => {
     expect(first?.z).toBeLessThan(0);
   });
 
+  it("digs its way to a warped forest it cannot walk to", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 3,
+      },
+    });
+    // As in the live run: nylium up on a ledge no walking route reaches.
+    const nylium = { x: -20, y: 72, z: -20, dimension: nether };
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:warped_nylium") === true
+        ? [blockObservation(nylium, { blockId: "minecraft:warped_nylium", solid: true })]
+        : [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          policy.allowMining
+            ? Effect.never
+            : Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              ),
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "warped-dig-run",
+          teamId: "warped-dig-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "warped-dig-run",
+            team: { teamId: "warped-dig-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.paths.some(({ policy }) => policy.allowMining)) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // The walking route fails, and the bot digs and builds its way there
+    // instead of trying the same walk again.
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: objectContaining({ x: -20, y: 73, z: -20 }),
+        policy: objectContaining({ allowMining: true }),
+      }),
+    );
+  });
+
   it("goes back to a warped forest it has seen to hunt endermen", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
