@@ -690,6 +690,31 @@ export function makeSoulFireBeatGameDriver(
     }),
   );
 
+  const goToGoal = (
+    goal: Parameters<typeof bot.tasks.goTo>[0],
+    policy: BeatGamePathPolicy,
+    operation: "pathfind" | "pathfindXZ",
+  ): Effect.Effect<void, BeatGameDriverError> =>
+    bot.tasks
+      .goTo(goal, {
+        conflictPolicy: BotTaskConflictPolicy.REPLACE,
+        reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
+        path: pathOptions(policy),
+      })
+      .pipe(
+        Effect.flatMap((handle) =>
+          handle
+            .result()
+            .pipe(
+              Effect.onInterrupt(() =>
+                handle.cancel("Beat-game pathfinding was interrupted").pipe(Effect.ignore),
+              ),
+            ),
+        ),
+        Effect.asVoid,
+        Effect.mapError(mapError(operation)),
+      );
+
   const runTask = (
     task: BeatGameTask,
     policy: BeatGamePathPolicy,
@@ -1263,45 +1288,13 @@ export function makeSoulFireBeatGameDriver(
         })
         .pipe(Effect.asVoid, Effect.mapError(mapError("waitForChunks"))),
     pathfind: (position, radius, policy) =>
-      bot.tasks
-        .goTo(goals.near(position, radius), {
-          conflictPolicy: BotTaskConflictPolicy.REPLACE,
-          reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-          path: pathOptions(policy),
-        })
-        .pipe(
-          Effect.flatMap((handle) =>
-            handle
-              .result()
-              .pipe(
-                Effect.onInterrupt(() =>
-                  handle.cancel("Beat-game pathfinding was interrupted").pipe(Effect.ignore),
-                ),
-              ),
-          ),
-          Effect.asVoid,
-          Effect.mapError(mapError("pathfind")),
-        ),
+      withQualityBoundFallback(policy, (attemptPolicy) =>
+        goToGoal(goals.near(position, radius), attemptPolicy, "pathfind"),
+      ),
     pathfindXZ: (x, z, dimension, radius, policy) =>
-      bot.tasks
-        .goTo(goals.xz(x, z, { dimension, radius }), {
-          conflictPolicy: BotTaskConflictPolicy.REPLACE,
-          reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
-          path: pathOptions(policy),
-        })
-        .pipe(
-          Effect.flatMap((handle) =>
-            handle
-              .result()
-              .pipe(
-                Effect.onInterrupt(() =>
-                  handle.cancel("Beat-game pathfinding was interrupted").pipe(Effect.ignore),
-                ),
-              ),
-          ),
-          Effect.asVoid,
-          Effect.mapError(mapError("pathfindXZ")),
-        ),
+      withQualityBoundFallback(policy, (attemptPolicy) =>
+        goToGoal(goals.xz(x, z, { dimension, radius }), attemptPolicy, "pathfindXZ"),
+      ),
     runTask,
     act: (action) =>
       executePrimitive(bot, action).pipe(Effect.mapError(mapError(`act.${action.type}`))),
@@ -1564,6 +1557,31 @@ function required<T>(value: T | undefined, name: string): T {
     throw new Error(`SoulFire omitted required ${name}`);
   }
   return value;
+}
+
+// A route that only misses the requested quality bound still exists. A live
+// stronghold search ended the whole run after five such misses in a row, on
+// SoulFire's default bound of 1.2. The route is tried once more in urgent
+// mode with a looser bound before the failure stands.
+const QUALITY_BOUND_FALLBACK = 3;
+
+function withQualityBoundFallback(
+  policy: BeatGamePathPolicy,
+  attempt: (policy: BeatGamePathPolicy) => Effect.Effect<void, BeatGameDriverError>,
+): Effect.Effect<void, BeatGameDriverError> {
+  return attempt(policy).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.code === "path_quality_bound_not_met" &&
+        (policy.maximumQualityBound ?? 0) < QUALITY_BOUND_FALLBACK,
+      () =>
+        attempt({
+          ...policy,
+          searchMode: BeatGamePathSearchMode.URGENT,
+          maximumQualityBound: QUALITY_BOUND_FALLBACK,
+        }),
+    ),
+  );
 }
 
 function driverError(operation: string, cause: unknown): BeatGameDriverError {

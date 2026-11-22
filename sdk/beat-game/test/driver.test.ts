@@ -810,6 +810,46 @@ describe("production SoulFire beat-game driver", () => {
     expect(calls.cancellations).toBe(1);
   });
 
+  it("retries a route that only missed its quality bound with a looser one", async () => {
+    // As in the live run: the route exists but misses SoulFire's default
+    // bound of 1.2.
+    const task = create(BotTaskSchema, {
+      taskId: "loose-route",
+      failure: create(BotTaskFailureSchema, {
+        code: "path_quality_bound_not_met",
+        message: "Pathfinding found a route with certified bound 1.38 but the request requires 1.2",
+        retryable: false,
+      }),
+    });
+    const cause = new SoulFireTaskError(task);
+    let attempts = 0;
+    const { bot, calls } = effectBot(
+      Effect.suspend(() => {
+        attempts += 1;
+        return attempts === 1
+          ? Effect.fail(new SoulFireTaskFailed({ task, cause, message: cause.message }))
+          : Effect.succeed({});
+      }),
+    );
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    await Effect.runPromise(
+      driver.pathfind(
+        { x: 10, y: 64, z: 20, dimension: "minecraft:overworld" },
+        2,
+        defaultBeatGameStrategy.path,
+      ),
+    );
+
+    expect(attempts).toBe(2);
+    expect(calls.goTo?.[1]).toMatchObject({
+      path: objectContaining({
+        searchMode: PathfindSearchMode.URGENT,
+        maximumQualityBound: 3,
+      }),
+    });
+  });
+
   it("cancels durable pathfinding when interrupted", async () => {
     const { bot, calls } = effectBot(Effect.never);
     const driver = makeSoulFireBeatGameDriver(bot);
