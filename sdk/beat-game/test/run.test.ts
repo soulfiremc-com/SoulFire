@@ -43966,8 +43966,14 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    // It turns to a dug staircase, which begins by stepping to its start.
-    expect(driver.paths).toContainEqual(objectContaining({ radius: 0.5 }));
+    // It turns to a dug staircase, which starts where the bot stands: a live
+    // bot could not walk to a start twenty blocks away either.
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: objectContaining({ x: 100.5, y: 80, z: 0.5 }),
+        radius: 0.5,
+      }),
+    );
   });
 
   it("goes on down to the stronghold when the level walk to it fails", async () => {

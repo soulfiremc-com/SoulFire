@@ -19124,11 +19124,13 @@ function searchStronghold(
     // A route that deep can outgrow the search: a live run ended after every
     // walk down hit the state limit. A staircase digs down one block per step
     // and stops at flooded steps.
+    // It starts where the bot stands: a live run could not walk to a start
+    // twenty blocks away either, and ended there.
     if (!descended) {
       const target = floorBlockPosition(undergroundTarget);
       const from = floorBlockPosition((yield* state.driver.observe).player.position);
       yield* excavateStaircase(state.driver, {
-        from: staircaseStartPosition(target, from),
+        from,
         to: target,
         path: state.strategy.path,
         openSpaceHandoffRadius: 16,
