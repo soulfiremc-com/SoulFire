@@ -318,6 +318,23 @@ describe("beat-game requirements", () => {
     });
   });
 
+  it("counts eyes of ender toward the pearls and blaze rods they were made from", () => {
+    // As in the live run: eleven eyes, one lost to a throw, back in the Nether.
+    const nether = requirementsForPhase(
+      BeatGamePhase.COLLECT_NETHER_RESOURCES,
+      observation({ counts: { "minecraft:ender_eye": 11, "minecraft:blaze_rod": 3 } }).inventory,
+      fastBeatGameStrategy,
+    );
+
+    expect(nether.find(({ key }) => key === "blaze-rods")).toMatchObject({ satisfied: true });
+    // Only the pearl for the lost eye is still missing.
+    expect(nether.find(({ key }) => key === "ender-pearls")).toMatchObject({
+      currentCount: 11,
+      targetCount: 12,
+      satisfied: false,
+    });
+  });
+
   it("replaces gold boots before they wear out", () => {
     expect(goldBootsSatisfied(91)).toBe(true);
     // Nearly broken: a new pair is due while the old one still works.

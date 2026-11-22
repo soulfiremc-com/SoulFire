@@ -540,14 +540,27 @@ function hasWornOutGoldBoots(inventory: BeatGameInventory): boolean {
   return remaining !== undefined && remaining < GOLD_BOOTS_REPLACEMENT_DURABILITY;
 }
 
-/// Counts what a requirement can rely on: worn-out gold boots do not count.
+/// Counts what a requirement can rely on: worn-out gold boots do not count,
+/// and pearls and blaze rods already made into eyes of ender still do.
 export function usableRequirementCount(
   inventory: BeatGameInventory,
   definition: Pick<BeatGameRequirementDefinition, "key" | "itemIds" | "tags">,
 ): number {
-  return definition.key === "gold-boots" && hasWornOutGoldBoots(inventory)
-    ? 0
-    : requirementCount(inventory, definition);
+  if (definition.key === "gold-boots" && hasWornOutGoldBoots(inventory)) {
+    return 0;
+  }
+  // A live bot crafted eleven eyes, lost the twelfth, and went back to the
+  // Nether for a pearl. It then began collecting all seven blaze rods and
+  // twelve pearls again, because the eyes it carried were not counted.
+  const eyes = inventory.counts["minecraft:ender_eye"] ?? 0;
+  if (definition.key === "ender-pearls") {
+    return requirementCount(inventory, definition) + eyes;
+  }
+  if (definition.key === "blaze-rods") {
+    const powder = inventory.counts["minecraft:blaze_powder"] ?? 0;
+    return requirementCount(inventory, definition) + Math.floor((eyes + powder) / 2);
+  }
+  return requirementCount(inventory, definition);
 }
 
 function materializeRequirement(
