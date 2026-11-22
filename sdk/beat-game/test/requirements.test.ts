@@ -119,11 +119,21 @@ describe("beat-game requirements", () => {
   });
 
   it("gets gold boots before blaze rods in the Nether", () => {
-    expect(missingNetherKeys({})).toStrictEqual(["gold-boots", "blaze-rods", "ender-pearls"]);
-    expect(missingNetherKeys({ "minecraft:golden_boots": 1 })).toStrictEqual([
+    expect(missingNetherKeys({})).toStrictEqual([
+      "gold-boots",
+      "melee-weapon",
       "blaze-rods",
       "ender-pearls",
     ]);
+    expect(missingNetherKeys({ "minecraft:golden_boots": 1 })).toStrictEqual([
+      "melee-weapon",
+      "blaze-rods",
+      "ender-pearls",
+    ]);
+    // A sword worn out on the pearl hunt is replaced in the Nether.
+    expect(
+      missingNetherKeys({ "minecraft:golden_boots": 1, "minecraft:stone_sword": 1 }),
+    ).toStrictEqual(["blaze-rods", "ender-pearls"]);
   });
 
   it("counts interchangeable item choices without double counting tags", () => {

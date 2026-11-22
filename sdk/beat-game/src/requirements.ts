@@ -156,6 +156,20 @@ export const PLANK_ITEM_IDS = [
   "minecraft:warped_planks",
 ] as const;
 
+// Pearl hunts wear a sword out. A live bot broke its stone sword in the
+// Nether, never replaced it, and ran from every angry enderman it met.
+const MELEE_WEAPON_REQUIREMENT = itemRequirement(
+  "melee-weapon",
+  [
+    "minecraft:netherite_sword",
+    "minecraft:diamond_sword",
+    "minecraft:iron_sword",
+    "minecraft:stone_sword",
+  ],
+  () => 1,
+  105,
+);
+
 const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementDefinition[]>> = {
   [BeatGamePhase.PREPARE_OVERWORLD]: [
     itemRequirement("logs", LOG_ITEM_IDS, ({ targetLogCount }) => targetLogCount, 120),
@@ -185,17 +199,7 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     ),
     // A bed skips each night in seconds. Without one, the bot hides for 10 minutes.
     itemRequirement("bed", BED_ITEM_IDS, () => 1, 106),
-    itemRequirement(
-      "melee-weapon",
-      [
-        "minecraft:netherite_sword",
-        "minecraft:diamond_sword",
-        "minecraft:iron_sword",
-        "minecraft:stone_sword",
-      ],
-      () => 1,
-      105,
-    ),
+    MELEE_WEAPON_REQUIREMENT,
     itemRequirement(
       "food",
       COOKED_FOOD_ITEM_IDS,
@@ -240,6 +244,7 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
   [BeatGamePhase.COLLECT_NETHER_RESOURCES]: [
     // Worn gold keeps piglins from attacking. Boots take the free armor slot.
     itemRequirement("gold-boots", BOOTS_ITEM_IDS, () => 1, 110),
+    MELEE_WEAPON_REQUIREMENT,
     itemRequirement(
       "blaze-rods",
       ["minecraft:blaze_rod"],
@@ -255,6 +260,7 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
   ],
   [BeatGamePhase.RETURN_TO_OVERWORLD]: [],
   [BeatGamePhase.LOCATE_STRONGHOLD]: [
+    MELEE_WEAPON_REQUIREMENT,
     itemRequirement(
       "eyes-of-ender",
       ["minecraft:ender_eye"],
