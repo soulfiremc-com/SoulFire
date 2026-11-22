@@ -19,6 +19,8 @@ export interface BeatGameRequirementContext {
   readonly reusablePortalAvailable?: boolean;
   /// True once the bot searched long enough for sheep without finding enough wool for a bed.
   readonly bedUnavailable?: boolean;
+  /// True while the bot is deep under the Overworld surface, where no animals live.
+  readonly underground?: boolean;
 }
 
 export const BED_COLORS = [
@@ -317,10 +319,17 @@ export function requirementsForPhase(
             // explosions, far faster than arrows. They must be carried in.
             [...REQUIREMENTS[phase], DRAGON_BEDS_REQUIREMENT]
           : REQUIREMENTS[phase];
+  // Animals live on the surface. A live bot broke off its search at the
+  // stronghold depth to hunt for food, and skeletons in the caves shot it.
+  // Food is restocked before the dig, and the search goes on below.
+  const reachableDefinitions =
+    phase === BeatGamePhase.LOCATE_STRONGHOLD && context.underground === true
+      ? definitions.filter(({ key }) => key !== "food-supply")
+      : definitions;
   const fastPreparation =
     phase === BeatGamePhase.PREPARE_OVERWORLD && strategy.riskProfile === BeatGameRiskProfile.FAST;
   return (
-    definitions
+    reachableDefinitions
       // oxlint-disable-next-line oxc/no-map-spread -- copies keep the shared requirement definitions unchanged
       .map((definition) =>
         // A fast run takes its bed right after wood and a weapon: every night

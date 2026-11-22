@@ -143,6 +143,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
   const requirements = requirementsForPhase(phase, observation.inventory, strategy, {
     reusablePortalAvailable,
     bedUnavailable: bedSearchExhausted(checkpoint, observation),
+    underground: isDeepUnderground(observation),
   });
   if (
     observation.player.food <= strategy.eatBelowFood &&
@@ -351,6 +352,16 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
   }
 }
 
+// Sea level is 63, so a bot this far down is in a cave or a dug shaft.
+const DEEP_UNDERGROUND_MAXIMUM_Y = 50;
+
+function isDeepUnderground(observation: BeatGameObservation): boolean {
+  return (
+    isOverworld(observation.player.position.dimension) &&
+    observation.player.position.y < DEEP_UNDERGROUND_MAXIMUM_Y
+  );
+}
+
 function canCraftWoodenSword(observation: BeatGameObservation): boolean {
   const counts = observation.inventory.counts;
   const availablePlanks = PLANK_ITEM_IDS.reduce(
@@ -493,6 +504,7 @@ export function plannerWithObservation(
       reusablePortalAvailable:
         checkpoint !== undefined && hasReusablePortalCandidate(checkpoint, observation),
       bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint, observation),
+      underground: isDeepUnderground(observation),
     }),
     updatedAt: now,
   };

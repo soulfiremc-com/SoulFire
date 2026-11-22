@@ -4,6 +4,7 @@ import {
   BeatGamePhase,
   decideBeatGameAction,
   defaultBeatGameStrategy,
+  fastBeatGameStrategy,
   PortalStrategy,
 } from "../src/index.js";
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
@@ -977,6 +978,44 @@ describe("beat-game planner", () => {
     });
 
     expect(decision).toMatchObject({ type: "search-stronghold" });
+  });
+
+  it("hunts for food on the surface but not at the stronghold depth", () => {
+    const base = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD);
+    const decideAt = (y: number, food: Readonly<Record<string, number>>) =>
+      decideBeatGameAction({
+        checkpoint: {
+          ...base,
+          memory: {
+            ...base.memory,
+            strongholdEstimate: { x: 232, y: 30, z: -501, dimension: "minecraft:overworld" },
+          },
+        },
+        observation: observation({
+          counts: {
+            "minecraft:stone_sword": 1,
+            "minecraft:stone_pickaxe": 1,
+            "minecraft:water_bucket": 1,
+            "minecraft:ender_eye": 11,
+            "minecraft:ender_pearl": 1,
+            "minecraft:blaze_powder": 1,
+            ...food,
+          },
+          food: 16,
+          position: { x: 235, y, z: -497, dimension: "minecraft:overworld" },
+        }),
+        strategy: fastBeatGameStrategy,
+      });
+
+    expect(decideAt(80, {})).toMatchObject({
+      type: "satisfy-requirement",
+      requirement: { key: "food-supply" },
+    });
+    // As in the live run: two meals left at the bottom of the dig, where
+    // skeletons shot the bot while it looked for animals in the caves.
+    expect(decideAt(38, { "minecraft:cooked_beef": 1, "minecraft:chicken": 1 })).toMatchObject({
+      type: "search-stronghold",
+    });
   });
 
   it("replaces a worn-out pickaxe before digging down to the stronghold", () => {
