@@ -44130,6 +44130,73 @@ describe("beat-game run lifecycle", () => {
     expect(collectsLogs()).toBe(true);
   });
 
+  it("fetches logs for its own table when a nearby one is out of reach", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: three planks, three sticks and no table in a desert.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_sword": 1,
+        "minecraft:oak_planks": 3,
+        "minecraft:stick": 3,
+        "minecraft:cobblestone": 180,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+      },
+      position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    // As in the live run: two tables were in range, and no route reached them.
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 120, y: 80, z: 0, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    driver.pathResolver = () =>
+      Effect.fail(
+        new BeatGameDriverError({
+          operation: "pathfind",
+          code: "path_no_route",
+          retryable: true,
+          message: "No route found to the goal!",
+        }),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "stronghold-far-table-run",
+          teamId: "stronghold-far-table-team",
+        }),
+        undefined,
+      ),
+    );
+    const collectsLogs = () =>
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:oak_log"),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-far-table-run",
+            team: { teamId: "stronghold-far-table-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !collectsLogs()).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(collectsLogs()).toBe(true);
+  });
+
   it("digs around water on its way down to the stronghold", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

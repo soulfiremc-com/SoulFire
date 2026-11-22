@@ -17060,7 +17060,9 @@ function craftWithTable(
 
 // A live bot needed a new pickaxe in a desert with three planks and no
 // crafting table. Each craft failed one plank short, and it replanned in
-// place for half an hour, so it fetches logs first.
+// place for half an hour, so it fetches logs first. A table nearby does not
+// count: another live bot could reach neither of the two it had left, and
+// looped the same way.
 function ensureWoodForCraftingTable(
   state: RunState,
   observation: BeatGameObservation,
@@ -17076,14 +17078,6 @@ function ensureWoodForCraftingTable(
     );
     const stickPlanks = (counts["minecraft:stick"] ?? 0) >= 2 ? 0 : 2;
     if (planks >= 4 + stickPlanks) {
-      return;
-    }
-    const tables = yield* findReusableWorkstations(
-      state.driver,
-      observation,
-      "minecraft:crafting_table",
-    );
-    if (tables.length > 0) {
       return;
     }
     const explorationTarget = yield* findNearestTreeColumn(state, observation.player.position);
