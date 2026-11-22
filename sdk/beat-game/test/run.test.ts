@@ -43600,6 +43600,79 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "explore")).toBe(false);
   });
 
+  it("hunts a pearl for an eye lost to a throw", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: twelve eyes crafted, one broke locating the
+    // stronghold, and no pearl is left.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:blaze_rod": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:gold_ingot": 2,
+      },
+      position: { x: 100, y: 70, z: 200, dimension: "minecraft:overworld" },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 98,
+      entityType: "minecraft:enderman",
+      position: { x: 108.5, y: 70, z: 200.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "lost-eye-run",
+          teamId: "lost-eye-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "lost-eye-run",
+            team: { teamId: "lost-eye-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It goes after the enderman for the missing pearl.
+    expect(driver.tasks).toContainEqual(
+      objectContaining({
+        type: "attack-entity",
+        target: objectContaining({ networkId: 98 }),
+      }),
+    );
+  });
+
   it("bounds the triangulation baseline independently of exploration", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

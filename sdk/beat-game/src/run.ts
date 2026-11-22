@@ -10784,6 +10784,13 @@ function satisfyRequirementFromWorld(
       );
     }
     case "eyes-of-ender": {
+      // Thrown eyes break about one time in five. A live fast run crafted
+      // exactly twelve, lost one locating the stronghold, and retried the
+      // craft 1146 times with no pearl left. Missing pearls are hunted again.
+      const pearls = observation.inventory.counts["minecraft:ender_pearl"] ?? 0;
+      if (pearls < missing) {
+        return acquireEnderPearls(state, observation, missing - pearls);
+      }
       return craftItem(state.driver, {
         resultItemId: "minecraft:ender_eye",
         count: missing,
@@ -16561,7 +16568,11 @@ function acquireEnderPearls(
       return;
     }
 
-    const goldIngots = observation.inventory.counts["minecraft:gold_ingot"] ?? 0;
+    // Piglins live only in the Nether. An Overworld pearl hunt, for an eye
+    // lost to a throw, goes straight to the endermen.
+    const goldIngots = isNether(observation.player.position.dimension)
+      ? (observation.inventory.counts["minecraft:gold_ingot"] ?? 0)
+      : 0;
     if (goldIngots > 0) {
       const piglins = yield* state.driver.queryEntities({
         origin: observation.player.position,
@@ -16588,7 +16599,7 @@ function acquireEnderPearls(
     }
 
     const nuggets = observation.inventory.counts["minecraft:gold_nugget"] ?? 0;
-    if (nuggets >= 9) {
+    if (nuggets >= 9 && isNether(observation.player.position.dimension)) {
       yield* craftWithTable(state, observation, "minecraft:gold_ingot", Math.floor(nuggets / 9));
       return;
     }
