@@ -17525,6 +17525,16 @@ export function selectInventoryDiscard(
   if (priorityItemId !== undefined) {
     return { itemId: priorityItemId, count: counts[priorityItemId] ?? 0 };
   }
+  // A bed takes three wool of one color. A live bot carried two light gray
+  // and one white beside four black, and could not free slots for food.
+  const mostWool = Math.max(0, ...WOOL_ITEM_IDS.map((itemId) => counts[itemId] ?? 0));
+  const strayWool = WOOL_ITEM_IDS.find((itemId) => {
+    const count = counts[itemId] ?? 0;
+    return count > 0 && count < 3 && count < mostWool;
+  });
+  if (strayWool !== undefined) {
+    return { itemId: strayWool, count: counts[strayWool] ?? 0 };
+  }
   const excessCobbledDeepslate =
     (counts["minecraft:cobbled_deepslate"] ?? 0) - INVENTORY_BUILDING_BLOCK_RESERVE;
   if (excessCobbledDeepslate >= 64) {

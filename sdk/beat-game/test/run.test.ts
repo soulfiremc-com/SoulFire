@@ -264,6 +264,27 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("drops wool too short of a bed beside a fuller color", () => {
+    // Part of the inventory a live bot held when its food search could not
+    // free three slots.
+    const counts: Record<string, number> = {
+      "minecraft:black_wool": 4,
+      "minecraft:light_gray_wool": 2,
+      "minecraft:white_wool": 1,
+      "minecraft:white_bed": 3,
+      "minecraft:ender_eye": 11,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    // The color with enough for a bed stays.
+    expect(discarded.toSorted()).toEqual(["minecraft:light_gray_wool", "minecraft:white_wool"]);
+  });
+
   it("drops backup tools when nothing else can go", () => {
     // Part of the inventory a live bot held when its pearl hunt could not
     // free three slots.
