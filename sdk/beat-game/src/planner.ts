@@ -306,8 +306,13 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
         : phaseTransition(phase, BeatGamePhase.LOCATE_STRONGHOLD);
     }
     case BeatGamePhase.LOCATE_STRONGHOLD: {
+      // The search digs its way down and meets mobs on the way. A live run
+      // resumed it with no pickaxe left and ended at once, so missing tools
+      // come first. Eyes are only needed at the portal itself.
       if (checkpoint.memory.strongholdEstimate !== undefined) {
-        return { type: "search-stronghold", action: "search-stronghold" };
+        return missing === undefined || missing.key === "eyes-of-ender"
+          ? { type: "search-stronghold", action: "search-stronghold" }
+          : requirementDecision(missing);
       }
       return missing === undefined
         ? { type: "throw-eye", action: "throw-eye" }

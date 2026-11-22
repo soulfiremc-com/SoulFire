@@ -965,11 +965,41 @@ describe("beat-game planner", () => {
           },
         },
       },
-      observation: observation(),
+      observation: observation({
+        counts: { "minecraft:stone_sword": 1, "minecraft:stone_pickaxe": 1 },
+      }),
       strategy: defaultBeatGameStrategy,
     });
 
     expect(decision).toMatchObject({ type: "search-stronghold" });
+  });
+
+  it("replaces a worn-out pickaxe before digging down to the stronghold", () => {
+    // As in the live run: the search resumed with no pickaxe and ended the run.
+    const base = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...base,
+        memory: {
+          ...base.memory,
+          strongholdEstimate: { x: 232, y: 53, z: -501, dimension: "minecraft:overworld" },
+        },
+      },
+      observation: observation({
+        counts: {
+          "minecraft:stone_sword": 1,
+          "minecraft:ender_eye": 11,
+          "minecraft:cobblestone": 64,
+          "minecraft:oak_log": 6,
+        },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({
+      type: "satisfy-requirement",
+      requirement: { key: "pickaxe" },
+    });
   });
 
   it("requires an observed End exit before completion", () => {
