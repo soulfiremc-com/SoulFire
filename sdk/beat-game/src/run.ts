@@ -5380,6 +5380,19 @@ function escapeFromTarget(
             placedBlocks: cover.placedBlocks,
           },
         });
+        // Health only comes back on a nearly full stomach. A live bot sat in
+        // its cover at 2 health and 17 hunger for half an hour, with a meal
+        // in its pack.
+        const sheltered = yield* state.driver.observe;
+        if (sheltered.player.food < 20 && hasUsableFood(sheltered)) {
+          yield* eatUnlessEndangered(state, {
+            foodItemIds: preferredUsableFoodItemIds(sheltered),
+            foodLevel: 20,
+            maximumMeals: 1,
+            completeWhenNoFood: true,
+            path: state.strategy.path,
+          }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+        }
         yield* Effect.sleep(ENDERMAN_COVER_WAIT_MS);
         return;
       }
