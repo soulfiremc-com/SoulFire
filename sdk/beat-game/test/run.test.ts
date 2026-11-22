@@ -43897,6 +43897,76 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("digs a staircase to the stronghold when no route down can be found", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+      },
+      position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    // As in the live run: every walk down hits the search limit.
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          position.y <= 32 && radius === 16
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "search_limit",
+                  retryable: true,
+                  message: "Pathfinding reached its search limit after 50000 expanded states",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "stronghold-staircase-run",
+      teamId: "stronghold-staircase-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            strongholdEstimate: { x: 120, y: 53, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-staircase-run",
+            team: { teamId: "stronghold-staircase-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.paths.some(({ radius }) => radius === 0.5)) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It turns to a dug staircase, which begins by stepping to its start.
+    expect(driver.paths).toContainEqual(objectContaining({ radius: 0.5 }));
+  });
+
   it("bounds the triangulation baseline independently of exploration", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

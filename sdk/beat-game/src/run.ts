@@ -19093,10 +19093,31 @@ function searchStronghold(
     // The route down may swim through flooded caves. A live bot followed one
     // into a water pocket under a dirt ceiling and drowned there twice, so
     // the descent digs around water instead.
-    yield* state.driver.pathfind(undergroundTarget, 16, {
-      ...state.strategy.path,
-      avoidFluids: true,
-    });
+    const descended = yield* state.driver
+      .pathfind(undergroundTarget, 16, {
+        ...state.strategy.path,
+        avoidFluids: true,
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catchIf(
+          (error) => error.operation === "pathfind" && error.retryable,
+          () => Effect.succeed(false),
+        ),
+      );
+    // A route that deep can outgrow the search: a live run ended after every
+    // walk down hit the state limit. A staircase digs down one block per step
+    // and stops at flooded steps.
+    if (!descended) {
+      const target = floorBlockPosition(undergroundTarget);
+      const from = floorBlockPosition((yield* state.driver.observe).player.position);
+      yield* excavateStaircase(state.driver, {
+        from: staircaseStartPosition(target, from),
+        to: target,
+        path: state.strategy.path,
+        openSpaceHandoffRadius: 16,
+      });
+    }
     const observation = yield* state.driver.observe;
     const frames = yield* state.driver.queryBlocks({
       center: observation.player.position,
