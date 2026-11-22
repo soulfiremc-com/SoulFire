@@ -37601,6 +37601,16 @@ describe("beat-game run lifecycle", () => {
       previousConfidence: 0.25,
       failureCode: "path_quality_bound_not_met",
     },
+    // As in the live run: the route stalls climbing out of the bot's own
+    // cover, right beside it, which says nothing about the portal.
+    {
+      label: "keeps after a stall beside the bot",
+      previousX: 0,
+      expectedConfidence: 1,
+      previousConfidence: 0.25,
+      failureMessage:
+        "Pathfinding stalled on ClimbAction -> [1, 65, 0] across 5 consecutive attempts",
+    },
   ])(
     "$label a remembered portal when its failed route did not bring the bot closer",
     async ({
@@ -37608,11 +37618,12 @@ describe("beat-game run lifecycle", () => {
       expectedConfidence,
       previousConfidence = 0.5,
       failureCode = "unreachable",
+      failureMessage = "No route found to the goal!",
     }) => {
       const driver = new FakeBeatGameDriver();
       const store = new InMemoryBeatGameCheckpointStore();
-      const runId = `stalled-portal-route-${previousX}-${previousConfidence}-${failureCode}`;
-      const teamId = `stalled-portal-route-team-${previousX}-${previousConfidence}-${failureCode}`;
+      const runId = `stalled-portal-route-${previousX}-${previousConfidence}-${failureCode}-${failureMessage.length}`;
+      const teamId = `stalled-portal-route-team-${previousX}-${previousConfidence}-${failureCode}-${failureMessage.length}`;
       const observedAt = "2026-01-01T00:00:00.000Z";
       const portalPosition = { x: 64, y: 64, z: 0, dimension: "minecraft:overworld" };
       const portal = blockObservation(portalPosition, {
@@ -37672,11 +37683,22 @@ describe("beat-game run lifecycle", () => {
                 operation: "pathfind",
                 code: failureCode,
                 retryable: true,
-                message: "No route found to the goal!",
+                message: failureMessage,
               }),
             ),
           ),
         );
+      if (failureMessage.startsWith("Pathfinding stalled")) {
+        driver.xzPathResolver = () =>
+          Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfindXZ",
+              code: failureCode,
+              retryable: true,
+              message: failureMessage,
+            }),
+          );
+      }
       // The long route itself exists but misses the requested quality bound.
       if (failureCode === "path_quality_bound_not_met") {
         driver.xzPathResolver = () =>

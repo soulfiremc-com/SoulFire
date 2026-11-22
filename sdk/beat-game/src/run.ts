@@ -18767,6 +18767,25 @@ function invalidatePortalEvidence(
   );
 }
 
+const LOCAL_PATH_STALL_RADIUS = 4;
+
+/// Whether a route failed on a step within reach of the bot, from SoulFire's
+/// "Pathfinding stalled on <action> -> [x, y, z]" message.
+function isLocalPathStall(reason: string, position: BeatGamePosition): boolean {
+  const match = /Pathfinding stalled on .*?\[(-?\d+), (-?\d+), (-?\d+)\]/u.exec(reason);
+  if (match === null) {
+    return false;
+  }
+  const [, x, y, z] = match.map(Number);
+  return (
+    x !== undefined &&
+    y !== undefined &&
+    z !== undefined &&
+    Math.hypot(x + 0.5 - position.x, y - position.y, z + 0.5 - position.z) <=
+      LOCAL_PATH_STALL_RADIUS
+  );
+}
+
 function markPortalRouteUnavailable(
   state: RunState,
   portal: BeatGamePosition,
@@ -18795,8 +18814,11 @@ function markPortalRouteUnavailable(
       // A route that only missed the requested quality bound exists, so it
       // says nothing about whether the portal is reachable. A live run lost
       // most of its confidence in a portal 650 blocks away this way.
+      // Neither does a route that stalls right beside the bot: the bot is
+      // stuck where it stands. A live run stalled five times climbing out of
+      // its own cover and forgot the portal it had come through.
       routeConfidence =
-        failureCode === "path_quality_bound_not_met"
+        failureCode === "path_quality_bound_not_met" || isLocalPathStall(reason, current)
           ? (previous?.confidence ?? 1)
           : Math.max(
               0,
