@@ -44015,6 +44015,54 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("fetches logs for a crafting table before it replaces its pickaxe", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: three planks, three sticks and no table in a desert.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_sword": 1,
+        "minecraft:oak_planks": 3,
+        "minecraft:stick": 3,
+        "minecraft:cobblestone": 180,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+      },
+      position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "stronghold-pickaxe-run",
+          teamId: "stronghold-pickaxe-team",
+        }),
+        undefined,
+      ),
+    );
+    const collectsLogs = () =>
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:oak_log"),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-pickaxe-run",
+            team: { teamId: "stronghold-pickaxe-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !collectsLogs()).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(collectsLogs()).toBe(true);
+  });
+
   it("digs around water on its way down to the stronghold", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

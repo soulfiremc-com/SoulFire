@@ -10720,13 +10720,18 @@ function satisfyRequirementFromWorld(
       return satisfyIronRequirement(state, observation, missing);
     }
     case "pickaxe": {
-      return craftWithTable(
-        state,
-        observation,
-        (observation.inventory.counts["minecraft:iron_ingot"] ?? 0) >= 3
-          ? "minecraft:iron_pickaxe"
-          : "minecraft:stone_pickaxe",
-        1,
+      return ensureWoodForCraftingTable(state, observation).pipe(
+        Effect.andThen(state.driver.observe),
+        Effect.flatMap((current) =>
+          craftWithTable(
+            state,
+            current,
+            (current.inventory.counts["minecraft:iron_ingot"] ?? 0) >= 3
+              ? "minecraft:iron_pickaxe"
+              : "minecraft:stone_pickaxe",
+            1,
+          ),
+        ),
       );
     }
     case "diamond-pickaxe": {
@@ -17024,6 +17029,47 @@ function craftWithTable(
           }),
       ),
     );
+  });
+}
+
+// A live bot needed a new pickaxe in a desert with three planks and no
+// crafting table. Each craft failed one plank short, and it replanned in
+// place for half an hour, so it fetches logs first.
+function ensureWoodForCraftingTable(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const counts = observation.inventory.counts;
+    if ((counts["minecraft:crafting_table"] ?? 0) > 0) {
+      return;
+    }
+    const planks = PLANK_ITEM_IDS.reduce(
+      (total, itemId) => total + (counts[itemId] ?? 0),
+      LOG_ITEM_IDS.reduce((total, itemId) => total + (counts[itemId] ?? 0) * 4, 0),
+    );
+    const stickPlanks = (counts["minecraft:stick"] ?? 0) >= 2 ? 0 : 2;
+    if (planks >= 4 + stickPlanks) {
+      return;
+    }
+    const tables = yield* findReusableWorkstations(
+      state.driver,
+      observation,
+      "minecraft:crafting_table",
+    );
+    if (tables.length > 0) {
+      return;
+    }
+    const explorationTarget = yield* findNearestTreeColumn(state, observation.player.position);
+    yield* collectBlocksOrExplore(state, observation, {
+      blockIds: LOG_ITEM_IDS,
+      count: 2,
+      progressItemIds: LOG_ITEM_IDS,
+      purpose: "find-logs",
+      avoidSubmergedTargets: true,
+      requireSurfaceTargets: true,
+      ...(explorationTarget === undefined ? {} : { explorationTarget }),
+    });
   });
 }
 
