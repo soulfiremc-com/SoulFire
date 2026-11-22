@@ -4593,6 +4593,114 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("makes new gold boots before the worn pair breaks", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "worn-gold-boots-run";
+    const teamId = "worn-gold-boots-team";
+    const counts: Record<string, number> = {
+      "minecraft:cooked_beef": 16,
+      "minecraft:crafting_table": 1,
+      "minecraft:gold_ingot": 4,
+      "minecraft:golden_boots": 1,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:netherrack": 64,
+      "minecraft:oak_log": 8,
+      "minecraft:shield": 1,
+      "minecraft:stone_sword": 1,
+    };
+    // As in the live run: the boots the bot wears are nearly broken.
+    let bootsDurability = 12;
+    const updateInventory = () => {
+      const base = observation({
+        dimension: "minecraft:the_nether",
+        pathBuildingBlockCount: 64,
+        counts: { ...counts },
+      });
+      driver.currentObservation = {
+        ...base,
+        player: {
+          ...base.player,
+          equipment: { ...base.player.equipment, feet: "minecraft:golden_boots" },
+        },
+        inventory: {
+          ...base.inventory,
+          remainingDurability: { "minecraft:golden_boots": bootsDurability },
+        },
+      };
+    };
+    updateInventory();
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:golden_boots"
+        ? [
+            {
+              recipeId: "golden-boots",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 1,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [
+            blockObservation(
+              { x: 1, y: 64, z: 0, dimension: "minecraft:the_nether" },
+              { blockId: "minecraft:crafting_table" },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "craft" && task.recipeId === "golden-boots") {
+          counts["minecraft:gold_ingot"] = 0;
+          counts["minecraft:golden_boots"] = 2;
+          bootsDurability += 91;
+          updateInventory();
+        }
+      });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (
+                !driver.tasks.some(
+                  (task) => task.type === "craft" && task.recipeId === "golden-boots",
+                )
+              ) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(Effect.timeout("3 seconds")),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({ type: "craft", recipeId: "golden-boots" }),
+    );
+  });
+
   it("crafts spare stone pickaxes before a Nether search", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

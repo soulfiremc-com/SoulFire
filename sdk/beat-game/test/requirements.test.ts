@@ -10,6 +10,15 @@ import {
 import { observation } from "./fixtures.js";
 import { arrayContaining } from "./matchers.js";
 
+const goldBootsSatisfied = (remainingDurability: number, count = 1) =>
+  requirementsForPhase(
+    BeatGamePhase.COLLECT_NETHER_RESOURCES,
+    {
+      ...observation({ counts: { "minecraft:golden_boots": count } }).inventory,
+      remainingDurability: { "minecraft:golden_boots": remainingDurability },
+    },
+    fastBeatGameStrategy,
+  ).find(({ key }) => key === "gold-boots")?.satisfied;
 const reentryArmorKeys = (blazeRods: number) =>
   requirementsForPhase(
     BeatGamePhase.ENTER_NETHER,
@@ -307,6 +316,14 @@ describe("beat-game requirements", () => {
       targetCount: 0,
       satisfied: true,
     });
+  });
+
+  it("replaces gold boots before they wear out", () => {
+    expect(goldBootsSatisfied(91)).toBe(true);
+    // Nearly broken: a new pair is due while the old one still works.
+    expect(goldBootsSatisfied(12)).toBe(false);
+    // The new pair is carried beside the worn one.
+    expect(goldBootsSatisfied(103, 2)).toBe(true);
   });
 
   it("returns to the Nether for pearls only in armor", () => {

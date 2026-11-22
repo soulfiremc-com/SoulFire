@@ -529,13 +529,34 @@ export function requirementCount(
   return Math.max(direct, tagged);
 }
 
+// Gold boots last 91 points, and each hit wears them. A live bot's boots
+// broke in an enderman fight, and a piglin killed it twenty seconds later.
+// Worn-out boots no longer count, so a new pair is made while the old pair
+// still keeps piglins calm.
+const GOLD_BOOTS_REPLACEMENT_DURABILITY = 30;
+
+function hasWornOutGoldBoots(inventory: BeatGameInventory): boolean {
+  const remaining = inventory.remainingDurability?.["minecraft:golden_boots"];
+  return remaining !== undefined && remaining < GOLD_BOOTS_REPLACEMENT_DURABILITY;
+}
+
+/// Counts what a requirement can rely on: worn-out gold boots do not count.
+export function usableRequirementCount(
+  inventory: BeatGameInventory,
+  definition: Pick<BeatGameRequirementDefinition, "key" | "itemIds" | "tags">,
+): number {
+  return definition.key === "gold-boots" && hasWornOutGoldBoots(inventory)
+    ? 0
+    : requirementCount(inventory, definition);
+}
+
 function materializeRequirement(
   definition: BeatGameRequirementDefinition,
   inventory: BeatGameInventory,
   strategy: BeatGameStrategy,
 ): BeatGameItemRequirement {
   const targetCount = nonNegativeInteger(definition.target(strategy), `${definition.key}.target`);
-  const currentCount = requirementCount(inventory, definition);
+  const currentCount = usableRequirementCount(inventory, definition);
   return {
     key: definition.key,
     itemIds: definition.itemIds ?? [],

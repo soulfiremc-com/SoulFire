@@ -127,6 +127,7 @@ import {
   URGENT_HUNGER_FOOD_LEVEL,
   WOOL_ITEM_IDS,
   requirementCount,
+  usableRequirementCount,
 } from "./requirements.js";
 import {
   abandonActiveDurableSkill,
@@ -20981,7 +20982,7 @@ function actionObservedComplete(
     }
     case "satisfy-requirement": {
       return (
-        requirementCount(observation.inventory, decision.requirement) >=
+        usableRequirementCount(observation.inventory, decision.requirement) >=
         decision.requirement.targetCount +
           (includeCollectionBuffer ? requirementCollectionBuffer(decision.requirement.key) : 0)
       );
