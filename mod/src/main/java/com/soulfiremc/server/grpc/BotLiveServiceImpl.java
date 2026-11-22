@@ -2414,6 +2414,9 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
         if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
           player.swing(hand, swingAnimation, false);
         }
+        // The client stops using an item on the next tick unless the use key
+        // is held, so a raised shield or drawn bow is held until releaseItem.
+        bot.minecraft().options.keyUse.setDown(player.isUsingItem());
       }),
       DEFAULT_ACTION_TIMEOUT,
       result -> UseItemResponse.newBuilder().setResult(result).build(),
@@ -2435,6 +2438,7 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
             .withDescription("Bot player or game mode is not available")
             .asRuntimeException();
         }
+        bot.minecraft().options.keyUse.setDown(false);
         if (!player.isUsingItem()) {
           throw Status.FAILED_PRECONDITION
             .withDescription("The bot is not using an item")
