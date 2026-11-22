@@ -31198,7 +31198,7 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
-  it("uses the water bucket every tick when the ground is close at full fall speed", async () => {
+  it("uses the water bucket every tick at full fall speed and takes the water back", async () => {
     const driver = new FakeBeatGameDriver();
     driver.taskResolver = (task) =>
       Effect.sync(() => {
@@ -31206,7 +31206,7 @@ describe("beat-game run lifecycle", () => {
       }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.void));
     // As in a live fall: a poll takes two ticks, a use one, and the bot drops
     // 1.9 blocks a tick. The water reaches 2.88 blocks below the feet.
-    const fall = { height: 8.8, clutched: false };
+    const fall = { height: 8.8, clutched: false, refilled: false };
     driver.raycastResolver = () => {
       fall.height -= 3.8;
       return {
@@ -31217,6 +31217,15 @@ describe("beat-game run lifecycle", () => {
     driver.actionResolver = (action) =>
       Effect.suspend(() => {
         if (action.type !== "use-item") {
+          return Effect.succeed({});
+        }
+        if (fall.clutched) {
+          fall.refilled = true;
+          driver.currentObservation = observation({
+            counts: { "minecraft:water_bucket": 1 },
+            onGround: true,
+            velocity: { y: 0 },
+          });
           return Effect.succeed({});
         }
         fall.height -= 1.9;
@@ -31256,9 +31265,10 @@ describe("beat-game run lifecycle", () => {
                 position: { x: 0.5, y: 24, z: 0.5 },
                 velocity: { y: -1.9 },
               });
-              while (!driver.currentObservation.player.onGround) {
-                yield* Effect.sleep(1);
-              }
+              yield* sleepWhile(() => !fall.refilled).pipe(
+                Effect.timeout("2 seconds"),
+                Effect.ignore,
+              );
               yield* run.stop;
               yield* run.awaitCompletion.pipe(Effect.result);
             }),
@@ -31268,6 +31278,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(fall.clutched).toBe(true);
+    expect(fall.refilled).toBe(true);
   });
 
   it("stops a flee before it clutches the fall the flee led into", async () => {

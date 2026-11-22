@@ -1061,6 +1061,7 @@ const FALL_CLUTCH_MAXIMUM_ATTEMPTS = 200;
 // blocks in that time, more than the window in which the water can land.
 const FALL_CLUTCH_BURST_LOOKAHEAD_TICKS = 3;
 const FALL_CLUTCH_MAXIMUM_BURST_USES = 6;
+const FALL_CLUTCH_PICKUP_ATTEMPTS = 4;
 
 export interface BeatGameRun {
   readonly id: string;
@@ -4856,6 +4857,7 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
       });
 
       let placementAttempted = false;
+      let placed = false;
       for (let attempt = 0; attempt < FALL_CLUTCH_MAXIMUM_ATTEMPTS; attempt += 1) {
         observation = yield* state.driver.observe;
         if (
@@ -4863,6 +4865,9 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
           observation.player.onGround ||
           observation.player.velocity.y >= FALL_CLUTCH_SAFE_VELOCITY
         ) {
+          if (placed && !observation.player.dead) {
+            yield* pickUpClutchWater(state);
+          }
           return undefined;
         }
 
@@ -4891,6 +4896,7 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
               Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
             );
             if (used) {
+              placed = true;
               break;
             }
           }
@@ -4908,6 +4914,24 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
       });
     }).pipe(Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore))),
   );
+}
+
+// A live bot clutched one fall, left the water behind, and died to the
+// next fall with an empty bucket. The water is still below the bot, which
+// still holds the bucket and looks down, so one use takes it back.
+function pickUpClutchWater(state: RunState): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    for (let attempt = 0; attempt < FALL_CLUTCH_PICKUP_ATTEMPTS; attempt += 1) {
+      const pickedUp = yield* state.driver.act({ type: "use-item", hand: "main" }).pipe(
+        Effect.as(true),
+        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+      );
+      if (pickedUp) {
+        return;
+      }
+      yield* Effect.sleep(FALL_CLUTCH_POLL_MS);
+    }
+  });
 }
 
 function isSafeFallFluidBlock(blockId: string): boolean {
