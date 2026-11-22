@@ -43839,6 +43839,64 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("digs around water on its way down to the stronghold", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+      },
+      position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "stronghold-descent-run",
+      teamId: "stronghold-descent-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            strongholdEstimate: { x: 120, y: 53, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-descent-run",
+            team: { teamId: "stronghold-descent-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!driver.paths.some(({ position }) => position.y <= 32)) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // As in the live run: the descent once swam into a flooded pocket under a
+    // dirt ceiling and drowned.
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: objectContaining({ y: 29 }),
+        policy: objectContaining({ avoidFluids: true }),
+      }),
+    );
+  });
+
   it("bounds the triangulation baseline independently of exploration", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

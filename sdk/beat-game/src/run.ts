@@ -19090,7 +19090,13 @@ function searchStronghold(
       ...estimate,
       y: Math.min(32, estimate.y - 24),
     };
-    yield* state.driver.pathfind(undergroundTarget, 16, state.strategy.path);
+    // The route down may swim through flooded caves. A live bot followed one
+    // into a water pocket under a dirt ceiling and drowned there twice, so
+    // the descent digs around water instead.
+    yield* state.driver.pathfind(undergroundTarget, 16, {
+      ...state.strategy.path,
+      avoidFluids: true,
+    });
     const observation = yield* state.driver.observe;
     const frames = yield* state.driver.queryBlocks({
       center: observation.player.position,
