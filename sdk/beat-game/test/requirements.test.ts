@@ -19,6 +19,15 @@ const goldBootsSatisfied = (remainingDurability: number, count = 1) =>
     },
     fastBeatGameStrategy,
   ).find(({ key }) => key === "gold-boots")?.satisfied;
+const weaponMissing = (remainingDurability: number, counts: Record<string, number> = {}) =>
+  requirementsForPhase(
+    BeatGamePhase.LOCATE_STRONGHOLD,
+    {
+      ...observation({ counts: { "minecraft:stone_sword": 1, ...counts } }).inventory,
+      remainingDurability: { "minecraft:stone_sword": remainingDurability },
+    },
+    fastBeatGameStrategy,
+  ).some(({ key, satisfied }) => key === "melee-weapon" && !satisfied);
 const missingStrongholdKeys = (counts: Record<string, number>) =>
   requirementsForPhase(
     BeatGamePhase.LOCATE_STRONGHOLD,
@@ -393,6 +402,14 @@ describe("beat-game requirements", () => {
         "minecraft:water_bucket": 1,
       }),
     ).not.toContain("water-bucket");
+  });
+
+  it("replaces a melee weapon before it breaks", () => {
+    expect(weaponMissing(120)).toBe(false);
+    // As in the live run: the sword broke two hits into a zombie fight.
+    expect(weaponMissing(4)).toBe(true);
+    // A sound sword beside the worn one is enough.
+    expect(weaponMissing(4, { "minecraft:iron_sword": 1 })).toBe(false);
   });
 
   it("replaces gold boots before they wear out", () => {

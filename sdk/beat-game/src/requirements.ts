@@ -560,14 +560,36 @@ function hasWornOutGoldBoots(inventory: BeatGameInventory): boolean {
   return remaining !== undefined && remaining < GOLD_BOOTS_REPLACEMENT_DURABILITY;
 }
 
-/// Counts what a requirement can rely on: worn-out gold boots do not count,
-/// and pearls and blaze rods already made into eyes of ender still do.
+// A live bot's stone sword broke two hits into a zombie fight in a tunnel,
+// and the zombie beat it to death while it punched back. A nearly broken
+// weapon no longer counts, so a new one is made while the old one works.
+const MELEE_WEAPON_REPLACEMENT_DURABILITY = 30;
+
+function usableMeleeWeaponCount(
+  inventory: BeatGameInventory,
+  definition: Pick<BeatGameRequirementDefinition, "itemIds">,
+): number {
+  return (definition.itemIds ?? []).filter((itemId) => {
+    if ((inventory.counts[itemId] ?? 0) === 0) {
+      return false;
+    }
+    const remaining = inventory.remainingDurability?.[itemId];
+    return remaining === undefined || remaining >= MELEE_WEAPON_REPLACEMENT_DURABILITY;
+  }).length;
+}
+
+/// Counts what a requirement can rely on: worn-out gold boots and weapons
+/// do not count, and pearls and blaze rods already made into eyes of ender
+/// still do.
 export function usableRequirementCount(
   inventory: BeatGameInventory,
   definition: Pick<BeatGameRequirementDefinition, "key" | "itemIds" | "tags">,
 ): number {
   if (definition.key === "gold-boots" && hasWornOutGoldBoots(inventory)) {
     return 0;
+  }
+  if (definition.key === "melee-weapon") {
+    return usableMeleeWeaponCount(inventory, definition);
   }
   // A live bot crafted eleven eyes, lost the twelfth, and went back to the
   // Nether for a pearl. It then began collecting all seven blaze rods and

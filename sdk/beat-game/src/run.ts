@@ -10708,7 +10708,10 @@ function satisfyRequirementFromWorld(
       return craftWithTable(state, observation, "minecraft:wooden_sword", 1);
     }
     case "melee-weapon": {
-      return craftWithTable(state, observation, "minecraft:stone_sword", 1);
+      return ensureWoodForCraftingTable(state, observation).pipe(
+        Effect.andThen(state.driver.observe),
+        Effect.flatMap((current) => craftWithTable(state, current, "minecraft:stone_sword", 1)),
+      );
     }
     case "obsidian": {
       return acquire(state.driver, requirement, {
