@@ -480,6 +480,9 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:rail",
   "minecraft:warped_nylium",
   "minecraft:crimson_nylium",
+  // Nothing crafts with iron nuggets. A live bot looking for its last eye of
+  // ender carried 36 of them and could not free three slots for food.
+  "minecraft:iron_nugget",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left

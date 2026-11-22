@@ -246,6 +246,7 @@ describe("inventory discards", () => {
       "minecraft:rail": 1,
       "minecraft:stone_sword": 1,
       "minecraft:warped_nylium": 4,
+      "minecraft:iron_nugget": 36,
     };
     const discarded: string[] = [];
     for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
@@ -257,6 +258,7 @@ describe("inventory discards", () => {
     expect(discarded.toSorted()).toEqual([
       "minecraft:azure_bluet",
       "minecraft:cornflower",
+      "minecraft:iron_nugget",
       "minecraft:rail",
       "minecraft:warped_nylium",
     ]);
