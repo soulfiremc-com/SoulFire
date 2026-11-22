@@ -1956,6 +1956,106 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
   }, 10_000);
 
+  it("leaves alone an angry enderman it cannot reach", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 8,
+      },
+    });
+    // As in the live run: the bot stands on a pillar, and an angry enderman
+    // waits five blocks below where neither can reach the other.
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 95,
+      entityType: "minecraft:enderman",
+      position: { x: 3.5, y: 59, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 40,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "attack-entity"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "task.attack-entity",
+                  retryable: false,
+                  message: "Unable to reach the target entity after 3 path attempts",
+                }),
+              )
+            : task.type === "build"
+              ? Effect.void
+              : Effect.never,
+        ),
+      );
+    const failures: string[] = [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "unreachable-enderman-run",
+          teamId: "unreachable-enderman-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "unreachable-enderman-run",
+            team: { teamId: "unreachable-enderman-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed"
+                ? Effect.sync(() => {
+                    failures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.sleep("2 seconds");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It turned on the enderman once, found it out of reach, and let it be.
+    expect(
+      failures.filter(
+        (detail) => detail.includes("immediate threat") || detail.includes("nearby hostile"),
+      ).length,
+    ).toBeLessThanOrEqual(1);
+  }, 10_000);
+
   it("fights an angry enderman behind its shield", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

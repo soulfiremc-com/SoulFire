@@ -918,6 +918,12 @@ const CREEPER_CRITICAL_REEVASION_RADIUS = 4;
 const PROACTIVE_RANGED_ENGAGEMENT_RADIUS = 16;
 const SHIELDED_AMBUSH_ESCAPE_THRESHOLD = 3;
 const PROACTIVE_THREAT_MAXIMUM_VERTICAL_DISTANCE = 6;
+// A live bot on a pillar saw an angry enderman five blocks below that could
+// not reach it, and that it could not reach. It turned to fight it every seven
+// seconds for an hour, and each attack failed at once. A threat the bot
+// could not reach is left alone for a while unless it comes close.
+const UNREACHABLE_THREAT_IGNORE_MS = 30_000;
+const UNREACHABLE_THREAT_IGNORED_BEYOND = 3;
 const RANGED_THREAT_ESCAPE_TRIGGER_RADIUS = 24;
 const RANGED_THREAT_ESCAPE_SAFE_DISTANCE = 32;
 const ENDERMAN_WATER_ESCAPE_RADIUS = 16;
@@ -1070,6 +1076,9 @@ interface RunState {
   readonly lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>;
   // Escapes whose route failed in a row, reset by one that gets away.
   readonly failedEscapes: Ref.Ref<{ readonly count: number; readonly atMs: number }>;
+  /// Threats the bot found it could not reach, by entity key, with when to
+  /// look at them again.
+  readonly unreachableThreats: Ref.Ref<ReadonlyMap<string, number>>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1221,6 +1230,7 @@ export function beatGameWithDriver(
       abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       lastDamage,
       failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
+      unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -4167,7 +4177,15 @@ function executeDecision(
           result.travelMealRequested === true;
         const handledResponse =
           result.airEscapePosition === undefined && result.fallClutchPosition === undefined
-            ? response.pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void))
+            ? response.pipe(
+                Effect.catchTag("BeatGameDriverError", (error) =>
+                  rememberUnreachableThreat(
+                    state,
+                    result.escapeTarget ?? result.defenseTarget,
+                    error,
+                  ),
+                ),
+              )
             : response;
         const fallProtectedResponse =
           interruptedForSafety && result.fallClutchPosition === undefined
@@ -4844,6 +4862,32 @@ function isSafeFallFluidBlock(blockId: string): boolean {
   );
 }
 
+function rememberUnreachableThreat(
+  state: RunState,
+  target: BeatGameEntityObservation | undefined,
+  error: BeatGameDriverError,
+): Effect.Effect<void> {
+  if (
+    target === undefined ||
+    error.operation !== "task.attack-entity" ||
+    !error.message.includes("Unable to reach the target entity")
+  ) {
+    return Effect.void;
+  }
+  return Clock.currentTimeMillis.pipe(
+    Effect.flatMap((now) =>
+      Ref.update(
+        state.unreachableThreats,
+        (current) =>
+          new Map([
+            ...[...current].filter(([, until]) => until > now),
+            [`${target.connectionEpoch}:${target.networkId}`, now + UNREACHABLE_THREAT_IGNORE_MS],
+          ]),
+      ),
+    ),
+  );
+}
+
 function findImmediateThreat(
   state: RunState,
   observation: BeatGameObservation,
@@ -4885,109 +4929,132 @@ function findImmediateThreat(
     ],
     { concurrency: 1 },
   ).pipe(
-    Effect.map(([visibleHostiles, nearbyEscapeOnlyThreats, nearbyDangerousNeutralMobs]) => {
-      const hostiles = new Map(
-        [
-          ...visibleHostiles.filter((entity) => isCurrentlyHostileMob(entity)),
-          ...nearbyEscapeOnlyThreats,
-          ...nearbyDangerousNeutralMobs.filter((entity) => isAggressiveNeutralMob(entity)),
-        ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
-      );
-      const candidates = [...hostiles.values()]
-        .filter(
-          (target) =>
-            Math.abs(target.position.y - observation.player.position.y) <=
-            PROACTIVE_THREAT_MAXIMUM_VERTICAL_DISTANCE,
-        )
-        .map((target) => ({
-          target,
-          distanceSquared: distanceSquared(observation.player.position, target.position),
-        }))
-        .toSorted(
-          (left, right) =>
-            threatPriorityScore(left.target, left.distanceSquared) -
-            threatPriorityScore(right.target, right.distanceSquared),
+    Effect.flatMap((queried) =>
+      Effect.all([Ref.get(state.unreachableThreats), Clock.currentTimeMillis], {
+        concurrency: 1,
+      }).pipe(Effect.map(([unreachable, now]) => [queried, unreachable, now] as const)),
+    ),
+    Effect.map(
+      ([
+        [visibleHostiles, nearbyEscapeOnlyThreats, nearbyDangerousNeutralMobs],
+        unreachable,
+        now,
+      ]) => {
+        const hostiles = new Map(
+          [
+            ...visibleHostiles.filter((entity) => isCurrentlyHostileMob(entity)),
+            ...nearbyEscapeOnlyThreats,
+            ...nearbyDangerousNeutralMobs.filter((entity) => isAggressiveNeutralMob(entity)),
+          ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
         );
-      const nearbyGroupCandidates = deduplicateEntityTargets([
-        ...visibleHostiles,
-        ...nearbyDangerousNeutralMobs,
-      ]);
-      const escapeOnlyThreat = candidates.find(
-        ({ target, distanceSquared: targetDistanceSquared }) =>
-          ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) &&
-          targetDistanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2,
-      );
-      if (escapeOnlyThreat !== undefined) {
-        return { target: escapeOnlyThreat.target, response: "flee" };
-      }
-      const aggressiveEnderman = candidates.find(
-        ({ target }) =>
-          target.entityType === "minecraft:enderman" && isAggressiveNeutralMob(target),
-      );
-      if (aggressiveEnderman !== undefined) {
-        return { target: aggressiveEnderman.target, response: "flee" };
-      }
-      const melee = candidates.find(({ target, distanceSquared: targetDistanceSquared }) => {
-        if (
-          !isActiveMeleeHostile(target) ||
-          PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)
-        ) {
-          return false;
+        const candidates = [...hostiles.entries()]
+          .filter(
+            ([key, target]) =>
+              !(
+                (unreachable.get(key) ?? 0) > now &&
+                distanceSquared(observation.player.position, target.position) >
+                  UNREACHABLE_THREAT_IGNORED_BEYOND ** 2
+              ),
+          )
+          .map(([, target]) => target)
+          .filter(
+            (target) =>
+              Math.abs(target.position.y - observation.player.position.y) <=
+              PROACTIVE_THREAT_MAXIMUM_VERTICAL_DISTANCE,
+          )
+          .map((target) => ({
+            target,
+            distanceSquared: distanceSquared(observation.player.position, target.position),
+          }))
+          .toSorted(
+            (left, right) =>
+              threatPriorityScore(left.target, left.distanceSquared) -
+              threatPriorityScore(right.target, right.distanceSquared),
+          );
+        const nearbyGroupCandidates = deduplicateEntityTargets([
+          ...visibleHostiles,
+          ...nearbyDangerousNeutralMobs,
+        ]);
+        const escapeOnlyThreat = candidates.find(
+          ({ target, distanceSquared: targetDistanceSquared }) =>
+            ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) &&
+            targetDistanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2,
+        );
+        if (escapeOnlyThreat !== undefined) {
+          return { target: escapeOnlyThreat.target, response: "flee" };
         }
-        const responseRadius = shouldDisengageFromThreat(state, observation, target)
-          ? PROACTIVE_MELEE_DISENGAGEMENT_RADIUS
-          : MELEE_ENGAGEMENT_RADIUS;
-        return targetDistanceSquared <= responseRadius ** 2;
-      });
-      if (melee !== undefined) {
-        if (hasNearbyGroupAggroMember(melee.target, nearbyGroupCandidates)) {
-          return { target: melee.target, response: "flee" };
+        const aggressiveEnderman = candidates.find(
+          ({ target }) =>
+            target.entityType === "minecraft:enderman" && isAggressiveNeutralMob(target),
+        );
+        if (aggressiveEnderman !== undefined) {
+          return { target: aggressiveEnderman.target, response: "flee" };
         }
-        const nearbyThreats = candidates.filter(
-          ({ distanceSquared: targetDistanceSquared }) =>
+        const melee = candidates.find(({ target, distanceSquared: targetDistanceSquared }) => {
+          if (
+            !isActiveMeleeHostile(target) ||
+            PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType)
+          ) {
+            return false;
+          }
+          const responseRadius = shouldDisengageFromThreat(state, observation, target)
+            ? PROACTIVE_MELEE_DISENGAGEMENT_RADIUS
+            : MELEE_ENGAGEMENT_RADIUS;
+          return targetDistanceSquared <= responseRadius ** 2;
+        });
+        if (melee !== undefined) {
+          if (hasNearbyGroupAggroMember(melee.target, nearbyGroupCandidates)) {
+            return { target: melee.target, response: "flee" };
+          }
+          const nearbyThreats = candidates.filter(
+            ({ distanceSquared: targetDistanceSquared }) =>
+              targetDistanceSquared <=
+              PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
+          );
+          const hasShield = (observation.inventory.counts["minecraft:shield"] ?? 0) > 0;
+          const unshieldedAmbush = !hasShield && nearbyThreats.length > 1;
+          const shieldedAmbush =
+            hasShield && nearbyThreats.length >= SHIELDED_AMBUSH_ESCAPE_THRESHOLD;
+          const armedClosePursuer = shouldCommitToCaughtMeleePursuerFight(
+            observation,
+            melee.target,
+          );
+          const shouldFleeMelee =
+            shieldedAmbush ||
+            (unshieldedAmbush && !armedClosePursuer) ||
+            shouldDisengageFromThreat(state, observation, melee.target);
+          return {
+            target: melee.target,
+            response: shouldFleeMelee ? "flee" : "attack",
+          };
+        }
+        const ranged = candidates.find(
+          ({ target, distanceSquared: targetDistanceSquared }) =>
+            PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
             targetDistanceSquared <=
-            PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
+              PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
         );
-        const hasShield = (observation.inventory.counts["minecraft:shield"] ?? 0) > 0;
-        const unshieldedAmbush = !hasShield && nearbyThreats.length > 1;
-        const shieldedAmbush =
-          hasShield && nearbyThreats.length >= SHIELDED_AMBUSH_ESCAPE_THRESHOLD;
-        const armedClosePursuer = shouldCommitToCaughtMeleePursuerFight(observation, melee.target);
-        const shouldFleeMelee =
-          shieldedAmbush ||
-          (unshieldedAmbush && !armedClosePursuer) ||
-          shouldDisengageFromThreat(state, observation, melee.target);
-        return {
-          target: melee.target,
-          response: shouldFleeMelee ? "flee" : "attack",
-        };
-      }
-      const ranged = candidates.find(
-        ({ target, distanceSquared: targetDistanceSquared }) =>
-          PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(target.entityType) &&
-          targetDistanceSquared <=
-            PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
-      );
-      if (ranged !== undefined) {
-        const nearbyThreats = candidates.filter(
-          ({ distanceSquared: targetDistanceSquared }) =>
-            targetDistanceSquared <=
-            PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
-        );
-        const overwhelmingAmbush = isOverwhelmingAmbush(
-          observation,
-          nearbyThreats.map(({ target }) => target),
-        );
-        return {
-          target: ranged.target,
-          response:
-            overwhelmingAmbush || shouldDisengageFromThreat(state, observation, ranged.target)
-              ? "flee"
-              : "attack",
-        };
-      }
-      return undefined;
-    }),
+        if (ranged !== undefined) {
+          const nearbyThreats = candidates.filter(
+            ({ distanceSquared: targetDistanceSquared }) =>
+              targetDistanceSquared <=
+              PROACTIVE_RANGED_ENGAGEMENT_RADIUS * PROACTIVE_RANGED_ENGAGEMENT_RADIUS,
+          );
+          const overwhelmingAmbush = isOverwhelmingAmbush(
+            observation,
+            nearbyThreats.map(({ target }) => target),
+          );
+          return {
+            target: ranged.target,
+            response:
+              overwhelmingAmbush || shouldDisengageFromThreat(state, observation, ranged.target)
+                ? "flee"
+                : "attack",
+          };
+        }
+        return undefined;
+      },
+    ),
   );
 }
 
