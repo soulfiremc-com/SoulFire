@@ -31198,6 +31198,165 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("uses the water bucket every tick when the ground is close at full fall speed", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.void));
+    // As in a live fall: a poll takes two ticks, a use one, and the bot drops
+    // 1.9 blocks a tick. The water reaches 2.88 blocks below the feet.
+    const fall = { height: 8.8, clutched: false };
+    driver.raycastResolver = () => {
+      fall.height -= 3.8;
+      return {
+        block: blockObservation({ x: 0, y: 0, z: 0, dimension: "minecraft:overworld" }),
+        distance: fall.height,
+      };
+    };
+    driver.actionResolver = (action) =>
+      Effect.suspend(() => {
+        if (action.type !== "use-item") {
+          return Effect.succeed({});
+        }
+        fall.height -= 1.9;
+        const inReach = fall.height > 0 && fall.height <= 2.88;
+        if (inReach || fall.height <= 0) {
+          fall.clutched = inReach;
+          driver.currentObservation = observation({
+            counts: inReach ? { "minecraft:bucket": 1 } : { "minecraft:water_bucket": 1 },
+            onGround: true,
+            velocity: { y: 0 },
+          });
+        }
+        return inReach
+          ? Effect.succeed({})
+          : Effect.fail(
+              new BeatGameDriverError({
+                operation: "act.use-item",
+                retryable: false,
+                message: "The held item could not be used",
+              }),
+            );
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+                yield* Effect.sleep(1);
+              }
+              driver.currentObservation = observation({
+                counts: { "minecraft:water_bucket": 1 },
+                onGround: false,
+                position: { x: 0.5, y: 24, z: 0.5 },
+                velocity: { y: -1.9 },
+              });
+              while (!driver.currentObservation.player.onGround) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(fall.clutched).toBe(true);
+  });
+
+  it("stops a flee before it clutches the fall the flee led into", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 6,
+      food: 13,
+      counts: { "minecraft:water_bucket": 1 },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 43,
+        entityType: "minecraft:creeper",
+        position: { x: 8, y: 64, z: 0, dimension: "minecraft:overworld" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 20,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.raycastResolver = () => ({
+      block: blockObservation({ x: 0, y: 30, z: 0, dimension: "minecraft:overworld" }),
+      distance: 2,
+    });
+    const flee = { running: false, runningAtClutch: undefined as boolean | undefined };
+    driver.actionObserver = (action) => {
+      if (
+        action.type === "select-item" &&
+        action.selector.itemIds?.[0] === "minecraft:water_bucket"
+      ) {
+        flee.runningAtClutch ??= flee.running;
+      }
+      if (action.type === "use-item") {
+        driver.currentObservation = observation({
+          health: 6,
+          food: 13,
+          counts: { "minecraft:bucket": 1 },
+          onGround: true,
+          velocity: { y: 0 },
+        });
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          // As in a live run: the flee route ran off a ravine edge.
+          flee.running = true;
+          driver.currentObservation = observation({
+            health: 6,
+            food: 13,
+            counts: { "minecraft:water_bucket": 1 },
+            onGround: false,
+            position: { x: 0.5, y: 40, z: 0.5 },
+            velocity: { y: -1.5 },
+          });
+        }
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.never.pipe(
+                Effect.onInterrupt(() =>
+                  Effect.sync(() => {
+                    flee.running = false;
+                  }),
+                ),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (flee.runningAtClutch === undefined) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }).pipe(Effect.timeout("5 seconds")),
+      ),
+    );
+
+    expect(flee.runningAtClutch).toBe(false);
+  }, 10_000);
+
   it("swims directly to shore when an obstructed ascent stalls", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceColumns = [-1, 0, 1].map((z) => ({

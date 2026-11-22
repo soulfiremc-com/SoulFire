@@ -1053,9 +1053,14 @@ const AIR_ESCAPE_BREATHING_POCKET_PATH_RESERVE_TICKS =
 const FALL_CLUTCH_TRIGGER_VELOCITY = -0.7;
 const FALL_CLUTCH_SAFE_VELOCITY = -0.2;
 const FALL_CLUTCH_RAYCAST_DISTANCE = 96;
-const FALL_CLUTCH_PLACEMENT_REACH = Math.min(LIQUID_INTERACTION_REACH, 4.5);
+// The bucket reaches from the eyes, but the landing raycast starts at the feet.
+const FALL_CLUTCH_PLACEMENT_REACH = Math.min(LIQUID_INTERACTION_REACH, 4.5) - 1.62;
 const FALL_CLUTCH_POLL_MS = 50;
 const FALL_CLUTCH_MAXIMUM_ATTEMPTS = 200;
+// A poll takes about two ticks, and a full-speed fall covers almost four
+// blocks in that time, more than the window in which the water can land.
+const FALL_CLUTCH_BURST_LOOKAHEAD_TICKS = 3;
+const FALL_CLUTCH_MAXIMUM_BURST_USES = 6;
 
 export interface BeatGameRun {
   readonly id: string;
@@ -4755,9 +4760,13 @@ function protectFromFatalFall(
   state: RunState,
   response: Effect.Effect<void, BeatGameDriverError>,
 ): Effect.Effect<void, BeatGameDriverError> {
+  // The response stops before the clutch, so it cannot change the held item
+  // or the view while the bot falls.
   return Effect.raceFirst(
-    response,
-    monitorDangerousFall(state).pipe(Effect.flatMap(() => performWaterBucketFallClutch(state))),
+    response.pipe(Effect.as(false)),
+    monitorDangerousFall(state).pipe(Effect.as(true)),
+  ).pipe(
+    Effect.flatMap((falling) => (falling ? performWaterBucketFallClutch(state) : Effect.void)),
   );
 }
 
@@ -4767,9 +4776,8 @@ function protectFromLava(
   state: RunState,
   response: Effect.Effect<void, BeatGameDriverError>,
 ): Effect.Effect<void, BeatGameDriverError> {
-  return Effect.raceFirst(
-    response,
-    monitorBurningInLava(state).pipe(Effect.flatMap((burning) => escapeLava(state, burning))),
+  return Effect.raceFirst(response.pipe(Effect.as(undefined)), monitorBurningInLava(state)).pipe(
+    Effect.flatMap((burning) => (burning === undefined ? Effect.void : escapeLava(state, burning))),
   );
 }
 
@@ -4865,14 +4873,27 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
         });
         const landingInSafeFluid =
           landing.block !== undefined && isSafeFallFluidBlock(landing.block.blockId);
+        const fallPerTick = Math.max(0, -observation.player.velocity.y);
         if (
           !landingInSafeFluid &&
           landing.block !== undefined &&
-          landing.distance <= FALL_CLUTCH_PLACEMENT_REACH &&
+          landing.distance <=
+            FALL_CLUTCH_PLACEMENT_REACH + fallPerTick * FALL_CLUTCH_BURST_LOOKAHEAD_TICKS &&
           (observation.inventory.counts["minecraft:water_bucket"] ?? 0) > 0
         ) {
-          yield* state.driver.act({ type: "use-item", hand: "main" });
+          // A live bot polled at 4.6 blocks, just out of reach, and hit the
+          // ground before the next poll. A use out of reach fails without
+          // effect, so the bot uses the bucket every tick until one lands.
           placementAttempted = true;
+          for (let use = 0; use < FALL_CLUTCH_MAXIMUM_BURST_USES; use += 1) {
+            const used = yield* state.driver.act({ type: "use-item", hand: "main" }).pipe(
+              Effect.as(true),
+              Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+            );
+            if (used) {
+              break;
+            }
+          }
         }
         yield* Effect.sleep(FALL_CLUTCH_POLL_MS);
       }
