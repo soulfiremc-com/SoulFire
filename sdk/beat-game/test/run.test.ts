@@ -2108,6 +2108,106 @@ describe("beat-game run lifecycle", () => {
     ).toBeLessThanOrEqual(1);
   }, 10_000);
 
+  it("puts on its spare gold boots as soon as the worn pair breaks", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const counts: Record<string, number> = {
+      "minecraft:golden_boots": 2,
+      "minecraft:cooked_beef": 16,
+      "minecraft:netherrack": 64,
+      "minecraft:stone_sword": 1,
+      "minecraft:iron_pickaxe": 1,
+      "minecraft:shield": 1,
+      "minecraft:blaze_rod": 7,
+      "minecraft:ender_pearl": 11,
+    };
+    let feet: string | undefined = "minecraft:golden_boots";
+    const update = () => {
+      const base = observation({
+        dimension: nether,
+        position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+        pathBuildingBlockCount: 64,
+        counts: { ...counts },
+      });
+      driver.currentObservation = {
+        ...base,
+        player: {
+          ...base.player,
+          equipment: {
+            ...base.player.equipment,
+            ...(feet === undefined ? {} : { feet }),
+          },
+        },
+      };
+    };
+    update();
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 96,
+      entityType: "minecraft:enderman",
+      position: { x: 6.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    // As in the live run: the worn pair breaks partway through a fight.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity" && feet !== undefined) {
+          feet = undefined;
+          counts["minecraft:golden_boots"] = 1;
+          update();
+        }
+      }).pipe(Effect.andThen(task.type === "attack-entity" ? Effect.never : Effect.void));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "spare-boots-run",
+          teamId: "spare-boots-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "spare-boots-run",
+            team: { teamId: "spare-boots-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (
+              !driver.actions.some(
+                (action) => action.type === "equip-item" && action.equipmentSlot === "feet",
+              )
+            ) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({
+      type: "equip-item",
+      selector: { itemIds: ["minecraft:golden_boots"] },
+      equipmentSlot: "feet",
+    });
+  });
+
   it("fights an angry enderman behind its shield", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

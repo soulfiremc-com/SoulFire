@@ -4566,6 +4566,19 @@ function monitorObservedSafety(
       replanReason: "interrupted an action to replace a broken pickaxe",
     } satisfies ActionResult);
   }
+  // Worn gold keeps piglins calm, and spare boots are put on between
+  // actions. A live bot's boots broke in a fight, it fought on barefoot with
+  // the spare pair in its pack, and piglins shot it dead within 30 seconds.
+  if (
+    isNether(observation.player.position.dimension) &&
+    previousObservation.player.equipment["feet"] !== undefined &&
+    observation.player.equipment["feet"] === undefined &&
+    BOOTS_ITEM_IDS.some((itemId) => (observation.inventory.counts[itemId] ?? 0) > 0)
+  ) {
+    return Effect.succeed({
+      replanReason: "interrupted an action to put on spare gold boots",
+    } satisfies ActionResult);
+  }
   if (
     decision.type !== "retreat" &&
     decision.type !== "fight-ender-dragon" &&
