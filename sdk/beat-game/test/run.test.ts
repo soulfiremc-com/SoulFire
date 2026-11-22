@@ -38043,6 +38043,121 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths).toHaveLength(1);
   });
 
+  it("forgets old route failures once it goes through the portal", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "cleared-route-failures-run";
+    const teamId = "cleared-route-failures-team";
+    const observedAt = "2026-01-01T00:00:00.000Z";
+    const portal = blockObservation(
+      {
+        x: 0,
+        y: 64,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      {
+        blockId: "minecraft:nether_portal",
+        properties: { axis: "x" },
+        diggable: false,
+        solid: false,
+        observedAt,
+      },
+    );
+    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, {
+      runId,
+      teamId,
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:minecraft:overworld:0:64:0",
+                value: portal,
+                observedAt,
+                confidence: 1,
+              },
+            ],
+            // As in the live run: failed routes from hours before, while the
+            // portal kept working.
+            unreachable: [
+              {
+                key: "portal-route-progress:minecraft:overworld:0:64:0",
+                value: { x: 10, y: 64, z: 10, dimension: "minecraft:overworld" },
+                observedAt,
+                confidence: 0.25,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      position: {
+        x: 10,
+        y: 64,
+        z: 10,
+        dimension: "minecraft:overworld",
+      },
+      counts: {
+        "minecraft:cooked_beef": 8,
+        "minecraft:oak_log": 4,
+        "minecraft:cobblestone": 20,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:shield": 1,
+      },
+    });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:nether_portal") === true ? [portal] : [];
+    // The walk into the portal carries the bot to the Nether.
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_nether" },
+          dimension: "minecraft:the_nether",
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            for (;;) {
+              const saved = yield* store.load(runId);
+              if (saved?.planner.phase === BeatGamePhase.COLLECT_NETHER_RESOURCES) {
+                return;
+              }
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("5 seconds"));
+          yield* Effect.sleep(25);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.planner.phase).toBe(BeatGamePhase.COLLECT_NETHER_RESOURCES);
+    expect(saved?.memory.unreachable).not.toContainEqual(
+      objectContaining({ key: "portal-route-progress:minecraft:overworld:0:64:0" }),
+    );
+  });
+
   it("retains portal progress after a local route miss", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

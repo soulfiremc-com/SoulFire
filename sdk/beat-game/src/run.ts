@@ -18541,6 +18541,7 @@ function tryEnterKnownPortal(
       path,
     }).pipe(Effect.result);
     if (entry._tag === "Success") {
+      yield* clearPortalRouteFailures(state, portal);
       return true;
     }
     if (!entry.failure.retryable) {
@@ -18553,6 +18554,37 @@ function tryEnterKnownPortal(
     );
     return false;
   });
+}
+
+/// A portal the bot just went through works, so the route failures it piled
+/// up before no longer count. A live run used its portal for hours while its
+/// failures kept adding up, and the first failed route after a later respawn
+/// made it forget the portal.
+function clearPortalRouteFailures(
+  state: RunState,
+  portal: BeatGamePosition,
+): Effect.Effect<void, BeatGameError> {
+  const matchesPortal = (position: BeatGamePosition) =>
+    position.dimension === portal.dimension && distanceSquared(position, portal) <= 8 ** 2;
+  return persist(state, (checkpoint) => {
+    // A progress entry holds where the bot stood, so it is found by the
+    // portal position in its key.
+    const progressKeys = new Set(
+      [portal, ...checkpoint.memory.portals.map(({ value }) => value.position)]
+        .filter((position) => matchesPortal(position))
+        .map((position) => `portal-route-progress:${positionKey(position)}`),
+    );
+    return {
+      ...checkpoint,
+      memory: {
+        ...checkpoint.memory,
+        unreachable: checkpoint.memory.unreachable.filter(
+          ({ key, value }) =>
+            !progressKeys.has(key) && !(key.startsWith("portal-route:") && matchesPortal(value)),
+        ),
+      },
+    };
+  }).pipe(Effect.asVoid);
 }
 
 function hasReusablePortalEvidence(checkpoint: BeatGameCheckpoint, dimension: string): boolean {
