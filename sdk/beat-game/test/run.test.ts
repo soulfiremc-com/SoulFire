@@ -262,6 +262,29 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("drops backup tools when nothing else can go", () => {
+    // Part of the inventory a live bot held when its pearl hunt could not
+    // free three slots.
+    const counts: Record<string, number> = {
+      "minecraft:blaze_rod": 7,
+      "minecraft:cooked_porkchop": 6,
+      "minecraft:ender_pearl": 10,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:wooden_pickaxe": 1,
+      "minecraft:wooden_sword": 1,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    // The stone tools in hand stay.
+    expect(discarded.toSorted()).toEqual(["minecraft:wooden_pickaxe", "minecraft:wooden_sword"]);
+  });
+
   it("frees slots held by what a pearl barter run carries", () => {
     // Part of the inventory a live bot held when it could not free three
     // slots to keep bartering.

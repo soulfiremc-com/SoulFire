@@ -17481,7 +17481,23 @@ export function selectInventoryDiscard(
       return { itemId, count: Math.min(64, excess) };
     }
   }
-  return selectRedundantEquipmentDiscard(counts);
+  return selectRedundantEquipmentDiscard(counts) ?? selectBackupEquipmentDiscard(counts);
+}
+
+/// The last resort: a backup tool one tier below a better one in hand. A
+/// live bot back in the Nether failed its pearl hunt for want of three
+/// empty slots while it kept a wooden pickaxe and sword behind stone ones.
+function selectBackupEquipmentDiscard(
+  counts: Readonly<Record<string, number>>,
+): { readonly itemId: string; readonly count: number } | undefined {
+  for (const family of REDUNDANT_EQUIPMENT_FAMILIES) {
+    const bestTier = family.findLastIndex((itemId) => (counts[itemId] ?? 0) > 0);
+    const backup = bestTier > 0 ? family[bestTier - 1] : undefined;
+    if (backup !== undefined && (counts[backup] ?? 0) > 0) {
+      return { itemId: backup, count: counts[backup] ?? 0 };
+    }
+  }
+  return undefined;
 }
 
 export function selectRedundantEquipmentDiscard(
