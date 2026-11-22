@@ -2289,6 +2289,73 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
   });
 
+  it("fights an enderman it angered rather than running from it", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: an Overworld pearl hunt with a sword and no shield.
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:blaze_rod": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 99,
+      entityType: "minecraft:enderman",
+      position: { x: 3.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    // The first strike turns it on the bot.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity") {
+          enderman.aggressive = true;
+        }
+      }).pipe(Effect.andThen(task.type === "attack-entity" ? Effect.never : Effect.void));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "angered-enderman-run",
+          teamId: "angered-enderman-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "angered-enderman-run",
+            team: { teamId: "angered-enderman-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.sleep("1 second");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It keeps fighting instead of fleeing an enderman that teleports after it.
+    expect(driver.tasks.filter(({ type }) => type === "attack-entity").length).toBeGreaterThan(1);
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "flee" }));
+  });
+
   it("fights an angry enderman behind its shield", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

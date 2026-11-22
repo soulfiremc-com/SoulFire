@@ -5017,8 +5017,20 @@ function findImmediateThreat(
           ({ target }) =>
             target.entityType === "minecraft:enderman" && isAggressiveNeutralMob(target),
         );
+        // An enderman teleports after a fleeing bot, so running rarely helps.
+        // A live pearl hunt struck an enderman first, then ran from it when it
+        // turned, and took five hits in six seconds while the enderman lost
+        // only two more health. An armed bot with health to spare fights; the
+        // fight still breaks off below the minimum.
         if (aggressiveEnderman !== undefined) {
-          return { target: aggressiveEnderman.target, response: "flee" };
+          return {
+            target: aggressiveEnderman.target,
+            response:
+              hasMeleeWeapon(observation) &&
+              observation.player.health >= state.strategy.minimumHealth
+                ? "attack"
+                : "flee",
+          };
         }
         const melee = candidates.find(({ target, distanceSquared: targetDistanceSquared }) => {
           if (
