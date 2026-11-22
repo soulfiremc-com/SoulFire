@@ -5108,8 +5108,11 @@ function shouldDisengageFromThreat(
   if (ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType)) {
     return true;
   }
+  // Running from an enderman fails: it teleports after the bot. A live bot
+  // hit by one it had struck dug in for cover and took six hits while
+  // digging. An armed bot with health to spare stands and fights.
   if (target.entityType === "minecraft:enderman" && isAggressiveNeutralMob(target)) {
-    return true;
+    return !hasMeleeWeapon(observation) || observation.player.health < state.strategy.minimumHealth;
   }
   if (observation.player.health <= LETHAL_MELEE_DISENGAGE_HEALTH) {
     return true;
@@ -9061,12 +9064,11 @@ const ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:mob_projectile",
 ]);
 const RECENT_ATTACK_MS = 3000;
-// Like a hoglin, an enderman cannot reach a bot three blocks up or climb to it.
-// A live bot dug a cover shaft one block every second and a half while an
-// enderman hit it three times for 4.5 and killed it. A pillar goes up as
-// fast as blocks can be placed, and waiting on it outlasts the anger.
+// Hoglins cannot climb to a bot three blocks up. Endermen are not on this
+// list: they teleport, and a live bot was hit 0.7 seconds after it reached
+// the top of a three-block pillar. Another was hit while it climbed. An
+// enderman is fought on the ground.
 const PILLAR_DEFENSE_ENTITY_TYPES: ReadonlySet<string> = new Set([
-  "minecraft:enderman",
   "minecraft:hoglin",
   "minecraft:zoglin",
 ]);

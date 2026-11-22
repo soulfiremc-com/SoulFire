@@ -1383,7 +1383,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
   }, 10_000);
 
-  it("waits out an angry enderman on a pillar instead of digging in", async () => {
+  it("fights an angry enderman on the ground instead of from a pillar", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
     const counts = {
@@ -1411,10 +1411,7 @@ describe("beat-game run lifecycle", () => {
       target: { connectionEpoch: "epoch-1", networkId: 99 },
       observedAt: "2026-01-01T00:00:00.000Z",
     };
-    // The enderman calms down after the bot has waited on its pillar a while.
-    const watch = { onPillarQueries: 0 };
     driver.entityQueryResolver = ({ selector }) =>
-      (driver.currentObservation.player.position.y < 67 || (watch.onPillarQueries += 1) < 20) &&
       (selector.networkId === undefined || selector.networkId === hoglin.networkId) &&
       (selector.entityTypes === undefined || selector.entityTypes.includes(hoglin.entityType))
         ? [hoglin]
@@ -1450,7 +1447,7 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           yield* Effect.gen(function* () {
-            while (watch.onPillarQueries < 20) {
+            while (!driver.tasks.some(({ type }) => type === "attack-entity")) {
               yield* Effect.sleep(1);
             }
           }).pipe(Effect.timeout("5 seconds"), Effect.ignore);
@@ -1459,14 +1456,15 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(driver.paths).toContainEqual(
+    // An enderman teleports up to a pillar, so the bot fights where it
+    // stands rather than climbing one.
+    expect(driver.paths).not.toContainEqual(
       objectContaining({
         position: { x: 0.5, y: 67, z: 0.5, dimension: nether },
         radius: 0,
-        policy: objectContaining({ allowPlacing: true, allowMining: false }),
       }),
     );
-    // It builds up rather than digging a shaft, which took too long live.
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
     expect(driver.actions).not.toContainEqual(objectContaining({ type: "dig-block" }));
   }, 10_000);
 
@@ -2354,6 +2352,84 @@ describe("beat-game run lifecycle", () => {
     // It keeps fighting instead of fleeing an enderman that teleports after it.
     expect(driver.tasks.filter(({ type }) => type === "attack-entity").length).toBeGreaterThan(1);
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "flee" }));
+  });
+
+  it("stands and fights an enderman that hits back", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: an Overworld pearl hunt with a sword and no shield.
+    driver.currentObservation = observation({
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:blaze_rod": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 99,
+      entityType: "minecraft:enderman",
+      position: { x: 3.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    // As in the live run: the first strike turns it on the bot, and it hits
+    // back at once.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity" && !enderman.aggressive) {
+          enderman.aggressive = true;
+          driver.currentObservation = {
+            ...driver.currentObservation,
+            player: { ...driver.currentObservation.player, health: 16.7 },
+          };
+        }
+      }).pipe(Effect.andThen(task.type === "attack-entity" ? Effect.never : Effect.void));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "hit-back-enderman-run",
+          teamId: "hit-back-enderman-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "hit-back-enderman-run",
+            team: { teamId: "hit-back-enderman-team" },
+            checkpointStore: store,
+            // The live run plays the fast profile, whose fights break off at 12.
+            strategy: {
+              observationPollMs: 1,
+              riskProfile: BeatGameRiskProfile.FAST,
+              minimumHealth: 12,
+            },
+          });
+          yield* Effect.sleep("1 second");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It fights on instead of digging in while the enderman hits it.
+    expect(driver.tasks.filter(({ type }) => type === "attack-entity").length).toBeGreaterThan(1);
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "flee" }));
+    expect(driver.actions).not.toContainEqual(objectContaining({ type: "dig-block" }));
   });
 
   it("fights an angry enderman behind its shield", async () => {
