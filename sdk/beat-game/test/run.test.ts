@@ -2208,6 +2208,87 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("heals before hunting an enderman already in sight", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    // As in the live run: a calm enderman in view, the bot at 12.5 health,
+    // and too little hunger to heal on its own.
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      health: 12.5,
+      food: 15,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:blaze_rod": 7,
+        "minecraft:ender_pearl": 11,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 97,
+      entityType: "minecraft:enderman",
+      position: { x: 8.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: false,
+      health: 40,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === enderman.networkId) &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(enderman.entityType))
+        ? [enderman]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "heal-before-enderman-run",
+          teamId: "heal-before-enderman-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "heal-before-enderman-run",
+            team: { teamId: "heal-before-enderman-team" },
+            checkpointStore: store,
+            // The live run plays the fast profile, whose retreat starts at 12.
+            strategy: {
+              observationPollMs: 1,
+              riskProfile: BeatGameRiskProfile.FAST,
+              minimumHealth: 12,
+            },
+          });
+          yield* Effect.gen(function* () {
+            while (driver.tasks.length === 0) {
+              yield* Effect.sleep(1);
+            }
+          }).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks[0]?.type).toBe("auto-eat");
+    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "attack-entity" }));
+  });
+
   it("fights an angry enderman behind its shield", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";

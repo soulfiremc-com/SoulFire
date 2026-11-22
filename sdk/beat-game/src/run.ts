@@ -16493,6 +16493,40 @@ function discoveryHopRadius(
   );
 }
 
+/// An enderman hits for about 4.5 through iron and takes eight stone sword
+/// strikes. A live bot started one at 13 health and died to three hits.
+/// Returns whether the bot spent this turn healing instead of hunting.
+function healBeforeEndermanHunt(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameError | BeatGameDriverError> {
+  return Effect.gen(function* () {
+    if (observation.player.health >= ENDERMAN_HUNT_MINIMUM_HEALTH) {
+      return false;
+    }
+    // A live bot thrown into lava started this meal there and burned to
+    // death while eating. Lava and fire come first.
+    if (
+      observation.player.fireTicks > 0 ||
+      (yield* isPlayerInLava(state.driver, observation.player.position))
+    ) {
+      return true;
+    }
+    if (observation.player.food < 20 && hasUsableFood(observation)) {
+      yield* eatUnlessEndangered(state, {
+        foodItemIds: preferredUsableFoodItemIds(observation),
+        foodLevel: 20,
+        maximumMeals: 1,
+        completeWhenNoFood: true,
+        path: state.strategy.path,
+      });
+    } else {
+      yield* Effect.sleep(ENDERMAN_HUNT_HEAL_WAIT_MS);
+    }
+    return true;
+  });
+}
+
 function acquireEnderPearls(
   state: RunState,
   observation: BeatGameObservation,
@@ -16509,6 +16543,11 @@ function acquireEnderPearls(
       maximumResults: Math.max(1, missing),
     });
     if (endermen.length > 0) {
+      // A live bot with endermen in sight started its hunt at 12 health,
+      // brought one from 40 to 5, and died to its last three hits.
+      if (yield* healBeforeEndermanHunt(state, observation)) {
+        return;
+      }
       yield* huntOrExplore(
         state,
         observation,
@@ -16574,28 +16613,7 @@ function acquireEnderPearls(
           horizontalDistanceSquared(left.position, observation.player.position) -
           horizontalDistanceSquared(right.position, observation.player.position),
       )[0]?.position;
-    // An enderman hits for about 4.5 through iron and takes eight stone sword
-    // strikes. A live bot started one at 13 health and died to three hits.
-    if (observation.player.health < ENDERMAN_HUNT_MINIMUM_HEALTH) {
-      // A live bot thrown into lava started this meal there and burned to
-      // death while eating. Lava and fire come first.
-      if (
-        observation.player.fireTicks > 0 ||
-        (yield* isPlayerInLava(state.driver, observation.player.position))
-      ) {
-        return;
-      }
-      if (observation.player.food < 20 && hasUsableFood(observation)) {
-        yield* eatUnlessEndangered(state, {
-          foodItemIds: preferredUsableFoodItemIds(observation),
-          foodLevel: 20,
-          maximumMeals: 1,
-          completeWhenNoFood: true,
-          path: state.strategy.path,
-        });
-      } else {
-        yield* Effect.sleep(ENDERMAN_HUNT_HEAL_WAIT_MS);
-      }
+    if (yield* healBeforeEndermanHunt(state, observation)) {
       return;
     }
     const searchTurns = Math.floor(
