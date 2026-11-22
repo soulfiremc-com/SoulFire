@@ -10,6 +10,15 @@ import {
 import { observation } from "./fixtures.js";
 import { arrayContaining } from "./matchers.js";
 
+const reentryArmorKeys = (blazeRods: number) =>
+  requirementsForPhase(
+    BeatGamePhase.ENTER_NETHER,
+    observation({ counts: { "minecraft:blaze_rod": blazeRods } }).inventory,
+    fastBeatGameStrategy,
+    { reusablePortalAvailable: true },
+  )
+    .map(({ key }) => key)
+    .filter((key) => key === "chestplate" || key === "helmet");
 const keys = (strategy: typeof defaultBeatGameStrategy, bedUnavailable = false) =>
   requirementsForPhase(
     BeatGamePhase.LOCATE_STRONGHOLD,
@@ -298,6 +307,16 @@ describe("beat-game requirements", () => {
       targetCount: 0,
       satisfied: true,
     });
+  });
+
+  it("returns to the Nether for pearls only in armor", () => {
+    // Before the blaze rods the armor does not hold up the trip.
+    expect(reentryArmorKeys(0)).toEqual([]);
+    // The pearl hunt means fighting endermen, so the armor comes first.
+    expect(reentryArmorKeys(fastBeatGameStrategy.targetBlazeRodCount).toSorted()).toEqual([
+      "chestplate",
+      "helmet",
+    ]);
   });
 
   it("requires a diamond pickaxe before mining an obsidian frame", () => {

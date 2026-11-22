@@ -418,8 +418,12 @@ function portalRequirements(
         key !== "water-bucket" &&
         key !== "ignition" &&
         key !== "bed" &&
-        key !== "chestplate" &&
-        key !== "helmet",
+        // Endermen guard the pearls, and their hits come through a shield. A
+        // live bot hunting them in golden boots died to three hits after
+        // breaking off the fight. With every blaze rod in hand, the bot
+        // returns to the Nether only in its armor.
+        ((key !== "chestplate" && key !== "helmet") ||
+          (inventory.counts["minecraft:blaze_rod"] ?? 0) >= strategy.targetBlazeRodCount),
     )
     // oxlint-disable-next-line oxc/no-map-spread -- copies keep the shared requirement definitions unchanged
     .map((definition) => {
