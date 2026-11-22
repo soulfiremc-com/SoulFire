@@ -44082,6 +44082,68 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("cooks in a carried furnace without crafting a table", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: raw meat, one plank and a furnace in the pack.
+    driver.currentObservation = observation({
+      health: 8,
+      food: 17,
+      counts: {
+        "minecraft:porkchop": 1,
+        "minecraft:coal": 1,
+        "minecraft:furnace": 1,
+        "minecraft:oak_planks": 1,
+        "minecraft:wooden_pickaxe": 1,
+      },
+    });
+    const ground = blockObservation({ x: 2, y: 63, z: 0, dimension: "minecraft:overworld" });
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.replaceable === false) {
+        return [ground];
+      }
+      if (selector.replaceable === true) {
+        return [
+          blockObservation(
+            {
+              x: Math.floor(center.x),
+              y: Math.floor(center.y),
+              z: Math.floor(center.z),
+              dimension: center.dimension,
+            },
+            { replaceable: true },
+          ),
+        ];
+      }
+      return [];
+    };
+    const builds: string[] = [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "build") {
+          builds.push(...task.blocks.map(({ blockId }) => blockId));
+        }
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !builds.includes("minecraft:furnace")).pipe(
+            Effect.timeout("3 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(builds).toContain("minecraft:furnace");
+    expect(builds).not.toContain("minecraft:crafting_table");
+  });
+
   it("fetches logs for a crafting table before it replaces its pickaxe", async () => {
     const driver = new FakeBeatGameDriver();
     // As in the live run: three planks, three sticks and no table in a desert.

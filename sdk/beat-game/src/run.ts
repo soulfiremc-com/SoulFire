@@ -17197,8 +17197,11 @@ function ensureWorkstation(
         .pipe(Effect.ignore);
       current = yield* state.driver.observe;
     }
+    // A carried furnace needs no table. A live bot with a furnace in its
+    // pack went for a table to cook one chicken, had one plank, and failed
+    // every few seconds for ten minutes.
     const craftingTable =
-      blockId === "minecraft:furnace"
+      blockId === "minecraft:furnace" && (current.inventory.counts[blockId] ?? 0) === 0
         ? yield* ensureWorkstation(state, current, "minecraft:crafting_table")
         : undefined;
     const placementObservation =
