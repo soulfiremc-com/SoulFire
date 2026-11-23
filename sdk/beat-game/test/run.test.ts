@@ -44577,6 +44577,112 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("replans for a new pickaxe when the staircase tool breaks", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+      },
+      position: { x: 100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    // As in the live run: every walk down hits the search limit.
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          position.y <= 32 && radius === 16
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "search_limit",
+                  retryable: true,
+                  message: "Pathfinding reached its search limit after 50000 expanded states",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    // As in the live run: the last pickaxe broke on the way down.
+    const resolveAction = driver.actionResolver;
+    driver.actionResolver = (action) => {
+      if (
+        action.type !== "select-item" ||
+        !(action.selector.itemIds ?? []).includes("minecraft:stone_pickaxe")
+      ) {
+        return resolveAction(action);
+      }
+      const current = driver.currentObservation;
+      driver.currentObservation = {
+        ...current,
+        inventory: {
+          ...current.inventory,
+          counts: { ...current.inventory.counts, "minecraft:stone_pickaxe": 0 },
+        },
+      };
+      return Effect.fail(
+        new BeatGameDriverError({
+          operation: "act.select-item",
+          code: "not_found",
+          retryable: false,
+          message: "[not_found] No matching item is available",
+        }),
+      );
+    };
+    const started: string[] = [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "stronghold-broken-tool-run",
+      teamId: "stronghold-broken-tool-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            strongholdEstimate: { x: 120, y: 53, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-broken-tool-run",
+            team: { teamId: "stronghold-broken-tool-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-started"
+                ? Effect.sync(() => {
+                    started.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => !started.includes("satisfy:pickaxe")).pipe(
+            Effect.timeout("3 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(started).toContain("satisfy:pickaxe");
+  });
+
   it("goes on down to the stronghold when the level walk to it fails", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

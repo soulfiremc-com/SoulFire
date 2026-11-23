@@ -4115,6 +4115,17 @@ function executeDecision(
                 }
               : {},
           ),
+          // A live bot's last pickaxe broke on the way down. The search was
+          // retried with no tool until the run gave up, while the planner
+          // would have crafted a new one from the logs the bot carried.
+          Effect.catchIf(
+            (error): error is BeatGameDriverError =>
+              error instanceof BeatGameDriverError && error.operation === "select-staircase-tool",
+            (error) =>
+              Effect.succeed({
+                replanReason: `the stronghold search ran out of tools: ${error.message}`,
+              } satisfies ActionResult),
+          ),
         );
       }
       case "activate-end-portal": {
