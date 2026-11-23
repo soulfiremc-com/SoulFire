@@ -178,6 +178,54 @@ describe("inventory discards", () => {
     });
   });
 
+  it("frees slots held by stronghold debris", () => {
+    // Part of the pack a live bot carried back to the portal room, too full
+    // to take on food once it had dropped its leaf litter.
+    const counts = {
+      "minecraft:ender_eye": 1,
+      "minecraft:white_bed": 1,
+      "minecraft:cooked_beef": 2,
+      "minecraft:cobblestone": 64,
+      "minecraft:cobbled_deepslate": 64,
+      "minecraft:stone_bricks": 7,
+      "minecraft:cracked_stone_bricks": 1,
+      "minecraft:mossy_stone_bricks": 2,
+      "minecraft:mossy_cobblestone": 2,
+      "minecraft:cobblestone_stairs": 2,
+      "minecraft:spruce_door": 2,
+      "minecraft:oak_fence": 1,
+      "minecraft:blue_egg": 1,
+      "minecraft:gold_nugget": 7,
+    };
+    const dropped: string[] = [];
+    let remaining: Record<string, number> = counts;
+    for (let discard = selectInventoryDiscard(remaining); discard !== undefined;) {
+      dropped.push(discard.itemId);
+      const { [discard.itemId]: _, ...rest } = remaining;
+      remaining = rest;
+      discard = selectInventoryDiscard(remaining);
+    }
+    expect(dropped).toEqual(
+      expect.arrayContaining([
+        "minecraft:stone_bricks",
+        "minecraft:cracked_stone_bricks",
+        "minecraft:mossy_stone_bricks",
+        "minecraft:mossy_cobblestone",
+        "minecraft:cobblestone_stairs",
+        "minecraft:spruce_door",
+        "minecraft:oak_fence",
+        "minecraft:blue_egg",
+      ]),
+    );
+    expect(Object.keys(remaining)).toEqual(
+      expect.arrayContaining([
+        "minecraft:ender_eye",
+        "minecraft:white_bed",
+        "minecraft:cooked_beef",
+      ]),
+    );
+  });
+
   it("frees slots held by Overworld pickups that nothing uses", () => {
     // As in a live run that reached the Nether too full to craft gold boots.
     expect(

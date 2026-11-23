@@ -423,6 +423,23 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:soul_sand",
   "minecraft:soul_soil",
   "minecraft:egg",
+  "minecraft:blue_egg",
+  "minecraft:brown_egg",
+  // Digging through a stronghold fills the pack with its walls and fittings.
+  // A live bot came back to the portal room too full to take on food.
+  "minecraft:stone_bricks",
+  "minecraft:cracked_stone_bricks",
+  "minecraft:mossy_stone_bricks",
+  "minecraft:chiseled_stone_bricks",
+  "minecraft:infested_stone_bricks",
+  "minecraft:stone_brick_stairs",
+  "minecraft:stone_brick_slab",
+  "minecraft:mossy_cobblestone",
+  "minecraft:cobblestone_stairs",
+  "minecraft:iron_bars",
+  "minecraft:oak_fence",
+  "minecraft:oak_door",
+  "minecraft:spruce_door",
   "minecraft:red_mushroom",
   "minecraft:brown_mushroom",
   // Magma burns whoever stands on it, so it makes a poor building block.
