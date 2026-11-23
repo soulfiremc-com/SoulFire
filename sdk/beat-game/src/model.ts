@@ -417,6 +417,9 @@ export interface BeatGameWorldMemory {
   readonly keepsInventoryOnDeath?: boolean;
   readonly latestDeath?: BeatGameMemoryEntry<BeatGamePosition>;
   readonly strongholdEstimate?: BeatGamePosition;
+  /// Empty frames the bot saw in the stronghold portal room, which is how
+  /// many eyes it needs to open the portal.
+  readonly emptyPortalFrames?: number;
 }
 
 export const emptyBeatGameWorldMemory = (): BeatGameWorldMemory => ({

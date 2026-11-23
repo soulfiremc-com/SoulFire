@@ -144,6 +144,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
     reusablePortalAvailable,
     bedUnavailable: bedSearchExhausted(checkpoint, observation),
     underground: isDeepUnderground(observation),
+    portalEyesNeeded: checkpoint.memory.emptyPortalFrames,
   });
   if (
     observation.player.food <= strategy.eatBelowFood &&
@@ -511,6 +512,7 @@ export function plannerWithObservation(
         checkpoint !== undefined && hasReusablePortalCandidate(checkpoint, observation),
       bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint, observation),
       underground: isDeepUnderground(observation),
+      portalEyesNeeded: checkpoint?.memory.emptyPortalFrames,
     }),
     updatedAt: now,
   };

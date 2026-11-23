@@ -350,6 +350,14 @@ function worldMemory(value: unknown): void {
     position(memory["strongholdEstimate"], "checkpoint.memory.strongholdEstimate");
   }
   if (
+    memory["emptyPortalFrames"] !== undefined &&
+    (typeof memory["emptyPortalFrames"] !== "number" ||
+      !Number.isInteger(memory["emptyPortalFrames"]) ||
+      memory["emptyPortalFrames"] < 0)
+  ) {
+    throw new TypeError("checkpoint.memory.emptyPortalFrames must be a non-negative integer");
+  }
+  if (
     memory["keepsInventoryOnDeath"] !== undefined &&
     typeof memory["keepsInventoryOnDeath"] !== "boolean"
   ) {

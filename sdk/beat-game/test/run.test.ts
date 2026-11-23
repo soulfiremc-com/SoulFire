@@ -46262,6 +46262,9 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(routeDown()?.policy).toMatchObject({ allowMining: true, avoidFluids: true });
+    // None of the frames it saw held an eye, so it plans to fill all twelve.
+    const saved = await Effect.runPromise(store.load("flooded-staircase-run"));
+    expect(saved?.memory.emptyPortalFrames).toBe(12);
   }, 10_000);
 
   it("resumes a stronghold staircase from an intermediate step", async () => {

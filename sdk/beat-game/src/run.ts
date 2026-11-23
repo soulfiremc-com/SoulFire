@@ -952,6 +952,7 @@ const DEFENSIVE_PURSUIT_MAX_DISTANCE = 12;
 const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
+const END_PORTAL_FRAME_COUNT = 12;
 /// A wooden sword deals 4 damage and a fist 1.
 const FINISHABLE_PURSUER_ARMED_HEALTH = 4;
 const FINISHABLE_PURSUER_BAREHANDED_HEALTH = 1;
@@ -19710,18 +19711,30 @@ function approachStrongholdPortalRoom(
   frames: readonly BeatGameBlockObservation[],
   estimate: BeatGamePosition,
   currentPosition: BeatGamePosition,
-): Effect.Effect<void, BeatGameDriverError> {
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   const destination = strongholdEntryPosition(frames, estimate);
   const current = floorBlockPosition(currentPosition);
   const depth = current.y - destination.y;
+  // Frames out of sight count as empty, so the bot never sets out with
+  // too few eyes.
+  const filledFrames = frames.filter(({ properties }) => properties["eye"] === "true").length;
+  const rememberEmptyFrames = persist(state, (checkpoint) => ({
+    ...checkpoint,
+    memory: {
+      ...checkpoint.memory,
+      emptyPortalFrames: Math.max(0, END_PORTAL_FRAME_COUNT - filledFrames),
+    },
+  }));
   if (depth <= 0) {
-    return state.driver.pathfind(destination, 4, state.strategy.path);
+    return rememberEmptyFrames.pipe(
+      Effect.andThen(state.driver.pathfind(destination, 4, state.strategy.path)),
+    );
   }
   // A live bot found the portal room under a lake. Every staircase it
   // started stood in the water and was refused, and the run ended there.
   // With the frames known and close, a route that digs down around the
   // water reaches them instead.
-  return excavateStaircase(state.driver, {
+  const descend = excavateStaircase(state.driver, {
     from: staircaseStartPosition(destination, current),
     to: destination,
     path: state.strategy.path,
@@ -19745,6 +19758,7 @@ function approachStrongholdPortalRoom(
           ),
     ),
   );
+  return rememberEmptyFrames.pipe(Effect.andThen(descend));
 }
 
 function floorBlockPosition(position: BeatGamePosition): BeatGameBlockPosition {

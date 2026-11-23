@@ -21,6 +21,8 @@ export interface BeatGameRequirementContext {
   readonly bedUnavailable?: boolean;
   /// True while the bot is deep under the Overworld surface, where no animals live.
   readonly underground?: boolean;
+  /// Eyes the known End portal still needs, when the bot has seen its frames.
+  readonly portalEyesNeeded?: number | undefined;
 }
 
 export const BED_COLORS = [
@@ -331,31 +333,37 @@ export function requirementsForPhase(
       : definitions;
   const fastPreparation =
     phase === BeatGamePhase.PREPARE_OVERWORLD && strategy.riskProfile === BeatGameRiskProfile.FAST;
+  // A live bot stood in a portal room with two frames already filled and
+  // eleven eyes in its pack, and left to make a twelfth it did not need.
+  const portalEyesNeeded =
+    phase === BeatGamePhase.ACTIVATE_END_PORTAL ? context.portalEyesNeeded : undefined;
   return (
     reachableDefinitions
       // oxlint-disable-next-line oxc/no-map-spread -- copies keep the shared requirement definitions unchanged
       .map((definition) =>
-        // A fast run takes its bed right after wood and a weapon: every night
-        // without one costs ten minutes in a shelter.
-        fastPreparation && definition.key === "bed"
-          ? { ...definition, priority: FAST_BED_PRIORITY }
-          : // A live fast run spent whole days stocking cooked food at full
-            // hunger before it had any iron. The small food supply still
-            // comes first; the full stock waits for the iron and the shield.
-            fastPreparation && definition.key === "food"
-            ? { ...definition, priority: FAST_COOKED_FOOD_PRIORITY }
-            : // Once the iron is in hand the shield is a few seconds of
-              // crafting, and every night without it costs a shelter. A live
-              // run held four iron for a whole day while it searched for food.
-              fastPreparation &&
-                definition.key === "shield" &&
-                (inventory.counts["minecraft:iron_ingot"] ?? 0) > 0
-              ? { ...definition, priority: FAST_READY_SHIELD_PRIORITY }
-              : fastPreparation && definition.key === "chestplate"
-                ? { ...definition, priority: FAST_CHESTPLATE_PRIORITY }
-                : fastPreparation && definition.key === "helmet"
-                  ? { ...definition, priority: FAST_HELMET_PRIORITY }
-                  : definition,
+        portalEyesNeeded !== undefined && definition.key === "eyes-of-ender"
+          ? { ...definition, target: () => portalEyesNeeded }
+          : // A fast run takes its bed right after wood and a weapon: every night
+            // without one costs ten minutes in a shelter.
+            fastPreparation && definition.key === "bed"
+            ? { ...definition, priority: FAST_BED_PRIORITY }
+            : // A live fast run spent whole days stocking cooked food at full
+              // hunger before it had any iron. The small food supply still
+              // comes first; the full stock waits for the iron and the shield.
+              fastPreparation && definition.key === "food"
+              ? { ...definition, priority: FAST_COOKED_FOOD_PRIORITY }
+              : // Once the iron is in hand the shield is a few seconds of
+                // crafting, and every night without it costs a shelter. A live
+                // run held four iron for a whole day while it searched for food.
+                fastPreparation &&
+                  definition.key === "shield" &&
+                  (inventory.counts["minecraft:iron_ingot"] ?? 0) > 0
+                ? { ...definition, priority: FAST_READY_SHIELD_PRIORITY }
+                : fastPreparation && definition.key === "chestplate"
+                  ? { ...definition, priority: FAST_CHESTPLATE_PRIORITY }
+                  : fastPreparation && definition.key === "helmet"
+                    ? { ...definition, priority: FAST_HELMET_PRIORITY }
+                    : definition,
       )
       .map((definition) => materializeRequirement(definition, inventory, strategy))
       .toSorted(

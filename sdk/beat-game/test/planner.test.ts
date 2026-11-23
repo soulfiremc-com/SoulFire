@@ -10,6 +10,28 @@ import {
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
 
 describe("beat-game planner", () => {
+  it("activates a portal whose remaining empty frames its eyes can fill", () => {
+    // As in a live run: two frames already held eyes and the bot carried
+    // eleven, one more than the portal still needed.
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 10 },
+      },
+      observation: observation({
+        position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+        counts: { "minecraft:ender_eye": 11 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({
+      type: "activate-end-portal",
+      action: "activate-end-portal",
+    });
+  });
+
   it("recovers a death before considering phase requirements", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
