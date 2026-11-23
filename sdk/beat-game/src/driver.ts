@@ -1686,6 +1686,9 @@ const BOT_OFFLINE_MESSAGE = "Bot is not online";
 // A dropped connection to SoulFire passes. A live run ended on one reset
 // entity query while the server kept running.
 const TRANSPORT_FAILURE_PATTERN = /Transport error|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up/u;
+// A bot that rejoins after a server restart has no level for a moment. A
+// live run ended on one such observation while the server came back.
+const LEVEL_NOT_LOADED_MESSAGE = "Bot level is not loaded";
 
 function isRetryable(cause: unknown): boolean {
   if (typeof cause !== "object" || cause === null) {
@@ -1698,6 +1701,7 @@ function isRetryable(cause: unknown): boolean {
     cause instanceof Error &&
     (cause.message.startsWith(PLACEMENT_NOT_READY_PREFIX) ||
       cause.message.includes(BOT_OFFLINE_MESSAGE) ||
+      cause.message.includes(LEVEL_NOT_LOADED_MESSAGE) ||
       TRANSPORT_FAILURE_PATTERN.test(cause.message))
   ) {
     return true;

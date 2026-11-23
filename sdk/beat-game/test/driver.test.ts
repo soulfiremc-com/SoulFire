@@ -679,6 +679,30 @@ describe("production SoulFire beat-game driver", () => {
     expect(error).toMatchObject({ code: "failed_precondition", retryable: true });
   });
 
+  it("retries a request while the bot rejoins after a server restart", async () => {
+    // As in a live run: the server restarted, and one observation found no level.
+    const cause = new SoulFireRpcError({
+      operation: "world.getPlayerSnapshot",
+      cause: new Error("Bot level is not loaded"),
+      code: Code.FailedPrecondition,
+      retryable: false,
+      message: "[failed_precondition] Bot level is not loaded",
+    });
+    const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:iron_pickaxe"] },
+        }),
+      ),
+    );
+
+    expect(error).toMatchObject({ retryable: true });
+  });
+
   it("retries a request whose connection was reset", async () => {
     // As in a live run: one entity query lost its connection, and the run ended.
     const cause = new SoulFireRpcError({
