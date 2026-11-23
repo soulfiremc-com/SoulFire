@@ -1112,6 +1112,8 @@ interface RunState {
   readonly unreachableThreats: Ref.Ref<ReadonlyMap<string, number>>;
   /// What each item last failed to craft from, for lack of materials.
   readonly failedCrafts: Ref.Ref<ReadonlyMap<string, FailedCraft>>;
+  /// Set while the bot fetches logs for a crafting table.
+  readonly fetchingTableWood: Ref.Ref<boolean>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1265,6 +1267,7 @@ export function beatGameWithDriver(
       failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
       unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       failedCrafts: yield* Ref.make<ReadonlyMap<string, FailedCraft>>(new Map()),
+      fetchingTableWood: yield* Ref.make(false),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -17154,16 +17157,26 @@ function ensureWoodForCraftingTable(
     if (planks >= 4 + stickPlanks) {
       return;
     }
-    const explorationTarget = yield* findNearestTreeColumn(state, observation.player.position);
-    yield* collectBlocksOrExplore(state, observation, {
-      blockIds: LOG_ITEM_IDS,
-      count: 2,
-      progressItemIds: LOG_ITEM_IDS,
-      purpose: "find-logs",
-      avoidSubmergedTargets: true,
-      requireSurfaceTargets: true,
-      ...(explorationTarget === undefined ? {} : { explorationTarget }),
-    });
+    // The way to the logs can dig, and digging can craft a pickaxe that
+    // needs a table. A live bot nested one log trip in another on every
+    // staircase step, so a trip already under way is not started again.
+    if (yield* Ref.getAndSet(state.fetchingTableWood, true)) {
+      return;
+    }
+    yield* findNearestTreeColumn(state, observation.player.position).pipe(
+      Effect.flatMap((explorationTarget) =>
+        collectBlocksOrExplore(state, observation, {
+          blockIds: LOG_ITEM_IDS,
+          count: 2,
+          progressItemIds: LOG_ITEM_IDS,
+          purpose: "find-logs",
+          avoidSubmergedTargets: true,
+          requireSurfaceTargets: true,
+          ...(explorationTarget === undefined ? {} : { explorationTarget }),
+        }),
+      ),
+      Effect.ensuring(Ref.set(state.fetchingTableWood, false)),
+    );
   });
 }
 
