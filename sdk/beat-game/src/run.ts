@@ -803,6 +803,7 @@ const FOOD_ANIMAL_ENTITY_TYPES = [
   "minecraft:salmon",
 ] as const;
 const AQUATIC_FOOD_ENTITY_TYPES = new Set(["minecraft:cod", "minecraft:salmon"]);
+const AQUATIC_HUNT_DROWNED_RADIUS = 24;
 const EMERGENCY_FOOD_ENTITY_TYPES = [
   "minecraft:zombie",
   "minecraft:zombie_villager",
@@ -14002,14 +14003,23 @@ function huntOrExplore(
         explorationHops,
         completedExplorationLegs(checkpoint, current.player.position.dimension, purpose),
       );
+      // A live bot chased cod along a shore where drowned swam, and died to
+      // them three times. Fish are not worth water a drowned is in.
+      const drownedNearby = (yield* state.driver.queryEntities({
+        origin: current.player.position,
+        radius: AQUATIC_HUNT_DROWNED_RADIUS,
+        selector: { entityTypes: ["minecraft:drowned"], alive: true },
+        maximumResults: 4,
+      })).some((entity) => entity.entityType === "minecraft:drowned");
       const aquaticHuntAllowed =
-        strandedAquaticFallback ||
-        shouldAllowAquaticHunt(
-          current,
-          state.strategy.minimumHealth,
-          targetPreference,
-          explorationLegs,
-        );
+        !drownedNearby &&
+        (strandedAquaticFallback ||
+          shouldAllowAquaticHunt(
+            current,
+            state.strategy.minimumHealth,
+            targetPreference,
+            explorationLegs,
+          ));
       const overworldHunt = current.player.position.dimension === "minecraft:overworld";
       const playerInFluid =
         overworldHunt && (yield* isPlayerInFluid(state.driver, current.player.position));

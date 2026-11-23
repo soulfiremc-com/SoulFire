@@ -41851,6 +41851,70 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("leaves fish alone while a drowned swims nearby", async () => {
+    const driver = new FakeBeatGameDriver();
+    const salmon = {
+      connectionEpoch: "epoch-1",
+      networkId: 46,
+      entityType: "minecraft:salmon",
+      position: {
+        x: 3,
+        y: 62,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 3,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const drowned = {
+      ...salmon,
+      networkId: 47,
+      entityType: "minecraft:drowned",
+      position: { ...salmon.position, x: 22, y: 55 },
+      health: 20,
+      aggressive: false,
+    } as const;
+    driver.currentObservation = observation({
+      food: 17,
+      health: 12,
+    });
+    driver.entityResults = [salmon];
+    // The drowned stays deep and out of the threat scans, as the live ones
+    // did between attacks.
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:drowned") === true
+        ? [drowned]
+        : driver.entityResults;
+    driver.taskResolver = (task) => {
+      driver.tasks.push(task);
+      return task.type === "attack-entity" ? Effect.never : Effect.void;
+    };
+    const attacksSalmon = () =>
+      driver.tasks.some(
+        (task) => task.type === "attack-entity" && task.target.networkId === salmon.networkId,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 1500;
+          while (!attacksSalmon() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(attacksSalmon()).toBe(false);
+  });
+
   it("hunts shallow fish after every dry recovery route fails", async () => {
     const driver = new FakeBeatGameDriver();
     const salmon = {
