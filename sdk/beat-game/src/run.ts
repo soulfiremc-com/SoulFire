@@ -953,6 +953,9 @@ const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
+const PORTAL_ROOM_ARRIVAL_RADIUS = 8;
+const PORTAL_ROOM_APPROACH_RADIUS = 3;
+const PORTAL_ROOM_SEARCH_RADIUS = 16;
 /// A wooden sword deals 4 damage and a fist 1.
 const FINISHABLE_PURSUER_ARMED_HEALTH = 4;
 const FINISHABLE_PURSUER_BAREHANDED_HEALTH = 1;
@@ -4237,9 +4240,32 @@ function executeDecision(
             .activateEndPortal(policyContext)
             .pipe(Effect.as({} satisfies ActionResult));
         }
-        return activateEndPortal(state.driver, {
-          path: state.strategy.path,
-        }).pipe(
+        // A live bot stood eighty blocks from the frames it had found, and
+        // the activation searched only around where it stood. It now walks
+        // back to the portal room first.
+        const portalRoom = actionCheckpoint.memory.portalRoomCenter;
+        const approachPortalRoom =
+          portalRoom === undefined ||
+          (portalRoom.dimension === observation.player.position.dimension &&
+            horizontalDistanceSquared(portalRoom, observation.player.position) <=
+              PORTAL_ROOM_ARRIVAL_RADIUS ** 2 &&
+            Math.abs(portalRoom.y - observation.player.position.y) <= PORTAL_ROOM_ARRIVAL_RADIUS)
+            ? Effect.void
+            : state.driver.pathfind(portalRoom, PORTAL_ROOM_APPROACH_RADIUS, {
+                ...state.strategy.path,
+                allowMining: true,
+                allowPlacing: true,
+                avoidFluids: true,
+              });
+        return approachPortalRoom.pipe(
+          Effect.andThen(
+            activateEndPortal(state.driver, {
+              path: state.strategy.path,
+              ...(portalRoom === undefined
+                ? {}
+                : { center: portalRoom, searchRadius: PORTAL_ROOM_SEARCH_RADIUS }),
+            }),
+          ),
           Effect.andThen(
             enterEndPortal(state.driver, {
               path: state.strategy.path,
@@ -19723,6 +19749,7 @@ function approachStrongholdPortalRoom(
     memory: {
       ...checkpoint.memory,
       emptyPortalFrames: Math.max(0, END_PORTAL_FRAME_COUNT - filledFrames),
+      ...(frames.length === 0 ? {} : { portalRoomCenter: portalFrameCenter(frames) }),
     },
   }));
   if (depth <= 0) {
@@ -19759,6 +19786,23 @@ function approachStrongholdPortalRoom(
     ),
   );
   return rememberEmptyFrames.pipe(Effect.andThen(descend));
+}
+
+function portalFrameCenter(frames: readonly BeatGameBlockObservation[]): BeatGamePosition {
+  const total = frames.reduce(
+    (sum, { position }) => ({
+      x: sum.x + position.x,
+      y: sum.y + position.y,
+      z: sum.z + position.z,
+    }),
+    { x: 0, y: 0, z: 0 },
+  );
+  return {
+    x: total.x / frames.length + 0.5,
+    y: total.y / frames.length + 1,
+    z: total.z / frames.length + 0.5,
+    dimension: frames[0]?.position.dimension ?? "minecraft:overworld",
+  };
 }
 
 function floorBlockPosition(position: BeatGamePosition): BeatGameBlockPosition {

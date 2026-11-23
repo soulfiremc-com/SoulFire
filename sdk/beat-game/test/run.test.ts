@@ -46158,6 +46158,66 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("walks back to the portal room before filling its frames", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: the bot ended up eighty blocks from the frames.
+    driver.currentObservation = observation({
+      counts: { "minecraft:ender_eye": 11 },
+      position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
+    });
+    const portalRoomCenter = {
+      x: -375.5,
+      y: 15,
+      z: -1771.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "portal-room-run",
+      teamId: "portal-room-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, emptyPortalFrames: 10, portalRoomCenter },
+        },
+        undefined,
+      ),
+    );
+    const framesSearchedAtRoom = () =>
+      driver.blockQueries.some(
+        ({ center, selector }) =>
+          selector.blockIds?.includes("minecraft:end_portal_frame") === true &&
+          Math.hypot(center.x - portalRoomCenter.x, center.z - portalRoomCenter.z) < 1,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "portal-room-run",
+            team: { teamId: "portal-room-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!framesSearchedAtRoom() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual(
+      objectContaining({ position: portalRoomCenter, radius: 3 }),
+    );
+    expect(framesSearchedAtRoom()).toBe(true);
+  }, 10_000);
+
   it("digs a route to portal frames under a lake when the staircase floods", async () => {
     const driver = new FakeBeatGameDriver();
     const currentPosition = {
@@ -46265,6 +46325,12 @@ describe("beat-game run lifecycle", () => {
     // None of the frames it saw held an eye, so it plans to fill all twelve.
     const saved = await Effect.runPromise(store.load("flooded-staircase-run"));
     expect(saved?.memory.emptyPortalFrames).toBe(12);
+    expect(saved?.memory.portalRoomCenter).toEqual({
+      x: 12.5,
+      y: 4,
+      z: 22.5,
+      dimension: "minecraft:overworld",
+    });
   }, 10_000);
 
   it("resumes a stronghold staircase from an intermediate step", async () => {

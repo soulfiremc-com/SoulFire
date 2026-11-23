@@ -357,6 +357,9 @@ function worldMemory(value: unknown): void {
   ) {
     throw new TypeError("checkpoint.memory.emptyPortalFrames must be a non-negative integer");
   }
+  if (memory["portalRoomCenter"] !== undefined) {
+    position(memory["portalRoomCenter"], "checkpoint.memory.portalRoomCenter");
+  }
   if (
     memory["keepsInventoryOnDeath"] !== undefined &&
     typeof memory["keepsInventoryOnDeath"] !== "boolean"

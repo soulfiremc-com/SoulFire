@@ -420,6 +420,8 @@ export interface BeatGameWorldMemory {
   /// Empty frames the bot saw in the stronghold portal room, which is how
   /// many eyes it needs to open the portal.
   readonly emptyPortalFrames?: number;
+  /// Center of the End portal frames the bot found in the stronghold.
+  readonly portalRoomCenter?: BeatGamePosition;
 }
 
 export const emptyBeatGameWorldMemory = (): BeatGameWorldMemory => ({
