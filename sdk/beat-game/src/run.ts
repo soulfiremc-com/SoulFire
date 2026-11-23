@@ -18265,6 +18265,17 @@ function moveToEyeBaseline(
       return undefined;
     }
     const baseline = EYE_TRIANGULATION_BASELINE;
+    // A live bot a thousand blocks from its last throw walked all the way
+    // back to throw beside it. Standing far enough off that throw's line
+    // already gives a wide crossing, so the bot throws from where it is.
+    const here = (yield* state.driver.observe).player.position;
+    const offLine = Math.abs(
+      latest.direction.x * (here.z - latest.origin.z) -
+        latest.direction.z * (here.x - latest.origin.x),
+    );
+    if (here.dimension === latest.origin.dimension && offLine >= baseline * 0.5) {
+      return undefined;
+    }
     const candidates = [1, -1].flatMap((side) =>
       [1, 0.75, 0.5].map((scale) => ({
         x: latest.origin.x - latest.direction.z * baseline * scale * side,

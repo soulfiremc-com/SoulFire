@@ -45668,6 +45668,74 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("throws from where it stands when it is already far off its last throw's line", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: a thousand blocks from its last throw, well off
+    // that throw's line.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+      },
+      position: { x: 2300, y: 70, z: 0, dimension: "minecraft:overworld" },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "far-baseline-run",
+      teamId: "far-baseline-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            eyeSamples: [
+              {
+                origin: { x: 2100, y: 70, z: 0, dimension: "minecraft:overworld" },
+                direction: { x: 0, z: -1 },
+                observedAt: "2026-01-01T00:00:01.000Z",
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    const throws = { pathsBefore: -1 };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "far-baseline-run",
+            team: { teamId: "far-baseline-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              throwEye: () =>
+                Effect.sync(() => {
+                  throws.pathsBefore = driver.paths.length;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* sleepWhile(() => throws.pathsBefore < 0).pipe(
+            Effect.timeout("3 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(throws.pathsBefore).toBe(0);
+  });
+
   it("bounds the triangulation baseline independently of exploration", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
