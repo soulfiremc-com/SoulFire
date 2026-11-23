@@ -26678,6 +26678,89 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "flee")).toBe(false);
   }, 10_000);
 
+  it("still escapes a nearly dead drowned its attack could not kill", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = {
+      x: 0,
+      y: 62,
+      z: 0,
+      dimension: "minecraft:overworld",
+    } as const;
+    const drowned = {
+      connectionEpoch: "epoch-1",
+      networkId: 24,
+      entityType: "minecraft:drowned",
+      position: { ...position, x: 4.5, y: 59 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 0.32,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.currentObservation = observation({
+      health: 5.5,
+      food: 16,
+      position,
+      counts: { "minecraft:stone_sword": 1 },
+    });
+    driver.entityResults = [drowned];
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(2) === true ||
+      query.selector.networkId === drowned.networkId
+        ? driver.entityResults
+        : [];
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:water") === true
+        ? [
+            blockObservation(
+              {
+                x: Math.floor(query.center.x),
+                y: Math.floor(query.center.y),
+                z: Math.floor(query.center.z),
+                dimension: query.center.dimension,
+              },
+              { blockId: "minecraft:water", replaceable: true },
+            ),
+          ]
+        : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "collect-blocks" || task.type === "flee" ? Effect.never : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              let attempts = 3000;
+              while (!driver.tasks.some((task) => task.type === "flee") && attempts > 0) {
+                attempts -= 1;
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({
+        type: "attack-entity",
+        target: objectContaining({ networkId: drowned.networkId }),
+      }),
+    );
+    expect(driver.tasks.some((task) => task.type === "flee")).toBe(true);
+  }, 10_000);
+
   it("escapes a drowned toward dry ground instead of staying submerged", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

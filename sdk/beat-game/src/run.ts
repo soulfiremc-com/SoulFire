@@ -955,7 +955,8 @@ const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const FINISHABLE_PURSUER_ARMED_HEALTH = 4;
 const FINISHABLE_PURSUER_BAREHANDED_HEALTH = 1;
 const FINISHABLE_PURSUER_RADIUS = 6;
-const FINISHABLE_PURSUER_FIGHT_TIMEOUT_MS = 5000;
+const FINISHABLE_PURSUER_FIGHT_TIMEOUT_MS = 3000;
+const FINISHABLE_PURSUER_UNAVAILABLE_SECONDS = 2;
 const EMERGENCY_ESCAPE_SPRINT_MS = 1250;
 const RANGED_ESCAPE_SPRINT_MS = 2500;
 const RANGED_ESCAPE_MINIMUM_AWAY_ALIGNMENT = 0;
@@ -5619,14 +5620,36 @@ function escapeFromTarget(
           health: observation.player.health,
         },
       });
-      yield* defendAgainstSingleTarget(state, finishable, { commitThroughWound: true }).pipe(
+      // A defensive fight escapes when it breaks off, and that escape found
+      // the same pursuer again. A live bot restarted the fight every half
+      // second against a drowned it could not reach while its air ran out,
+      // so this is one bounded attack and the escape goes on if it lives.
+      yield* attackEntity(state.driver, {
+        target: finishable,
+        sprinting: true,
+        selectBestWeapon: true,
+        targetUnavailableTimeoutSeconds: FINISHABLE_PURSUER_UNAVAILABLE_SECONDS,
+        path: {
+          ...state.strategy.path,
+          allowMining: false,
+          allowPlacing: false,
+          avoidFluids: false,
+          maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 3000),
+        },
+      }).pipe(
         Effect.timeoutOrElse({
           duration: FINISHABLE_PURSUER_FIGHT_TIMEOUT_MS,
           orElse: () => Effect.void,
         }),
         Effect.catchTag("BeatGameDriverError", () => Effect.void),
       );
-      if (isSameEntityTarget(finishable, target)) {
+      const remaining = yield* state.driver.queryEntities({
+        origin: observation.player.position,
+        radius: FINISHABLE_PURSUER_RADIUS * 2,
+        selector: { networkId: finishable.networkId, alive: true },
+        maximumResults: 1,
+      });
+      if (isSameEntityTarget(finishable, target) && remaining.length === 0) {
         return;
       }
     }
