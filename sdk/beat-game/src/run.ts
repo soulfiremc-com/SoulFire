@@ -17184,6 +17184,16 @@ function craftWithTable(
       failedFrom !== undefined &&
       failedFrom.signature === inventorySignature(observation, failedFrom.itemIds)
     ) {
+      // A craft that lacked planks can still be made once the bot fetches
+      // wood. A live bot failed a sword this way 24 times in two minutes
+      // because the remembered failure skipped the trip for logs.
+      const lackedPlanks = (failedFrom.itemIds ?? []).some((itemId) =>
+        (PLANK_ITEM_IDS as readonly string[]).includes(itemId),
+      );
+      if (lackedPlanks && (yield* fetchLogs(state, observation))) {
+        const afterLogs = yield* state.driver.observe;
+        return yield* craftWithTableUncached(state, afterLogs, resultItemId, count);
+      }
       return yield* new BeatGameDriverError({
         operation: "craft",
         code: "resource-exhausted",
