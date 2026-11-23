@@ -320,7 +320,10 @@ export function requirementsForPhase(
       ? portalRequirements(inventory, strategy, context.reusablePortalAvailable === true)
       : phase === BeatGamePhase.PREPARE_OVERWORLD
         ? prepareOverworldRequirements(inventory, context)
-        : phase === BeatGamePhase.LOCATE_STRONGHOLD &&
+        : (phase === BeatGamePhase.LOCATE_STRONGHOLD ||
+              // A live bot reached the portal room without beds and fought
+              // with arrows. A bot going back in after a death fetches them.
+              phase === BeatGamePhase.ACTIVATE_END_PORTAL) &&
             strategy.riskProfile === BeatGameRiskProfile.FAST &&
             context.bedUnavailable !== true
           ? // Beds set off under the perched dragon kill it in about four

@@ -49,6 +49,28 @@ describe("beat-game planner", () => {
     expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:food" });
   });
 
+  it("fetches beds for the dragon before going back through the portal", () => {
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 0 },
+      },
+      observation: observation({
+        position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:ender_eye": 1,
+          "minecraft:cooked_beef": 16,
+          "minecraft:bow": 1,
+          "minecraft:arrow": 64,
+        },
+      }),
+      strategy: fastBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:dragon-beds" });
+  });
+
   it("goes back through an open portal without more eyes", () => {
     const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
     const decision = decideBeatGameAction({
