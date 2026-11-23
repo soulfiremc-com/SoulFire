@@ -45312,7 +45312,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       counts: { "minecraft:ender_eye": 12 },
       position: {
-        x: 100,
+        x: 2100,
         y: 70,
         z: 200,
         dimension: "minecraft:overworld",
@@ -45358,7 +45358,7 @@ describe("beat-game run lifecycle", () => {
             throwEye: () =>
               Effect.succeed({
                 origin: {
-                  x: 100,
+                  x: 2100,
                   y: 70,
                   z: 232,
                   dimension: "minecraft:overworld",
@@ -45386,7 +45386,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths[0]).toEqual(
       objectContaining({
         position: {
-          x: 100,
+          x: 2100,
           y: 70,
           z: 232,
           dimension: "minecraft:overworld",
@@ -45401,7 +45401,7 @@ describe("beat-game run lifecycle", () => {
     driver.currentObservation = observation({
       counts: { "minecraft:ender_eye": 12 },
       position: {
-        x: 100,
+        x: 2100,
         y: 70,
         z: 200,
         dimension: "minecraft:overworld",
@@ -45486,13 +45486,13 @@ describe("beat-game run lifecycle", () => {
 
     expect(driver.paths.slice(0, 2).map(({ position }) => position)).toEqual([
       {
-        x: 100,
+        x: 2100,
         y: 70,
         z: 232,
         dimension: "minecraft:overworld",
       },
       {
-        x: 100,
+        x: 2100,
         y: 70,
         z: 224,
         dimension: "minecraft:overworld",

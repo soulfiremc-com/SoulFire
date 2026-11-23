@@ -10,6 +10,10 @@ const RADIANS_PER_DEGREE = Math.PI / 180;
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 const MINIMUM_BASELINE = 8;
 const MINIMUM_INTERSECTION_SINE = 0.03;
+// Overworld strongholds start 1280 blocks from the origin. Two throws 17
+// blocks apart and 2.5 degrees off crossed 550 blocks out in a live run,
+// and the bot searched there for hours. A crossing that close is noise.
+const MINIMUM_STRONGHOLD_ORIGIN_DISTANCE = 1100;
 export const NETHER_PORTAL_FRAME_OBSIDIAN_COUNT = 10 as const;
 
 export interface PortalFrame {
@@ -78,6 +82,8 @@ export function triangulateStronghold(
       const candidate = intersectSamples(left, right);
       if (
         candidate !== undefined &&
+        Math.hypot(candidate.position.x, candidate.position.z) >=
+          MINIMUM_STRONGHOLD_ORIGIN_DISTANCE &&
         (best === undefined || candidate.confidence > best.confidence)
       ) {
         best = candidate;

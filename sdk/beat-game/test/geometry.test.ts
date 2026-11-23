@@ -63,7 +63,7 @@ describe("beat-game geometry", () => {
     const samples: readonly BeatGameEyeSample[] = [
       {
         origin: {
-          x: 0,
+          x: 2000,
           y: 70,
           z: 0,
           dimension: "minecraft:overworld",
@@ -74,7 +74,7 @@ describe("beat-game geometry", () => {
       },
       {
         origin: {
-          x: 100,
+          x: 2100,
           y: 70,
           z: 0,
           dimension: "minecraft:overworld",
@@ -88,10 +88,31 @@ describe("beat-game geometry", () => {
     const result = triangulateStronghold(samples);
 
     expect(result).toBeDefined();
-    expect(result?.position.x).toBeCloseTo(100);
+    expect(result?.position.x).toBeCloseTo(2100);
     expect(result?.position.z).toBeCloseTo(100);
     expect(result?.baseline).toBe(100);
     expect(result?.confidence).toBeGreaterThan(0);
+  });
+
+  it("ignores a crossing closer to the origin than any stronghold", () => {
+    // As in a live run: two throws 17 blocks apart and 2.5 degrees off
+    // crossed 550 blocks from the origin, inside the first stronghold ring.
+    const samples: readonly BeatGameEyeSample[] = [
+      {
+        origin: { x: 393.5, y: 53, z: -167.4, dimension: "minecraft:overworld" },
+        direction: { x: -0.4354, z: -0.9002 },
+        observedAt: "2026-01-01T00:00:00.000Z",
+        confidence: 1,
+      },
+      {
+        origin: { x: 409.5, y: 50, z: -173.5, dimension: "minecraft:overworld" },
+        direction: { x: -0.476, z: -0.8795 },
+        observedAt: "2026-01-01T00:01:00.000Z",
+        confidence: 1,
+      },
+    ];
+
+    expect(triangulateStronghold(samples)).toBeUndefined();
   });
 
   it("does not claim an intersection from a negligible baseline", () => {
