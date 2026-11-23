@@ -1002,6 +1002,8 @@ const NIGHT_SHELTER_RELOCATION_SCAN_RADIUS = 32;
 const NIGHT_SHELTER_RELOCATION_MINIMUM_DISTANCE = 4;
 const NIGHT_SHELTER_ACTION = "survive:night-shelter";
 const NIGHT_SHELTER_RETRY_BACKOFF_MS = 300_000;
+const STRONGHOLD_RETHROW_ARRIVAL_RADIUS = 48;
+const STRONGHOLD_RETHROW_SAMPLE_RADIUS = 200;
 const BED_WOOL_COUNT = 3;
 const NIGHT_BED_SEARCH_RADIUS = 32;
 const NIGHT_BED_PLACEMENT_SEARCH_RADIUS = 5;
@@ -19500,6 +19502,26 @@ function searchStronghold(
         approachObservation.player.position,
       );
       return true;
+    }
+    // Throws made far from the stronghold point along nearly the same line,
+    // so their crossing can be hundreds of blocks off. A live bot reached an
+    // estimate 365 blocks from the real stronghold and searched below it.
+    // One throw from here crosses the old ones at a wide angle, so the bot
+    // drops the estimate and throws again.
+    const here = approachObservation.player.position;
+    const atEstimate =
+      Math.hypot(here.x - estimate.x, here.z - estimate.z) <= STRONGHOLD_RETHROW_ARRIVAL_RADIUS;
+    const thrownNearby = checkpoint.memory.eyeSamples.some(
+      (sample) =>
+        Math.hypot(sample.origin.x - here.x, sample.origin.z - here.z) <=
+        STRONGHOLD_RETHROW_SAMPLE_RADIUS,
+    );
+    if (atEstimate && checkpoint.memory.eyeSamples.length > 0 && !thrownNearby) {
+      yield* persist(state, (current) => {
+        const { strongholdEstimate: _, ...memory } = current.memory;
+        return { ...current, memory };
+      });
+      return false;
     }
     const undergroundTarget = {
       ...estimate,

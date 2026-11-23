@@ -45205,6 +45205,75 @@ describe("beat-game run lifecycle", () => {
     expect(collectsLogs()).toBe(true);
   });
 
+  it("throws again at an estimate its earlier throws were far from", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+      },
+      position: { x: 2100, y: 80, z: 0, dimension: "minecraft:overworld" },
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "stronghold-rethrow-run",
+      teamId: "stronghold-rethrow-team",
+    });
+    // As in the live run: the only throws were made 900 blocks away, and the
+    // bot reached an estimate with no portal frames in range.
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            strongholdEstimate: { x: 2110, y: 53, z: 0, dimension: "minecraft:overworld" },
+            eyeSamples: [
+              {
+                origin: { x: 2100, y: 70, z: 900, dimension: "minecraft:overworld" },
+                direction: { x: 0, z: -1 },
+                observedAt: "2026-01-01T00:00:01.000Z",
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    const throws = { count: 0 };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "stronghold-rethrow-run",
+            team: { teamId: "stronghold-rethrow-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              throwEye: () =>
+                Effect.sync(() => {
+                  throws.count += 1;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* sleepWhile(() => throws.count === 0).pipe(
+            Effect.timeout("3 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(throws.count).toBeGreaterThan(0);
+  });
+
   it("digs around water on its way down to the stronghold", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
