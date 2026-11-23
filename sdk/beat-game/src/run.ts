@@ -1113,7 +1113,7 @@ interface RunState {
   readonly unreachableThreats: Ref.Ref<ReadonlyMap<string, number>>;
   /// What each item last failed to craft from, for lack of materials.
   readonly failedCrafts: Ref.Ref<ReadonlyMap<string, FailedCraft>>;
-  /// Set while the bot fetches logs for a crafting table.
+  /// Set while the bot fetches logs for a craft.
   readonly fetchingTableWood: Ref.Ref<boolean>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
@@ -17075,7 +17075,23 @@ function craftWithTable(
         message: `Crafting ${resultItemId} already failed with this inventory`,
       });
     }
-    return yield* craftWithTableUncached(state, observation, resultItemId, count).pipe(
+    const craft = craftWithTableUncached(state, observation, resultItemId, count);
+    // A live bot held one log and one plank, a plank short of a shield, and
+    // was shot to death by a skeleton it could not block. Wood is the one
+    // material a bot can always go and fetch, so it does, and tries again.
+    return yield* craft.pipe(
+      Effect.catchIf(
+        (error) =>
+          isResourceExhausted(error) &&
+          (missingCraftMaterials(error) ?? []).some((itemId) =>
+            (PLANK_ITEM_IDS as readonly string[]).includes(itemId),
+          ),
+        (error) =>
+          state.driver.observe.pipe(
+            Effect.flatMap((latest) => fetchLogs(state, latest)),
+            Effect.flatMap((fetched) => (fetched ? craft : Effect.fail(error))),
+          ),
+      ),
       Effect.tapError((error) =>
         isResourceExhausted(error)
           ? state.driver.observe.pipe(
@@ -17173,11 +17189,22 @@ function ensureWoodForCraftingTable(
     if (planks >= 4 + stickPlanks) {
       return;
     }
+    yield* fetchLogs(state, observation);
+  });
+}
+
+/// Collects two logs, unless a log trip is already under way. Returns
+/// whether this call made the trip.
+function fetchLogs(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
     // The way to the logs can dig, and digging can craft a pickaxe that
     // needs a table. A live bot nested one log trip in another on every
     // staircase step, so a trip already under way is not started again.
     if (yield* Ref.getAndSet(state.fetchingTableWood, true)) {
-      return;
+      return false;
     }
     yield* findNearestTreeColumn(state, observation.player.position).pipe(
       Effect.flatMap((explorationTarget) =>
@@ -17193,6 +17220,7 @@ function ensureWoodForCraftingTable(
       ),
       Effect.ensuring(Ref.set(state.fetchingTableWood, false)),
     );
+    return true;
   });
 }
 

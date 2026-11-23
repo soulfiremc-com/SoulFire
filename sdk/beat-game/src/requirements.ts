@@ -277,6 +277,9 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     // A live bot placed its water to break one ravine fall, then died to
     // the next fall with an empty bucket.
     itemRequirement("water-bucket", ["minecraft:water_bucket"], () => 1, 102),
+    // Skeletons guard the caves around the stronghold. A live bot without a
+    // shield was shot seven times while it fled from one.
+    itemRequirement("shield", ["minecraft:shield"], () => 1, 101),
     itemRequirement(
       "eyes-of-ender",
       ["minecraft:ender_eye"],

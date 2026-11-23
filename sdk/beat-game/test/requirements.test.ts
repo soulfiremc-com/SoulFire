@@ -412,6 +412,19 @@ describe("beat-game requirements", () => {
     expect(weaponMissing(4, { "minecraft:iron_sword": 1 })).toBe(false);
   });
 
+  it("carries a shield into the stronghold caves", () => {
+    const ready = {
+      "minecraft:ender_eye": 12,
+      "minecraft:stone_sword": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:cooked_beef": 4,
+      "minecraft:water_bucket": 1,
+    };
+
+    expect(missingStrongholdKeys(ready)).toContain("shield");
+    expect(missingStrongholdKeys({ ...ready, "minecraft:shield": 1 })).not.toContain("shield");
+  });
+
   it("replaces gold boots before they wear out", () => {
     expect(goldBootsSatisfied(91)).toBe(true);
     // Nearly broken: a new pair is due while the old one still works.
