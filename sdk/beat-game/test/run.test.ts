@@ -44229,6 +44229,101 @@ describe("beat-game run lifecycle", () => {
     expect(builds).not.toContain("minecraft:crafting_table");
   });
 
+  it("does not repeat a craft until the missing materials change", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_sword": 1,
+        "minecraft:oak_planks": 8,
+        "minecraft:stick": 4,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    const craftingTable = blockObservation(
+      { x: 1, y: 64, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:crafting_table" },
+    );
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true ? [craftingTable] : [];
+    let pickaxeLookups = 0;
+    driver.recipeResolver = (resultItemId) => {
+      if (resultItemId !== "minecraft:stone_pickaxe") {
+        return [];
+      }
+      pickaxeLookups += 1;
+      return [
+        {
+          recipeId: "minecraft:stone_pickaxe",
+          recipeType: "minecraft:crafting_shaped",
+          resultItemId,
+          resultCount: 1,
+          ingredients: [{ itemIds: ["minecraft:cobblestone"], tags: [], count: 3 }],
+        },
+      ];
+    };
+    driver.craftabilityResolver = () => ({
+      canCraft: false,
+      maximumCraftCount: 0,
+      requiredStation: "minecraft:crafting_table",
+      missing: [{ itemIds: ["minecraft:cobblestone"], tags: [], available: 0, missing: 3 }],
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "failed-craft-run",
+          teamId: "failed-craft-team",
+        }),
+        undefined,
+      ),
+    );
+    let pickaxeFailures = 0;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "failed-craft-run",
+            team: { teamId: "failed-craft-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed" && event.action === "satisfy:pickaxe"
+                ? Effect.sync(() => {
+                    pickaxeFailures += 1;
+                    // As in a live staircase climb: every step digs up blocks
+                    // the failed craft does not need.
+                    const current = driver.currentObservation;
+                    driver.currentObservation = {
+                      ...current,
+                      inventory: {
+                        ...current.inventory,
+                        counts: { ...current.inventory.counts, "minecraft:dirt": pickaxeFailures },
+                      },
+                    };
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => pickaxeFailures < 3).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(pickaxeFailures).toBeGreaterThanOrEqual(3);
+    expect(pickaxeLookups).toBe(1);
+  }, 10_000);
+
   it("fetches logs for a crafting table before it replaces its pickaxe", async () => {
     const driver = new FakeBeatGameDriver();
     // As in the live run: three planks, three sticks and no table in a desert.

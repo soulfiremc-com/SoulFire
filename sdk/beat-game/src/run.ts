@@ -1086,6 +1086,11 @@ export interface BeatGameTeamRun {
   readonly stop: Effect.Effect<void, BeatGameError>;
 }
 
+interface FailedCraft {
+  readonly itemIds: readonly string[] | undefined;
+  readonly signature: string;
+}
+
 interface RunState {
   readonly driver: BeatGameDriver;
   readonly store: BeatGameCheckpointStore;
@@ -1105,6 +1110,8 @@ interface RunState {
   /// Threats the bot found it could not reach, by entity key, with when to
   /// look at them again.
   readonly unreachableThreats: Ref.Ref<ReadonlyMap<string, number>>;
+  /// What each item last failed to craft from, for lack of materials.
+  readonly failedCrafts: Ref.Ref<ReadonlyMap<string, FailedCraft>>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1257,6 +1264,7 @@ export function beatGameWithDriver(
       lastDamage,
       failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
       unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
+      failedCrafts: yield* Ref.make<ReadonlyMap<string, FailedCraft>>(new Map()),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -17002,7 +17010,73 @@ function craftResultSlots(resultItemId: string, count: number): number {
   return UNSTACKABLE_CRAFT_RESULT_PATTERN.test(resultItemId) ? count : 1;
 }
 
+// The materials a failed craft lacked, read from its error, plus logs since
+// they make planks. Blocks dug on the way do not count as progress then.
+function missingCraftMaterials(error: BeatGameDriverError): readonly string[] | undefined {
+  const missing = /Missing \d+ of (.+?) while producing/u.exec(error.message)?.[1];
+  return missing === undefined ? undefined : [...missing.split(" or "), ...LOG_ITEM_IDS];
+}
+
+function inventorySignature(
+  observation: BeatGameObservation,
+  itemIds: readonly string[] | undefined,
+): string {
+  const counts = observation.inventory.counts;
+  return JSON.stringify(
+    itemIds === undefined
+      ? Object.entries(counts).toSorted(([left], [right]) => left.localeCompare(right))
+      : itemIds.map((itemId) => counts[itemId] ?? 0),
+  );
+}
+
+function isResourceExhausted(error: BeatGameDriverError): boolean {
+  return error.code?.toLowerCase().replace("_", "-") === "resource-exhausted";
+}
+
+// Each failed craft walks every wood recipe the server knows, about 25
+// seconds of queries. A live bot without a pickaxe retried one on every
+// step of a staircase and spent half an hour climbing twelve blocks. A craft
+// that failed for lack of materials fails at once until the inventory changes.
 function craftWithTable(
+  state: RunState,
+  observation: BeatGameObservation,
+  resultItemId: string,
+  count: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const failedFrom = (yield* Ref.get(state.failedCrafts)).get(resultItemId);
+    if (
+      failedFrom !== undefined &&
+      failedFrom.signature === inventorySignature(observation, failedFrom.itemIds)
+    ) {
+      return yield* new BeatGameDriverError({
+        operation: "craft",
+        code: "resource-exhausted",
+        retryable: true,
+        message: `Crafting ${resultItemId} already failed with this inventory`,
+      });
+    }
+    return yield* craftWithTableUncached(state, observation, resultItemId, count).pipe(
+      Effect.tapError((error) =>
+        isResourceExhausted(error)
+          ? state.driver.observe.pipe(
+              Effect.flatMap((latest) => {
+                const itemIds = missingCraftMaterials(error);
+                const failed = { itemIds, signature: inventorySignature(latest, itemIds) };
+                return Ref.update(
+                  state.failedCrafts,
+                  (current) => new Map([...current, [resultItemId, failed]]),
+                );
+              }),
+              Effect.ignore,
+            )
+          : Effect.void,
+      ),
+    );
+  });
+}
+
+function craftWithTableUncached(
   state: RunState,
   observation: BeatGameObservation,
   resultItemId: string,
