@@ -1062,6 +1062,7 @@ const FALL_CLUTCH_MAXIMUM_ATTEMPTS = 200;
 const FALL_CLUTCH_BURST_LOOKAHEAD_TICKS = 3;
 const FALL_CLUTCH_MAXIMUM_BURST_USES = 6;
 const FALL_CLUTCH_PICKUP_ATTEMPTS = 4;
+const FALL_CLUTCH_USE_RETRY_TICKS = 6;
 
 export interface BeatGameRun {
   readonly id: string;
@@ -4923,12 +4924,16 @@ function performWaterBucketFallClutch(state: RunState): Effect.Effect<void, Beat
           // A live bot polled at 4.6 blocks, just out of reach, and hit the
           // ground before the next poll. A use out of reach fails without
           // effect, so the bot uses the bucket every tick until one lands.
+          // Another bot's use still came a tick late across the round trip,
+          // so the server retries each use on every tick by itself.
           placementAttempted = true;
           for (let use = 0; use < FALL_CLUTCH_MAXIMUM_BURST_USES; use += 1) {
-            const used = yield* state.driver.act({ type: "use-item", hand: "main" }).pipe(
-              Effect.as(true),
-              Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
-            );
+            const used = yield* state.driver
+              .act({ type: "use-item", hand: "main", retryTicks: FALL_CLUTCH_USE_RETRY_TICKS })
+              .pipe(
+                Effect.as(true),
+                Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+              );
             if (used) {
               placed = true;
               break;

@@ -31259,7 +31259,7 @@ describe("beat-game run lifecycle", () => {
       yaw: 0,
       pitch: 90,
     });
-    expect(driver.actions).toContainEqual({ type: "use-item", hand: "main" });
+    expect(driver.actions).toContainEqual({ type: "use-item", hand: "main", retryTicks: 6 });
     expect(driver.raycasts).toContainEqual({
       direction: { x: 0, y: -1, z: 0 },
       maximumDistance: 96,
@@ -31347,6 +31347,8 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(fall.clutched).toBe(true);
+    // The server retries each use on every tick, beyond the client's polls.
+    expect(driver.actions).toContainEqual({ type: "use-item", hand: "main", retryTicks: 6 });
     expect(fall.refilled).toBe(true);
   });
 

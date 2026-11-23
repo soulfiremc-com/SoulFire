@@ -679,6 +679,10 @@ message UseItemRequest {
   // Which hand's item to use (e.g. eat food, draw a bow, throw a splash
   // potion).
   Hand hand = 3 [(google.api.field_behavior) = REQUIRED];
+  // How many ticks to keep trying when the item cannot be used yet. A
+  // water bucket held over a fall only places once the ground is in reach,
+  // which lasts about one tick at full speed. 0 tries once.
+  uint32 retry_ticks = 4;
 }
 
 message UseItemResponse {

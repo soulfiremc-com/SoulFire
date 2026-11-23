@@ -380,6 +380,8 @@ export type BeatGamePrimitiveAction =
   | {
       readonly type: "use-item";
       readonly hand?: BeatGameHand;
+      /// Ticks to keep trying while the item cannot be used yet.
+      readonly retryTicks?: number;
     }
   | {
       readonly type: "release-item";
@@ -1382,7 +1384,10 @@ function executePrimitive(
       });
     }
     case "use-item": {
-      return bot.useItem({ hand: hand(action.hand) });
+      return bot.useItem({
+        hand: hand(action.hand),
+        ...(action.retryTicks === undefined ? {} : { retryTicks: action.retryTicks }),
+      });
     }
     case "release-item": {
       return bot.releaseItem();

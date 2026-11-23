@@ -2394,33 +2394,80 @@ public final class BotLiveServiceImpl extends BotLiveServiceGrpc.BotLiveServiceI
     var botId = UUID.fromString(request.getBotId());
     var bot = requireControlledOnlineBot(soulFireServer, instanceId, botId);
     var hand = toMcHand(request.getHand());
+    var attempts = Math.max(1, request.getRetryTicks() + 1);
     submitAction(
       bot,
-      ControlTask.once("SDK use item", () -> {
-        var gameMode = bot.minecraft().gameMode;
-        var player = bot.minecraft().player;
-        if (gameMode == null || player == null) {
-          throw Status.FAILED_PRECONDITION
-            .withDescription("Bot player or game mode is not available")
-            .asRuntimeException();
-        }
-        var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
-        var result = gameMode.useItem(player, hand);
-        if (!(result instanceof InteractionResult.Success success)) {
-          throw Status.FAILED_PRECONDITION
-            .withDescription("The held item could not be used")
-            .asRuntimeException();
-        }
-        if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
-          player.swing(hand, swingAnimation, false);
-        }
-        // The client stops using an item on the next tick unless the use key
-        // is held, so a raised shield or drawn bow is held until releaseItem.
-        bot.minecraft().options.keyUse.setDown(player.isUsingItem());
-      }),
+      new UseItemTask(bot, hand, attempts),
       DEFAULT_ACTION_TIMEOUT,
       result -> UseItemResponse.newBuilder().setResult(result).build(),
       responseObserver);
+  }
+
+  /// Uses the held item once per tick until it works or the attempts run out.
+  /// A water bucket over a fall only places once the ground is in reach,
+  /// which lasts about one tick at full speed, so the SDK cannot time it
+  /// across a network round trip.
+  private static final class UseItemTask implements ControlTask {
+    private final BotConnection bot;
+    private final InteractionHand hand;
+    private final int attempts;
+    private int attempt;
+    private boolean done;
+
+    private UseItemTask(BotConnection bot, InteractionHand hand, int attempts) {
+      this.bot = bot;
+      this.hand = hand;
+      this.attempts = attempts;
+    }
+
+    @Override
+    public void tick() {
+      if (done) {
+        return;
+      }
+      var gameMode = bot.minecraft().gameMode;
+      var player = bot.minecraft().player;
+      if (gameMode == null || player == null) {
+        done = true;
+        throw Status.FAILED_PRECONDITION
+          .withDescription("Bot player or game mode is not available")
+          .asRuntimeException();
+      }
+      attempt++;
+      var swingAnimation = player.getItemInHand(hand).getInteractAnimation();
+      var result = gameMode.useItem(player, hand);
+      if (!(result instanceof InteractionResult.Success success)) {
+        if (attempt < attempts) {
+          return;
+        }
+        done = true;
+        throw Status.FAILED_PRECONDITION
+          .withDescription("The held item could not be used")
+          .asRuntimeException();
+      }
+      if (success.swingSource() == InteractionResult.SwingSource.PREDICTED) {
+        player.swing(hand, swingAnimation, false);
+      }
+      // The client stops using an item on the next tick unless the use key
+      // is held, so a raised shield or drawn bow is held until releaseItem.
+      bot.minecraft().options.keyUse.setDown(player.isUsingItem());
+      done = true;
+    }
+
+    @Override
+    public boolean isDone() {
+      return done;
+    }
+
+    @Override
+    public void onStopped(ControlStopReason reason, @Nullable Throwable cause) {
+      done = true;
+    }
+
+    @Override
+    public String description() {
+      return "SDK use item";
+    }
   }
 
   @Override

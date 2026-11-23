@@ -885,14 +885,16 @@ class InteractBlockResponse(_message.Message):
     def __init__(self, result: _Optional[_Union[BotActionResult, _Mapping]] = ...) -> None: ...
 
 class UseItemRequest(_message.Message):
-    __slots__ = ("instance_id", "bot_id", "hand")
+    __slots__ = ("instance_id", "bot_id", "hand", "retry_ticks")
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     BOT_ID_FIELD_NUMBER: _ClassVar[int]
     HAND_FIELD_NUMBER: _ClassVar[int]
+    RETRY_TICKS_FIELD_NUMBER: _ClassVar[int]
     instance_id: str
     bot_id: str
     hand: Hand
-    def __init__(self, instance_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., hand: _Optional[_Union[Hand, str]] = ...) -> None: ...
+    retry_ticks: int
+    def __init__(self, instance_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., hand: _Optional[_Union[Hand, str]] = ..., retry_ticks: _Optional[int] = ...) -> None: ...
 
 class UseItemResponse(_message.Message):
     __slots__ = ("result",)
