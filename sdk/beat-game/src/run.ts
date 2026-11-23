@@ -4273,8 +4273,17 @@ function executeDecision(
           ),
           Effect.as({
             phase: BeatGamePhase.FIGHT_ENDER_DRAGON,
+            // The open portal needs no more eyes when the bot comes back.
             checkpoint: (checkpoint: BeatGameCheckpoint) =>
-              rememberWorldPlace(checkpoint, "END_ENTRY", observation.player.position, 1),
+              rememberWorldPlace(
+                {
+                  ...checkpoint,
+                  memory: { ...checkpoint.memory, emptyPortalFrames: 0 },
+                },
+                "END_ENTRY",
+                observation.player.position,
+                1,
+              ),
           } satisfies ActionResult),
         );
       }

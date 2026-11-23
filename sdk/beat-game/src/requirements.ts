@@ -296,6 +296,9 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
       ({ targetEyeCount }) => targetEyeCount,
       100,
     ),
+    // Nothing in the End feeds the bot. A live bot went through without
+    // food, could not heal after a fall, and died to an enderman.
+    itemRequirement("food", COOKED_FOOD_ITEM_IDS, ({ targetFoodCount }) => targetFoodCount, 90),
   ],
   [BeatGamePhase.FIGHT_ENDER_DRAGON]: [
     itemRequirement("food", COOKED_FOOD_ITEM_IDS, ({ targetFoodCount }) => targetFoodCount, 100),

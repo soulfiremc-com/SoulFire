@@ -46158,11 +46158,84 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("needs no more eyes for the portal it opened", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = { x: -375, y: 15, z: -1771, dimension: "minecraft:overworld" } as const;
+    driver.currentObservation = observation({
+      counts: { "minecraft:ender_eye": 1, "minecraft:cooked_beef": 16 },
+      position,
+    });
+    // Every frame already holds an eye, and the portal is lit. Stepping in
+    // takes the bot to the End.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal") !== true) {
+        return [];
+      }
+      driver.currentObservation = observation({
+        counts: driver.currentObservation.inventory.counts,
+        dimension: "minecraft:the_end",
+      });
+      return [
+        blockObservation(
+          {
+            x: Math.floor(center.x),
+            y: Math.floor(center.y),
+            z: Math.floor(center.z),
+            dimension: center.dimension,
+          },
+          { blockId: "minecraft:end_portal", replaceable: true },
+        ),
+      ];
+    };
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "opened-portal-run",
+      teamId: "opened-portal-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            emptyPortalFrames: 1,
+            portalRoomCenter: { ...position, x: -375.5, z: -1771.5 },
+          },
+        },
+        undefined,
+      ),
+    );
+    const savedFrames = () =>
+      Effect.map(store.load("opened-portal-run"), (saved) => saved?.memory.emptyPortalFrames);
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "opened-portal-run",
+            team: { teamId: "opened-portal-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while ((yield* savedFrames()) !== 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(await Effect.runPromise(savedFrames())).toBe(0);
+  }, 10_000);
+
   it("walks back to the portal room before filling its frames", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: the bot ended up eighty blocks from the frames.
     driver.currentObservation = observation({
-      counts: { "minecraft:ender_eye": 11 },
+      counts: { "minecraft:ender_eye": 11, "minecraft:cooked_beef": 16 },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
     const portalRoomCenter = {

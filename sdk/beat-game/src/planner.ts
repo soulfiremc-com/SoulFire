@@ -338,6 +338,12 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
         : requirementDecision(missing);
     }
     case BeatGamePhase.FIGHT_ENDER_DRAGON: {
+      // A live bot died in the End and woke in the Overworld, where it
+      // looked for the dragon around its bed. It goes back through the
+      // portal first.
+      if (observation.player.position.dimension === "minecraft:overworld") {
+        return phaseTransition(phase, BeatGamePhase.ACTIVATE_END_PORTAL);
+      }
       // Nothing the fight asks for can be gathered in the End. A live bot
       // stepped through the portal without cooked food and retried the food
       // requirement every second, so it fights with what it carried in.

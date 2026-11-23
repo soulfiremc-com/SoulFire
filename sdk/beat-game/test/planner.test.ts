@@ -10,6 +10,62 @@ import {
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
 
 describe("beat-game planner", () => {
+  it("goes back through the portal after waking in the Overworld mid-fight", () => {
+    // As in a live run: an enderman killed the bot in the End and it woke at
+    // its bed in the Overworld.
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON),
+      observation: observation({
+        position: { x: -225, y: 80, z: -1263, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:bow": 1,
+          "minecraft:arrow": 64,
+          "minecraft:cooked_beef": 16,
+        },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({
+      type: "advance-phase",
+      to: BeatGamePhase.ACTIVATE_END_PORTAL,
+    });
+  });
+
+  it("stocks food before stepping through the End portal", () => {
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 10 },
+      },
+      observation: observation({
+        position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+        counts: { "minecraft:ender_eye": 11 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:food" });
+  });
+
+  it("goes back through an open portal without more eyes", () => {
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 0 },
+      },
+      observation: observation({
+        position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+        counts: { "minecraft:ender_eye": 1, "minecraft:cooked_beef": 16 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({ type: "activate-end-portal", action: "activate-end-portal" });
+  });
+
   it("fights the dragon with what it carried into the End", () => {
     // As in a live run: no cooked food made it through the portal.
     const decision = decideBeatGameAction({
@@ -38,7 +94,7 @@ describe("beat-game planner", () => {
       },
       observation: observation({
         position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
-        counts: { "minecraft:ender_eye": 11 },
+        counts: { "minecraft:ender_eye": 11, "minecraft:cooked_beef": 16 },
       }),
       strategy: defaultBeatGameStrategy,
     });
