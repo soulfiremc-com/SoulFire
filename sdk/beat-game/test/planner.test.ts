@@ -10,6 +10,23 @@ import {
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
 
 describe("beat-game planner", () => {
+  it("fights the dragon with what it carried into the End", () => {
+    // As in a live run: no cooked food made it through the portal.
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON),
+      observation: observation({
+        dimension: "minecraft:the_end",
+        counts: { "minecraft:bow": 1, "minecraft:arrow": 64, "minecraft:stone_sword": 1 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({
+      type: "fight-ender-dragon",
+      action: "fight-ender-dragon",
+    });
+  });
+
   it("activates a portal whose remaining empty frames its eyes can fill", () => {
     // As in a live run: two frames already held eyes and the bot carried
     // eleven, one more than the portal still needed.
