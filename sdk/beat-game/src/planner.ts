@@ -315,7 +315,13 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
           ? { type: "search-stronghold", action: "search-stronghold" }
           : requirementDecision(missing);
       }
-      return missing === undefined
+      // Locating the stronghold takes one eye, not twelve. A live bot that
+      // dropped a bad estimate went hunting pearls for its twelfth eye
+      // instead of throwing one of the eleven it carried.
+      return missing === undefined ||
+        (missing.key === "eyes-of-ender" &&
+          checkpoint.memory.eyeSamples.length > 0 &&
+          (observation.inventory.counts["minecraft:ender_eye"] ?? 0) > 0)
         ? { type: "throw-eye", action: "throw-eye" }
         : requirementDecision(missing);
     }

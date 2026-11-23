@@ -1020,6 +1020,42 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("throws one of its eyes to relocate a dropped stronghold estimate", () => {
+    const base = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD);
+    // As in the live run: eleven eyes, throws on record, and no estimate
+    // after the old one was dropped at an empty spot.
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...base,
+        memory: {
+          ...base.memory,
+          eyeSamples: [
+            {
+              origin: { x: 465, y: 52, z: -207, dimension: "minecraft:overworld" },
+              direction: { x: -0.484, z: -0.875 },
+              observedAt: "2026-01-01T00:00:00.000Z",
+              confidence: 1,
+            },
+          ],
+        },
+      },
+      observation: observation({
+        counts: {
+          "minecraft:stone_sword": 1,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:water_bucket": 1,
+          "minecraft:shield": 1,
+          "minecraft:cooked_beef": 8,
+          "minecraft:ender_eye": 11,
+        },
+        position: { x: -232, y: 83, z: -1482, dimension: "minecraft:overworld" },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "throw-eye" });
+  });
+
   it("replaces a worn-out pickaxe before digging down to the stronghold", () => {
     // As in the live run: the search resumed with no pickaxe and ended the run.
     const base = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD);
