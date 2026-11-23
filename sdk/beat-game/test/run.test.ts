@@ -6663,6 +6663,56 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("travels on through the night after its bed shelter fails", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    // As in the live run by the sea: armed and fed, with a bed it could not
+    // use, and no spot for a shaft or walls.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:white_bed": 1,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 4,
+      },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    const work = { resumed: false };
+    let shelterStarts = 0;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1, riskProfile: BeatGameRiskProfile.FAST },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  work.resumed = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-started" && event.action === "survive:night-shelter"
+                ? Effect.sync(() => {
+                    shelterStarts += 1;
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => !work.resumed).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(work.resumed).toBe(true);
+    expect(shelterStarts).toBe(1);
+  }, 10_000);
+
   it("sleeps through the night in a fast run that could travel through it", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

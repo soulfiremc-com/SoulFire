@@ -1001,6 +1001,7 @@ const NIGHT_SHELTER_MAXIMUM_WAIT_MS = 12 * 60_000;
 const NIGHT_SHELTER_RELOCATION_SCAN_RADIUS = 32;
 const NIGHT_SHELTER_RELOCATION_MINIMUM_DISTANCE = 4;
 const NIGHT_SHELTER_ACTION = "survive:night-shelter";
+const NIGHT_SHELTER_RETRY_BACKOFF_MS = 300_000;
 const BED_WOOL_COUNT = 3;
 const NIGHT_BED_SEARCH_RADIUS = 32;
 const NIGHT_BED_PLACEMENT_SEARCH_RADIUS = 5;
@@ -1115,6 +1116,8 @@ interface RunState {
   readonly failedCrafts: Ref.Ref<ReadonlyMap<string, FailedCraft>>;
   /// Set while the bot fetches logs for a craft.
   readonly fetchingTableWood: Ref.Ref<boolean>;
+  /// When the last night shelter ended before morning, in epoch milliseconds.
+  readonly nightShelterFailedAtMs: Ref.Ref<number>;
   readonly pendingDeaths: Ref.Ref<readonly PendingDeath[]>;
   readonly explorationFrontiers: Ref.Ref<Readonly<Record<string, BeatGameExplorationFrontier>>>;
   readonly checkedRecoveryContainers: Ref.Ref<ReadonlySet<string>>;
@@ -1269,6 +1272,7 @@ export function beatGameWithDriver(
       unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       failedCrafts: yield* Ref.make<ReadonlyMap<string, FailedCraft>>(new Map()),
       fetchingTableWood: yield* Ref.make(false),
+      nightShelterFailedAtMs: yield* Ref.make(Number.NEGATIVE_INFINITY),
       pendingDeaths,
       explorationFrontiers,
       checkedRecoveryContainers,
@@ -1646,6 +1650,10 @@ function runNightShelterAction(
       attempt: 1,
     });
     const reachedMorning = yield* shelterUntilMorning(state, observation);
+    if (!reachedMorning) {
+      const failedAtMs = yield* Clock.currentTimeMillis;
+      yield* Ref.set(state.nightShelterFailedAtMs, failedAtMs);
+    }
     yield* persist(state, (checkpoint) =>
       reachedMorning
         ? completeDurableSkill(
@@ -1732,7 +1740,16 @@ function shouldTakeNightShelter(
     // A bed skips the night in seconds, far less than the fights a night of
     // travel brings. A live fast run with a bed in its pack kept searching
     // through the night and died to night mobs three times in an hour.
-    if (protectedForNightTravel && carriedBedItemId(observation) === undefined) {
+    // A bed that cannot be used is no reason to stop. A live bot by the
+    // sea found no bed spot, shaft or wall-in, and retried every few seconds
+    // until the night ended, so it travels on after a failed shelter.
+    const nowMs = yield* Clock.currentTimeMillis;
+    const shelterFailedAtMs = yield* Ref.get(state.nightShelterFailedAtMs);
+    const shelterRecentlyFailed = nowMs - shelterFailedAtMs < NIGHT_SHELTER_RETRY_BACKOFF_MS;
+    if (
+      protectedForNightTravel &&
+      (carriedBedItemId(observation) === undefined || shelterRecentlyFailed)
+    ) {
       return false;
     }
     return true;
