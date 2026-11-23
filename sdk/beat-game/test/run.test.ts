@@ -13937,6 +13937,105 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions).toContainEqual(objectContaining({ type: "set-movement", sneak: true }));
   });
 
+  it("pillars off magma when every neighboring cell is magma too", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "magma-pillar-run",
+          teamId: "magma-pillar-team",
+        }),
+        undefined,
+      ),
+    );
+    const nether = "minecraft:the_nether";
+    let health = 20;
+    let position = { x: 0.5, y: 64, z: 0.5, dimension: nether };
+    const inFire = () =>
+      Math.floor(position.x) === 0 && Math.floor(position.z) === 0 && position.y < 65;
+    const counts = { "minecraft:cobblestone": 16 };
+    driver.currentObservation = observation({ health, position, counts });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const burning = inFire();
+        if (burning) {
+          health = Math.max(0, health - 1);
+        }
+        driver.currentObservation = observation({
+          health,
+          position,
+          counts,
+          fireTicks: 0,
+        });
+        return driver.currentObservation;
+      });
+    // As in a fortress basement in a live run: magma all around, nowhere safe.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const block = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (block.y === 63) {
+        return [
+          blockObservation(block, {
+            blockId: "minecraft:magma_block",
+          }),
+        ];
+      }
+      return [
+        blockObservation(block, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    driver.pathResolver = (target, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position: target, radius, policy });
+        position = { ...target };
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId: "magma-pillar-run",
+          team: { teamId: "magma-pillar-team" },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+          hooks: { satisfyRequirement: () => Effect.never },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (position.y < 65 && driver.currentObservation.player.health > 0) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+          Effect.timeout("3 seconds"),
+        ),
+      ),
+    );
+
+    // As on a live seabed: a block placed on the magma lifts the bot off it.
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: objectContaining({ y: 65 }),
+        policy: objectContaining({ allowPlacing: true }),
+      }),
+    );
+    expect(driver.currentObservation.player.health).toBeGreaterThan(0);
+  });
+
   it("escapes lava that only touches the edge of the hitbox", async () => {
     const driver = new FakeBeatGameDriver();
     // The live bot stood on dry ground here while lava in the next block

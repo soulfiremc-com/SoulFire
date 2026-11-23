@@ -10156,6 +10156,32 @@ function stepOffBurningGround(
         return true;
       }
     }
+    // A block placed on the magma lifts the bot off it for good. A live bot
+    // on a seabed magma patch sneaked, and every replan reset its movement,
+    // so the magma burned it from 7 health to death.
+    if (floorBlock !== undefined && HOT_FLOOR_BLOCK_IDS.has(floorBlock.blockId)) {
+      const current = yield* state.driver.observe;
+      if (pathBuildingBlockCount(current) > 0) {
+        const raised = yield* state.driver
+          .pathfind(
+            { x: feet.x + 0.5, y: feet.y + 1, z: feet.z + 0.5, dimension: feet.dimension },
+            0,
+            {
+              ...state.strategy.path,
+              allowMining: false,
+              allowPlacing: true,
+              maxSearchTimeMs: Math.min(state.strategy.path.maxSearchTimeMs, 1000),
+            },
+          )
+          .pipe(
+            Effect.as(true),
+            Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+          );
+        if (raised) {
+          return true;
+        }
+      }
+    }
     // Magma does not burn a sneaking player. A live bot in a fortress
     // basement found no cell to step to and stood on magma until it died.
     if (floorBlock !== undefined && HOT_FLOOR_BLOCK_IDS.has(floorBlock.blockId)) {
