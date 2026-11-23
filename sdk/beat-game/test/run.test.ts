@@ -10391,6 +10391,112 @@ describe("beat-game run lifecycle", () => {
     ]);
   }, 10_000);
 
+  it("sinks one block in a shallow pit to roof it from the sides", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:dirt": 16,
+        "minecraft:wooden_sword": 1,
+      },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    // As in a live run: the bot stood in a pit with dirt walls up to its head
+    // and open sky above, where every roof needed a face above its eyes.
+    const walls = new Set(
+      [64, 65].flatMap((y) => [`1:${y}:0`, `-1:${y}:0`, `0:${y}:1`, `0:${y}:-1`]),
+    );
+    const placed = new Set<string>();
+    const dug = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      const key = blockKey(position);
+      if (position.y <= 62) {
+        return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
+      }
+      if (!dug.has(key) && (position.y === 63 || walls.has(key) || placed.has(key))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionResolver = (action) =>
+      Effect.suspend(() => {
+        if (action.type === "place-block") {
+          const eyeY = driver.currentObservation.player.position.y + 1.62;
+          // A top face above the eyes cannot be seen, and the server refuses it.
+          if (action.face === "up" && action.against.y + 1 > eyeY) {
+            return Effect.fail(
+              new BeatGameDriverError({
+                operation: "act.place-block",
+                retryable: true,
+                message: "FAILED_PRECONDITION: Block placement is not ready",
+              }),
+            );
+          }
+          const offset = faceOffsets[action.face];
+          placed.add(
+            blockKey({
+              x: action.against.x + offset.x,
+              y: action.against.y + offset.y,
+              z: action.against.z + offset.z,
+            }),
+          );
+        }
+        if (action.type === "dig-block") {
+          dug.add(blockKey(action.position));
+          if (action.position.x === 0 && action.position.z === 0) {
+            driver.currentObservation = observation({
+              counts: driver.currentObservation.inventory.counts,
+              position: { x: 0.5, y: action.position.y, z: 0.5 },
+            });
+          }
+        }
+        return Effect.succeed({});
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !placed.has("0:65:0")).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(dug).toContain("0:63:0");
+    expect(placed).toContain("0:65:0");
+  }, 10_000);
+
   it("fills water under an enclosure wall before building it", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

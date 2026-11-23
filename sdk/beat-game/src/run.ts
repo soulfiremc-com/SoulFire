@@ -2919,7 +2919,80 @@ const foodCount = (current: BeatGameObservation): number =>
 
 // Places blocks around the bot's feet, head and roof where it stands. This
 // works on open ground and in shafts whose floor cannot be dug.
+// The roof of a pit one block too shallow sits on top of its walls, a face
+// the eyes cannot see from inside. A live bot stood in such a pit all night,
+// refused a roof every few seconds. One block deeper, the roof goes up
+// against the sides of the walls instead.
 function encloseNightShelterInPlace(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<NightShelterEnclosure | undefined, BeatGameDriverError> {
+  return encloseNightShelterInPlaceOnce(state, observation).pipe(
+    Effect.filterOrElse(
+      (enclosure) => enclosure !== undefined,
+      () =>
+        sinkIntoShallowPit(state, observation).pipe(
+          Effect.flatMap((sunk) =>
+            sunk === undefined ? Effect.undefined : encloseNightShelterInPlaceOnce(state, sunk),
+          ),
+        ),
+    ),
+  );
+}
+
+function sinkIntoShallowPit(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<BeatGameObservation | undefined, BeatGameDriverError> {
+  const feet = {
+    x: Math.floor(observation.player.position.x),
+    y: Math.floor(observation.player.position.y),
+    z: Math.floor(observation.player.position.z),
+    dimension: observation.player.position.dimension,
+  };
+  return Effect.gen(function* () {
+    for (const y of [feet.y, feet.y + 1]) {
+      for (const side of ENCLOSURE_SIDES) {
+        const wall = yield* queryExactBlock(state.driver, {
+          ...feet,
+          x: feet.x + side.x,
+          y,
+          z: feet.z + side.z,
+        });
+        if (!isSolid(wall)) {
+          return undefined;
+        }
+      }
+    }
+    const floorPosition = { ...feet, y: feet.y - 1 };
+    const floor = yield* queryExactBlock(state.driver, floorPosition);
+    const below = yield* queryExactBlock(state.driver, { ...feet, y: feet.y - 2 });
+    if (floor === undefined || !floor.diggable || !isSolid(floor) || !isSolid(below)) {
+      return undefined;
+    }
+    yield* state.driver.withControl(
+      Effect.gen(function* () {
+        if (hasMiningPickaxe(observation)) {
+          yield* state.driver.act({
+            type: "select-item",
+            selector: { itemIds: MINING_PICKAXE_ITEM_IDS },
+          });
+        }
+        yield* state.driver.act({ type: "dig-block", position: floorPosition });
+      }),
+    );
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const current = yield* state.driver.observe;
+      if (current.player.position.y < feet.y - 0.5) {
+        return current;
+      }
+      yield* Effect.sleep(100);
+    }
+    return undefined;
+  });
+}
+
+function encloseNightShelterInPlaceOnce(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<NightShelterEnclosure | undefined, BeatGameDriverError> {
