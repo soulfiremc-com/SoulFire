@@ -6002,14 +6002,21 @@ function takeCoverFromRangedFire(
     // while three zombies and two skeletons waited outside. Once healed, an
     // armed bot fights its way out instead.
     const sheltered = yield* state.driver.observe;
+    // Health only comes back on a nearly full stomach. A live bot with no
+    // food sat behind finished walls fifteen times at six health, waiting to
+    // heal, while its hunger ran down, so a bot that cannot heal goes out.
+    const cannotHealInCover = sheltered.player.food < 18 && !hasUsableFood(sheltered);
     if (
       cover.placedBlocks === 0 &&
-      sheltered.player.health >= state.strategy.minimumHealth &&
+      (sheltered.player.health >= state.strategy.minimumHealth || cannotHealInCover) &&
       hasMeleeWeapon(sheltered)
     ) {
       yield* emit(state, {
         type: "diagnostic",
-        message: "Fighting out of finished cover at full health",
+        message:
+          sheltered.player.health >= state.strategy.minimumHealth
+            ? "Fighting out of finished cover at full health"
+            : "Fighting out of finished cover it cannot heal in",
         data: {
           threatNetworkId: threat.networkId,
           threatType: threat.entityType,
