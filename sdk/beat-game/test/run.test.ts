@@ -46158,6 +46158,112 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("digs a route to portal frames under a lake when the staircase floods", async () => {
+    const driver = new FakeBeatGameDriver();
+    const currentPosition = {
+      x: 15,
+      y: 10,
+      z: 17,
+      dimension: "minecraft:overworld",
+    };
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:cobblestone": 64,
+      },
+      position: currentPosition,
+    });
+    installStaircaseMovementSimulation(driver, currentPosition);
+    const portalFrames = [
+      { x: 10, z: 20 },
+      { x: 14, z: 20 },
+      { x: 10, z: 24 },
+      { x: 14, z: 24 },
+    ].map(({ x, z }) => ({
+      blockId: "minecraft:end_portal_frame",
+      position: {
+        x,
+        y: 3,
+        z,
+        dimension: "minecraft:overworld",
+      },
+      properties: { eye: "false" },
+      diggable: false,
+      replaceable: false,
+      interactive: true,
+      observedAt: "2026-01-01T00:00:01.000Z",
+    }));
+    driver.blockResults = portalFrames;
+    // As in the live run: the staircase start lies under the lake beside
+    // the bot.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal_frame") === true) {
+        return portalFrames;
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        position.y >= currentPosition.y - 1 &&
+        (position.x !== currentPosition.x || position.z !== currentPosition.z)
+          ? blockObservation(position, { blockId: "minecraft:water", replaceable: true })
+          : blockObservation(position),
+      ];
+    };
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "flooded-staircase-run",
+      teamId: "flooded-staircase-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            strongholdEstimate: { x: 12, y: 100, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const routeDown = () =>
+      driver.paths.find(
+        ({ position, radius, policy }) =>
+          radius === 4 && position.y < currentPosition.y && policy.allowMining,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "flooded-staircase-run",
+            team: { teamId: "flooded-staircase-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (routeDown() === undefined && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(routeDown()?.policy).toMatchObject({ allowMining: true, avoidFluids: true });
+  }, 10_000);
+
   it("resumes a stronghold staircase from an intermediate step", async () => {
     const driver = new FakeBeatGameDriver();
     const currentPosition = {

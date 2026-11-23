@@ -19717,12 +19717,34 @@ function approachStrongholdPortalRoom(
   if (depth <= 0) {
     return state.driver.pathfind(destination, 4, state.strategy.path);
   }
+  // A live bot found the portal room under a lake. Every staircase it
+  // started stood in the water and was refused, and the run ended there.
+  // With the frames known and close, a route that digs down around the
+  // water reaches them instead.
   return excavateStaircase(state.driver, {
     from: staircaseStartPosition(destination, current),
     to: destination,
     path: state.strategy.path,
     openSpaceHandoffRadius: 1,
-  });
+  }).pipe(
+    Effect.catchIf(
+      (error) => error.code === "fluid_exposed",
+      (error) =>
+        state.driver
+          .pathfind(destination, 4, {
+            ...state.strategy.path,
+            allowMining: true,
+            allowPlacing: true,
+            avoidFluids: true,
+          })
+          .pipe(
+            Effect.catchIf(
+              (cause) => cause.operation === "pathfind",
+              () => Effect.fail(error),
+            ),
+          ),
+    ),
+  );
 }
 
 function floorBlockPosition(position: BeatGamePosition): BeatGameBlockPosition {
