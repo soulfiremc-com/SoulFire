@@ -951,6 +951,11 @@ const DEFENSIVE_PURSUIT_MAX_DISTANCE = 12;
 const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
+/// A wooden sword deals 4 damage and a fist 1.
+const FINISHABLE_PURSUER_ARMED_HEALTH = 4;
+const FINISHABLE_PURSUER_BAREHANDED_HEALTH = 1;
+const FINISHABLE_PURSUER_RADIUS = 6;
+const FINISHABLE_PURSUER_FIGHT_TIMEOUT_MS = 5000;
 const EMERGENCY_ESCAPE_SPRINT_MS = 1250;
 const RANGED_ESCAPE_SPRINT_MS = 2500;
 const RANGED_ESCAPE_MINIMUM_AWAY_ALIGNMENT = 0;
@@ -5599,6 +5604,32 @@ function escapeFromTarget(
       yield* blockCreeperExplosion(state, observation, target);
       return;
     }
+    // A live bot wore a drowned down to a third of a heart, then fled it
+    // for 26 seconds while it followed and landed the killing hit. A pursuer
+    // one strike from death is ended rather than outrun.
+    const finishable = yield* findFinishablePursuer(state, observation);
+    if (finishable !== undefined) {
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Finishing a nearly dead pursuer instead of fleeing it",
+        data: {
+          pursuerNetworkId: finishable.networkId,
+          pursuerType: finishable.entityType,
+          pursuerHealth: finishable.health,
+          health: observation.player.health,
+        },
+      });
+      yield* defendAgainstSingleTarget(state, finishable, { commitThroughWound: true }).pipe(
+        Effect.timeoutOrElse({
+          duration: FINISHABLE_PURSUER_FIGHT_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
+        Effect.catchTag("BeatGameDriverError", () => Effect.void),
+      );
+      if (isSameEntityTarget(finishable, target)) {
+        return;
+      }
+    }
     const endermanWaterEscapeTarget =
       target.entityType === "minecraft:enderman"
         ? yield* findEndermanWaterEscapeTarget(state, observation.player.position)
@@ -6725,6 +6756,47 @@ function isSameEntityTarget(
   right: BeatGameEntityObservation,
 ): boolean {
   return left.connectionEpoch === right.connectionEpoch && left.networkId === right.networkId;
+}
+
+/// Finds an aggressive melee pursuer close enough to chase the bot down
+/// that a single strike of the bot's best weapon would kill.
+function findFinishablePursuer(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<BeatGameEntityObservation | undefined, BeatGameDriverError> {
+  const maximumHealth = hasMeleeWeapon(observation)
+    ? FINISHABLE_PURSUER_ARMED_HEALTH
+    : FINISHABLE_PURSUER_BAREHANDED_HEALTH;
+  return state.driver
+    .queryEntities({
+      origin: observation.player.position,
+      radius: FINISHABLE_PURSUER_RADIUS,
+      selector: { categories: [2], alive: true },
+      maximumResults: 16,
+    })
+    .pipe(
+      Effect.map((entities) =>
+        entities
+          .filter(
+            (entity) =>
+              entity.health !== undefined &&
+              entity.health > 0 &&
+              entity.health <= maximumHealth &&
+              entity.position.dimension === observation.player.position.dimension &&
+              PROACTIVE_MELEE_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+              !PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(entity.entityType) &&
+              !GROUP_AGGRO_ENTITY_TYPES.has(entity.entityType) &&
+              entity.entityType !== "minecraft:enderman" &&
+              (entity.aggressive === true || entity.target !== undefined),
+          )
+          .toSorted(
+            (left, right) =>
+              distanceSquared(left.position, observation.player.position) -
+              distanceSquared(right.position, observation.player.position),
+          )
+          .at(0),
+      ),
+    );
 }
 
 function knockBackAndSprintAway(
