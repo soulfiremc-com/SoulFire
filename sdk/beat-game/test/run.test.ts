@@ -285,6 +285,24 @@ describe("inventory discards", () => {
     expect(discarded.toSorted()).toEqual(["minecraft:light_gray_wool", "minecraft:white_wool"]);
   });
 
+  it("keeps white wool while no color holds a bed's worth", () => {
+    // As in a live run: two black wool beside one white, while the bot hunted
+    // the white sheep that make up nearly every flock.
+    const counts: Record<string, number> = {
+      "minecraft:black_wool": 2,
+      "minecraft:white_wool": 1,
+      "minecraft:ender_eye": 12,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded).not.toContain("minecraft:white_wool");
+  });
+
   it("drops backup tools when nothing else can go", () => {
     // Part of the inventory a live bot held when its pearl hunt could not
     // free three slots.
@@ -7422,6 +7440,56 @@ describe("beat-game run lifecycle", () => {
       driver.tasks.filter((task) => task.type === "attack-entity").map((task) => task.target),
     ).toEqual(sheep.map(({ networkId }) => objectContaining({ networkId })));
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
+  });
+
+  it("hunts the white sheep of a flock while it holds two black wool", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: two black wool, and only white sheep in sight.
+    const preparedCounts = {
+      "minecraft:oak_log": 8,
+      "minecraft:wooden_sword": 1,
+      "minecraft:cooked_beef": 5,
+      "minecraft:cobblestone": 20,
+      "minecraft:black_wool": 2,
+    };
+    const sheep = [311, 312, 313].map(
+      (networkId) =>
+        ({
+          connectionEpoch: "epoch-1",
+          networkId,
+          entityType: "minecraft:sheep",
+          position: { x: 3, y: 64, z: networkId - 310, dimension: "minecraft:overworld" },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 8,
+          sheep: { color: "white", sheared: false },
+          observedAt: "2026-01-01T00:00:00.000Z",
+        }) as const,
+    );
+    driver.currentObservation = observation({ counts: preparedCounts });
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:sheep") === true ? sheep : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "attack-entity" ? Effect.never : Effect.void));
+    const attacksSheep = () =>
+      driver.tasks.some((task) => task.type === "attack-entity" && task.target.networkId >= 311);
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !attacksSheep()).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(attacksSheep()).toBe(true);
   });
 
   it("collects a village hay bale for food instead of hunting", async () => {

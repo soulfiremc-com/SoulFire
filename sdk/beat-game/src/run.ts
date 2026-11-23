@@ -10798,16 +10798,14 @@ function huntSheepForBed(
   observation: BeatGameObservation,
 ): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   // A bed needs three wool of one color. Each sheep drops one wool of its own
-  // color, so the bot hunts the color it already holds most of, and only
-  // unsheared sheep, which still drop wool.
-  const targetWool = WOOL_ITEM_IDS.reduce<{ itemId?: string; count: number }>(
-    (best, itemId) => {
-      const count = observation.inventory.counts[itemId] ?? 0;
-      return count > best.count ? { itemId, count } : best;
-    },
-    { count: 0 },
-  );
-  const targetColor = targetWool.itemId?.replace(/^minecraft:/u, "").replace(/_wool$/u, "");
+  // color, and nearly every sheep is white. A live bot held two black wool,
+  // hunted only black sheep, and threw away the white wool it found, so the
+  // bot hunts white sheep.
+  const targetWool = {
+    itemId: "minecraft:white_wool",
+    count: observation.inventory.counts["minecraft:white_wool"] ?? 0,
+  };
+  const targetColor = targetWool.itemId.replace(/^minecraft:/u, "").replace(/_wool$/u, "");
   return huntOrExplore(
     state,
     observation,
@@ -10818,11 +10816,10 @@ function huntSheepForBed(
       preferredEntityTypes: new Set(["minecraft:sheep"]),
       preferredRadius: state.strategy.entitySearchRadius,
       maximumExplorationHops: 1,
-      dropItemIds: targetWool.itemId === undefined ? WOOL_ITEM_IDS : [targetWool.itemId],
+      dropItemIds: [targetWool.itemId],
       // A server that does not report sheep details leaves every sheep eligible.
       acceptsTarget: ({ sheep }) =>
-        sheep === undefined ||
-        (!sheep.sheared && (targetColor === undefined || sheep.color === targetColor)),
+        sheep === undefined || (!sheep.sheared && sheep.color === targetColor),
       path: state.strategy.path,
     },
   );
@@ -17906,9 +17903,16 @@ export function selectInventoryDiscard(
   // A bed takes three wool of one color. A live bot carried two light gray
   // and one white beside four black, and could not free slots for food.
   const mostWool = Math.max(0, ...WOOL_ITEM_IDS.map((itemId) => counts[itemId] ?? 0));
+  // Until another color holds a bed's worth, white wool is not stray: nearly
+  // every sheep is white, so it is the color the bot hunts.
   const strayWool = WOOL_ITEM_IDS.find((itemId) => {
     const count = counts[itemId] ?? 0;
-    return count > 0 && count < 3 && count < mostWool;
+    return (
+      count > 0 &&
+      count < 3 &&
+      count < mostWool &&
+      (itemId !== "minecraft:white_wool" || mostWool >= 3)
+    );
   });
   if (strayWool !== undefined) {
     return { itemId: strayWool, count: counts[strayWool] ?? 0 };
