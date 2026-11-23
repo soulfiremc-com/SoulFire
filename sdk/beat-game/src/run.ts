@@ -19504,15 +19504,20 @@ function searchStronghold(
     // and stops at flooded steps.
     // It starts where the bot stands: a live run could not walk to a start
     // twenty blocks away either, and ended there.
+    // A live bot fell below the target depth on its way down, and the
+    // staircase it then started had nowhere to descend, which ended the run.
+    // A bot already that deep goes on with the search from where it is.
     if (!descended) {
       const target = floorBlockPosition(undergroundTarget);
       const from = floorBlockPosition((yield* state.driver.observe).player.position);
-      yield* excavateStaircase(state.driver, {
-        from,
-        to: target,
-        path: state.strategy.path,
-        openSpaceHandoffRadius: 16,
-      });
+      if (from.y > target.y) {
+        yield* excavateStaircase(state.driver, {
+          from,
+          to: target,
+          path: state.strategy.path,
+          openSpaceHandoffRadius: 16,
+        });
+      }
     }
     const observation = yield* state.driver.observe;
     const frames = yield* state.driver.queryBlocks({
