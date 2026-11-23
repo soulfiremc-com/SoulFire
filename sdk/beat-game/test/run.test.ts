@@ -15691,6 +15691,62 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("keeps its phase after a death that left its eyes of ender", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+      runId: "late-progress-recovery-run",
+      teamId: "late-progress-recovery-team",
+    });
+    const recoveredAt = new Date().toISOString();
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          lastStableAction: {
+            action: "recover-death",
+            phase: BeatGamePhase.LOCATE_STRONGHOLD,
+            completedAt: recoveredAt,
+            evidence: "TASK_RESULT",
+            connectionEpoch: "epoch-1",
+            playerRevision: "1",
+            inventoryRevision: "1",
+          },
+        },
+        undefined,
+      ),
+    );
+    // As in the live run: swords and eleven eyes, but no pickaxe or food.
+    driver.currentObservation = observation({
+      dimension: "minecraft:overworld",
+      counts: { "minecraft:stone_sword": 3, "minecraft:ender_eye": 11 },
+    });
+    driver.taskResolver = () => Effect.never;
+
+    const phaseChange = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "late-progress-recovery-run",
+            team: { teamId: "late-progress-recovery-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          const phaseChangeEvent = yield* run.events.pipe(
+            Stream.filter((event) => event.type === "phase-changed"),
+            Stream.runHead,
+            Effect.timeout("1 second"),
+            Effect.orElseSucceed(() => Option.none()),
+          );
+          yield* run.stop;
+          return phaseChangeEvent;
+        }),
+      ),
+    );
+
+    expect(Option.getOrUndefined(phaseChange)).toBeUndefined();
+  });
+
   it("restarts preparation after respawning without a recoverable inventory", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();

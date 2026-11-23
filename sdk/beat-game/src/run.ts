@@ -19787,6 +19787,13 @@ function hasItemInInventoryOrEquipment(observation: BeatGameObservation, itemId:
   );
 }
 
+const LATE_PROGRESS_ITEM_IDS = [
+  "minecraft:ender_eye",
+  "minecraft:ender_pearl",
+  "minecraft:blaze_rod",
+  "minecraft:blaze_powder",
+] as const;
+
 function resetAfterCatastrophicInventoryLoss(
   checkpoint: BeatGameCheckpoint,
   observation: BeatGameObservation,
@@ -19805,6 +19812,13 @@ function resetAfterCatastrophicInventoryLoss(
     (itemId) => (counts[itemId] ?? 0) > 0,
   );
   if (Number(hasMeleeWeapon(observation)) + Number(hasPickaxe) + Number(hasFood) >= 2) {
+    return checkpoint;
+  }
+  // Eyes, rods and pearls are the run's late progress, and the later phases
+  // restock tools and food themselves. A live bot died near the stronghold
+  // with eleven eyes and a sword but no pickaxe or food, and was sent back
+  // to gather logs as if it had nothing.
+  if (LATE_PROGRESS_ITEM_IDS.some((itemId) => (counts[itemId] ?? 0) > 0)) {
     return checkpoint;
   }
   const repairedCheckpoint =
