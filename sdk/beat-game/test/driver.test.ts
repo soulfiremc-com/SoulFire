@@ -679,6 +679,34 @@ describe("production SoulFire beat-game driver", () => {
     expect(error).toMatchObject({ code: "failed_precondition", retryable: true });
   });
 
+  it("retries a request whose connection was reset", async () => {
+    // As in a live run: one entity query lost its connection, and the run ended.
+    const cause = new SoulFireRpcError({
+      operation: "world.queryEntities",
+      cause: new Error(
+        "Transport error (POST http://127.0.0.1:35719/soulfire.v1.WorldService/QueryEntities)",
+        { cause: new Error("read ECONNRESET") },
+      ),
+      code: Code.Unknown,
+      retryable: false,
+      message:
+        "[unknown] Transport error (POST http://127.0.0.1:35719/soulfire.v1.WorldService/QueryEntities)",
+    });
+    const { bot } = effectBot(Effect.succeed({}), Effect.fail(cause));
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const error = await Effect.runPromise(
+      Effect.flip(
+        driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:iron_pickaxe"] },
+        }),
+      ),
+    );
+
+    expect(error).toMatchObject({ retryable: true });
+  });
+
   it("reads the status of a failed bot action from its message", async () => {
     // As in a live run whose dig target was out of reach.
     const cause = new SoulFireActionError(

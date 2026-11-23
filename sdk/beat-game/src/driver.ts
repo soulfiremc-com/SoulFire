@@ -1683,6 +1683,9 @@ const PLACEMENT_NOT_READY_PREFIX = "FAILED_PRECONDITION: Block placement is not 
 // SoulFire reconnects a dropped bot on its own. A live run ended when its
 // Minecraft server restarted, though the bot would have come back.
 const BOT_OFFLINE_MESSAGE = "Bot is not online";
+// A dropped connection to SoulFire passes. A live run ended on one reset
+// entity query while the server kept running.
+const TRANSPORT_FAILURE_PATTERN = /Transport error|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up/u;
 
 function isRetryable(cause: unknown): boolean {
   if (typeof cause !== "object" || cause === null) {
@@ -1694,7 +1697,8 @@ function isRetryable(cause: unknown): boolean {
   if (
     cause instanceof Error &&
     (cause.message.startsWith(PLACEMENT_NOT_READY_PREFIX) ||
-      cause.message.includes(BOT_OFFLINE_MESSAGE))
+      cause.message.includes(BOT_OFFLINE_MESSAGE) ||
+      TRANSPORT_FAILURE_PATTERN.test(cause.message))
   ) {
     return true;
   }
