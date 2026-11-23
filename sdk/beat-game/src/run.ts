@@ -1729,7 +1729,10 @@ function shouldTakeNightShelter(
           observation.player.health >= state.strategy.minimumHealth &&
           observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
           countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 4;
-    if (protectedForNightTravel) {
+    // A bed skips the night in seconds, far less than the fights a night of
+    // travel brings. A live fast run with a bed in its pack kept searching
+    // through the night and died to night mobs three times in an hour.
+    if (protectedForNightTravel && carriedBedItemId(observation) === undefined) {
       return false;
     }
     return true;

@@ -6663,6 +6663,69 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("sleeps through the night in a fast run that could travel through it", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      // As in the live run: armed, shielded and fed, with a bed in the pack.
+      counts: {
+        "minecraft:white_bed": 1,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 4,
+      },
+      position: {
+        x: 0.5,
+        y: 64,
+        z: 0.5,
+        dimension: "minecraft:overworld",
+      },
+    });
+    installNightBedTestWorld(driver);
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "sleep") {
+          driver.currentEnvironment = { gameTime: 1000n };
+        }
+      });
+    const succeeded: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1, riskProfile: BeatGameRiskProfile.FAST },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-succeeded"
+                ? Effect.sync(() => {
+                    succeeded.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!succeeded.includes("survive:night-shelter")) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "3 seconds",
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for bed sleep" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "sleep" }));
+  });
+
   it("stops placing its bed when a creeper closes in", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
