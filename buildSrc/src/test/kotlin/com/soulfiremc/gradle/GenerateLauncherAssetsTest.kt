@@ -89,6 +89,22 @@ class GenerateLauncherAssetsTest {
   }
 
   @Test
+  fun `Mojang-built natives do not acquire a Linux ARM64 classifier that Central lacks`() {
+    val metadata = minecraftLibraries(
+      "natives-linux", "natives-windows", "natives-windows-arm64", "natives-macos", "natives-macos-arm64"
+    )
+    metadata.getAsJsonArray("libraries").add(JsonObject().apply {
+      addProperty("name", "org.lwjgl:lwjgl-freetype:3.4.3-mojang-2.15.0:natives-linux")
+      add("downloads", JsonObject().apply { add("artifact", JsonObject()) })
+    })
+
+    val natives = GenerateLauncherAssets.minecraftNatives(metadata)
+
+    assertEquals(listOf("linux-x86_64"), natives.filter { it.name.startsWith("org.lwjgl:lwjgl-freetype:") }.map { it.platform })
+    assertEquals(7, natives.size)
+  }
+
+  @Test
   fun `incomplete Minecraft native coverage stops manifest generation`() {
     assertThrows(IllegalArgumentException::class.java) {
       GenerateLauncherAssets.minecraftNatives(minecraftLibraries("natives-linux"))

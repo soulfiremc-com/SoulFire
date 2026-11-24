@@ -235,8 +235,9 @@ abstract class GenerateLauncherAssets : DefaultTask() {
         MinecraftNative(name, platform, download)
       }.associateBy { it.name }.toMutableMap()
 
-      // Mojang omits Linux ARM64. LWJGL publishes matching classifiers on Central.
-      natives.values.filter { it.platform == "linux-x86_64" }.toList().forEach { native ->
+      // Mojang omits Linux ARM64. LWJGL publishes matching classifiers on Central,
+      // but not for Mojang's own patched builds such as lwjgl-freetype 3.4.3-mojang-2.15.0.
+      natives.values.filter { it.platform == "linux-x86_64" && "-mojang" !in it.name.split(':')[2] }.toList().forEach { native ->
         val arm = native.copy(
           name = native.name.substringBeforeLast(':') + ":natives-linux-arm64", platform = "linux-arm64", download = null
         )
