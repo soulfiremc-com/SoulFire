@@ -55407,10 +55407,10 @@ describe("beat-game run lifecycle", () => {
         ? []
         : driver.entityResults;
     const fight = { started: false };
-    const escapes: { x: number; z: number }[] = [];
-    driver.xzPathResolver = (x, z) =>
+    const escapes: { x: number; z: number; allowMining: boolean }[] = [];
+    driver.xzPathResolver = (x, z, _dimension, _radius, policy) =>
       Effect.sync(() => {
-        escapes.push({ x, z });
+        escapes.push({ x, z, allowMining: policy.allowMining });
       });
     const breath = Effect.gen(function* () {
       let attempts = 3000;
@@ -55490,6 +55490,8 @@ describe("beat-game run lifecycle", () => {
     const [escape] = escapes;
     expect(escape?.x).toBeCloseTo(7 + (12 * 7) / Math.hypot(7, 6));
     expect(escape?.z).toBeCloseTo(-6 - (12 * 6) / Math.hypot(7, 6));
+    // The End spawn platform can sit in a pocket that only digging leaves.
+    expect(escape?.allowMining).toBe(true);
   });
 
   it("walks back to the water it poured against an enderman", async () => {

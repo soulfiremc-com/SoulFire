@@ -15797,8 +15797,11 @@ function leaveDragonBreath(
     yield* state.driver
       .pathfindXZ(target.x, target.z, position.dimension, DRAGON_BREATH_ESCAPE_RADIUS, {
         ...state.strategy.path,
-        allowMining: false,
-        allowPlacing: false,
+        // The End spawn platform can sit in a pocket cut into the island. A
+        // live bot arrived there, found no route out without digging, and
+        // died in the breath of the fireballs the dragon kept aiming at it.
+        allowMining: true,
+        allowPlacing: true,
         avoidFluids: true,
         sprint: true,
       })
