@@ -990,6 +990,7 @@ const FURNACE_STONE_ITEM_IDS = [
 const PORTAL_ROOM_ARRIVAL_RADIUS = 8;
 const PORTAL_ROOM_APPROACH_RADIUS = 3;
 const PORTAL_ROOM_SEARCH_RADIUS = 16;
+const PORTAL_ROOM_ABOVE_RADIUS = 6;
 const PORTAL_ROOM_TRAVEL_RADIUS = 128;
 const PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS = 16;
 /// A wooden sword deals 4 damage and a fist 1.
@@ -4356,12 +4357,23 @@ function executeDecision(
               PORTAL_ROOM_ARRIVAL_RADIUS ** 2 &&
             Math.abs(portalRoom.y - observation.player.position.y) <= PORTAL_ROOM_ARRIVAL_RADIUS)
             ? Effect.void
-            : state.driver.pathfind(portalRoom, PORTAL_ROOM_APPROACH_RADIUS, {
-                ...state.strategy.path,
-                allowMining: true,
-                allowPlacing: true,
-                avoidFluids: true,
-              });
+            : state.driver
+                .pathfind(portalRoom, PORTAL_ROOM_APPROACH_RADIUS, {
+                  ...state.strategy.path,
+                  allowMining: true,
+                  allowPlacing: true,
+                  avoidFluids: true,
+                })
+                .pipe(
+                  // A dug route down from ninety blocks off outgrew the path
+                  // search, and a live bot retried it until it gave up. As the
+                  // stronghold search did, it walks above the room and digs a
+                  // staircase down to the frames.
+                  Effect.catchIf(
+                    (error) => error.operation === "pathfind" && error.retryable,
+                    () => descendToPortalRoom(state, portalRoom),
+                  ),
+                );
         return approachPortalRoom.pipe(
           Effect.andThen(
             activateEndPortal(state.driver, {
@@ -19963,6 +19975,39 @@ function approachStrongholdPortalRoom(
     ),
   );
   return rememberEmptyFrames.pipe(Effect.andThen(descend));
+}
+
+function descendToPortalRoom(
+  state: RunState,
+  portalRoom: BeatGamePosition,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
+  return Effect.gen(function* () {
+    yield* state.driver
+      .pathfindXZ(
+        portalRoom.x,
+        portalRoom.z,
+        portalRoom.dimension,
+        PORTAL_ROOM_ABOVE_RADIUS,
+        state.strategy.path,
+      )
+      .pipe(
+        Effect.catchIf(
+          (error) => error.operation === "pathfindXZ" && error.retryable,
+          () => Effect.void,
+        ),
+      );
+    const frames = yield* state.driver.queryBlocks({
+      center: portalRoom,
+      radius: PORTAL_ROOM_SEARCH_RADIUS,
+      selector: { blockIds: ["minecraft:end_portal_frame"] },
+      maximumResults: END_PORTAL_FRAME_COUNT,
+    });
+    if (frames.length === 0) {
+      return;
+    }
+    const current = yield* state.driver.observe;
+    yield* approachStrongholdPortalRoom(state, frames, portalRoom, current.player.position);
+  });
 }
 
 function portalFrameCenter(frames: readonly BeatGameBlockObservation[]): BeatGamePosition {

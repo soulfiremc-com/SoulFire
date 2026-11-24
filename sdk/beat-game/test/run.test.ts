@@ -46807,6 +46807,84 @@ describe("beat-game run lifecycle", () => {
     expect(framesSearchedAtRoom()).toBe(true);
   }, 10_000);
 
+  it("walks above the portal room when the dug route down outgrows the search", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: from ninety blocks off, every dug route down to the
+    // frames hit the path search limit.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+      position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
+    });
+    const portalRoomCenter = {
+      x: -375.5,
+      y: 15,
+      z: -1771.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          radius === 3
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "search_limit",
+                  retryable: true,
+                  message: "Pathfinding reached its search limit after 50000 expanded states",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "descend-room-run",
+      teamId: "descend-room-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, emptyPortalFrames: 10, portalRoomCenter },
+        },
+        undefined,
+      ),
+    );
+    const walksAboveRoom = () =>
+      driver.xzPaths.some(
+        ({ x, z, radius }) => radius === 6 && x === portalRoomCenter.x && z === portalRoomCenter.z,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "descend-room-run",
+            team: { teamId: "descend-room-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!walksAboveRoom() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(walksAboveRoom()).toBe(true);
+  }, 10_000);
+
   it("digs a route to portal frames under a lake when the staircase floods", async () => {
     const driver = new FakeBeatGameDriver();
     const currentPosition = {
