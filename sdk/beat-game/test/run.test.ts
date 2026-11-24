@@ -6677,6 +6677,51 @@ describe("beat-game run lifecycle", () => {
     expect(failures).toEqual(["survive:night-shelter"]);
   });
 
+  it("judges night by the day clock, not the game time", async () => {
+    // As in a live run: nights slept through moved the day clock on but not
+    // the game time, which still read as night at noon.
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n, dayTime: 6000n };
+    driver.currentObservation = observation({
+      counts: { "minecraft:white_bed": 1 },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    const started: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-started"
+                ? Effect.sync(() => {
+                    started.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (started.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(started.length).toBeGreaterThan(0);
+    expect(started).not.toContain("survive:night-shelter");
+    expect(driver.tasks.some((task) => task.type === "sleep")).toBe(false);
+  });
+
   it("places a carried bed and skips the hostile night", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

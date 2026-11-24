@@ -113,7 +113,19 @@ export interface BeatGameSurfaceColumn {
 
 export interface BeatGameEnvironmentObservation {
   readonly gameTime?: bigint;
+  /// Ticks of the Overworld day clock. Sleeping moves it on but not the
+  /// game time, so it is what tells day from night.
+  readonly dayTime?: bigint;
   readonly raining?: boolean;
+}
+
+const OVERWORLD_DAY_CLOCK_ID = "minecraft:overworld";
+
+/// Reads the Overworld day clock from the clocks a bot session tracks.
+export function overworldDayTime(
+  clocks: ReadonlyMap<string, { readonly totalTicks: bigint }>,
+): bigint | undefined {
+  return (clocks.get(OVERWORLD_DAY_CLOCK_ID) ?? clocks.values().next().value)?.totalTicks;
 }
 
 export interface SoulFireBeatGameDriverOptions {

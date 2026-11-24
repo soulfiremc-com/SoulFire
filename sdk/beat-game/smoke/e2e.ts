@@ -8,6 +8,7 @@ import {
   defaultBeatGameStrategy,
   fastBeatGameStrategy,
   makeSoulFireBeatGameDriver,
+  overworldDayTime,
   type BeatGameBlockSelector,
   type BeatGameDriver,
   type BeatGameEntitySelector,
@@ -633,8 +634,10 @@ const program = Effect.scoped(
     const debugSession = debugApiEnabled ? environmentSession : undefined;
     const observeEnvironment = Effect.sync(() => {
       const state = environmentSession.state.environment;
+      const dayTime = overworldDayTime(state.clocks);
       return {
         ...(state.gameTime === undefined ? {} : { gameTime: state.gameTime }),
+        ...(dayTime === undefined ? {} : { dayTime }),
         ...(state.raining === undefined ? {} : { raining: state.raining }),
       };
     });

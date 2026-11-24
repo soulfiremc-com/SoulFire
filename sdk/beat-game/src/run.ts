@@ -41,6 +41,7 @@ import { ReplayBroadcast } from "./broadcast.js";
 import { InMemoryBeatGameCoordinator, type BeatGameCoordinator } from "./coordinator.js";
 import {
   makeSoulFireBeatGameDriver,
+  overworldDayTime,
   type BeatGameBlockFace,
   type BeatGameDriver,
   type BeatGameDriverEvent,
@@ -1446,8 +1447,10 @@ function liveEnvironmentDriver(
       makeSoulFireBeatGameDriver(bot, {
         environment: Effect.sync(() => {
           const environment = session.state.environment;
+          const dayTime = overworldDayTime(environment.clocks);
           return {
             ...(environment.gameTime === undefined ? {} : { gameTime: environment.gameTime }),
+            ...(dayTime === undefined ? {} : { dayTime }),
             ...(environment.raining === undefined ? {} : { raining: environment.raining }),
           };
         }),
@@ -1750,7 +1753,7 @@ function shouldTakeNightShelter(
   }
   return Effect.gen(function* () {
     const environment = yield* observeEnvironment(state);
-    if (!isHostileNight(environment.gameTime)) {
+    if (!isHostileNight(timeOfDay(environment))) {
       return false;
     }
     if (
@@ -1875,7 +1878,7 @@ function trySleepThroughNight(
   }
   return Effect.gen(function* () {
     const environment = yield* observeEnvironment(state);
-    if (!isHostileNight(environment.gameTime)) {
+    if (!isHostileNight(timeOfDay(environment))) {
       return "slept";
     }
     let current = observation;
@@ -2205,7 +2208,7 @@ function waitForMorningAfterBed(
     while ((yield* Clock.currentTimeMillis) < deadline) {
       const environment = yield* observeEnvironment(state);
       daylightConfirmations =
-        environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
+        timeOfDay(environment) !== undefined && !isHostileNight(timeOfDay(environment))
           ? daylightConfirmations + 1
           : 0;
       if (daylightConfirmations >= NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS) {
@@ -2480,7 +2483,7 @@ function shelterUntilMorning(
       }
       const environment = yield* observeEnvironment(state);
       daylightConfirmations =
-        environment.gameTime !== undefined && !isHostileNight(environment.gameTime)
+        timeOfDay(environment) !== undefined && !isHostileNight(timeOfDay(environment))
           ? daylightConfirmations + 1
           : 0;
       const current = yield* state.driver.observe;
@@ -3244,6 +3247,13 @@ function observeEnvironment(
     state.driver.environment ??
     Effect.die(new Error("The beat-game driver does not observe the environment"))
   );
+}
+
+/// A live bot slept through many nights, which moved the day clock on but not
+/// the game time. Judged by the game time, it took broad day for night and
+/// tried to build shelters until the morning was half gone.
+function timeOfDay(environment: BeatGameEnvironmentObservation): bigint | undefined {
+  return environment.dayTime ?? environment.gameTime;
 }
 
 function isHostileNight(gameTime: bigint | undefined): boolean {
@@ -20853,7 +20863,7 @@ function hasGuardedCorpseAtNight(
   }
   return Effect.gen(function* () {
     const environment = yield* observeEnvironment(state);
-    if (!isHostileNight(environment.gameTime)) {
+    if (!isHostileNight(timeOfDay(environment))) {
       return false;
     }
     const pendingDeaths = yield* Ref.get(state.pendingDeaths);

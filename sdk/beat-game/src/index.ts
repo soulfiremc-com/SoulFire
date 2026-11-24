@@ -81,6 +81,7 @@ export {
 } from "./coordinator.js";
 export {
   makeSoulFireBeatGameDriver,
+  overworldDayTime,
   type BeatGameBlockFace,
   type BeatGameBlockSelector,
   type BeatGameBuildBlock,

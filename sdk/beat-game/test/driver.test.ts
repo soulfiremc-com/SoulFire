@@ -19,7 +19,11 @@ import { BotTaskFailureSchema, BotTaskSchema } from "@soulfiremc/sdk/generated/s
 import { Effect, Fiber, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { defaultBeatGameStrategy, makeSoulFireBeatGameDriver } from "../src/index.js";
+import {
+  defaultBeatGameStrategy,
+  makeSoulFireBeatGameDriver,
+  overworldDayTime,
+} from "../src/index.js";
 import { objectContaining } from "./matchers.js";
 
 function effectBot(
@@ -966,5 +970,23 @@ describe("production SoulFire beat-game driver", () => {
       reconnectPolicy: BotTaskReconnectPolicy.PAUSE_AND_RESUME,
     });
     expect(calls.cancellations).toBe(1);
+  });
+});
+
+describe("overworld day clock", () => {
+  it("reads the Overworld clock over any other", () => {
+    expect(
+      overworldDayTime(
+        new Map([
+          ["minecraft:the_end", { totalTicks: 900n }],
+          ["minecraft:overworld", { totalTicks: 30_000n }],
+        ]),
+      ),
+    ).toBe(30_000n);
+  });
+
+  it("falls back to the only clock and reports none without clocks", () => {
+    expect(overworldDayTime(new Map([["minecraft:custom", { totalTicks: 7n }]]))).toBe(7n);
+    expect(overworldDayTime(new Map())).toBeUndefined();
   });
 });
