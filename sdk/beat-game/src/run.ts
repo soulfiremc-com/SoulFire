@@ -438,6 +438,11 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:mossy_cobblestone",
   "minecraft:cobblestone_stairs",
   "minecraft:iron_bars",
+  "minecraft:cobblestone_wall",
+  "minecraft:mossy_cobblestone_wall",
+  // Geodes break into these on the way down to a stronghold.
+  "minecraft:amethyst_block",
+  "minecraft:amethyst_shard",
   "minecraft:oak_fence",
   "minecraft:oak_door",
   "minecraft:spruce_door",

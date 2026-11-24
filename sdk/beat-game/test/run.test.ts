@@ -206,6 +206,32 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("frees slots held by stronghold walls and geode blocks", () => {
+    // Part of the pack a live bot carried near the portal room. Tossed dirt
+    // and leaf litter kept coming back, and nothing else counted as junk,
+    // so its bed step failed for want of three slots.
+    const counts: Record<string, number> = {
+      "minecraft:white_bed": 1,
+      "minecraft:white_wool": 1,
+      "minecraft:cobblestone": 64,
+      "minecraft:cobblestone_wall": 1,
+      "minecraft:amethyst_block": 3,
+      "minecraft:spruce_log": 5,
+      "minecraft:stone_sword": 1,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded.toSorted()).toEqual([
+      "minecraft:amethyst_block",
+      "minecraft:cobblestone_wall",
+    ]);
+  });
+
   it("frees slots held by stronghold debris", () => {
     // Part of the pack a live bot carried back to the portal room, too full
     // to take on food once it had dropped its leaf litter.
