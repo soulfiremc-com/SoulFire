@@ -7889,6 +7889,73 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("leaves a placed bed near the portal room for its respawn point", async () => {
+    // As in a live run: the bed step took the bot's own respawn bed by the
+    // stronghold, and its next death sent it back to the world spawn.
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_sword": 1,
+        "minecraft:cooked_beef": 5,
+        "minecraft:cobblestone": 20,
+      },
+    });
+    const respawnBed = blockObservation(
+      { x: 6, y: 64, z: 2, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:white_bed" },
+    );
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:white_bed") === true ? [respawnBed] : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId: "respawn-bed-keep-run",
+      teamId: "respawn-bed-keep-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portalRoomCenter: { x: 30, y: 15, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "respawn-bed-keep-run",
+            team: { teamId: "respawn-bed-keep-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (driver.tasks.length === 0 && driver.paths.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:white_bed"),
+      ),
+    ).toBe(false);
+  });
+
   it("hunts only unsheared sheep of the wool color it already holds", async () => {
     const driver = new FakeBeatGameDriver();
     const preparedCounts = {

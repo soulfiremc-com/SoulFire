@@ -11098,6 +11098,19 @@ function satisfyBedRequirement(
     return craftWithTable(state, observation, craftableBed, 1);
   }
   return Effect.gen(function* () {
+    // A bed left by the portal room is the bot's respawn point. A live bot
+    // took its own back up for the dragon, then died in the End and woke
+    // 1,850 blocks away at the world spawn. Near the room it hunts sheep.
+    const portalRoom = (yield* Ref.get(state.checkpoint)).memory.portalRoomCenter;
+    if (
+      portalRoom !== undefined &&
+      portalRoom.dimension === observation.player.position.dimension &&
+      horizontalDistanceSquared(portalRoom, observation.player.position) <=
+        RESPAWN_BED_KEEP_RADIUS ** 2
+    ) {
+      yield* huntSheepForBed(state, observation);
+      return;
+    }
     // Villages have beds, and taking one is far faster than shearing sheep.
     const placedBeds = (yield* state.driver.queryBlocks({
       center: observation.player.position,
