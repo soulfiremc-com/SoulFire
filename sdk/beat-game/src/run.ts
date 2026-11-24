@@ -978,6 +978,7 @@ const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
+const PORTAL_ROOM_SILVERFISH_MINIMUM_HEALTH = 6;
 const ENDERMAN_WATER_HOLD_MS = 4000;
 const RESPAWN_BED_KEEP_RADIUS = 256;
 const STONE_SWORD_COBBLESTONE = 2;
@@ -4611,7 +4612,7 @@ function findImmediateActionThreat(
       }
       return findImmediateThreat(state, observation).pipe(
         Effect.map((threat) => {
-          if (threat === undefined) {
+          if (threat === undefined || ignoresThreatDuringAction(decision, threat.target)) {
             return undefined;
           }
           return {
@@ -4734,7 +4735,10 @@ function monitorActionSafety(
                                         )
                                       : findImmediateThreat(state, observation).pipe(
                                           Effect.flatMap((threat) => {
-                                            if (threat === undefined) {
+                                            if (
+                                              threat === undefined ||
+                                              ignoresThreatDuringAction(decision, threat.target)
+                                            ) {
                                               return monitorObservedSafety(
                                                 state,
                                                 decision,
@@ -4839,6 +4843,17 @@ function findDistantRangedAttacker(
   });
 }
 
+/// Silverfish swarm out of the spawner in the End portal room, and each one
+/// fought broke off the portal step. A live bot stood by the open portal for
+/// ten minutes swatting them until they nibbled it to death. Stepping into
+/// the portal leaves them all behind.
+function ignoresThreatDuringAction(
+  decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
+  target: BeatGameEntityObservation,
+): boolean {
+  return decision.type === "activate-end-portal" && target.entityType === "minecraft:silverfish";
+}
+
 function monitorObservedSafety(
   state: RunState,
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
@@ -4920,6 +4935,13 @@ function monitorObservedSafety(
         () => findDistantRangedAttacker(state, observation),
       ),
       Effect.flatMap((threat): Effect.Effect<ActionResult, BeatGameError | BeatGameDriverError> => {
+        if (
+          threat !== undefined &&
+          ignoresThreatDuringAction(decision, threat.target) &&
+          observation.player.health > PORTAL_ROOM_SILVERFISH_MINIMUM_HEALTH
+        ) {
+          return Effect.suspend(() => monitor(observation));
+        }
         if (threat === undefined) {
           if (decision.type === "eat") {
             return Effect.suspend(() => monitor(observation));

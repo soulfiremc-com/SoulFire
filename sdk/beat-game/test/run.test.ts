@@ -46799,6 +46799,106 @@ describe("beat-game run lifecycle", () => {
     expect(await Effect.runPromise(savedFrames())).toBe(0);
   }, 10_000);
 
+  it("steps into the open portal past swarming silverfish", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = { x: -375, y: 15, z: -1771, dimension: "minecraft:overworld" } as const;
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+      },
+      position,
+    });
+    // Every frame already holds an eye, and the portal is lit. Stepping in
+    // takes the bot to the End.
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal") !== true) {
+        return [];
+      }
+      driver.currentObservation = observation({
+        counts: driver.currentObservation.inventory.counts,
+        dimension: "minecraft:the_end",
+      });
+      return [
+        blockObservation(
+          {
+            x: Math.floor(center.x),
+            y: Math.floor(center.y),
+            z: Math.floor(center.z),
+            dimension: center.dimension,
+          },
+          { blockId: "minecraft:end_portal", replaceable: true },
+        ),
+      ];
+    };
+    // As in a live run: the portal room spawner kept silverfish coming, and
+    // fighting each one kept the bot from the portal until they killed it.
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 77,
+        entityType: "minecraft:silverfish",
+        position: { ...position, x: position.x + 1.5 },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 8,
+        aggressive: true,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    driver.entityQueryResolver = (query) =>
+      driver.currentObservation.player.position.dimension === "minecraft:the_end"
+        ? []
+        : query.selector.categories?.includes(2) === true
+          ? driver.entityResults
+          : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "silverfish-portal-run",
+      teamId: "silverfish-portal-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            emptyPortalFrames: 1,
+            portalRoomCenter: { ...position, x: -375.5, z: -1771.5 },
+          },
+        },
+        undefined,
+      ),
+    );
+    const savedFrames = () =>
+      Effect.map(store.load("silverfish-portal-run"), (saved) => saved?.memory.emptyPortalFrames);
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "silverfish-portal-run",
+            team: { teamId: "silverfish-portal-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while ((yield* savedFrames()) !== 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.currentObservation.player.position.dimension).toBe("minecraft:the_end");
+  }, 10_000);
+
   it("travels back to a distant portal room a leg at a time", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: the bot woke at world spawn, 1,850 blocks away.
