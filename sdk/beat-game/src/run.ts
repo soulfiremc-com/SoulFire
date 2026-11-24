@@ -373,6 +373,16 @@ const RENEWABLE_DEATH_RECOVERY_ITEM_IDS = new Set([
   "minecraft:yellow_wool",
 ]);
 const COOKABLE_RAW_FOOD_ITEM_IDS = new Set(Object.keys(RAW_FOOD_TO_COOKED));
+// Nether gear and scraps the bot has no use for once it is back at the End
+// portal. A live bot there carried 57 flint, fire charges, gold nuggets and
+// rotten flesh, and could not free the slots to craft a chestplate.
+const END_OBSOLETE_DISCARD_ITEM_IDS = [
+  "minecraft:rotten_flesh",
+  "minecraft:flint",
+  "minecraft:flint_and_steel",
+  "minecraft:fire_charge",
+  "minecraft:gold_nugget",
+] as const;
 const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:leaf_litter",
   "minecraft:tripwire_hook",
@@ -18373,7 +18383,10 @@ function ensureInventorySpace(
         });
         break;
       }
-      const discard = selectInventoryDiscard(current.inventory.counts);
+      const discard = selectInventoryDiscard(
+        current.inventory.counts,
+        (yield* Ref.get(state.checkpoint)).planner.phase,
+      );
       if (discard === undefined) {
         if (current.inventory.emptyPlayerSlots >= minimumEmptySlots) {
           break;
@@ -18475,9 +18488,15 @@ function ensureInventorySpace(
 // blocks beyond the reserve, then redundant equipment.
 export function selectInventoryDiscard(
   counts: Readonly<Record<string, number>>,
+  phase?: BeatGamePhase,
 ): { readonly itemId: string; readonly count: number } | undefined {
+  const obsoleteItemIds =
+    phase === BeatGamePhase.ACTIVATE_END_PORTAL || phase === BeatGamePhase.FIGHT_ENDER_DRAGON
+      ? END_OBSOLETE_DISCARD_ITEM_IDS
+      : [];
   const priorityItemId =
     INVENTORY_DISCARD_PRIORITY.find((itemId) => (counts[itemId] ?? 0) > 0) ??
+    obsoleteItemIds.find((itemId) => (counts[itemId] ?? 0) > 0) ??
     Object.keys(counts).find(
       (itemId) => itemId.startsWith("minecraft:music_disc_") && (counts[itemId] ?? 0) > 0,
     );

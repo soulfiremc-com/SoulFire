@@ -222,6 +222,42 @@ describe("inventory discards", () => {
     ]);
   });
 
+  it("frees slots held by Nether gear once back at the End portal", () => {
+    // Part of the pack a live bot carried at the portal room. Nothing counted
+    // as junk, so it could not free three slots to craft a chestplate.
+    const counts: Record<string, number> = {
+      "minecraft:ender_eye": 1,
+      "minecraft:flint": 57,
+      "minecraft:flint_and_steel": 1,
+      "minecraft:fire_charge": 2,
+      "minecraft:gold_nugget": 7,
+      "minecraft:rotten_flesh": 2,
+      "minecraft:white_bed": 3,
+      "minecraft:cobblestone": 57,
+      "minecraft:stone_sword": 1,
+    };
+    const discarded = (phase: BeatGamePhase) => {
+      const remaining = { ...counts };
+      const items: string[] = [];
+      for (let discard = selectInventoryDiscard(remaining, phase); discard !== undefined;) {
+        items.push(discard.itemId);
+        remaining[discard.itemId] = 0;
+        discard = selectInventoryDiscard(remaining, phase);
+      }
+      return items.toSorted();
+    };
+
+    expect(discarded(BeatGamePhase.ACTIVATE_END_PORTAL)).toEqual([
+      "minecraft:fire_charge",
+      "minecraft:flint",
+      "minecraft:flint_and_steel",
+      "minecraft:gold_nugget",
+      "minecraft:rotten_flesh",
+    ]);
+    // Before the Nether, flint and steel still lights the portal.
+    expect(discarded(BeatGamePhase.PREPARE_OVERWORLD)).toEqual([]);
+  });
+
   it("frees slots held by stronghold walls and geode blocks", () => {
     // Part of the pack a live bot carried near the portal room. Tossed dirt
     // and leaf litter kept coming back, and nothing else counted as junk,
