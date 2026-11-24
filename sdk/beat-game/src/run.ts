@@ -20048,6 +20048,12 @@ function descendToPortalRoom(
   portalRoom: BeatGamePosition,
 ): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   return Effect.gen(function* () {
+    // Under the surface, every route above the room outgrew the search. A
+    // live bot in the caves at y 29 failed all of them, so it climbs out first.
+    const start = (yield* state.driver.observe).player.position;
+    if (yield* needsOverworldSurfaceRecovery(state, start)) {
+      yield* escapeToOverworldSurface(state, start);
+    }
     yield* state.driver
       .pathfindXZ(
         portalRoom.x,
