@@ -11353,7 +11353,12 @@ function satisfyRequirementFromWorld(
       return ensureIgnition(state, observation);
     }
     case "shield": {
-      return craftWithTable(state, observation, "minecraft:shield", 1);
+      // A bot replacing a worn-out shield near the End portal has no iron
+      // requirement of its own. A live bot holding only raw iron failed the
+      // craft nine times, so the shield fetches its iron as armor does.
+      return (observation.inventory.counts["minecraft:iron_ingot"] ?? 0) < 1
+        ? satisfyIronRequirement(state, observation, 1)
+        : craftWithTable(state, observation, "minecraft:shield", 1);
     }
     case "chestplate": {
       return craftIronArmor(state, observation, "minecraft:iron_chestplate", 8);

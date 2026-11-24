@@ -5132,6 +5132,116 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths).toHaveLength(0);
   });
 
+  it("smelts carried raw iron for a shield before going back to the End", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "end-shield-iron-run";
+    const teamId = "end-shield-iron-team";
+    // As in a live run: back at the portal room with a worn-out shield and
+    // only raw iron, it failed the shield craft nine times.
+    driver.currentObservation = observation({
+      position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:crafting_table": 1,
+        "minecraft:oak_planks": 8,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+        "minecraft:raw_iron": 2,
+        "minecraft:coal": 4,
+        "minecraft:furnace": 1,
+      },
+    });
+    driver.recipeResolver = (resultItemId) =>
+      resultItemId === "minecraft:shield"
+        ? [
+            {
+              recipeId: "shield",
+              recipeType: "minecraft:crafting_shaped",
+              resultItemId,
+              resultCount: 1,
+              ingredients: [],
+            },
+          ]
+        : [];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 2,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:furnace") === true
+        ? [
+            blockObservation(
+              { x: -370, y: 14, z: -1772, dimension: "minecraft:overworld" },
+              { blockId: "minecraft:furnace" },
+            ),
+          ]
+        : query.selector.blockIds?.includes("minecraft:crafting_table") === true
+          ? [
+              blockObservation(
+                {
+                  x: -371,
+                  y: 14,
+                  z: -1772,
+                  dimension: "minecraft:overworld",
+                },
+                { blockId: "minecraft:crafting_table" },
+              ),
+            ]
+          : [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "craft" ? Effect.never : Effect.void));
+    await Effect.runPromise(
+      store.save(
+        (() => {
+          const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, { runId, teamId });
+          return {
+            ...portalCheckpoint,
+            memory: {
+              ...portalCheckpoint.memory,
+              emptyPortalFrames: 0,
+              portalRoomCenter: { x: -375.5, y: 15, z: -1771.5, dimension: "minecraft:overworld" },
+            },
+          };
+        })(),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          runId,
+          team: { teamId },
+          checkpointStore: store,
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "craft" || task.type === "smelt")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      driver.tasks.find((task) => task.type === "craft" || task.type === "smelt"),
+    ).toMatchObject({ type: "smelt", input: { itemIds: ["minecraft:raw_iron"] } });
+  });
+
   it("smelts carried raw iron for a Nether pickaxe that lasts longer", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
