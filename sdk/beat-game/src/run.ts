@@ -4304,17 +4304,29 @@ function executeDecision(
           horizontalDistanceSquared(portalRoom, observation.player.position) >
             PORTAL_ROOM_TRAVEL_RADIUS ** 2
         ) {
+          // A leg follows the surface only from near it. A live bot set out
+          // from a cave at y 42 and tunnelled sixteen blocks a minute, so an
+          // underground bot climbs out before it walks on.
           // Drowned fill the water by the world spawn. A live bot on its way
           // back swam into it and drowned fighting them, so a leg keeps to dry
           // land unless only water leads on.
-          return pathfindExplorationTarget(
-            state,
-            observation.player.position,
-            portalRoom,
-            PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
-            { ...state.strategy.path, avoidFluids: true },
-            true,
-          ).pipe(
+          return needsOverworldSurfaceRecovery(state, observation.player.position).pipe(
+            Effect.flatMap((underground) =>
+              underground
+                ? escapeToOverworldSurface(state, observation.player.position)
+                : Effect.void,
+            ),
+            Effect.andThen(state.driver.observe),
+            Effect.flatMap((surfaced) =>
+              pathfindExplorationTarget(
+                state,
+                surfaced.player.position,
+                portalRoom,
+                PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
+                { ...state.strategy.path, avoidFluids: true },
+                true,
+              ),
+            ),
             Effect.catchIf(
               (error) =>
                 (error.operation === "pathfind" || error.operation === "pathfindXZ") &&

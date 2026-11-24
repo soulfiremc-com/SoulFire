@@ -46532,6 +46532,78 @@ describe("beat-game run lifecycle", () => {
     expect(leg?.x).toBeLessThan(25);
   }, 10_000);
 
+  it("climbs out of a cave before a leg toward a distant portal room", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: the bot set out from a cave at y 42 and tunnelled
+    // toward the portal room sixteen blocks a minute.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:white_bed": 3,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+      position: { x: 25, y: 42, z: 15, dimension: "minecraft:overworld" },
+    });
+    const portalRoomCenter = {
+      x: -375.5,
+      y: 15,
+      z: -1771.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    driver.surfaceColumns = [
+      {
+        x: 25,
+        z: 15,
+        loaded: true,
+        surfaceY: 70,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "cave-portal-run",
+      teamId: "cave-portal-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, emptyPortalFrames: 0, portalRoomCenter },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "cave-portal-run",
+            team: { teamId: "cave-portal-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (driver.xzPaths.length === 0 && driver.paths.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    // It heads up out of the cave before any leg toward the room.
+    const [firstPath] = driver.paths;
+    expect(firstPath?.position.y).toBeGreaterThan(60);
+  }, 10_000);
+
   it("walks back to the portal room before filling its frames", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: the bot ended up eighty blocks from the frames.
