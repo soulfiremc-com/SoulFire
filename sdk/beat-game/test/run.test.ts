@@ -46537,6 +46537,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:cooked_beef": 16,
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
       },
       position,
     });
@@ -46616,6 +46617,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:white_bed": 3,
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
       },
       position: { x: 25, y: 61, z: 15, dimension: "minecraft:overworld" },
     });
@@ -46681,6 +46683,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:white_bed": 3,
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
       },
       position: { x: 25, y: 42, z: 15, dimension: "minecraft:overworld" },
     });
@@ -46751,6 +46754,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:cooked_beef": 16,
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
       },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
@@ -46817,6 +46821,7 @@ describe("beat-game run lifecycle", () => {
         "minecraft:cooked_beef": 16,
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
       },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
@@ -54830,6 +54835,97 @@ describe("beat-game run lifecycle", () => {
     expect(fight.started).toBe(true);
     // The bot turns from the fight to get away from the enderman.
     expect(driver.tasks.length + driver.actions.length).toBeGreaterThan(0);
+  }, 10_000);
+
+  it("pours water against an enderman that attacks during the dragon fight", async () => {
+    // As in a live run: digging cover took two seconds while an enderman
+    // hit the bot every second. Water at its feet drives the enderman off.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 14, y: 64, z: -4, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:enderman",
+      position: { ...position, x: 15.8 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 40,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "enderman-water-run",
+          teamId: "enderman-water-team",
+        }),
+        undefined,
+      ),
+    );
+    const fight = { started: false };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-water-run",
+            team: { teamId: "enderman-water-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          let attempts = 3000;
+          while (!fight.started && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.entityResults = [enderman];
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 15.5,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          attempts = 1500;
+          while (!driver.actions.some(({ type }) => type === "use-item") && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(fight.started).toBe(true);
+    expect(driver.actions).toEqual(
+      arrayContaining([
+        objectContaining({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:water_bucket"] },
+        }),
+        objectContaining({ type: "look", pitch: 90 }),
+        objectContaining({ type: "use-item", hand: "main" }),
+      ]),
+    );
   }, 10_000);
 
   it("runs custom Effect policy inside the normal planner lifecycle", async () => {

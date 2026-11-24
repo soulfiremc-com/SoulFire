@@ -295,6 +295,9 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     // A live bot came back for the portal after a death with no tools left,
     // and tunnelled toward the stronghold by hand.
     MELEE_WEAPON_REQUIREMENT,
+    // Water at its feet drives off an enderman, and the End is full of them.
+    // A live bot without water died to them three times there.
+    itemRequirement("water-bucket", ["minecraft:water_bucket"], () => 1, 102),
     itemRequirement("pickaxe", ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"], () => 1, 104),
     itemRequirement(
       "eyes-of-ender",

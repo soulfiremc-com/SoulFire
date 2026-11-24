@@ -46,6 +46,7 @@ describe("beat-game planner", () => {
           "minecraft:ender_eye": 11,
           "minecraft:stone_pickaxe": 1,
           "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
         },
       }),
       strategy: defaultBeatGameStrategy,
@@ -70,6 +71,7 @@ describe("beat-game planner", () => {
           "minecraft:arrow": 64,
           "minecraft:stone_pickaxe": 1,
           "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
         },
       }),
       strategy: fastBeatGameStrategy,
@@ -98,6 +100,7 @@ describe("beat-game planner", () => {
           "minecraft:cooked_beef": 1,
           "minecraft:stone_pickaxe": 1,
           "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
         },
         food: 16,
       }),
@@ -128,6 +131,31 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("fills a water bucket before going back through the portal", () => {
+    // As in a live run: endermen killed the bot three times in the End, and
+    // it carried only an empty bucket.
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 0 },
+      },
+      observation: observation({
+        position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:ender_eye": 1,
+          "minecraft:cooked_beef": 16,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+          "minecraft:bucket": 1,
+        },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:water-bucket" });
+  });
+
   it("goes back through an open portal without more eyes", () => {
     const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
     const decision = decideBeatGameAction({
@@ -142,6 +170,7 @@ describe("beat-game planner", () => {
           "minecraft:cooked_beef": 16,
           "minecraft:stone_pickaxe": 1,
           "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
         },
       }),
       strategy: defaultBeatGameStrategy,
@@ -183,6 +212,7 @@ describe("beat-game planner", () => {
           "minecraft:cooked_beef": 16,
           "minecraft:stone_pickaxe": 1,
           "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
         },
       }),
       strategy: defaultBeatGameStrategy,

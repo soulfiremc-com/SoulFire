@@ -978,6 +978,7 @@ const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
+const ENDERMAN_WATER_HOLD_MS = 4000;
 const RESPAWN_BED_KEEP_RADIUS = 256;
 const STONE_SWORD_COBBLESTONE = 2;
 const STONE_PICKAXE_COBBLESTONE = 3;
@@ -5826,6 +5827,16 @@ function escapeFromTarget(
         return;
       }
     }
+    // Cover took a live bot two seconds to dig in the End while an enderman
+    // hit it every second, and it died. Water at its feet drives an enderman
+    // off at once.
+    if (
+      target.entityType === "minecraft:enderman" &&
+      (observation.inventory.counts["minecraft:water_bucket"] ?? 0) > 0 &&
+      (yield* pourWaterAgainstEnderman(state, target))
+    ) {
+      return;
+    }
     const endermanWaterEscapeTarget =
       target.entityType === "minecraft:enderman"
         ? yield* findEndermanWaterEscapeTarget(state, observation.player.position)
@@ -6578,6 +6589,39 @@ function continueDirectFastPursuerEscape(
         THREAT_ESCAPE_SAFE_DISTANCE ** 2
     );
   });
+}
+
+function pourWaterAgainstEnderman(
+  state: RunState,
+  target: BeatGameEntityObservation,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return state.driver
+    .withControl(
+      Effect.gen(function* () {
+        yield* state.driver.act({ type: "reset-movement" });
+        yield* state.driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:water_bucket"] },
+        });
+        yield* state.driver.act({ type: "look", yaw: 0, pitch: 90 });
+        yield* state.driver.act({ type: "use-item", hand: "main" });
+        const position = (yield* state.driver.observe).player.position;
+        yield* emit(state, {
+          type: "diagnostic",
+          message: "Poured water against an attacking enderman",
+          data: { threatNetworkId: target.networkId, position },
+        });
+        yield* Effect.sleep(ENDERMAN_WATER_HOLD_MS);
+        yield* state.driver.act({
+          type: "select-item",
+          selector: { itemIds: ["minecraft:bucket"] },
+        });
+        yield* state.driver.act({ type: "look", yaw: 0, pitch: 90 });
+        yield* pickUpClutchWater(state);
+        return true;
+      }),
+    )
+    .pipe(Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)));
 }
 
 function findEndermanWaterEscapeTarget(
