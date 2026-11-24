@@ -2573,6 +2573,39 @@ export function fightEnderDragon(
     if (encounter.defeated) {
       return undefined;
     }
+    const perchTimeoutMs = nonNegativeInteger(
+      options.bedPerchTimeoutMs ?? BED_BOMB_PERCH_TIMEOUT_MS,
+      "bedPerchTimeoutMs",
+    );
+    // Beds under the perched dragon's head kill it without the crystals.
+    // While perched it is too far from the towers to heal. A live bot spent
+    // every visit at towers it could not reach, and never set off a bed.
+    if (countItems(initialObservation, BED_ITEM_IDS) > 0) {
+      yield* approachDragonPerchWatch(driver, options.path);
+      yield* bedBombDragon(driver, {
+        searchRadius,
+        perchTimeoutMs,
+        ...(options.path === undefined ? {} : { path: options.path }),
+      });
+      const watched = yield* driver.observe;
+      const survivor = yield* queryEndEntities(
+        driver,
+        watched.player.position,
+        "minecraft:ender_dragon",
+        searchRadius,
+        1,
+      );
+      if (survivor.length === 0) {
+        yield* waitForDragonDefeatResult(
+          driver,
+          watched.player.position,
+          searchRadius,
+          confirmationAttempts,
+          confirmationDelayMs,
+        );
+        return undefined;
+      }
+    }
     for (let pass = 0; pass < maximumCrystalPasses; pass += 1) {
       const observation = yield* driver.observe;
       const crystals = yield* queryEndEntities(
@@ -2642,10 +2675,7 @@ export function fightEnderDragon(
     if (dragons[0] !== undefined) {
       yield* bedBombDragon(driver, {
         searchRadius,
-        perchTimeoutMs: nonNegativeInteger(
-          options.bedPerchTimeoutMs ?? BED_BOMB_PERCH_TIMEOUT_MS,
-          "bedPerchTimeoutMs",
-        ),
+        perchTimeoutMs,
         ...(options.path === undefined ? {} : { path: options.path }),
       });
     }
@@ -2726,6 +2756,10 @@ const DRAGON_PERCH_RADIUS = 2;
 const DRAGON_PERCH_SETTLE_MS = 500;
 const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.3;
 const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
+const DRAGON_PERCH_WATCH_DISTANCE = 16;
+const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 24;
+const DRAGON_PERCH_WATCH_RADIUS = 3;
+const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
@@ -2788,6 +2822,35 @@ function bedBombDragon(
       failures = exploded ? 0 : failures + 1;
     }
   });
+}
+
+/// Walks within reach of the fountain to wait for the dragon to perch. A
+/// perch lasts seconds, and the End arrival platform lies a hundred blocks
+/// out.
+function approachDragonPerchWatch(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    const distance = Math.hypot(player.x, player.z);
+    if (distance <= DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE) {
+      return;
+    }
+    yield* driver.pathfindXZ(
+      (player.x / distance) * DRAGON_PERCH_WATCH_DISTANCE,
+      (player.z / distance) * DRAGON_PERCH_WATCH_DISTANCE,
+      player.dimension,
+      DRAGON_PERCH_WATCH_RADIUS,
+      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true },
+    );
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: DRAGON_PERCH_WATCH_TIMEOUT_MS,
+      orElse: () => Effect.void,
+    }),
+    Effect.catchTag("BeatGameDriverError", () => Effect.void),
+  );
 }
 
 /// Builds up beside a crystal's tower to the crystal's height, off the
