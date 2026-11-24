@@ -91,6 +91,15 @@ const missingNetherKeys = (counts: Readonly<Record<string, number>>) =>
     .filter(({ currentCount, targetCount }) => currentCount < targetCount)
     .map(({ key }) => key);
 
+const missingEndKeys = (counts: Record<string, number>) =>
+  requirementsForPhase(
+    BeatGamePhase.ACTIVATE_END_PORTAL,
+    observation({ counts }).inventory,
+    fastBeatGameStrategy,
+  )
+    .filter(({ satisfied }) => !satisfied)
+    .map(({ key }) => key);
+
 describe("beat-game requirements", () => {
   it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
     expect(keys(fastBeatGameStrategy)).toContainEqual({
@@ -100,6 +109,19 @@ describe("beat-game requirements", () => {
     });
     expect(keys(fastBeatGameStrategy, true).map(({ key }) => key)).not.toContain("dragon-beds");
     expect(keys(defaultBeatGameStrategy).map(({ key }) => key)).not.toContain("dragon-beds");
+  });
+
+  it("replaces worn-out armor and shield before going back to the End", () => {
+    // As in a live run: the bot came back to the End with neither, and
+    // endermen killed it run after run.
+    expect(missingEndKeys({})).toEqual(arrayContaining(["shield", "chestplate", "helmet"]));
+    expect(
+      missingEndKeys({
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+      }).filter((key) => key === "shield" || key === "chestplate" || key === "helmet"),
+    ).toEqual([]);
   });
 
   it("takes the bed right after wood and a weapon in a fast run", () => {

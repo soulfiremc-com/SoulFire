@@ -114,6 +114,13 @@ const FAST_BED_PRIORITY = 114;
 // Below iron (103) and the shield (102).
 const FAST_COOKED_FOOD_PRIORITY = 101;
 // Above the small food supply (112).
+// Provisions gathered at the portal room, not on the long walk back to it.
+const PORTAL_ROOM_PROVISION_KEYS: ReadonlySet<string> = new Set([
+  "food",
+  "shield",
+  "chestplate",
+  "helmet",
+]);
 const FAST_READY_SHIELD_PRIORITY = 113;
 // Right after cobblestone (110): a live fast run kept dying in fights
 // before it reached armor at the end of preparation.
@@ -308,6 +315,12 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     // Nothing in the End feeds the bot. A live bot went through without
     // food, could not heal after a fall, and died to an enderman.
     itemRequirement("food", COOKED_FOOD_ITEM_IDS, ({ targetFoodCount }) => targetFoodCount, 90),
+    // Armor and a shield wear out over many deaths, and nothing replaced
+    // them. A live bot came back to the End with neither, and endermen hit
+    // it for 4.5 a blow until it died, run after run.
+    itemRequirement("shield", ["minecraft:shield"], () => 1, 95),
+    itemRequirement("chestplate", CHESTPLATE_ITEM_IDS, () => 1, 85),
+    itemRequirement("helmet", HELMET_ITEM_IDS, () => 1, 84),
   ],
   [BeatGamePhase.FIGHT_ENDER_DRAGON]: [
     itemRequirement("food", COOKED_FOOD_ITEM_IDS, ({ targetFoodCount }) => targetFoodCount, 100),
@@ -349,7 +362,7 @@ export function requirementsForPhase(
     phase === BeatGamePhase.LOCATE_STRONGHOLD && context.underground === true
       ? definitions.filter(({ key }) => key !== "food-supply")
       : phase === BeatGamePhase.ACTIVATE_END_PORTAL && context.portalRoomDistant === true
-        ? definitions.filter(({ key }) => key !== "food")
+        ? definitions.filter(({ key }) => !PORTAL_ROOM_PROVISION_KEYS.has(key))
         : definitions;
   const fastPreparation =
     phase === BeatGamePhase.PREPARE_OVERWORLD && strategy.riskProfile === BeatGameRiskProfile.FAST;

@@ -46872,6 +46872,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position,
     });
@@ -46951,6 +46954,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position,
     });
@@ -47052,6 +47058,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position: { x: 25, y: 61, z: 15, dimension: "minecraft:overworld" },
     });
@@ -47118,6 +47127,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position: { x: 25, y: 42, z: 15, dimension: "minecraft:overworld" },
     });
@@ -47189,6 +47201,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
@@ -47256,6 +47271,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
@@ -47335,6 +47353,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_pickaxe": 1,
         "minecraft:stone_sword": 1,
         "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
       },
       position: { x: -371, y: 29, z: -1850, dimension: "minecraft:overworld" },
     });
