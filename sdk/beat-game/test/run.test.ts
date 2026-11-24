@@ -27,6 +27,7 @@ import {
   DIRECT_ESCAPE_MINIMUM_LATERAL_HALF_WIDTH,
   hasNonRegressingThreatEscapeCorridor,
   selectSafeDirectEscapeDirection,
+  selectDragonBreathEscapeTarget,
   selectInventoryDiscard,
   selectRedundantEquipmentDiscard,
 } from "../src/run.js";
@@ -160,6 +161,21 @@ describe("direct threat escape corridors", () => {
         18,
       ),
     ).toBe(true);
+  });
+});
+
+describe("dragon breath escapes", () => {
+  it("walks inward past a fireball cloud near the island's edge", () => {
+    // As in a live run: a fireball's cloud lay beside a bot near the edge.
+    // Walking away from the fountain led toward the void, and it died in
+    // the cloud.
+    const position = { x: 102, z: -1 };
+    const cloud = { x: 103, z: 2 };
+
+    const target = selectDragonBreathEscapeTarget(position, cloud);
+
+    expect(Math.hypot(target.x - cloud.x, target.z - cloud.z)).toBeGreaterThanOrEqual(9);
+    expect(Math.hypot(target.x, target.z)).toBeLessThan(Math.hypot(position.x, position.z) - 6);
   });
 });
 
@@ -55385,6 +55401,11 @@ describe("beat-game run lifecycle", () => {
         observedAt: "2026-01-01T00:00:00.000Z",
       },
     ];
+    // No breath cloud is in sight, so it walks away from the fountain.
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.entityTypes?.includes("minecraft:area_effect_cloud") === true
+        ? []
+        : driver.entityResults;
     const fight = { started: false };
     const escapes: { x: number; z: number }[] = [];
     driver.xzPathResolver = (x, z) =>

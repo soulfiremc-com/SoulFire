@@ -15734,41 +15734,81 @@ function isDragonBreathDamage(
   );
 }
 
-/// Walks out of a breath cloud, away from the fountain where the dragon
-/// perches. A bot on the fountain itself picks a fixed direction.
+// A breath cloud grows to a radius of seven blocks.
+const DRAGON_BREATH_CLOUD_CLEARANCE = 9;
+const DRAGON_BREATH_CLOUD_SEARCH_RADIUS = 16;
+const DRAGON_BREATH_ESCAPE_DIRECTIONS = 16;
+
+/// Picks where to walk out of dragon breath. With the cloud in sight, it is
+/// the spot the escape distance away that clears the cloud and lies nearest
+/// the fountain, since the island ends in the void. Without one, it walks
+/// away from the fountain where the dragon perches.
+export function selectDragonBreathEscapeTarget(
+  position: Pick<BeatGamePosition, "x" | "z">,
+  cloud: Pick<BeatGamePosition, "x" | "z"> | undefined,
+): { readonly x: number; readonly z: number } {
+  if (cloud !== undefined) {
+    const candidates = Array.from({ length: DRAGON_BREATH_ESCAPE_DIRECTIONS }, (_, index) => {
+      const angle = (index * 2 * Math.PI) / DRAGON_BREATH_ESCAPE_DIRECTIONS;
+      return {
+        x: position.x + Math.cos(angle) * DRAGON_BREATH_ESCAPE_DISTANCE,
+        z: position.z + Math.sin(angle) * DRAGON_BREATH_ESCAPE_DISTANCE,
+      };
+    });
+    const clear = candidates
+      .filter(
+        (candidate) =>
+          Math.hypot(candidate.x - cloud.x, candidate.z - cloud.z) >= DRAGON_BREATH_CLOUD_CLEARANCE,
+      )
+      .toSorted((left, right) => Math.hypot(left.x, left.z) - Math.hypot(right.x, right.z))[0];
+    if (clear !== undefined) {
+      return clear;
+    }
+  }
+  const distance = Math.hypot(position.x, position.z);
+  const [directionX, directionZ] =
+    distance < 1 ? [1, 0] : [position.x / distance, position.z / distance];
+  return {
+    x: position.x + directionX * DRAGON_BREATH_ESCAPE_DISTANCE,
+    z: position.z + directionZ * DRAGON_BREATH_ESCAPE_DISTANCE,
+  };
+}
+
+/// Walks out of a breath cloud. The dragon's fireballs leave clouds anywhere
+/// on the island. A live bot at its edge walked away from the fountain toward
+/// the void, barely moved, and died in a fireball's cloud.
 function leaveDragonBreath(
   state: RunState,
   position: BeatGamePosition,
 ): Effect.Effect<void, BeatGameDriverError> {
-  const distance = Math.hypot(position.x, position.z);
-  const [directionX, directionZ] =
-    distance < 1 ? [1, 0] : [position.x / distance, position.z / distance];
-  const target = {
-    x: position.x + directionX * DRAGON_BREATH_ESCAPE_DISTANCE,
-    z: position.z + directionZ * DRAGON_BREATH_ESCAPE_DISTANCE,
-  };
-  return emit(state, {
-    type: "diagnostic",
-    message: "Leaving dragon breath",
-    data: { position, target },
-  }).pipe(
-    Effect.andThen(
-      state.driver
-        .pathfindXZ(target.x, target.z, position.dimension, DRAGON_BREATH_ESCAPE_RADIUS, {
-          ...state.strategy.path,
-          allowMining: false,
-          allowPlacing: false,
-          avoidFluids: true,
-          sprint: true,
-        })
-        .pipe(
-          Effect.timeoutOrElse({
-            duration: DRAGON_BREATH_ESCAPE_TIMEOUT_MS,
-            orElse: () => Effect.void,
-          }),
-        ),
-    ),
-  );
+  return Effect.gen(function* () {
+    const [cloud] = yield* state.driver.queryEntities({
+      origin: position,
+      radius: DRAGON_BREATH_CLOUD_SEARCH_RADIUS,
+      selector: { entityTypes: ["minecraft:area_effect_cloud"] },
+      maximumResults: 1,
+    });
+    const target = selectDragonBreathEscapeTarget(position, cloud?.position);
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Leaving dragon breath",
+      data: { position, target, ...(cloud === undefined ? {} : { cloud: cloud.position }) },
+    });
+    yield* state.driver
+      .pathfindXZ(target.x, target.z, position.dimension, DRAGON_BREATH_ESCAPE_RADIUS, {
+        ...state.strategy.path,
+        allowMining: false,
+        allowPlacing: false,
+        avoidFluids: true,
+        sprint: true,
+      })
+      .pipe(
+        Effect.timeoutOrElse({
+          duration: DRAGON_BREATH_ESCAPE_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
+      );
+  });
 }
 
 function recoverLocalNavigationTrap(
