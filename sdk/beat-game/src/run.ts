@@ -2474,6 +2474,7 @@ function shelterUntilMorning(
         : rememberWorldPlace(checkpoint, "SHELTER", surfaceOrigin, 1),
     );
     let daylightConfirmations = 0;
+    let waitingHealth = (yield* state.driver.observe).player.health;
     const waitDeadline = (yield* Clock.currentTimeMillis) + NIGHT_SHELTER_MAXIMUM_WAIT_MS;
     while (daylightConfirmations < NIGHT_SHELTER_DAYLIGHT_CONFIRMATIONS) {
       if ((yield* Clock.currentTimeMillis) >= waitDeadline) {
@@ -2493,6 +2494,17 @@ function shelterUntilMorning(
       if (current.player.dead) {
         return false;
       }
+      // A sealed shaft can still open into a cave or the sea. A live bot
+      // waited while a drowned that reached it hit it every second, and died
+      // without a single threat check.
+      if (current.player.health < waitingHealth) {
+        const attacker = yield* findNearbyAttackThreat(state, current);
+        if (attacker !== undefined) {
+          yield* respondToNightShelterTravelThreat(state, attacker);
+          return false;
+        }
+      }
+      waitingHealth = current.player.health;
       if (
         current.player.health < state.strategy.minimumHealth &&
         current.player.food < 18 &&

@@ -11800,6 +11800,106 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "auto-eat" }));
   });
 
+  it("answers a drowned that reaches it while it waits in a shelter", async () => {
+    // As in a live run: a drowned reached the bot in its sealed shaft and
+    // hit it every second for eight seconds while it waited for morning.
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    const counts = { "minecraft:stone_pickaxe": 1, "minecraft:wooden_sword": 1 };
+    const shelterPosition = { x: 0.5, y: 60, z: 0.5, dimension: "minecraft:overworld" } as const;
+    driver.currentObservation = observation({ counts, position: shelterPosition });
+    driver.surfaceColumns = [
+      {
+        x: 0,
+        z: 0,
+        loaded: true,
+        surfaceY: 62,
+        blockId: "minecraft:grass_block",
+        biomeId: "minecraft:plains",
+        skyLight: 15,
+        blockLight: 0,
+      },
+    ];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:water") === true) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y === 62
+            ? { blockId: "minecraft:oak_log" }
+            : {
+                blockId: "minecraft:air",
+                diggable: false,
+                replaceable: true,
+                solid: false,
+              },
+        ),
+      ];
+    };
+    const drowned = {
+      ...skeletonAt(91, 1.5, 0.5),
+      position: { ...shelterPosition, x: 1.5 },
+      entityType: "minecraft:drowned",
+      aggressive: true,
+    };
+    const waiting = { started: false };
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                    if (event.message === "Waiting under existing cover until morning") {
+                      waiting.started = true;
+                    }
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          for (let elapsedSeconds = 0; !waiting.started; elapsedSeconds += 10) {
+            expect(elapsedSeconds).toBeLessThan(15 * 60);
+            yield* TestClock.adjust("10 seconds");
+          }
+          driver.entityResults = [drowned];
+          driver.currentObservation = observation({
+            counts,
+            position: shelterPosition,
+            health: 17.5,
+          });
+          for (
+            let elapsedSeconds = 0;
+            !diagnostics.includes("Interrupted night shelter work for a nearby hostile");
+            elapsedSeconds += 10
+          ) {
+            expect(elapsedSeconds).toBeLessThan(60);
+            yield* TestClock.adjust("10 seconds");
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+
+    expect(waiting.started).toBe(true);
+    expect(diagnostics).toContain("Interrupted night shelter work for a nearby hostile");
+  }, 10_000);
+
   it("rechecks wounded hunger while waiting in a shelter", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
