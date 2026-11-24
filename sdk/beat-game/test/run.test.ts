@@ -50987,6 +50987,81 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("mines stone for a new furnace when the one in sight is out of reach", async () => {
+    // As in a live run: a furnace stood within sight but no route reached
+    // it, and the bot had three cobblestone for a new one.
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      food: defaultBeatGameStrategy.eatBelowFood,
+      counts: {
+        "minecraft:mutton": 9,
+        "minecraft:cobblestone": 3,
+        "minecraft:oak_log": 4,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    const furnace = blockObservation(
+      { x: 9, y: 70, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:furnace" },
+    );
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:furnace") === true
+        ? [furnace]
+        : selector.blockIds?.includes("minecraft:stone") === true
+          ? [
+              blockObservation(
+                { x: 2, y: 63, z: 0, dimension: "minecraft:overworld" },
+                { blockId: "minecraft:stone" },
+              ),
+            ]
+          : [];
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          Math.abs(position.x - furnace.position.x) < 4
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "pathfind",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.void));
+    const minesStone = () =>
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:stone"),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!minesStone() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(minesStone()).toBe(true);
+  }, 10_000);
+
   it("gathers a stone buffer before cooking without a furnace", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

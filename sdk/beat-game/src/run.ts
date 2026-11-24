@@ -972,6 +972,12 @@ const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
 const STONE_SWORD_COBBLESTONE = 2;
 const STONE_PICKAXE_COBBLESTONE = 3;
+const FURNACE_STONE_COUNT = 8;
+const FURNACE_STONE_ITEM_IDS = [
+  "minecraft:cobblestone",
+  "minecraft:cobbled_deepslate",
+  "minecraft:blackstone",
+] as const;
 const PORTAL_ROOM_ARRIVAL_RADIUS = 8;
 const PORTAL_ROOM_APPROACH_RADIUS = 3;
 const PORTAL_ROOM_SEARCH_RADIUS = 16;
@@ -17681,6 +17687,19 @@ function ensureWorkstation(
         )
         .pipe(Effect.ignore);
       current = yield* state.driver.observe;
+    }
+    // A live bot cooking beside a furnace it could not reach had three
+    // cobblestone. The cook skipped the stone because a furnace was in
+    // sight, and the craft of a new one failed every few seconds.
+    if (blockId === "minecraft:furnace" && (current.inventory.counts[blockId] ?? 0) === 0) {
+      const furnaceStone = FURNACE_STONE_ITEM_IDS.reduce(
+        (total, itemId) => total + (current.inventory.counts[itemId] ?? 0),
+        0,
+      );
+      if (furnaceStone < FURNACE_STONE_COUNT) {
+        yield* collectCobblestone(state, current, FURNACE_STONE_COUNT - furnaceStone);
+        current = yield* state.driver.observe;
+      }
     }
     // A carried furnace needs no table. A live bot with a furnace in its
     // pack went for a table to cook one chicken, had one plank, and failed
