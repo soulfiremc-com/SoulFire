@@ -5873,15 +5873,17 @@ function escapeFromTarget(
     // Cover took a live bot two seconds to dig in the End while an enderman
     // hit it every second, and it died. Water at its feet drives an enderman
     // off at once.
-    if (
+    const water =
       target.entityType === "minecraft:enderman" &&
-      (observation.inventory.counts["minecraft:water_bucket"] ?? 0) > 0 &&
-      (yield* pourWaterAgainstEnderman(state, target))
-    ) {
+      (observation.inventory.counts["minecraft:water_bucket"] ?? 0) > 0
+        ? yield* pourWaterAgainstEnderman(state, target)
+        : ({ type: "failed" } as const);
+    if (water.type === "held") {
       return;
     }
+    // Water the enderman already ignored is no escape.
     const endermanWaterEscapeTarget =
-      target.entityType === "minecraft:enderman"
+      target.entityType === "minecraft:enderman" && water.type !== "overrun"
         ? yield* findEndermanWaterEscapeTarget(state, observation.player.position)
         : undefined;
     // An enderman teleports after a fleeing bot, and a live run died running
@@ -5913,6 +5915,9 @@ function escapeFromTarget(
           }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
         }
         yield* Effect.sleep(ENDERMAN_COVER_WAIT_MS);
+        if (water.type === "overrun") {
+          yield* state.driver.withControl(recoverPouredWater(state, water.pourPosition));
+        }
         return;
       }
     }
@@ -6634,10 +6639,15 @@ function continueDirectFastPursuerEscape(
   });
 }
 
+type EndermanWaterOutcome =
+  | { readonly type: "held" }
+  | { readonly type: "overrun"; readonly pourPosition: BeatGameBlockPosition }
+  | { readonly type: "failed" };
+
 function pourWaterAgainstEnderman(
   state: RunState,
   target: BeatGameEntityObservation,
-): Effect.Effect<boolean, BeatGameDriverError> {
+): Effect.Effect<EndermanWaterOutcome, BeatGameDriverError> {
   return state.driver
     .withControl(
       Effect.gen(function* () {
@@ -6654,43 +6664,69 @@ function pourWaterAgainstEnderman(
           hand: "main",
           retryTicks: FALL_CLUTCH_USE_RETRY_TICKS,
         });
-        const position = (yield* state.driver.observe).player.position;
+        const poured = (yield* state.driver.observe).player;
+        const position = poured.position;
+        const pourPosition = {
+          x: Math.floor(position.x),
+          y: Math.floor(position.y),
+          z: Math.floor(position.z),
+          dimension: position.dimension,
+        };
         yield* emit(state, {
           type: "diagnostic",
           message: "Poured water against an attacking enderman",
           data: { threatNetworkId: target.networkId, position },
         });
-        yield* Effect.sleep(ENDERMAN_WATER_HOLD_MS);
-        yield* state.driver.act({
-          type: "select-item",
-          selector: { itemIds: ["minecraft:bucket"] },
-        });
-        // The flow pushes the bot away from its source, which can land a
-        // block or two from its feet. A live bot looked straight down into
-        // flowing water, which a bucket cannot take, lost its water, and died
-        // to the same enderman.
-        yield* recoverWaterBucket(
-          state.driver,
-          {
-            x: Math.floor(position.x),
-            y: Math.floor(position.y),
-            z: Math.floor(position.z),
-            dimension: position.dimension,
-          },
-          state.strategy.path,
-        ).pipe(
-          Effect.catchTag("BeatGameDriverError", (error) =>
-            emit(state, {
+        // Water does not reach an enderman that strikes from beside it. A
+        // live bot stood in its water while endermen hit it three more times
+        // in three seconds, and died before the hold ended.
+        const holdStart = yield* Clock.currentTimeMillis;
+        while ((yield* Clock.currentTimeMillis) - holdStart < ENDERMAN_WATER_HOLD_MS) {
+          const holding = yield* state.driver.observe;
+          if (holding.player.dead) {
+            return { type: "failed" } as const;
+          }
+          if (holding.player.health < poured.health) {
+            yield* emit(state, {
               type: "diagnostic",
-              message: "Could not take back the water poured against an enderman",
-              data: { error: error.message },
-            }),
-          ),
-        );
-        return true;
+              message: "The water did not stop an attacking enderman",
+              data: { threatNetworkId: target.networkId, health: holding.player.health },
+            });
+            return { type: "overrun", pourPosition } as const;
+          }
+          yield* Effect.sleep(Math.max(50, state.strategy.observationPollMs));
+        }
+        yield* recoverPouredWater(state, pourPosition);
+        return { type: "held" } as const;
       }),
     )
-    .pipe(Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)));
+    .pipe(
+      Effect.catchTag("BeatGameDriverError", () => Effect.succeed({ type: "failed" } as const)),
+    );
+}
+
+/// The flow pushes the bot away from its source, which can land a block or
+/// two from its feet. A live bot looked straight down into flowing water,
+/// which a bucket cannot take, lost its water, and died to the same enderman.
+function recoverPouredWater(
+  state: RunState,
+  pourPosition: BeatGameBlockPosition,
+): Effect.Effect<void, BeatGameDriverError> {
+  return state.driver
+    .act({
+      type: "select-item",
+      selector: { itemIds: ["minecraft:bucket"] },
+    })
+    .pipe(
+      Effect.andThen(recoverWaterBucket(state.driver, pourPosition, state.strategy.path)),
+      Effect.catchTag("BeatGameDriverError", (error) =>
+        emit(state, {
+          type: "diagnostic",
+          message: "Could not take back the water poured against an enderman",
+          data: { error: error.message },
+        }),
+      ),
+    );
 }
 
 function findEndermanWaterEscapeTarget(

@@ -55625,6 +55625,148 @@ describe("beat-game run lifecycle", () => {
     ]);
   }, 15_000);
 
+  it("breaks off its water hold when an enderman keeps hitting it", async () => {
+    // As in a live run: endermen hit the bot three more times while it stood
+    // in its water for the four-second hold, and it died before the hold
+    // ended.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 14, y: 64, z: -4, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+        // As in the live run, which stood and fought behind its shield.
+        "minecraft:shield": 1,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:enderman",
+      position: { ...position, x: 15.8 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 40,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    // As in the live run: a use sent with the look, before it took effect,
+    // was refused.
+    driver.actionResolver = (action) =>
+      action.type === "use-item" && (action.retryTicks ?? 0) === 0
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "act.use-item",
+              code: "FAILED_PRECONDITION",
+              retryable: false,
+              message: "FAILED_PRECONDITION: The held item could not be used",
+            }),
+          )
+        : Effect.succeed({});
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "enderman-overrun-run",
+          teamId: "enderman-overrun-team",
+        }),
+        undefined,
+      ),
+    );
+    const fight = { started: false };
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-overrun-run",
+            team: { teamId: "enderman-overrun-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (!fight.started && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.entityResults = [enderman];
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 15.5,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          attempts = 1500;
+          while (
+            !diagnostics.includes("Poured water against an attacking enderman") &&
+            attempts > 0
+          ) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 11,
+            counts: {
+              ...driver.currentObservation.inventory.counts,
+              "minecraft:water_bucket": 0,
+              "minecraft:bucket": 1,
+            },
+          });
+          attempts = 1500;
+          while (
+            !driver.actions.some(
+              (action) => action.type === "dig-block" || action.type === "place-block",
+            ) &&
+            attempts > 0
+          ) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          // Past the end of the four-second hold.
+          yield* Effect.sleep(4500);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(diagnostics).toContain("The water did not stop an attacking enderman");
+    // It leaves the water at once instead of standing out the hold and
+    // then going back to scoop it up.
+    expect(
+      driver.actions.some(
+        (action) =>
+          action.type === "select-item" &&
+          action.selector.itemIds?.includes("minecraft:bucket") === true,
+      ),
+    ).toBe(false);
+  }, 15_000);
+
   it("pours water against an enderman that attacks during the dragon fight", async () => {
     // As in a live run: digging cover took two seconds while an enderman
     // hit the bot every second. Water at its feet drives the enderman off.
