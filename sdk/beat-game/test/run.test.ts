@@ -55471,6 +55471,160 @@ describe("beat-game run lifecycle", () => {
     expect(escape?.z).toBeCloseTo(-6 - (12 * 6) / Math.hypot(7, 6));
   });
 
+  it("walks back to the water it poured against an enderman", async () => {
+    // As in a live run: the flow pushed the bot off its water, it looked
+    // straight down into flowing water, and lost it. In a real game the
+    // source can land two blocks from the bot's feet.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 14, y: 64, z: -4, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+        // As in the live run, which stood and fought behind its shield.
+        "minecraft:shield": 1,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:enderman",
+      position: { ...position, x: 15.8 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 40,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    // As in the live run: a use sent with the look, before it took effect,
+    // was refused.
+    driver.actionResolver = (action) =>
+      action.type === "use-item" && (action.retryTicks ?? 0) === 0
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "act.use-item",
+              code: "FAILED_PRECONDITION",
+              retryable: false,
+              message: "FAILED_PRECONDITION: The held item could not be used",
+            }),
+          )
+        : Effect.succeed({});
+    const source = { x: 14, y: 64, z: -2, dimension: "minecraft:the_end" } as const;
+    driver.blockQueryResolver = ({ center, radius }) =>
+      distanceSquared(center, { x: source.x + 0.5, y: source.y + 0.5, z: source.z + 0.5 }) <=
+      (radius + 1) ** 2
+        ? [
+            blockObservation(source, {
+              blockId: "minecraft:water",
+              properties: { level: "0" },
+              solid: false,
+              replaceable: true,
+              diggable: false,
+            }),
+          ]
+        : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "enderman-water-pickup-run",
+          teamId: "enderman-water-pickup-team",
+        }),
+        undefined,
+      ),
+    );
+    const fight = { started: false };
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-water-pickup-run",
+            team: { teamId: "enderman-water-pickup-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (!fight.started && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.entityResults = [enderman];
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 15.5,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          attempts = 1500;
+          while (
+            !diagnostics.includes("Poured water against an attacking enderman") &&
+            attempts > 0
+          ) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position: { ...position, x: position.x + 1.5 },
+            health: 15.5,
+            counts: {
+              ...driver.currentObservation.inventory.counts,
+              "minecraft:water_bucket": 0,
+              "minecraft:bucket": 1,
+            },
+          });
+          const pickupLook = () => {
+            const bucketSelect = driver.actions.findIndex(
+              (action) =>
+                action.type === "select-item" &&
+                action.selector.itemIds?.includes("minecraft:bucket") === true,
+            );
+            return bucketSelect === -1
+              ? undefined
+              : driver.actions.slice(bucketSelect).find((action) => action.type === "look");
+          };
+          attempts = 8000;
+          while (pickupLook() === undefined && driver.paths.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    // It walks to the source two blocks from where it poured, instead of
+    // looking straight down into the flowing water at its feet.
+    expect(driver.paths.map((path) => path.position)).toEqual([
+      { ...source, x: 14.5, y: 64.5, z: -1.5 },
+    ]);
+  }, 15_000);
+
   it("pours water against an enderman that attacks during the dragon fight", async () => {
     // As in a live run: digging cover took two seconds while an enderman
     // hit the bot every second. Water at its feet drives the enderman off.

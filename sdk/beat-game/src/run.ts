@@ -31,6 +31,7 @@ import {
   fish,
   flee,
   fightEnderDragon,
+  recoverWaterBucket,
   respawnAndRecover,
   smelt,
   staircaseStartPosition,
@@ -6664,8 +6665,28 @@ function pourWaterAgainstEnderman(
           type: "select-item",
           selector: { itemIds: ["minecraft:bucket"] },
         });
-        yield* state.driver.act({ type: "look", yaw: 0, pitch: 90 });
-        yield* pickUpClutchWater(state);
+        // The flow pushes the bot away from its source, which can land a
+        // block or two from its feet. A live bot looked straight down into
+        // flowing water, which a bucket cannot take, lost its water, and died
+        // to the same enderman.
+        yield* recoverWaterBucket(
+          state.driver,
+          {
+            x: Math.floor(position.x),
+            y: Math.floor(position.y),
+            z: Math.floor(position.z),
+            dimension: position.dimension,
+          },
+          state.strategy.path,
+        ).pipe(
+          Effect.catchTag("BeatGameDriverError", (error) =>
+            emit(state, {
+              type: "diagnostic",
+              message: "Could not take back the water poured against an enderman",
+              data: { error: error.message },
+            }),
+          ),
+        );
         return true;
       }),
     )

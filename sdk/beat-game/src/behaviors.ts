@@ -4500,9 +4500,7 @@ function refuseFloodedStaircaseStep(
         : Effect.fail(
             behaviorError(
               driver,
-              `Refused to enter a staircase flooded by ${fluid.blockId} at ${positionKey(
-                fluid.position,
-              )}`,
+              `Refused to enter a staircase flooded by ${fluid.blockId} at ${positionKey(fluid.position)}`,
               "fluid_exposed",
             ),
           );
@@ -5319,7 +5317,7 @@ function castNetherPortalFromLavaPool(
                 .pipe(
                   Effect.catchTag("BeatGameDriverError", (cause) =>
                     cause.code === "not_found"
-                      ? recoverPortalCastingWaterBucket(driver, water, options.path).pipe(
+                      ? recoverWaterBucket(driver, water, options.path).pipe(
                           Effect.andThen(
                             driver.act({
                               type: "select-item",
@@ -5351,14 +5349,12 @@ function castNetherPortalFromLavaPool(
                 : Effect.fail(
                     behaviorError(
                       driver,
-                      `cast portal block did not produce minecraft:obsidian at ${positionKey(
-                        target,
-                      )}`,
+                      `cast portal block did not produce minecraft:obsidian at ${positionKey(target)}`,
                     ),
                   ),
             ),
           );
-          yield* recoverPortalCastingWaterBucket(driver, water, options.path);
+          yield* recoverWaterBucket(driver, water, options.path);
         }
         for (const support of temporarySupports) {
           if (samePosition(support, finalCastingStandSupport)) {
@@ -5493,9 +5489,7 @@ function collectApproachedPortalCastingLavaSource(
     if (obstruction !== undefined && !samePosition(obstruction.position, source.position)) {
       return yield* behaviorError(
         driver,
-        `Could not safely collect the portal casting lava source through ${
-          obstruction.blockId
-        } at ${positionKey(obstruction.position)}`,
+        `Could not safely collect the portal casting lava source through ${obstruction.blockId} at ${positionKey(obstruction.position)}`,
       );
     }
     const sourceCenter = blockCenter(source.position);
@@ -5511,9 +5505,7 @@ function collectApproachedPortalCastingLavaSource(
     if (!liveSource.some(({ position }) => samePosition(position, source.position))) {
       return yield* behaviorError(
         driver,
-        `The portal casting lava source at ${positionKey(
-          source.position,
-        )} changed while the bot approached it`,
+        `The portal casting lava source at ${positionKey(source.position)} changed while the bot approached it`,
         "source-changed",
       );
     }
@@ -5528,9 +5520,7 @@ function collectApproachedPortalCastingLavaSource(
             operation: "collect-portal-casting-lava",
             ...(cause.code === undefined ? {} : { code: cause.code }),
             retryable: true,
-            message: `Could not collect the portal casting lava source at ${positionKey(
-              source.position,
-            )}: ${cause.message}`,
+            message: `Could not collect the portal casting lava source at ${positionKey(source.position)}: ${cause.message}`,
             cause,
           }),
       ),
@@ -5596,7 +5586,9 @@ function isPortalCastingPlayerStabilityBlock(
   );
 }
 
-function recoverPortalCastingWaterBucket(
+/// Takes back water the bot poured near `expectedWater`. It finds the nearest
+/// source, walks beside it, and fills an empty bucket from it.
+export function recoverWaterBucket(
   driver: BeatGameDriver,
   expectedWater: BeatGameBlockPosition,
   path?: Partial<BeatGamePathPolicy>,
@@ -5667,10 +5659,8 @@ function recoverPortalCastingWaterBucket(
     return yield* behaviorError(
       driver,
       lastSource === undefined
-        ? "The portal casting water bucket is missing and no nearby source remains"
-        : `The water source at ${positionKey(lastSource.position)} was not collected${
-            lastFailure === undefined ? "" : `: ${lastFailure.message}`
-          }`,
+        ? "The water bucket is missing and no nearby source remains"
+        : `The water source at ${positionKey(lastSource.position)} was not collected${lastFailure === undefined ? "" : `: ${lastFailure.message}`}`,
     );
   });
 }
@@ -6099,7 +6089,7 @@ function retryPortalBucketPlacement(
       if (itemIds.includes("minecraft:lava_bucket")) {
         yield* collectPortalCastingLava(driver, 1, path);
       } else {
-        yield* recoverPortalCastingWaterBucket(driver, target, path);
+        yield* recoverWaterBucket(driver, target, path);
       }
     } else if (!retryWithFilledBucket) {
       return yield* failure;
@@ -6157,9 +6147,7 @@ function exposePortalBucketSupport(
       ) {
         return yield* behaviorError(
           driver,
-          `Could not expose portal bucket support through ${
-            obstruction.blockId
-          } at ${positionKey(obstruction.position)}`,
+          `Could not expose portal bucket support through ${obstruction.blockId} at ${positionKey(obstruction.position)}`,
         );
       }
       const tool = preferredPortalDigTool(observation);
@@ -6616,9 +6604,7 @@ function craftItemDependencies(
           if (!resolved) {
             lastFailure = behaviorError(
               driver,
-              `Missing ${missing.missing} of ${missing.itemIds.join(
-                " or ",
-              )} while producing ${resultItemId}`,
+              `Missing ${missing.missing} of ${missing.itemIds.join(" or ")} while producing ${resultItemId}`,
               "resource-exhausted",
             );
             continue recipeLoop;
