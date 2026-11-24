@@ -16,6 +16,7 @@ import {
   beatGameWithDriver,
   createNetherPortalFrame,
   defaultBeatGameStrategy,
+  fastBeatGameStrategy,
   distanceSquared,
   type BeatGameBlockPosition,
   type BeatGameDriverEvent,
@@ -54280,6 +54281,88 @@ describe("beat-game run lifecycle", () => {
       }),
     );
   });
+
+  it("escapes an enderman that attacks during the dragon fight", async () => {
+    // As in a live fast run: the bot fought on through two enderman hits,
+    // still above the fast health threshold, and died during the retreat.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 14, y: 64, z: -4, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:enderman",
+      position: { ...position, x: 15.8 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 40,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "enderman-fight-run",
+          teamId: "enderman-fight-team",
+        }),
+        undefined,
+      ),
+    );
+    const fight = { started: false };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-fight-run",
+            team: { teamId: "enderman-fight-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          let attempts = 3000;
+          while (!fight.started && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.entityResults = [enderman];
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 15.5,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          attempts = 1500;
+          while (driver.tasks.length === 0 && driver.actions.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(fight.started).toBe(true);
+    // The bot turns from the fight to get away from the enderman.
+    expect(driver.tasks.length + driver.actions.length).toBeGreaterThan(0);
+  }, 10_000);
 
   it("runs custom Effect policy inside the normal planner lifecycle", async () => {
     const driver = new FakeBeatGameDriver();

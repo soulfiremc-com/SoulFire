@@ -4829,6 +4829,25 @@ function monitorObservedSafety(
       replanReason: "interrupted an action to put on spare gold boots",
     } satisfies ActionResult);
   }
+  // The dragon fight answers its own threats, but not an enderman. A live
+  // bot shooting at crystals took two enderman hits before its health fell
+  // below the fast profile's threshold, and two more killed it during the
+  // retreat. Cover too low for an enderman to follow into ends that fight.
+  if (
+    decision.type === "fight-ender-dragon" &&
+    observation.player.health < previousObservation.player.health
+  ) {
+    return findNearbyAttackThreat(state, observation).pipe(
+      Effect.flatMap((threat) =>
+        threat?.target.entityType === "minecraft:enderman"
+          ? Effect.succeed({
+              replanReason: "interrupted the dragon fight to escape an attacking enderman",
+              escapeTarget: threat.target,
+            } satisfies ActionResult)
+          : Effect.suspend(() => monitor(observation)),
+      ),
+    );
+  }
   if (
     decision.type !== "retreat" &&
     decision.type !== "fight-ender-dragon" &&
