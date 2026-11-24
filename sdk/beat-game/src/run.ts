@@ -440,6 +440,10 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:oak_fence",
   "minecraft:oak_door",
   "minecraft:spruce_door",
+  "minecraft:iron_door",
+  "minecraft:stone_button",
+  "minecraft:oak_button",
+  "minecraft:lever",
   "minecraft:red_mushroom",
   "minecraft:brown_mushroom",
   // Magma burns whoever stands on it, so it makes a poor building block.
@@ -18200,12 +18204,16 @@ export function selectInventoryDiscard(
   const mostWool = Math.max(0, ...WOOL_ITEM_IDS.map((itemId) => counts[itemId] ?? 0));
   // Until another color holds a bed's worth, white wool is not stray: nearly
   // every sheep is white, so it is the color the bot hunts.
+  // A color tied with the white the bot hunts is stray too. A live bot held
+  // one black and one white wool, and kept both while it needed slots.
+  const whiteWool = counts["minecraft:white_wool"] ?? 0;
   const strayWool = WOOL_ITEM_IDS.find((itemId) => {
     const count = counts[itemId] ?? 0;
     return (
       count > 0 &&
       count < 3 &&
-      count < mostWool &&
+      (count < mostWool ||
+        (itemId !== "minecraft:white_wool" && whiteWool > 0 && count <= whiteWool)) &&
       (itemId !== "minecraft:white_wool" || mostWool >= 3)
     );
   });

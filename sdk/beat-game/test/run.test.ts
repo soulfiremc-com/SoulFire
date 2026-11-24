@@ -179,6 +179,33 @@ describe("inventory discards", () => {
     });
   });
 
+  it("frees slots held by stronghold fittings and a stray wool color", () => {
+    // Part of the pack a live bot carried when its bed step could not free
+    // three slots.
+    const counts: Record<string, number> = {
+      "minecraft:white_bed": 2,
+      "minecraft:black_bed": 1,
+      "minecraft:cobblestone": 64,
+      "minecraft:stone_button": 2,
+      "minecraft:iron_door": 1,
+      "minecraft:black_wool": 1,
+      "minecraft:white_wool": 1,
+      "minecraft:stone_sword": 1,
+    };
+    const discarded: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      discarded.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+
+    expect(discarded.toSorted()).toEqual([
+      "minecraft:black_wool",
+      "minecraft:iron_door",
+      "minecraft:stone_button",
+    ]);
+  });
+
   it("frees slots held by stronghold debris", () => {
     // Part of the pack a live bot carried back to the portal room, too full
     // to take on food once it had dropped its leaf litter.
