@@ -935,10 +935,13 @@ const COMMITTABLE_CLOSE_MELEE_ENTITY_TYPES = new Set([
   "minecraft:zombie",
   "minecraft:zombie_villager",
 ]);
+// A wolf outruns the bot. A live bot fled an angry wolf on foot, and the
+// wolf bit it six times in six seconds until it died.
 const FAST_MELEE_PURSUER_ENTITY_TYPES = new Set([
   "minecraft:cave_spider",
   "minecraft:piglin",
   "minecraft:spider",
+  "minecraft:wolf",
   "minecraft:zombified_piglin",
 ]);
 const ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES = new Set(["minecraft:creeper", "minecraft:witch"]);

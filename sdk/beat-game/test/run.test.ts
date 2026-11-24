@@ -28466,6 +28466,99 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks.some((task) => task.type === "flee")).toBe(false);
   }, 10_000);
 
+  it("turns on an angry wolf that keeps pace with its escape", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 20,
+      food: 10,
+      counts: {
+        "minecraft:wooden_sword": 1,
+        "minecraft:porkchop": 5,
+      },
+    });
+    const wolf = {
+      connectionEpoch: "epoch-1",
+      networkId: 18,
+      entityType: "minecraft:wolf",
+      position: {
+        x: 2,
+        y: 64,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 8,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityResults = [
+      wolf,
+      {
+        ...wolf,
+        networkId: 19,
+        entityType: "minecraft:zombie",
+        position: { ...wolf.position, x: 7 },
+        health: 20,
+      },
+    ];
+    // A wolf is not a monster, so the monster scans pass it by.
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(2) === true && query.selector.entityTypes === undefined
+        ? driver.entityResults.filter(({ entityType }) => entityType !== "minecraft:wolf")
+        : driver.entityResults;
+    // The flee runs on while the wolf keeps pace, as in the live run.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "attack-entity") {
+          driver.entityResults = [];
+        }
+      }).pipe(Effect.andThen(task.type === "flee" ? Effect.never : Effect.void));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              let attempts = 3000;
+              while (driver.tasks.length === 0 && attempts > 0) {
+                attempts -= 1;
+                yield* Effect.sleep(1);
+              }
+              // As in the live run: the wolf bites the bot at its work.
+              driver.currentObservation = observation({
+                health: 17,
+                food: 10,
+                counts: driver.currentObservation.inventory.counts,
+              });
+              attempts = 3000;
+              while (!driver.tasks.some((task) => task.type === "attack-entity") && attempts > 0) {
+                attempts -= 1;
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({
+        type: "attack-entity",
+        target: objectContaining({
+          connectionEpoch: wolf.connectionEpoch,
+          networkId: wolf.networkId,
+        }),
+        selectBestWeapon: true,
+      }),
+    );
+  }, 10_000);
+
   it("flees an unshielded melee group when unable to regenerate", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
