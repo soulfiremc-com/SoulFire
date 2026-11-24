@@ -973,6 +973,8 @@ const END_PORTAL_FRAME_COUNT = 12;
 const PORTAL_ROOM_ARRIVAL_RADIUS = 8;
 const PORTAL_ROOM_APPROACH_RADIUS = 3;
 const PORTAL_ROOM_SEARCH_RADIUS = 16;
+const PORTAL_ROOM_TRAVEL_RADIUS = 128;
+const PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS = 16;
 /// A wooden sword deals 4 damage and a fist 1.
 const FINISHABLE_PURSUER_ARMED_HEALTH = 4;
 const FINISHABLE_PURSUER_BAREHANDED_HEALTH = 1;
@@ -4261,6 +4263,30 @@ function executeDecision(
         // the activation searched only around where it stood. It now walks
         // back to the portal room first.
         const portalRoom = actionCheckpoint.memory.portalRoomCenter;
+        // A digging route from far off outgrows the path search. A live bot
+        // woke 1,850 blocks away and its first route failed at the state
+        // limit. From that far it walks toward the room a leg at a time, at
+        // its own height, the way the stronghold search does.
+        if (
+          portalRoom !== undefined &&
+          portalRoom.dimension === observation.player.position.dimension &&
+          horizontalDistanceSquared(portalRoom, observation.player.position) >
+            PORTAL_ROOM_TRAVEL_RADIUS ** 2
+        ) {
+          return state.driver
+            .pathfind(
+              { ...portalRoom, y: Math.floor(observation.player.position.y) },
+              PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
+              state.strategy.path,
+            )
+            .pipe(
+              Effect.catchIf(
+                (error) => error.operation === "pathfind" && error.retryable,
+                () => Effect.void,
+              ),
+              Effect.as({} satisfies ActionResult),
+            );
+        }
         const approachPortalRoom =
           portalRoom === undefined ||
           (portalRoom.dimension === observation.player.position.dimension &&

@@ -46279,6 +46279,64 @@ describe("beat-game run lifecycle", () => {
     expect(await Effect.runPromise(savedFrames())).toBe(0);
   }, 10_000);
 
+  it("travels back to a distant portal room a leg at a time", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: the bot woke at world spawn, 1,850 blocks away.
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:white_bed": 3,
+      },
+      position: { x: 25, y: 61, z: 15, dimension: "minecraft:overworld" },
+    });
+    const portalRoomCenter = {
+      x: -375.5,
+      y: 15,
+      z: -1771.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "distant-portal-run",
+      teamId: "distant-portal-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, emptyPortalFrames: 0, portalRoomCenter },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "distant-portal-run",
+            team: { teamId: "distant-portal-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (driver.paths.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.paths[0]).toMatchObject({
+      position: { x: portalRoomCenter.x, y: 61, z: portalRoomCenter.z },
+      radius: 16,
+    });
+  }, 10_000);
+
   it("walks back to the portal room before filling its frames", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: the bot ended up eighty blocks from the frames.
