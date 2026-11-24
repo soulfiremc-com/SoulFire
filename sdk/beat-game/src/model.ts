@@ -422,6 +422,8 @@ export interface BeatGameWorldMemory {
   readonly emptyPortalFrames?: number;
   /// Center of the End portal frames the bot found in the stronghold.
   readonly portalRoomCenter?: BeatGamePosition;
+  /// The bed near the portal room the bot leaves placed as its respawn point.
+  readonly respawnBed?: BeatGamePosition;
 }
 
 export const emptyBeatGameWorldMemory = (): BeatGameWorldMemory => ({

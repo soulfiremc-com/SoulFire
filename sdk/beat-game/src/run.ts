@@ -970,6 +970,7 @@ const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
+const RESPAWN_BED_KEEP_RADIUS = 256;
 const STONE_SWORD_COBBLESTONE = 2;
 const STONE_PICKAXE_COBBLESTONE = 3;
 const FURNACE_STONE_COUNT = 8;
@@ -1934,7 +1935,25 @@ function trySleepThroughNight(
           message: "Slept through the hostile night in a bed",
           data: { position: bed.position },
         });
-        yield* pickUpBed(state, bed);
+        // A bed slept in is the respawn point. A live bot took its bed by
+        // the stronghold back up, then died and woke 1,850 blocks away at the
+        // world spawn. Near the portal room the bed stays where it is.
+        // Only one bed stays behind, so the pack keeps the rest for the dragon.
+        const { portalRoomCenter: portalRoom, respawnBed } = (yield* Ref.get(state.checkpoint))
+          .memory;
+        const keepsRespawnBed =
+          portalRoom !== undefined &&
+          portalRoom.dimension === bed.position.dimension &&
+          horizontalDistanceSquared(portalRoom, bed.position) <= RESPAWN_BED_KEEP_RADIUS ** 2 &&
+          (respawnBed === undefined || sameBlockPosition(respawnBed, bed.position));
+        if (keepsRespawnBed) {
+          yield* persist(state, (checkpoint) => ({
+            ...checkpoint,
+            memory: { ...checkpoint.memory, respawnBed: bed.position },
+          }));
+        } else {
+          yield* pickUpBed(state, bed);
+        }
         return "slept";
       }
     }

@@ -360,6 +360,9 @@ function worldMemory(value: unknown): void {
   if (memory["portalRoomCenter"] !== undefined) {
     position(memory["portalRoomCenter"], "checkpoint.memory.portalRoomCenter");
   }
+  if (memory["respawnBed"] !== undefined) {
+    position(memory["respawnBed"], "checkpoint.memory.respawnBed");
+  }
   if (
     memory["keepsInventoryOnDeath"] !== undefined &&
     typeof memory["keepsInventoryOnDeath"] !== "boolean"

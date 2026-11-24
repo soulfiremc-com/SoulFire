@@ -6730,6 +6730,159 @@ describe("beat-game run lifecycle", () => {
     ]);
   });
 
+  it("leaves its bed near the portal room as the respawn point", async () => {
+    // As in a live run: the bot took its bed by the stronghold back up, then
+    // died and woke at the world spawn, 1,850 blocks away.
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: { "minecraft:white_bed": 1 },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "sleep") {
+          driver.currentEnvironment = { gameTime: 1000n };
+        }
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "respawn-bed-run",
+      teamId: "respawn-bed-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portalRoomCenter: { x: 40, y: 15, z: -60, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const succeeded: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "respawn-bed-run",
+            team: { teamId: "respawn-bed-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-succeeded"
+                ? Effect.sync(() => {
+                    succeeded.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!succeeded.includes("survive:night-shelter")) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "3 seconds",
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for bed sleep" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "sleep" }));
+    expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([]);
+  });
+
+  it("takes a second bed along when a respawn bed already stands", async () => {
+    // One bed by the portal room is enough. Leaving every bed behind would
+    // empty the pack the bot carries for the dragon.
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: { "minecraft:white_bed": 1 },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "sleep") {
+          driver.currentEnvironment = { gameTime: 1000n };
+        }
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "second-bed-run",
+      teamId: "second-bed-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portalRoomCenter: { x: 40, y: 15, z: -60, dimension: "minecraft:overworld" },
+            respawnBed: { x: 30, y: 64, z: -40, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const succeeded: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "second-bed-run",
+            team: { teamId: "second-bed-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-succeeded"
+                ? Effect.sync(() => {
+                    succeeded.push(event.action);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (!succeeded.includes("survive:night-shelter")) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "3 seconds",
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for bed sleep" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(objectContaining({ type: "sleep" }));
+    expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
+      objectContaining({ position: objectContaining({ x: 0, y: 64, z: 1 }) }),
+    ]);
+  });
+
   it("travels on through the night after its bed shelter fails", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
