@@ -2561,9 +2561,7 @@ function leaveCoveredVerticalShaft(
         operation: "leave-covered-shaft",
         code: "unreachable",
         retryable: true,
-        message: `The covered shaft exit is blocked by ${overhead.blockId} at ${positionKey(
-          overhead.position,
-        )}`,
+        message: `The covered shaft exit is blocked by ${overhead.blockId} at ${positionKey(overhead.position)}`,
       }),
     );
   }
@@ -4114,9 +4112,7 @@ function executeDecision(
               error instanceof BeatGameDriverError && error.code === "resource-exhausted",
             (error) =>
               Effect.succeed({
-                replanReason: `resource acquisition remains incomplete while satisfying ${
-                  decision.requirement.key
-                }: ${error.message}`,
+                replanReason: `resource acquisition remains incomplete while satisfying ${decision.requirement.key}: ${error.message}`,
                 replanDelayMs: REQUIREMENT_NO_PROGRESS_REPLAN_DELAY_MS,
               } satisfies ActionResult),
           ),
@@ -4165,9 +4161,7 @@ function executeDecision(
               error instanceof BeatGameDriverError && isRouteUnavailable(error),
             (error) =>
               Effect.succeed({
-                replanReason: `retained the portal workspace after a local route failure: ${
-                  error.message
-                }`,
+                replanReason: `retained the portal workspace after a local route failure: ${error.message}`,
                 replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
               } satisfies ActionResult),
           ),
@@ -4913,14 +4907,23 @@ function monitorObservedSafety(
     decision.type === "fight-ender-dragon" &&
     observation.player.health < previousObservation.player.health
   ) {
-    return findNearbyAttackThreat(state, observation).pipe(
-      Effect.flatMap((threat) =>
-        threat?.target.entityType === "minecraft:enderman"
+    return Ref.get(state.lastDamage).pipe(
+      Effect.flatMap((damage) =>
+        isDragonBreathDamage(damage, observation)
           ? Effect.succeed({
-              replanReason: "interrupted the dragon fight to escape an attacking enderman",
-              escapeTarget: threat.target,
+              replanReason: "interrupted the dragon fight to leave dragon breath",
+              environmentalEscapePosition: observation.player.position,
             } satisfies ActionResult)
-          : Effect.suspend(() => monitor(observation)),
+          : findNearbyAttackThreat(state, observation).pipe(
+              Effect.flatMap((threat) =>
+                threat?.target.entityType === "minecraft:enderman"
+                  ? Effect.succeed({
+                      replanReason: "interrupted the dragon fight to escape an attacking enderman",
+                      escapeTarget: threat.target,
+                    } satisfies ActionResult)
+                  : Effect.suspend(() => monitor(observation)),
+              ),
+            ),
       ),
     );
   }
@@ -8255,9 +8258,7 @@ function tryBreathingPocketCandidates(
                           operation: "pathfind",
                           code: "unreachable",
                           retryable: true,
-                          message: `Timed out reaching breathing pocket at ${positionKey(
-                            candidate.target,
-                          )}`,
+                          message: `Timed out reaching breathing pocket at ${positionKey(candidate.target)}`,
                         }),
                       ),
                   }),
@@ -8740,9 +8741,7 @@ function escapeToOverworldSurface(
       operation: "pathfind",
       code: "no-progress",
       retryable: true,
-      message: `The bot remained below the Overworld surface at ${positionKey(
-        currentPosition,
-      )} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts without rising`,
+      message: `The bot remained below the Overworld surface at ${positionKey(currentPosition)} after ${AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS} recovery attempts without rising`,
       ...(lastPathFailure === undefined ? {} : { cause: lastPathFailure }),
     });
   });
@@ -8780,9 +8779,7 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
             operation: "escape-submerged-cavity",
             code: "unreachable",
             retryable: true,
-            message: `The overhead escape route is blocked by ${
-              obstruction.blockId
-            } at ${positionKey(overhead)}`,
+            message: `The overhead escape route is blocked by ${obstruction.blockId} at ${positionKey(overhead)}`,
           });
         }
         const cleared = yield* digAirEscapeObstruction(state, observation, obstruction, overhead);
@@ -8791,9 +8788,7 @@ function excavateAirEscapeShaft(state: RunState): Effect.Effect<void, BeatGameDr
             operation: "escape-submerged-cavity",
             code: "unreachable",
             retryable: true,
-            message: `Breaking ${obstruction.blockId} at ${positionKey(
-              overhead,
-            )} would consume the emergency air reserve`,
+            message: `Breaking ${obstruction.blockId} at ${positionKey(overhead)} would consume the emergency air reserve`,
           });
         }
       }
@@ -8884,9 +8879,7 @@ function digAirEscapeObstruction(
                 operation: "act.dig-block",
                 code: "deadline_exceeded",
                 retryable: true,
-                message: `Timed out clearing ${block.blockId} at ${positionKey(
-                  obstruction,
-                )} within the available air budget`,
+                message: `Timed out clearing ${block.blockId} at ${positionKey(obstruction)} within the available air budget`,
               }),
             ),
         }),
@@ -12928,9 +12921,7 @@ function fillLiquidBucket(
                 operation: "find-deep-lava",
                 code: "unreachable",
                 retryable: true,
-                message: `The lava descent made no vertical progress from Y${beforeDescent.y.toFixed(
-                  1,
-                )}`,
+                message: `The lava descent made no vertical progress from Y${beforeDescent.y.toFixed(1)}`,
               });
             }
             liquidSources = yield* state.driver.queryBlocks({
@@ -13098,9 +13089,7 @@ function fillLiquidBucket(
               return yield* new BeatGameDriverError({
                 operation: `fill-${liquid}-bucket`,
                 retryable: true,
-                message: `The ${liquid} source remained ${sourceDistance.toFixed(
-                  2,
-                )} blocks away after pathfinding`,
+                message: `The ${liquid} source remained ${sourceDistance.toFixed(2)} blocks away after pathfinding`,
               });
             }
             const rotation = rotationToward(eyePosition, sourceCenter);
@@ -13148,9 +13137,7 @@ function fillLiquidBucket(
                 return yield* new BeatGameDriverError({
                   operation: `fill-${liquid}-bucket`,
                   retryable: true,
-                  message: `The selected ${liquid} source at ${positionKey(
-                    source.position,
-                  )} changed while the bot approached it`,
+                  message: `The selected ${liquid} source at ${positionKey(source.position)} changed while the bot approached it`,
                 });
               }
               yield* state.driver.act({
@@ -13169,9 +13156,7 @@ function fillLiquidBucket(
                         operation: `fill-${liquid}-bucket`,
                         ...(cause.code === undefined ? {} : { code: cause.code }),
                         retryable: true,
-                        message: `Could not collect the ${liquid} source at ${positionKey(
-                          source.position,
-                        )}: ${cause.message}`,
+                        message: `Could not collect the ${liquid} source at ${positionKey(source.position)}: ${cause.message}`,
                         cause,
                       }),
                   ),
@@ -13194,12 +13179,8 @@ function fillLiquidBucket(
                 operation: `expose-${liquid}-source`,
                 retryable: true,
                 message: playerStabilityBlock
-                  ? `Refused to expose the ${liquid} source by mining the player's footing at ${positionKey(
-                      obstruction.position,
-                    )}`
-                  : `Could not expose the ${liquid} source through ${
-                      obstruction.blockId
-                    } at ${positionKey(obstruction.position)}`,
+                  ? `Refused to expose the ${liquid} source by mining the player's footing at ${positionKey(obstruction.position)}`
+                  : `Could not expose the ${liquid} source through ${obstruction.blockId} at ${positionKey(obstruction.position)}`,
               });
             }
             yield* state.driver.act({
@@ -13931,9 +13912,7 @@ function waitForViewRotation(
           new BeatGameDriverError({
             operation: "wait-for-view-rotation",
             retryable: true,
-            message: `The bot did not finish facing yaw ${yaw.toFixed(1)}, pitch ${pitch.toFixed(
-              1,
-            )}`,
+            message: `The bot did not finish facing yaw ${yaw.toFixed(1)}, pitch ${pitch.toFixed(1)}`,
           }),
         );
       }
@@ -15093,9 +15072,7 @@ function representativeStructureTargets(
 }
 
 function structureCellKey(position: BeatGamePosition): string {
-  return `${position.dimension}:${Math.floor(position.x / 16)}:${Math.floor(
-    position.y / 16,
-  )}:${Math.floor(position.z / 16)}`;
+  return `${position.dimension}:${Math.floor(position.x / 16)}:${Math.floor(position.y / 16)}:${Math.floor(position.z / 16)}`;
 }
 
 function waitForVisibleHuntingTarget(
@@ -15611,6 +15588,11 @@ function escapeEnvironmentalDamage(
       yield* extinguishFire(state, escaped);
       return;
     }
+    const breathDamage = yield* Ref.get(state.lastDamage);
+    if (!burning.player.dead && isDragonBreathDamage(breathDamage, burning)) {
+      yield* leaveDragonBreath(state, burning.player.position);
+      return;
+    }
     // Drowned throw tridents from under the water where the bot cannot see
     // them, and a live run died to three throws while it treaded water. Dry
     // land is out of their reach.
@@ -15655,6 +15637,64 @@ function escapeEnvironmentalDamage(
     }
     yield* recoverLocalNavigationTrap(state, position).pipe(Effect.asVoid);
   });
+}
+
+// The dragon breathes over the fountain while it perches, and its fireballs
+// leave the same lingering cloud where they land. A live bot stood in breath
+// for 14 seconds, poured water against a nearby enderman it took for the
+// attacker, and died without moving.
+const DRAGON_BREATH_DAMAGE_TYPE = "minecraft:indirect_magic";
+const DRAGON_BREATH_RECENT_MS = 1500;
+const DRAGON_BREATH_ESCAPE_DISTANCE = 12;
+const DRAGON_BREATH_ESCAPE_RADIUS = 2;
+const DRAGON_BREATH_ESCAPE_TIMEOUT_MS = 8000;
+
+function isDragonBreathDamage(
+  damage: Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined,
+  observation: BeatGameObservation,
+): boolean {
+  return (
+    observation.player.position.dimension === "minecraft:the_end" &&
+    damage?.damageType === DRAGON_BREATH_DAMAGE_TYPE &&
+    Date.parse(observation.observedAt) - Date.parse(damage.observedAt) <= DRAGON_BREATH_RECENT_MS
+  );
+}
+
+/// Walks out of a breath cloud, away from the fountain where the dragon
+/// perches. A bot on the fountain itself picks a fixed direction.
+function leaveDragonBreath(
+  state: RunState,
+  position: BeatGamePosition,
+): Effect.Effect<void, BeatGameDriverError> {
+  const distance = Math.hypot(position.x, position.z);
+  const [directionX, directionZ] =
+    distance < 1 ? [1, 0] : [position.x / distance, position.z / distance];
+  const target = {
+    x: position.x + directionX * DRAGON_BREATH_ESCAPE_DISTANCE,
+    z: position.z + directionZ * DRAGON_BREATH_ESCAPE_DISTANCE,
+  };
+  return emit(state, {
+    type: "diagnostic",
+    message: "Leaving dragon breath",
+    data: { position, target },
+  }).pipe(
+    Effect.andThen(
+      state.driver
+        .pathfindXZ(target.x, target.z, position.dimension, DRAGON_BREATH_ESCAPE_RADIUS, {
+          ...state.strategy.path,
+          allowMining: false,
+          allowPlacing: false,
+          avoidFluids: true,
+          sprint: true,
+        })
+        .pipe(
+          Effect.timeoutOrElse({
+            duration: DRAGON_BREATH_ESCAPE_TIMEOUT_MS,
+            orElse: () => Effect.void,
+          }),
+        ),
+    ),
+  );
 }
 
 function recoverLocalNavigationTrap(
@@ -16216,9 +16256,7 @@ function placeDryShaftRecoveryBlock(
       operation: "recover-dry-shaft",
       code: "no-progress",
       retryable: true,
-      message: `The recovery support was not placed at ${positionKey(expected)}${
-        placement._tag === "Failure" ? `: ${placement.failure.message}` : ""
-      }`,
+      message: `The recovery support was not placed at ${positionKey(expected)}${placement._tag === "Failure" ? `: ${placement.failure.message}` : ""}`,
     });
   });
 }
@@ -20276,9 +20314,7 @@ function rememberWorldPlace(
 
 function worldPlaceKey(kind: BeatGameWorldPlace["kind"], position: BeatGamePosition): string {
   if (kind === "SAFE_CORRIDOR" || kind === "FORTRESS") {
-    return `${kind}:${position.dimension}:${Math.floor(position.x / 32)}:${Math.floor(
-      position.z / 32,
-    )}`;
+    return `${kind}:${position.dimension}:${Math.floor(position.x / 32)}:${Math.floor(position.z / 32)}`;
   }
   return `${kind}:${positionKey(position)}`;
 }
@@ -22157,9 +22193,7 @@ function validateStrategy(strategy: BeatGameStrategy): void {
     strategy.targetObsidianCount < NETHER_PORTAL_FRAME_OBSIDIAN_COUNT
   ) {
     throw new RangeError(
-      `targetObsidianCount must be at least ${
-        NETHER_PORTAL_FRAME_OBSIDIAN_COUNT
-      } unless portalStrategy is CAST`,
+      `targetObsidianCount must be at least ${NETHER_PORTAL_FRAME_OBSIDIAN_COUNT} unless portalStrategy is CAST`,
     );
   }
 }
