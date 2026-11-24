@@ -6604,7 +6604,13 @@ function pourWaterAgainstEnderman(
           selector: { itemIds: ["minecraft:water_bucket"] },
         });
         yield* state.driver.act({ type: "look", yaw: 0, pitch: 90 });
-        yield* state.driver.act({ type: "use-item", hand: "main" });
+        // The use came before the look took effect, and a live bot's pour
+        // was refused. It retries tick by tick, as the fall clutch does.
+        yield* state.driver.act({
+          type: "use-item",
+          hand: "main",
+          retryTicks: FALL_CLUTCH_USE_RETRY_TICKS,
+        });
         const position = (yield* state.driver.observe).player.position;
         yield* emit(state, {
           type: "diagnostic",

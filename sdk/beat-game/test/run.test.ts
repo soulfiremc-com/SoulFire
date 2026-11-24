@@ -54851,6 +54851,8 @@ describe("beat-game run lifecycle", () => {
         "minecraft:arrow": 32,
         "minecraft:cobblestone": 64,
         "minecraft:water_bucket": 1,
+        // As in the live run, which stood and fought behind its shield.
+        "minecraft:shield": 1,
       },
     });
     const enderman = {
@@ -54864,6 +54866,19 @@ describe("beat-game run lifecycle", () => {
       aggressive: true,
       observedAt: "2026-01-01T00:00:00.000Z",
     } as const;
+    // As in the live run: a use sent with the look, before it took effect,
+    // was refused.
+    driver.actionResolver = (action) =>
+      action.type === "use-item" && (action.retryTicks ?? 0) === 0
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "act.use-item",
+              code: "FAILED_PRECONDITION",
+              retryable: false,
+              message: "FAILED_PRECONDITION: The held item could not be used",
+            }),
+          )
+        : Effect.succeed({});
     const store = new InMemoryBeatGameCheckpointStore();
     await Effect.runPromise(
       store.save(
@@ -54875,6 +54890,7 @@ describe("beat-game run lifecycle", () => {
       ),
     );
     const fight = { started: false };
+    const diagnostics: string[] = [];
 
     await Effect.runPromise(
       Effect.scoped(
@@ -54892,6 +54908,16 @@ describe("beat-game run lifecycle", () => {
                 }).pipe(Effect.andThen(Effect.never)),
             },
           });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
           let attempts = 3000;
           while (!fight.started && attempts > 0) {
             attempts -= 1;
@@ -54905,7 +54931,10 @@ describe("beat-game run lifecycle", () => {
             counts: driver.currentObservation.inventory.counts,
           });
           attempts = 1500;
-          while (!driver.actions.some(({ type }) => type === "use-item") && attempts > 0) {
+          while (
+            !diagnostics.includes("Poured water against an attacking enderman") &&
+            attempts > 0
+          ) {
             attempts -= 1;
             yield* Effect.sleep(1);
           }
@@ -54916,6 +54945,7 @@ describe("beat-game run lifecycle", () => {
     );
 
     expect(fight.started).toBe(true);
+    expect(diagnostics).toContain("Poured water against an attacking enderman");
     expect(driver.actions).toEqual(
       arrayContaining([
         objectContaining({
