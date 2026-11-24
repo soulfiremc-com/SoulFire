@@ -446,6 +446,8 @@ describe("production SoulFire beat-game driver", () => {
           maximumFallDistance: 3,
           maximumParkourGap: 0,
           smoothCamera: false,
+          // Looking down keeps endermen from noticing the bot's gaze.
+          walkingPitch: 30,
           timeoutSeconds: 30,
           searchTimeoutSeconds: 30,
         },

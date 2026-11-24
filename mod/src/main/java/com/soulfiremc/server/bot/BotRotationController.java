@@ -78,11 +78,12 @@ public final class BotRotationController {
 
   public void lookHorizontallyAtSmoothly(
     Vec3 target,
+    float pitch,
     float maxYawStep,
     float tolerance
   ) {
     request = new RotationRequest(
-      new HorizontalLookAtTarget(target, 0, 0),
+      new HorizontalLookAtTarget(target, 0, pitch),
       maxYawStep,
       DEFAULT_MAX_PITCH_STEP,
       tolerance

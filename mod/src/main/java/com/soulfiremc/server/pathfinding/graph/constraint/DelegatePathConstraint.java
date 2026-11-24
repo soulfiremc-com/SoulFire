@@ -144,5 +144,10 @@ public interface DelegatePathConstraint extends PathConstraint {
     return delegate().smoothCamera();
   }
 
+  @Override
+  default float walkingPitch() {
+    return delegate().walkingPitch();
+  }
+
   PathConstraint delegate();
 }

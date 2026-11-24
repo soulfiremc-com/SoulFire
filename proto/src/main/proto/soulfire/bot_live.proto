@@ -1060,6 +1060,11 @@ message PathfindOptions {
   // different dimension are rejected instead of being silently reinterpreted
   // in the bot's current dimension.
   repeated BlockPosition protected_blocks = 18;
+  // Pitch in degrees, from -90 (up) through 90 (down), that the bot holds
+  // while it walks. Unset keeps the view level. A level view meets the eyes
+  // of an enderman standing a block lower, which then attacks; looking down
+  // avoids that on uneven ground.
+  optional float walking_pitch = 19;
 }
 
 message GoToRequest {

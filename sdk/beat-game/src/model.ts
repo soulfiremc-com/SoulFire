@@ -141,6 +141,8 @@ export interface BeatGamePathPolicy {
   readonly maximumExpandedStates?: number;
   readonly maxParkourGap?: number;
   readonly smoothCamera?: boolean;
+  /// Pitch in degrees, down positive, that the bot holds while it walks.
+  readonly walkingPitch?: number;
 }
 
 export interface BeatGameStrategy {
@@ -202,6 +204,11 @@ export const defaultBeatGameStrategy: BeatGameStrategy = {
     searchMode: BeatGamePathSearchMode.NORMAL,
     maximumExpandedStates: 50_000,
     maxParkourGap: 0,
+    // A level view meets the eyes of an enderman standing a block lower, and
+    // it attacks. In a real game one did so from 18 to 40 blocks away, while
+    // a view thirty degrees down left it calm. Live bots walking the uneven
+    // End island were attacked by endermen on every visit.
+    walkingPitch: 30,
   },
 };
 

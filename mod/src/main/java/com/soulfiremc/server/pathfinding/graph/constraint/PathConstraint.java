@@ -104,4 +104,9 @@ public interface PathConstraint {
   default boolean smoothCamera() {
     return false;
   }
+
+  /// Returns the pitch the bot holds while it walks.
+  default float walkingPitch() {
+    return 0.0F;
+  }
 }

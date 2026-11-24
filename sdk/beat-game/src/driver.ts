@@ -573,6 +573,7 @@ const pathOptions = (policy: BeatGamePathPolicy) => ({
   maximumFallDistance: policy.maxFallDistance,
   ...(policy.maxParkourGap === undefined ? {} : { maximumParkourGap: policy.maxParkourGap }),
   smoothCamera: policy.smoothCamera ?? false,
+  ...(policy.walkingPitch === undefined ? {} : { walkingPitch: policy.walkingPitch }),
   timeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1000)),
   searchTimeoutSeconds: Math.max(1, Math.ceil(policy.maxSearchTimeMs / 1000)),
 });

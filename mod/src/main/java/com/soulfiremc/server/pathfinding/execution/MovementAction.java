@@ -199,11 +199,16 @@ public final class MovementAction implements WorldAction {
     if (pathConstraint.smoothCamera()) {
       connection.rotationControl().lookHorizontallyAtSmoothly(
         targetMiddleBlock,
+        pathConstraint.walkingPitch(),
         8,
         3
       );
     } else {
-      connection.rotationControl().lookHorizontallyAt(targetMiddleBlock, 0, 0);
+      connection.rotationControl().lookHorizontallyAt(
+        targetMiddleBlock,
+        0,
+        pathConstraint.walkingPitch()
+      );
     }
 
     var botPosition = clientEntity.position();

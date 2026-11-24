@@ -350,7 +350,8 @@ public final class PathfindingSupport {
       || options.getMaximumExpandedStates() != 0
       || options.hasMaximumFallDistance()
       || options.hasMaximumParkourGap()
-      || options.hasSmoothCamera()) {
+      || options.hasSmoothCamera()
+      || options.hasWalkingPitch()) {
       var breakPenalty = optionalPenalty(
         options.hasBreakBlockPenalty(),
         options.getBreakBlockPenalty(),
@@ -417,6 +418,14 @@ public final class PathfindingSupport {
         "maximum_parkour_gap",
         3
       );
+      if (
+        options.hasWalkingPitch()
+          && !(options.getWalkingPitch() >= -90.0F && options.getWalkingPitch() <= 90.0F)
+      ) {
+        throw Status.INVALID_ARGUMENT
+          .withDescription("walking_pitch must be between -90 and 90")
+          .asRuntimeException();
+      }
       constraint = new ConfiguredPathConstraint(
         constraint,
         breakPenalty,
@@ -432,6 +441,9 @@ public final class PathfindingSupport {
         maximumParkourGap,
         options.hasSmoothCamera()
           ? java.util.Optional.of(options.getSmoothCamera())
+          : java.util.Optional.empty(),
+        options.hasWalkingPitch()
+          ? java.util.Optional.of(options.getWalkingPitch())
           : java.util.Optional.empty()
       );
     }

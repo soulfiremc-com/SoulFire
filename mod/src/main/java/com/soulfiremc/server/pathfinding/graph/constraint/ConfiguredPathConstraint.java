@@ -36,7 +36,8 @@ public record ConfiguredPathConstraint(
   OptionalInt configuredMaximumExpandedStates,
   OptionalInt configuredMaximumFallDistance,
   OptionalInt configuredMaximumParkourGap,
-  Optional<Boolean> configuredSmoothCamera
+  Optional<Boolean> configuredSmoothCamera,
+  Optional<Float> configuredWalkingPitch
 ) implements DelegatePathConstraint {
   @Override
   public double breakBlockPenalty() {
@@ -97,5 +98,10 @@ public record ConfiguredPathConstraint(
   @Override
   public boolean smoothCamera() {
     return configuredSmoothCamera.orElseGet(delegate::smoothCamera);
+  }
+
+  @Override
+  public float walkingPitch() {
+    return configuredWalkingPitch.orElseGet(delegate::walkingPitch);
   }
 }

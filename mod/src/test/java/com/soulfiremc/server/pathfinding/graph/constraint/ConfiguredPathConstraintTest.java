@@ -50,10 +50,17 @@ final class ConfiguredPathConstraintTest {
       OptionalInt.empty(),
       OptionalInt.empty(),
       OptionalInt.empty(),
+      Optional.empty(),
       Optional.empty()
     );
 
     assertEquals(1.5, configured.maximumQualityBound());
+  }
+
+  @Test
+  void overridesWalkingPitchWithoutChangingTheLevelDefault() {
+    assertEquals(0.0F, configured(Optional.empty()).walkingPitch());
+    assertEquals(30.0F, configuredWalkingPitch(Optional.of(30.0F)).walkingPitch());
   }
 
   private static ConfiguredPathConstraint configured(
@@ -70,7 +77,27 @@ final class ConfiguredPathConstraintTest {
       OptionalInt.empty(),
       OptionalInt.empty(),
       OptionalInt.empty(),
+      Optional.empty(),
       Optional.empty()
+    );
+  }
+
+  private static ConfiguredPathConstraint configuredWalkingPitch(
+    Optional<Float> walkingPitch
+  ) {
+    return new ConfiguredPathConstraint(
+      TestPathConstraint.INSTANCE,
+      OptionalDouble.empty(),
+      OptionalDouble.empty(),
+      OptionalInt.empty(),
+      Optional.empty(),
+      Optional.empty(),
+      OptionalDouble.empty(),
+      OptionalInt.empty(),
+      OptionalInt.empty(),
+      OptionalInt.empty(),
+      Optional.empty(),
+      walkingPitch
     );
   }
 }

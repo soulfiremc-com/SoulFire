@@ -1327,7 +1327,7 @@ class PathfindGoal(_message.Message):
     def __init__(self, block: _Optional[_Union[PathfindGoal.BlockGoal, _Mapping]] = ..., near: _Optional[_Union[PathfindGoal.NearGoal, _Mapping]] = ..., entity: _Optional[_Union[PathfindGoal.EntityGoal, _Mapping]] = ..., xz: _Optional[_Union[PathfindGoal.XZGoal, _Mapping]] = ..., y: _Optional[_Union[PathfindGoal.YGoal, _Mapping]] = ..., break_block: _Optional[_Union[PathfindGoal.BreakBlockGoal, _Mapping]] = ..., place_block: _Optional[_Union[PathfindGoal.PlaceBlockGoal, _Mapping]] = ..., away_from_position: _Optional[_Union[PathfindGoal.AwayFromPositionGoal, _Mapping]] = ..., away_from_entity: _Optional[_Union[PathfindGoal.AwayFromEntityGoal, _Mapping]] = ..., any: _Optional[_Union[PathfindGoal.AnyGoal, _Mapping]] = ...) -> None: ...
 
 class PathfindOptions(_message.Message):
-    __slots__ = ("allow_mining", "allow_placing", "timeout_seconds", "search_timeout_seconds", "break_block_penalty", "place_block_penalty", "avoid_fluids", "additional_place_item_ids", "sprint", "minimum_y", "maximum_y", "search_mode", "maximum_quality_bound", "smooth_camera", "maximum_expanded_states", "maximum_fall_distance", "maximum_parkour_gap", "protected_blocks")
+    __slots__ = ("allow_mining", "allow_placing", "timeout_seconds", "search_timeout_seconds", "break_block_penalty", "place_block_penalty", "avoid_fluids", "additional_place_item_ids", "sprint", "minimum_y", "maximum_y", "search_mode", "maximum_quality_bound", "smooth_camera", "maximum_expanded_states", "maximum_fall_distance", "maximum_parkour_gap", "protected_blocks", "walking_pitch")
     ALLOW_MINING_FIELD_NUMBER: _ClassVar[int]
     ALLOW_PLACING_FIELD_NUMBER: _ClassVar[int]
     TIMEOUT_SECONDS_FIELD_NUMBER: _ClassVar[int]
@@ -1346,6 +1346,7 @@ class PathfindOptions(_message.Message):
     MAXIMUM_FALL_DISTANCE_FIELD_NUMBER: _ClassVar[int]
     MAXIMUM_PARKOUR_GAP_FIELD_NUMBER: _ClassVar[int]
     PROTECTED_BLOCKS_FIELD_NUMBER: _ClassVar[int]
+    WALKING_PITCH_FIELD_NUMBER: _ClassVar[int]
     allow_mining: bool
     allow_placing: bool
     timeout_seconds: int
@@ -1364,7 +1365,8 @@ class PathfindOptions(_message.Message):
     maximum_fall_distance: int
     maximum_parkour_gap: int
     protected_blocks: _containers.RepeatedCompositeFieldContainer[_common_pb2.BlockPosition]
-    def __init__(self, allow_mining: bool = ..., allow_placing: bool = ..., timeout_seconds: _Optional[int] = ..., search_timeout_seconds: _Optional[int] = ..., break_block_penalty: _Optional[float] = ..., place_block_penalty: _Optional[float] = ..., avoid_fluids: bool = ..., additional_place_item_ids: _Optional[_Iterable[str]] = ..., sprint: bool = ..., minimum_y: _Optional[int] = ..., maximum_y: _Optional[int] = ..., search_mode: _Optional[_Union[PathfindSearchMode, str]] = ..., maximum_quality_bound: _Optional[float] = ..., smooth_camera: bool = ..., maximum_expanded_states: _Optional[int] = ..., maximum_fall_distance: _Optional[int] = ..., maximum_parkour_gap: _Optional[int] = ..., protected_blocks: _Optional[_Iterable[_Union[_common_pb2.BlockPosition, _Mapping]]] = ...) -> None: ...
+    walking_pitch: float
+    def __init__(self, allow_mining: bool = ..., allow_placing: bool = ..., timeout_seconds: _Optional[int] = ..., search_timeout_seconds: _Optional[int] = ..., break_block_penalty: _Optional[float] = ..., place_block_penalty: _Optional[float] = ..., avoid_fluids: bool = ..., additional_place_item_ids: _Optional[_Iterable[str]] = ..., sprint: bool = ..., minimum_y: _Optional[int] = ..., maximum_y: _Optional[int] = ..., search_mode: _Optional[_Union[PathfindSearchMode, str]] = ..., maximum_quality_bound: _Optional[float] = ..., smooth_camera: bool = ..., maximum_expanded_states: _Optional[int] = ..., maximum_fall_distance: _Optional[int] = ..., maximum_parkour_gap: _Optional[int] = ..., protected_blocks: _Optional[_Iterable[_Union[_common_pb2.BlockPosition, _Mapping]]] = ..., walking_pitch: _Optional[float] = ...) -> None: ...
 
 class GoToRequest(_message.Message):
     __slots__ = ("instance_id", "bot_id", "goal", "options")
