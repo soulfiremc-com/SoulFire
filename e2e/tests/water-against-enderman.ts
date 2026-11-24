@@ -11,6 +11,13 @@ export default {
   run: ({ bot }) =>
     Effect.scoped(
       Effect.gen(function* () {
+        // The test world is peaceful, where no monster can exist.
+        const difficulty = (yield* rcon("difficulty")).match(/is (\w+)\s*$/u)?.[1]?.toLowerCase();
+        yield* check(difficulty !== undefined, "The difficulty could not be read");
+        yield* Effect.addFinalizer(() =>
+          rcon(`difficulty ${difficulty}`, { check: false }).pipe(Effect.ignore),
+        );
+        yield* rcon("difficulty easy");
         yield* rcon("forceload add 4096 0 4127 31");
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -31,6 +38,10 @@ export default {
         yield* rcon(`item replace entity ${BOT_NAME} hotbar.0 with water_bucket`);
         yield* bot.selectHotbar(0);
         yield* rcon("summon minecraft:enderman 4113.5 64 16.5");
+        const summoned = yield* rcon(
+          "execute if entity @e[type=minecraft:enderman,x=4112,y=64,z=16,distance=..3]",
+        );
+        yield* check(summoned.includes("passed"), `No enderman stands beside the bot: ${summoned}`);
 
         yield* bot.look(0, 90);
         yield* bot.useItem({ hand: Hand.MAIN, retryTicks: 6 });
