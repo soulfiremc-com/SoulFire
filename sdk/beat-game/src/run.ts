@@ -17581,8 +17581,11 @@ function craftWithTable(
             Effect.flatMap((fetched) => (fetched ? craft : Effect.fail(error))),
           ),
       ),
+      // Only a recipe the inventory cannot make is remembered. A live bot
+      // failed to toss dirt to make room for a sword, and the remembered
+      // failure refused the same sword twenty times though it held the stone.
       Effect.tapError((error) =>
-        isResourceExhausted(error)
+        isResourceExhausted(error) && error.operation !== "ensure-inventory-space"
           ? state.driver.observe.pipe(
               Effect.flatMap((latest) => {
                 const itemIds = missingCraftMaterials(error);

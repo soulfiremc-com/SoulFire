@@ -45591,6 +45591,131 @@ describe("beat-game run lifecycle", () => {
     expect(builds).not.toContain("minecraft:crafting_table");
   });
 
+  it("crafts again after making room failed once", async () => {
+    // As in a live run: a toss of dirt to make room for a sword did not
+    // shrink the stack, and the remembered failure then refused the sword
+    // twenty times though the bot held the stone for it.
+    const driver = new FakeBeatGameDriver();
+    const counts: Record<string, number> = {
+      "minecraft:ender_eye": 12,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:cobblestone": 54,
+      "minecraft:stick": 3,
+      "minecraft:oak_planks": 8,
+      "minecraft:dirt": 64,
+      "minecraft:cooked_beef": 16,
+      "minecraft:water_bucket": 1,
+      "minecraft:shield": 1,
+    };
+    const slots = { empty: 0 };
+    const observe = (position = driver.currentObservation.player.position) =>
+      observation({ counts: { ...counts }, emptyPlayerSlots: slots.empty, position });
+    driver.currentObservation = observe({
+      x: 0.5,
+      y: 64,
+      z: 0.5,
+      dimension: "minecraft:overworld",
+    });
+    const craftingTable = blockObservation(
+      { x: 1, y: 64, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:crafting_table", solid: true },
+    );
+    driver.blockQueryResolver = ({ center, selector }) =>
+      selector.blockIds?.includes("minecraft:crafting_table") === true
+        ? [craftingTable]
+        : selector.diggable === true
+          ? [
+              blockObservation({
+                x: Math.floor(center.x),
+                y: Math.floor(center.y),
+                z: Math.floor(center.z),
+                dimension: center.dimension,
+              }),
+            ]
+          : [];
+    driver.recipeResolver = (resultItemId) => [
+      {
+        recipeId: resultItemId,
+        recipeType: "minecraft:crafting_shaped",
+        resultItemId,
+        resultCount: 1,
+        ingredients: [],
+      },
+    ];
+    driver.craftabilityResolver = () => ({
+      canCraft: true,
+      maximumCraftCount: 1,
+      requiredStation: "minecraft:crafting_table",
+      missing: [],
+    });
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observe(position);
+      });
+    const tosses = { count: 0 };
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "look") {
+          driver.currentObservation = {
+            ...driver.currentObservation,
+            player: {
+              ...driver.currentObservation.player,
+              rotation: { yaw: action.yaw, pitch: action.pitch },
+            },
+          };
+        }
+        if (action.type === "toss-items") {
+          tosses.count += 1;
+          // The first toss is picked straight back up, as in the live run.
+          const [itemId] = action.selector.itemIds ?? [];
+          if (tosses.count > 1 && itemId !== undefined && (counts[itemId] ?? 0) > 0) {
+            counts[itemId] = 0;
+            slots.empty += 1;
+          }
+          driver.currentObservation = observe();
+        }
+        return {};
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "room-retry-run",
+          teamId: "room-retry-team",
+        }),
+        undefined,
+      ),
+    );
+    const craftsSword = () =>
+      driver.tasks.some(
+        (task) => task.type === "craft" && task.recipeId === "minecraft:stone_sword",
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "room-retry-run",
+            team: { teamId: "room-retry-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 4000;
+          while (!craftsSword() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(tosses.count).toBeGreaterThan(1);
+    expect(craftsSword()).toBe(true);
+  }, 15_000);
+
   it("does not repeat a craft until the missing materials change", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
