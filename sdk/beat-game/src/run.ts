@@ -970,6 +970,8 @@ const STALLED_RANGED_PURSUIT_MAXIMUM_PROGRESS = 2;
 const BAREHANDED_RANGED_DEFENSE_MAX_DISTANCE = 8;
 const EMERGENCY_KNOCKBACK_RANGE = 3.5;
 const END_PORTAL_FRAME_COUNT = 12;
+const STONE_SWORD_COBBLESTONE = 2;
+const STONE_PICKAXE_COBBLESTONE = 3;
 const PORTAL_ROOM_ARRIVAL_RADIUS = 8;
 const PORTAL_ROOM_APPROACH_RADIUS = 3;
 const PORTAL_ROOM_SEARCH_RADIUS = 16;
@@ -11045,16 +11047,7 @@ function satisfyRequirementFromWorld(
       );
     }
     case "cobblestone": {
-      return collectBlocksOrExplore(state, observation, {
-        blockIds: ["minecraft:stone"],
-        count: bufferedCollectionCount("cobblestone", missing),
-        progressItemIds: ["minecraft:cobblestone"],
-        purpose: "find-stone",
-        avoidSubmergedTargets: true,
-        avoidFluids: true,
-        prepareAttempt: (current) =>
-          ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
-      }).pipe(Effect.andThen(digForCobblestoneWithoutProgress(state, observation)));
+      return collectCobblestone(state, observation, missing);
     }
     case "bed":
     case "dragon-beds": {
@@ -11064,7 +11057,9 @@ function satisfyRequirementFromWorld(
       return craftWithTable(state, observation, "minecraft:wooden_sword", 1);
     }
     case "melee-weapon": {
-      return ensureWoodForCraftingTable(state, observation).pipe(
+      return ensureCraftingCobblestone(state, observation, STONE_SWORD_COBBLESTONE).pipe(
+        Effect.andThen(state.driver.observe),
+        Effect.flatMap((current) => ensureWoodForCraftingTable(state, current)),
         Effect.andThen(state.driver.observe),
         Effect.flatMap((current) => craftWithTable(state, current, "minecraft:stone_sword", 1)),
       );
@@ -11079,7 +11074,13 @@ function satisfyRequirementFromWorld(
       return satisfyIronRequirement(state, observation, missing);
     }
     case "pickaxe": {
-      return ensureWoodForCraftingTable(state, observation).pipe(
+      return (
+        (observation.inventory.counts["minecraft:iron_ingot"] ?? 0) >= 3
+          ? Effect.void
+          : ensureCraftingCobblestone(state, observation, STONE_PICKAXE_COBBLESTONE)
+      ).pipe(
+        Effect.andThen(state.driver.observe),
+        Effect.flatMap((current) => ensureWoodForCraftingTable(state, current)),
         Effect.andThen(state.driver.observe),
         Effect.flatMap((current) =>
           craftWithTable(
@@ -13360,6 +13361,34 @@ function preparePortalCastingLavaPool(
     );
     return { ready: false, candidateLavaSources: [] };
   });
+}
+
+function collectCobblestone(
+  state: RunState,
+  observation: BeatGameObservation,
+  missing: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  return collectBlocksOrExplore(state, observation, {
+    blockIds: ["minecraft:stone"],
+    count: bufferedCollectionCount("cobblestone", missing),
+    progressItemIds: ["minecraft:cobblestone"],
+    purpose: "find-stone",
+    avoidSubmergedTargets: true,
+    avoidFluids: true,
+    prepareAttempt: (current) =>
+      ensureMiningPickaxe(state, current, "minecraft:wooden_pickaxe", MINING_PICKAXE_ITEM_IDS),
+  }).pipe(Effect.andThen(digForCobblestoneWithoutProgress(state, observation)));
+}
+
+/// A live bot with no cobblestone left retried a stone sword craft every
+/// second, since the craft alone never fetched the stone it lacked.
+function ensureCraftingCobblestone(
+  state: RunState,
+  observation: BeatGameObservation,
+  needed: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  const held = observation.inventory.counts["minecraft:cobblestone"] ?? 0;
+  return held >= needed ? Effect.void : collectCobblestone(state, observation, needed - held);
 }
 
 function ensurePortalMiningPickaxe(

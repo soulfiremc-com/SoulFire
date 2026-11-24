@@ -45280,6 +45280,9 @@ describe("beat-game run lifecycle", () => {
         "minecraft:stone_sword": 1,
         "minecraft:oak_planks": 8,
         "minecraft:stick": 4,
+        // Enough cobblestone that the bot goes straight to the craft, which
+        // the server still refuses.
+        "minecraft:cobblestone": 3,
         "minecraft:cooked_beef": 16,
         "minecraft:water_bucket": 1,
       },
@@ -49268,6 +49271,65 @@ describe("beat-game run lifecycle", () => {
     );
     expect(driver.taskPolicies[logCollectionIndex]?.avoidFluids).toBe(false);
   });
+
+  it("mines stone for a sword when it has no cobblestone left", async () => {
+    // As in a live run: the bot held logs and a pickaxe but no cobblestone,
+    // and retried the stone sword craft every second.
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 12,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:spruce_log": 2,
+        "minecraft:stick": 3,
+        "minecraft:cooked_beef": 16,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:white_bed": 4,
+      },
+    });
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(task.type === "collect-blocks" ? Effect.never : Effect.void));
+    const collectsStone = () =>
+      driver.tasks.some(
+        (task) => task.type === "collect-blocks" && task.blockIds.includes("minecraft:stone"),
+      );
+
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.LOCATE_STRONGHOLD, {
+          runId: "no-cobblestone-run",
+          teamId: "no-cobblestone-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "no-cobblestone-run",
+            team: { teamId: "no-cobblestone-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!collectsStone() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(collectsStone()).toBe(true);
+  }, 10_000);
 
   it("crafts a basic sword and pickaxe before mining cobblestone", async () => {
     const driver = new FakeBeatGameDriver();
