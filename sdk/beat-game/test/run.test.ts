@@ -46343,6 +46343,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.paths.filter(({ position }) => position.y < 30)).toEqual([]);
     const [leg] = driver.xzPaths;
     expect(leg?.radius).toBe(16);
+    expect(leg?.policy.avoidFluids).toBe(true);
     expect(leg?.z).toBeLessThan(15);
     expect(leg?.x).toBeLessThan(25);
   }, 10_000);

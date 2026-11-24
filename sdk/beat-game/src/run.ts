@@ -4273,12 +4273,15 @@ function executeDecision(
           horizontalDistanceSquared(portalRoom, observation.player.position) >
             PORTAL_ROOM_TRAVEL_RADIUS ** 2
         ) {
+          // Drowned fill the water by the world spawn. A live bot on its way
+          // back swam into it and drowned fighting them, so a leg keeps to dry
+          // land unless only water leads on.
           return pathfindExplorationTarget(
             state,
             observation.player.position,
             portalRoom,
             PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
-            state.strategy.path,
+            { ...state.strategy.path, avoidFluids: true },
             true,
           ).pipe(
             Effect.catchIf(
