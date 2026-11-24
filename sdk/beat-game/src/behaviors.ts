@@ -2594,12 +2594,30 @@ export function fightEnderDragon(
           ...(options.path === undefined ? {} : { path: options.path }),
         }).pipe(Effect.result);
         if (ranged._tag === "Failure") {
-          yield* attackEntity(driver, {
+          const melee = yield* attackEntity(driver, {
             target: crystal,
             maximumAttacks: 4,
             targetUnavailableTimeoutSeconds: 2,
             ...(options.path === undefined ? {} : { path: options.path }),
-          }).pipe(Effect.ignore);
+          }).pipe(Effect.result);
+          // Crystals stand on obsidian towers up to forty blocks tall. A live
+          // bot could neither see nor reach seven of them from the ground in
+          // eleven tries each, so it builds up beside the tower and shoots
+          // from the crystal's height.
+          if (melee._tag === "Failure") {
+            yield* climbBesideCrystal(driver, crystal, options.path).pipe(
+              Effect.andThen(
+                rangedAttack(driver, {
+                  target: crystal,
+                  maximumShots: crystalShots,
+                  targetUnavailableTimeoutSeconds: 2,
+                  strafe: false,
+                  ...(options.path === undefined ? {} : { path: options.path }),
+                }),
+              ),
+              Effect.ignore,
+            );
+          }
         }
       }
     }
@@ -2701,6 +2719,9 @@ export function fightEnderDragon(
 const DRAGON_HEAD_REACH = 6.5;
 const DRAGON_HEAD_DROP = 1;
 const BED_BOMB_STAND_DISTANCE = 3;
+/// Tower radii run up to five blocks, so a spot six out stands clear of one.
+const CRYSTAL_CLIMB_OFFSET = 6;
+const CRYSTAL_CLIMB_RADIUS = 1.5;
 const DRAGON_PERCH_RADIUS = 2;
 const DRAGON_PERCH_SETTLE_MS = 500;
 const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.3;
@@ -2766,6 +2787,33 @@ function bedBombDragon(
       );
       failures = exploded ? 0 : failures + 1;
     }
+  });
+}
+
+/// Builds up beside a crystal's tower to the crystal's height, off the
+/// tower's edge on the bot's side.
+function climbBesideCrystal(
+  driver: BeatGameDriver,
+  crystal: BeatGameEntityObservation,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    const offsetX = player.x - crystal.position.x;
+    const offsetZ = player.z - crystal.position.z;
+    const length = Math.hypot(offsetX, offsetZ);
+    const directionX = length < 0.5 ? 1 : offsetX / length;
+    const directionZ = length < 0.5 ? 0 : offsetZ / length;
+    yield* driver.pathfind(
+      {
+        x: crystal.position.x + directionX * CRYSTAL_CLIMB_OFFSET,
+        y: Math.floor(crystal.position.y),
+        z: crystal.position.z + directionZ * CRYSTAL_CLIMB_OFFSET,
+        dimension: crystal.position.dimension,
+      },
+      CRYSTAL_CLIMB_RADIUS,
+      { ...mergePathPolicy(path), allowPlacing: true, allowMining: false },
+    );
   });
 }
 

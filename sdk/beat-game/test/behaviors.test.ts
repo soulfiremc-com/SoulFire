@@ -7613,6 +7613,89 @@ describe("beat-game behavior programs", () => {
     ).toHaveLength(2);
   });
 
+  it("builds up beside a crystal tower it cannot shoot or reach from below", async () => {
+    // As in a live run: crystals on tall towers failed every shot for lack
+    // of line of sight and every melee try for lack of a route.
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 20, y: 64, z: 0, dimension: "minecraft:the_end" },
+      counts: { "minecraft:cobblestone": 64, "minecraft:bow": 1, "minecraft:arrow": 32 },
+    });
+    const crystal = {
+      connectionEpoch: "epoch-1",
+      networkId: 43,
+      entityType: "minecraft:end_crystal",
+      position: { x: 40, y: 90, z: 0, dimension: "minecraft:the_end" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      observedAt: "2026-01-01T00:00:01.000Z",
+    } as const;
+    const dragon = {
+      ...crystal,
+      networkId: 42,
+      entityType: "minecraft:ender_dragon",
+      position: { x: 0, y: 80, z: 0, dimension: "minecraft:the_end" },
+      health: 200,
+    } as const;
+    driver.entityResults = [dragon, crystal];
+    driver.entityQueryResolver = (query) =>
+      driver.entityResults.filter(
+        (entity) =>
+          query.selector.entityTypes === undefined ||
+          query.selector.entityTypes.includes(entity.entityType),
+      );
+    const climbed = { done: false };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        if (position.y === 90) {
+          climbed.done = true;
+        }
+      });
+    driver.taskResolver = (task) =>
+      Effect.suspend(() => {
+        driver.tasks.push(task);
+        const onCrystal =
+          (task.type === "ranged-attack" || task.type === "attack-entity") &&
+          task.target.networkId === crystal.networkId;
+        if (onCrystal && !climbed.done) {
+          return Effect.fail(
+            new BeatGameDriverError({
+              operation: `task.${task.type}`,
+              code: "unreachable",
+              retryable: true,
+              message:
+                task.type === "ranged-attack"
+                  ? "Unable to find line of sight after 3 path attempts"
+                  : "Unable to reach the target entity after 3 path attempts",
+            }),
+          );
+        }
+        if (onCrystal) {
+          driver.entityResults = [dragon];
+        }
+        return Effect.void;
+      });
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+        bedPerchTimeoutMs: 0,
+      }).pipe(Effect.ignore),
+    );
+
+    expect(driver.paths).toContainEqual(
+      objectContaining({
+        position: objectContaining({ y: 90 }),
+        policy: objectContaining({ allowPlacing: true }),
+      }),
+    );
+    expect(driver.entityResults).toEqual([dragon]);
+  });
+
   it("keeps ranged dragon attacks stationary near the void", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
