@@ -4265,27 +4265,30 @@ function executeDecision(
         const portalRoom = actionCheckpoint.memory.portalRoomCenter;
         // A digging route from far off outgrows the path search. A live bot
         // woke 1,850 blocks away and its first route failed at the state
-        // limit. From that far it walks toward the room a leg at a time, at
-        // its own height, the way the stronghold search does.
+        // limit. From that far it walks toward the room a leg at a time over
+        // the surface. A leg at its own height had it tunnel by hand at y 52.
         if (
           portalRoom !== undefined &&
           portalRoom.dimension === observation.player.position.dimension &&
           horizontalDistanceSquared(portalRoom, observation.player.position) >
             PORTAL_ROOM_TRAVEL_RADIUS ** 2
         ) {
-          return state.driver
-            .pathfind(
-              { ...portalRoom, y: Math.floor(observation.player.position.y) },
-              PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
-              state.strategy.path,
-            )
-            .pipe(
-              Effect.catchIf(
-                (error) => error.operation === "pathfind" && error.retryable,
-                () => Effect.void,
-              ),
-              Effect.as({} satisfies ActionResult),
-            );
+          return pathfindExplorationTarget(
+            state,
+            observation.player.position,
+            portalRoom,
+            PORTAL_ROOM_TRAVEL_ARRIVAL_RADIUS,
+            state.strategy.path,
+            true,
+          ).pipe(
+            Effect.catchIf(
+              (error) =>
+                (error.operation === "pathfind" || error.operation === "pathfindXZ") &&
+                error.retryable,
+              () => Effect.void,
+            ),
+            Effect.as({} satisfies ActionResult),
+          );
         }
         const approachPortalRoom =
           portalRoom === undefined ||

@@ -290,6 +290,10 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     ),
   ],
   [BeatGamePhase.ACTIVATE_END_PORTAL]: [
+    // A live bot came back for the portal after a death with no tools left,
+    // and tunnelled toward the stronghold by hand.
+    MELEE_WEAPON_REQUIREMENT,
+    itemRequirement("pickaxe", ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"], () => 1, 104),
     itemRequirement(
       "eyes-of-ender",
       ["minecraft:ender_eye"],

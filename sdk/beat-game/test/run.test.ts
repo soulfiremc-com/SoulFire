@@ -46210,7 +46210,12 @@ describe("beat-game run lifecycle", () => {
     const driver = new FakeBeatGameDriver();
     const position = { x: -375, y: 15, z: -1771, dimension: "minecraft:overworld" } as const;
     driver.currentObservation = observation({
-      counts: { "minecraft:ender_eye": 1, "minecraft:cooked_beef": 16 },
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
       position,
     });
     // Every frame already holds an eye, and the portal is lit. Stepping in
@@ -46287,6 +46292,8 @@ describe("beat-game run lifecycle", () => {
         "minecraft:ender_eye": 1,
         "minecraft:cooked_beef": 16,
         "minecraft:white_bed": 3,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
       },
       position: { x: 25, y: 61, z: 15, dimension: "minecraft:overworld" },
     });
@@ -46321,7 +46328,7 @@ describe("beat-game run lifecycle", () => {
             strategy: { observationPollMs: 1 },
           });
           let attempts = 3000;
-          while (driver.paths.length === 0 && attempts > 0) {
+          while (driver.xzPaths.length === 0 && driver.paths.length === 0 && attempts > 0) {
             attempts -= 1;
             yield* Effect.sleep(1);
           }
@@ -46331,17 +46338,25 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(driver.paths[0]).toMatchObject({
-      position: { x: portalRoomCenter.x, y: 61, z: portalRoomCenter.z },
-      radius: 16,
-    });
+    // The first leg heads over the surface toward the room. It does not dig
+    // down from 1,850 blocks away.
+    expect(driver.paths.filter(({ position }) => position.y < 30)).toEqual([]);
+    const [leg] = driver.xzPaths;
+    expect(leg?.radius).toBe(16);
+    expect(leg?.z).toBeLessThan(15);
+    expect(leg?.x).toBeLessThan(25);
   }, 10_000);
 
   it("walks back to the portal room before filling its frames", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: the bot ended up eighty blocks from the frames.
     driver.currentObservation = observation({
-      counts: { "minecraft:ender_eye": 11, "minecraft:cooked_beef": 16 },
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
       position: { x: -371, y: 36, z: -1850, dimension: "minecraft:overworld" },
     });
     const portalRoomCenter = {

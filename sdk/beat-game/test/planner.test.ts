@@ -8,6 +8,7 @@ import {
   PortalStrategy,
 } from "../src/index.js";
 import { blockObservation, checkpoint, observation } from "./fixtures.js";
+import { stringMatching } from "./matchers.js";
 
 describe("beat-game planner", () => {
   it("goes back through the portal after waking in the Overworld mid-fight", () => {
@@ -41,7 +42,11 @@ describe("beat-game planner", () => {
       },
       observation: observation({
         position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
-        counts: { "minecraft:ender_eye": 11 },
+        counts: {
+          "minecraft:ender_eye": 11,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+        },
       }),
       strategy: defaultBeatGameStrategy,
     });
@@ -63,12 +68,35 @@ describe("beat-game planner", () => {
           "minecraft:cooked_beef": 16,
           "minecraft:bow": 1,
           "minecraft:arrow": 64,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
         },
       }),
       strategy: fastBeatGameStrategy,
     });
 
     expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:dragon-beds" });
+  });
+
+  it("re-equips tools before going back to the portal", () => {
+    // As in a live run: the bot came back after a death with no tools left.
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: { ...portalCheckpoint.memory, emptyPortalFrames: 0 },
+      },
+      observation: observation({
+        position: { x: 0, y: 52, z: -22, dimension: "minecraft:overworld" },
+        counts: { "minecraft:ender_eye": 1, "minecraft:cooked_beef": 16 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({
+      type: "satisfy-requirement",
+      action: stringMatching(/^satisfy:(pickaxe|melee-weapon)$/u),
+    });
   });
 
   it("goes back through an open portal without more eyes", () => {
@@ -80,7 +108,12 @@ describe("beat-game planner", () => {
       },
       observation: observation({
         position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
-        counts: { "minecraft:ender_eye": 1, "minecraft:cooked_beef": 16 },
+        counts: {
+          "minecraft:ender_eye": 1,
+          "minecraft:cooked_beef": 16,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+        },
       }),
       strategy: defaultBeatGameStrategy,
     });
@@ -116,7 +149,12 @@ describe("beat-game planner", () => {
       },
       observation: observation({
         position: { x: -372, y: 14, z: -1772, dimension: "minecraft:overworld" },
-        counts: { "minecraft:ender_eye": 11, "minecraft:cooked_beef": 16 },
+        counts: {
+          "minecraft:ender_eye": 11,
+          "minecraft:cooked_beef": 16,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+        },
       }),
       strategy: defaultBeatGameStrategy,
     });
