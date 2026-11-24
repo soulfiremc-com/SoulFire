@@ -23,6 +23,8 @@ export interface BeatGameRequirementContext {
   readonly underground?: boolean;
   /// Eyes the known End portal still needs, when the bot has seen its frames.
   readonly portalEyesNeeded?: number | undefined;
+  /// True while the known End portal room is still a long walk away.
+  readonly portalRoomDistant?: boolean;
 }
 
 export const BED_COLORS = [
@@ -337,10 +339,15 @@ export function requirementsForPhase(
   // Animals live on the surface. A live bot broke off its search at the
   // stronghold depth to hunt for food, and skeletons in the caves shot it.
   // Food is restocked before the dig, and the search goes on below.
+  // A live bot woke 1,850 blocks from the portal and hunted for an hour in
+  // a bare region, eating its stock as fast as it found it. Food for the
+  // End is stocked near the portal room, after the walk.
   const reachableDefinitions =
     phase === BeatGamePhase.LOCATE_STRONGHOLD && context.underground === true
       ? definitions.filter(({ key }) => key !== "food-supply")
-      : definitions;
+      : phase === BeatGamePhase.ACTIVATE_END_PORTAL && context.portalRoomDistant === true
+        ? definitions.filter(({ key }) => key !== "food")
+        : definitions;
   const fastPreparation =
     phase === BeatGamePhase.PREPARE_OVERWORLD && strategy.riskProfile === BeatGameRiskProfile.FAST;
   // A live bot stood in a portal room with two frames already filled and

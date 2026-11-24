@@ -145,6 +145,7 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
     bedUnavailable: bedSearchExhausted(checkpoint, observation),
     underground: isDeepUnderground(observation),
     portalEyesNeeded: checkpoint.memory.emptyPortalFrames,
+    portalRoomDistant: isPortalRoomDistant(checkpoint, observation),
   });
   if (
     observation.player.food <= strategy.eatBelowFood &&
@@ -371,6 +372,22 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
 // Sea level is 63, so a bot this far down is in a cave or a dug shaft.
 const DEEP_UNDERGROUND_MAXIMUM_Y = 50;
 
+/// Matches the distance from which the portal activation travels in legs.
+const PORTAL_ROOM_DISTANT_RADIUS = 128;
+
+function isPortalRoomDistant(
+  checkpoint: BeatGameCheckpoint,
+  observation: BeatGameObservation,
+): boolean {
+  const room = checkpoint.memory.portalRoomCenter;
+  const position = observation.player.position;
+  return (
+    room !== undefined &&
+    room.dimension === position.dimension &&
+    Math.hypot(room.x - position.x, room.z - position.z) > PORTAL_ROOM_DISTANT_RADIUS
+  );
+}
+
 function isDeepUnderground(observation: BeatGameObservation): boolean {
   return (
     isOverworld(observation.player.position.dimension) &&
@@ -522,6 +539,7 @@ export function plannerWithObservation(
       bedUnavailable: checkpoint !== undefined && bedSearchExhausted(checkpoint, observation),
       underground: isDeepUnderground(observation),
       portalEyesNeeded: checkpoint?.memory.emptyPortalFrames,
+      portalRoomDistant: checkpoint !== undefined && isPortalRoomDistant(checkpoint, observation),
     }),
     updatedAt: now,
   };

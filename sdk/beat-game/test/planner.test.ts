@@ -78,6 +78,35 @@ describe("beat-game planner", () => {
     expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:dragon-beds" });
   });
 
+  it("walks back to a distant portal room before stocking food for the End", () => {
+    // As in a live run: the bot woke 1,850 blocks away and hunted for an hour
+    // in a bare region instead of walking.
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: {
+          ...portalCheckpoint.memory,
+          emptyPortalFrames: 0,
+          portalRoomCenter: { x: -375.5, y: 15, z: -1771.5, dimension: "minecraft:overworld" },
+        },
+      },
+      observation: observation({
+        position: { x: -28, y: 77, z: -410, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:ender_eye": 1,
+          "minecraft:cooked_beef": 1,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+        },
+        food: 16,
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({ type: "activate-end-portal", action: "activate-end-portal" });
+  });
+
   it("re-equips tools before going back to the portal", () => {
     // As in a live run: the bot came back after a death with no tools left.
     const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
