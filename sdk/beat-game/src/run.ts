@@ -11289,6 +11289,7 @@ function huntSheepForBed(
 
 const SHEARS_IRON_COST = 2;
 const SHEAR_REACH = 2;
+const SHEAR_ATTEMPTS = 3;
 
 /// Shears the nearest unsheared sheep of the wanted color in sight and picks
 /// up its wool. Returns false when no such sheep is in sight.
@@ -11312,19 +11313,47 @@ function shearNearbySheep(
     if (sheep === undefined) {
       return false;
     }
-    yield* state.driver.pathfind(sheep.position, SHEAR_REACH, state.strategy.path);
-    yield* state.driver.withControl(
-      state.driver.act({ type: "select-item", selector: { itemIds: ["minecraft:shears"] } }).pipe(
-        Effect.andThen(
-          state.driver.act({
-            type: "interact-entity",
-            connectionEpoch: sheep.connectionEpoch,
-            networkId: sheep.networkId,
-            hand: "main",
-          }),
-        ),
-      ),
-    );
+    // A sheep wanders off while the bot walks up to it. A live run ended
+    // when a shear found the sheep out of reach on every retry.
+    let sheared = false;
+    let position = sheep.position;
+    for (let attempt = 0; attempt < SHEAR_ATTEMPTS && !sheared; attempt += 1) {
+      yield* state.driver.pathfind(position, SHEAR_REACH, state.strategy.path);
+      sheared = yield* state.driver
+        .withControl(
+          state.driver
+            .act({ type: "select-item", selector: { itemIds: ["minecraft:shears"] } })
+            .pipe(
+              Effect.andThen(
+                state.driver.act({
+                  type: "interact-entity",
+                  connectionEpoch: sheep.connectionEpoch,
+                  networkId: sheep.networkId,
+                  hand: "main",
+                }),
+              ),
+            ),
+        )
+        .pipe(
+          Effect.as(true),
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        );
+      if (!sheared) {
+        const [moved] = yield* state.driver.queryEntities({
+          origin: position,
+          radius: state.strategy.entitySearchRadius,
+          selector: { networkId: sheep.networkId, alive: true },
+          maximumResults: 1,
+        });
+        if (moved === undefined) {
+          return false;
+        }
+        position = moved.position;
+      }
+    }
+    if (!sheared) {
+      return false;
+    }
     yield* collectNearbyDrops(state.driver, {
       itemIds: [`minecraft:${targetColor}_wool`],
       radius: 8,

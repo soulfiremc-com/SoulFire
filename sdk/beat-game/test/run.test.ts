@@ -8024,6 +8024,96 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("follows a sheep that wanders out of shearing reach", async () => {
+    // As in a live run: the sheep walked off before the shear, and the run
+    // ended when it stayed out of reach on every retry.
+    const position = { x: -372, y: 64, z: -1772, dimension: "minecraft:overworld" } as const;
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position,
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+        "minecraft:shears": 1,
+      },
+    });
+    const sheep = {
+      connectionEpoch: "epoch-1",
+      networkId: 311,
+      entityType: "minecraft:sheep",
+      position: { ...position, x: -369 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 8,
+      sheep: { color: "white", sheared: false },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const wandered = { ...sheep, position: { ...sheep.position, x: -362 } };
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:sheep") === true
+        ? [sheep]
+        : query.selector.networkId === sheep.networkId
+          ? [wandered]
+          : [];
+    let shears = 0;
+    driver.actionResolver = (action) =>
+      action.type === "interact-entity" && (shears += 1) === 1
+        ? Effect.fail(
+            new BeatGameDriverError({
+              operation: "act.interact-entity",
+              code: "OUT_OF_RANGE",
+              retryable: false,
+              message: "OUT_OF_RANGE: Target entity is outside the bot's interaction reach",
+            }),
+          )
+        : Effect.succeed({});
+    const store = new InMemoryBeatGameCheckpointStore();
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "shear-follow-run",
+      teamId: "shear-follow-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...portalCheckpoint,
+          memory: {
+            ...portalCheckpoint.memory,
+            emptyPortalFrames: 0,
+            portalRoomCenter: { x: -375.5, y: 15, z: -1771.5, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const sheared = () => shears >= 2;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "shear-follow-run",
+            team: { teamId: "shear-follow-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !sheared()).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(sheared()).toBe(true);
+    // It walked to where the sheep went before trying again.
+    expect(driver.paths.map((path) => path.position.x)).toEqual(arrayContaining([-369, -362]));
+  });
+
   it("shears sheep for dragon beds back at the portal room", async () => {
     // As in a live run: sheep near the stronghold ran short, and killing them
     // gave one wool each. Shears take more and leave the sheep.
