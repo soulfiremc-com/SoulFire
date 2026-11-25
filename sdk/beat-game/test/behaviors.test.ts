@@ -184,9 +184,9 @@ const recipe = (
 const blockKey = (position: BeatGameBlockPosition) =>
   `${position.dimension}:${position.x}:${position.y}:${position.z}`;
 
-// A shaft dug down to the bot's feet at y 58, still open at the top.
+// A shaft dug down to the bot's feet at y 57, still open at the top.
 function isOpenShaft(position: { x: number; y: number; z: number }): boolean {
-  return position.x === 0 && position.z === 11 && position.y >= 58;
+  return position.x === 0 && position.z === 11 && position.y >= 57;
 }
 
 describe("beat-game behavior programs", () => {
@@ -7769,7 +7769,7 @@ describe("beat-game behavior programs", () => {
     );
 
     const shaft = driver.paths[0]?.position;
-    expect(shaft).toMatchObject({ y: 58 });
+    expect(shaft).toMatchObject({ y: 57 });
     expect(Math.abs((shaft?.x ?? 0) - 0.5) > 3 || (shaft?.z ?? 0) < 9).toBe(true);
     expect(Math.hypot((shaft?.x ?? 0) - 0.5, (shaft?.z ?? 0) - 0.5)).toBeCloseTo(12, 0);
   });
@@ -7835,13 +7835,27 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
-    expect(driver.actions).toContainEqual({
-      type: "place-block",
-      against: { x: 1, y: 60, z: 11, dimension: "minecraft:the_end" },
-      face: "west",
-      hand: "main",
-    });
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
+    // Two roof blocks, the upper one first, keep a fireball that strikes
+    // the roof too far above the bot to drop its cloud at its feet.
+    expect(
+      driver.actions
+        .filter((action) => action.type === "place-block" && action.face === "west")
+        .slice(0, 2),
+    ).toEqual([
+      {
+        type: "place-block",
+        against: { x: 1, y: 60, z: 11, dimension: "minecraft:the_end" },
+        face: "west",
+        hand: "main",
+      },
+      {
+        type: "place-block",
+        against: { x: 1, y: 59, z: 11, dimension: "minecraft:the_end" },
+        face: "west",
+        hand: "main",
+      },
+    ]);
   });
 
   it("heals in its shelter before setting off beds when wounded", async () => {
@@ -7951,7 +7965,7 @@ describe("beat-game behavior programs", () => {
     expect(eaten.done).toBe(true);
     // It healed sealed in its shaft, where no fireball reaches it, instead
     // of walking away across the open.
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
     expect(driver.xzPaths).toEqual([]);
     expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
   });
@@ -8044,7 +8058,7 @@ describe("beat-game behavior programs", () => {
 
     // It waited for the perch sealed in a shaft twelve blocks out, then
     // climbed out to stand behind the head.
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
     expect(driver.paths[1]?.position).toMatchObject({ x: 0.5, y: 61, z: 10.5 });
     expect(driver.actions).toContainEqual({
       type: "place-block",

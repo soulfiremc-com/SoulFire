@@ -2780,8 +2780,11 @@ const BED_BOMB_GROUND_SCAN_DEPTH = 8;
 /// Twelve blocks out keeps the bot within the twenty blocks at which a
 /// perched dragon spots it, and outside the fountain.
 const DRAGON_SHELTER_RADIUS = 12;
-/// Feet three blocks down leaves room for a roof in the ground itself.
-const DRAGON_SHELTER_DEPTH = 3;
+/// A dragon fireball that lands within four blocks of a player drops its
+/// cloud at the player's feet. A live bot three blocks down under a
+/// one-block roof took the cloud of a fireball that struck the roof. Four
+/// down under two roof blocks keeps the bot out of that reach.
+const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
@@ -2916,8 +2919,13 @@ function hideFromDragon(
         }
       }
     }
-    const roof = { ...bottom, y: feet + 2 };
-    if (yield* isOpen(driver, roof)) {
+    // The upper roof block goes in first: once the lower one is in, the
+    // bot cannot see a face to place the upper one against.
+    for (const height of [feet + 3, feet + 2]) {
+      const roof = { ...bottom, y: height };
+      if (!(yield* isOpen(driver, roof))) {
+        continue;
+      }
       for (const [dx, dz, face] of HORIZONTAL_OFFSETS) {
         const support = { ...roof, x: roof.x + dx, z: roof.z + dz };
         if (!(yield* isOpen(driver, support))) {
@@ -3046,6 +3054,7 @@ function isSheltered(
     }
     const cells = [
       { x, y: y + 2, z },
+      { x, y: y + 3, z },
       ...HORIZONTAL_OFFSETS.flatMap(([dx, dz]) => [
         { x: x + dx, y, z: z + dz },
         { x: x + dx, y: y + 1, z: z + dz },
