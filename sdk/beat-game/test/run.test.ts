@@ -165,6 +165,21 @@ describe("direct threat escape corridors", () => {
 });
 
 describe("dragon breath escapes", () => {
+  it("walks away from the breath of a dragon perched on the fountain", () => {
+    // As in a live run: the bot set off a bed beside the fountain, and the
+    // escape from the perched dragon's breath led it toward the fountain,
+    // deeper into the cloud, until it died.
+    const position = { x: 10, z: 2 };
+    const cloud = { x: 3, z: 1 };
+
+    const target = selectDragonBreathEscapeTarget(position, cloud);
+
+    expect(Math.hypot(target.x - cloud.x, target.z - cloud.z)).toBeGreaterThan(
+      Math.hypot(position.x - cloud.x, position.z - cloud.z) + 8,
+    );
+    expect(Math.hypot(target.x, target.z)).toBeLessThanOrEqual(30);
+  });
+
   it("walks inward past a fireball cloud near the island's edge", () => {
     // As in a live run: a fireball's cloud lay beside a bot near the edge.
     // Walking away from the fountain led toward the void, and it died in
@@ -175,7 +190,9 @@ describe("dragon breath escapes", () => {
     const target = selectDragonBreathEscapeTarget(position, cloud);
 
     expect(Math.hypot(target.x - cloud.x, target.z - cloud.z)).toBeGreaterThanOrEqual(9);
-    expect(Math.hypot(target.x, target.z)).toBeLessThan(Math.hypot(position.x, position.z) - 6);
+    expect(Math.hypot(target.x, target.z)).toBeLessThanOrEqual(
+      Math.hypot(position.x, position.z) - 4,
+    );
   });
 });
 

@@ -15753,29 +15753,39 @@ function isDragonBreathDamage(
 const DRAGON_BREATH_CLOUD_CLEARANCE = 9;
 const DRAGON_BREATH_CLOUD_SEARCH_RADIUS = 16;
 const DRAGON_BREATH_ESCAPE_DIRECTIONS = 16;
+// Ground this close to the fountain is solid in every direction.
+const DRAGON_BREATH_ESCAPE_INNER_RING = 30;
+const DRAGON_BREATH_ESCAPE_INWARD_STEP = 4;
 
 /// Picks where to walk out of dragon breath. With the cloud in sight, it is
-/// the spot the escape distance away that clears the cloud and lies nearest
-/// the fountain, since the island ends in the void. Without one, it walks
-/// away from the fountain where the dragon perches.
+/// the spot the escape distance away that lies farthest from the cloud, a
+/// few blocks nearer the fountain than the bot or within a safe inner ring,
+/// since the island ends in the void. Without one, it walks away from
+/// the fountain where the dragon perches.
 export function selectDragonBreathEscapeTarget(
   position: Pick<BeatGamePosition, "x" | "z">,
   cloud: Pick<BeatGamePosition, "x" | "z"> | undefined,
 ): { readonly x: number; readonly z: number } {
   if (cloud !== undefined) {
-    const candidates = Array.from({ length: DRAGON_BREATH_ESCAPE_DIRECTIONS }, (_, index) => {
+    const outerLimit = Math.max(
+      Math.hypot(position.x, position.z) - DRAGON_BREATH_ESCAPE_INWARD_STEP,
+      DRAGON_BREATH_ESCAPE_INNER_RING,
+    );
+    const fromCloud = (candidate: { readonly x: number; readonly z: number }) =>
+      Math.hypot(candidate.x - cloud.x, candidate.z - cloud.z);
+    const clear = Array.from({ length: DRAGON_BREATH_ESCAPE_DIRECTIONS }, (_, index) => {
       const angle = (index * 2 * Math.PI) / DRAGON_BREATH_ESCAPE_DIRECTIONS;
       return {
         x: position.x + Math.cos(angle) * DRAGON_BREATH_ESCAPE_DISTANCE,
         z: position.z + Math.sin(angle) * DRAGON_BREATH_ESCAPE_DISTANCE,
       };
-    });
-    const clear = candidates
+    })
       .filter(
         (candidate) =>
-          Math.hypot(candidate.x - cloud.x, candidate.z - cloud.z) >= DRAGON_BREATH_CLOUD_CLEARANCE,
+          fromCloud(candidate) >= DRAGON_BREATH_CLOUD_CLEARANCE &&
+          Math.hypot(candidate.x, candidate.z) <= outerLimit,
       )
-      .toSorted((left, right) => Math.hypot(left.x, left.z) - Math.hypot(right.x, right.z))[0];
+      .toSorted((left, right) => fromCloud(right) - fromCloud(left))[0];
     if (clear !== undefined) {
       return clear;
     }
