@@ -47,6 +47,9 @@ import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ProjectileWeaponItem;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -59,7 +62,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /// Server-timed bow and crossbow combat with dynamic pathfinding, target
-/// leading, and low-arc projectile compensation.
+/// leading, low-arc projectile compensation, and lobbed shots at still
+/// targets out of direct sight.
 public final class RangedAttackTaskProvider
   implements BotTaskProvider<RangedAttackTask> {
   private static final float DEFAULT_MINIMUM_RANGE = 8;
@@ -73,6 +77,14 @@ public final class RangedAttackTaskProvider
   private static final int MAX_CONSECUTIVE_PATH_FAILURES = 3;
   static final int MAX_IN_RANGE_TICKS_WITHOUT_SHOT = 5 * 20;
   private static final double ARROW_GRAVITY = 0.05;
+  private static final double LOB_AIM_DISTANCE = 16;
+  private static final double LOB_FACING_COSINE = Math.cos(Math.toRadians(0.5));
+  /// The server counts the draw from its own ticks, which can trail the
+  /// bot's by one, and a short draw slows the arrow. A lob is aimed for a
+  /// full draw, so the bot holds a little past it; the speed tops out there.
+  private static final int LOB_BOW_DRAW_TICKS = 23;
+  private static final double FULL_BOW_ARROW_SPEED = 3;
+  private static final double STATIONARY_DISTANCE_SQUARED = 0.0025;
   private static final Set<ControlResource> RESOURCES = Set.of(
     ControlResource.MOVEMENT,
     ControlResource.ROTATION,
@@ -221,6 +233,7 @@ public final class RangedAttackTaskProvider
     private boolean strafeRight;
     private boolean lastObservedAlive;
     private boolean active;
+    private @Nullable LobSolution lobCache;
     private final ShotProgressWatchdog shotProgress =
       new ShotProgressWatchdog(MAX_IN_RANGE_TICKS_WITHOUT_SHOT);
 
@@ -341,7 +354,13 @@ public final class RangedAttackTaskProvider
       var visiblePoint = KillAura.getEntityVisiblePoint(bot, attackTarget);
       var targetPoint = stableAimPoint(bot, attackTarget, visiblePoint);
       var distance = targetPoint.distanceTo(player.getEyePosition());
-      if (distance > maximumRange || visiblePoint == null) {
+      // Crystals sit on top of towers, where the tower's rim hides them from
+      // the ground. A live bot could see none of them from twenty blocks out,
+      // yet a steep arrow drops onto a still target over the rim.
+      var lobDirection = visiblePoint == null && distance <= maximumRange
+        ? lobDirection(attackTarget)
+        : null;
+      if (distance > maximumRange || visiblePoint == null && lobDirection == null) {
         shotProgress.reset();
         stopUsingItem();
         advanceSatisfiedStagingGoals(player.blockPosition());
@@ -403,20 +422,88 @@ public final class RangedAttackTaskProvider
       }
       shotProgress.awaitShot();
       var velocity = projectileVelocity(weapon);
-      var aimPoint = aimPoint(
-        player.getEyePosition(),
-        targetPoint,
-        attackTarget,
-        velocity
-      );
+      var aimPoint = lobDirection != null
+        ? player.getEyePosition().add(lobDirection.scale(LOB_AIM_DISTANCE))
+        : aimPoint(
+          player.getEyePosition(),
+          targetPoint,
+          attackTarget,
+          velocity
+        );
       bot.rotationControl().lookAt(aimPoint);
       report("Aiming ranged weapon", distance);
-      var facing = bot.rotationControl().isFacing(aimPoint);
+      // A lob flies several times as far as a flat shot, so two degrees off
+      // lands blocks wide of a crystal.
+      // Yaw barely matters for a near vertical shot, so a lob compares the
+      // look direction as a whole.
+      var facing = lobDirection != null
+        ? player.getLookAngle().dot(lobDirection) >= LOB_FACING_COSINE
+        : bot.rotationControl().isFacing(aimPoint);
       if (weapon.getItem() instanceof CrossbowItem) {
         tickCrossbow(weapon, facing);
       } else {
-        tickBow(facing);
+        tickBow(
+          facing,
+          lobDirection != null ? Math.max(bowDrawTicks, LOB_BOW_DRAW_TICKS) : bowDrawTicks
+        );
       }
+    }
+
+    /// Returns a launch direction that drops an arrow onto a still target
+    /// out of direct sight, or null when the target moves, no weapon is at
+    /// hand, or no flight reaches it.
+    private @Nullable Vec3 lobDirection(Entity attackTarget) {
+      var player = Objects.requireNonNull(context.bot().minecraft().player);
+      var level = Objects.requireNonNull(context.bot().minecraft().level);
+      var moved = attackTarget.position().distanceToSqr(
+        attackTarget.xo,
+        attackTarget.yo,
+        attackTarget.zo
+      );
+      if (moved > STATIONARY_DISTANCE_SQUARED) {
+        lobCache = null;
+        return null;
+      }
+      var weapon = ensureWeapon();
+      if (weapon == null) {
+        return null;
+      }
+      var origin = player.getEyePosition().subtract(0, ArrowTrajectory.LAUNCH_DROP, 0);
+      var targetBox = attackTarget.getBoundingBox();
+      var speed = weapon.getItem() instanceof CrossbowItem
+        ? projectileVelocity(weapon)
+        : FULL_BOW_ARROW_SPEED;
+      var cached = lobCache;
+      if (
+        cached != null
+          && cached.origin().distanceToSqr(origin) < STATIONARY_DISTANCE_SQUARED
+          && cached.target().equals(targetBox)
+          && cached.speed() == speed
+      ) {
+        return cached.direction();
+      }
+      var direction = ArrowTrajectory.launchDirection(
+        origin,
+        targetBox,
+        speed,
+        (from, to) -> level.clip(new ClipContext(
+          from,
+          to,
+          ClipContext.Block.COLLIDER,
+          ClipContext.Fluid.NONE,
+          player
+        )).getType() == HitResult.Type.MISS
+      ).orElse(null);
+      lobCache = new LobSolution(origin, targetBox, speed, direction);
+      return direction;
+    }
+
+    private record LobSolution(
+      Vec3 origin,
+      AABB target,
+      double speed,
+      @Nullable Vec3 direction
+    ) {
     }
 
     private static Vec3 stableAimPoint(
@@ -468,7 +555,7 @@ public final class RangedAttackTaskProvider
       ) / stack.getMaxDamage();
     }
 
-    private void tickBow(boolean facing) {
+    private void tickBow(boolean facing, int drawTicks) {
       var player = Objects.requireNonNull(context.bot().minecraft().player);
       var gameMode = Objects.requireNonNull(
         context.bot().minecraft().gameMode
@@ -480,7 +567,7 @@ public final class RangedAttackTaskProvider
         }
         return;
       }
-      if (player.getTicksUsingItem() < bowDrawTicks) {
+      if (player.getTicksUsingItem() < drawTicks) {
         return;
       }
       if (!facing) {
