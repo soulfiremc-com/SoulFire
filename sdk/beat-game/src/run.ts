@@ -11251,6 +11251,86 @@ function huntSheepForBed(
     count: observation.inventory.counts["minecraft:white_wool"] ?? 0,
   };
   const targetColor = targetWool.itemId.replace(/^minecraft:/u, "").replace(/_wool$/u, "");
+  // A killed sheep drops one wool, and sheep near a stronghold run out. A
+  // live bot spent half an hour for one wool. Shears take one to three from
+  // a sheep and leave it to grow more.
+  // Early on the first bed is worth more than a detour, and the iron goes to
+  // the shield and armor, so the bot makes shears only once it is back for
+  // the dragon.
+  return Ref.get(state.checkpoint).pipe(
+    Effect.flatMap((checkpoint) => {
+      if ((observation.inventory.counts["minecraft:shears"] ?? 0) > 0) {
+        return shearNearbySheep(state, observation, targetColor).pipe(
+          Effect.flatMap((sheared) =>
+            sheared
+              ? Effect.void
+              : huntSheepWithoutShears(state, observation, targetWool, targetColor),
+          ),
+        );
+      }
+      if (checkpoint.planner.phase !== BeatGamePhase.ACTIVATE_END_PORTAL) {
+        return huntSheepWithoutShears(state, observation, targetWool, targetColor);
+      }
+      return (observation.inventory.counts["minecraft:iron_ingot"] ?? 0) >= SHEARS_IRON_COST
+        ? craftWithTable(state, observation, "minecraft:shears", 1)
+        : satisfyIronRequirement(state, observation, SHEARS_IRON_COST);
+    }),
+  );
+}
+
+const SHEARS_IRON_COST = 2;
+const SHEAR_REACH = 2;
+
+/// Shears the nearest unsheared sheep of the wanted color in sight and picks
+/// up its wool. Returns false when no such sheep is in sight.
+function shearNearbySheep(
+  state: RunState,
+  observation: BeatGameObservation,
+  targetColor: string,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const sheep = (yield* state.driver.queryEntities({
+      origin: observation.player.position,
+      radius: state.strategy.entitySearchRadius,
+      selector: { entityTypes: ["minecraft:sheep"], alive: true },
+      maximumResults: 16,
+    })).find(
+      (candidate) =>
+        candidate.sheep !== undefined &&
+        !candidate.sheep.sheared &&
+        candidate.sheep.color === targetColor,
+    );
+    if (sheep === undefined) {
+      return false;
+    }
+    yield* state.driver.pathfind(sheep.position, SHEAR_REACH, state.strategy.path);
+    yield* state.driver.withControl(
+      state.driver.act({ type: "select-item", selector: { itemIds: ["minecraft:shears"] } }).pipe(
+        Effect.andThen(
+          state.driver.act({
+            type: "interact-entity",
+            connectionEpoch: sheep.connectionEpoch,
+            networkId: sheep.networkId,
+            hand: "main",
+          }),
+        ),
+      ),
+    );
+    yield* collectNearbyDrops(state.driver, {
+      itemIds: [`minecraft:${targetColor}_wool`],
+      radius: 8,
+      path: state.strategy.path,
+    });
+    return true;
+  });
+}
+
+function huntSheepWithoutShears(
+  state: RunState,
+  observation: BeatGameObservation,
+  targetWool: { readonly itemId: string; readonly count: number },
+  targetColor: string,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   return huntOrExplore(
     state,
     observation,
