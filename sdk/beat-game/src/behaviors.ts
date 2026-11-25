@@ -2577,35 +2577,6 @@ export function fightEnderDragon(
       options.bedPerchTimeoutMs ?? BED_BOMB_PERCH_TIMEOUT_MS,
       "bedPerchTimeoutMs",
     );
-    // Beds under the perched dragon's head kill it without the crystals.
-    // While perched it is too far from the towers to heal. A live bot spent
-    // every visit at towers it could not reach, and never set off a bed.
-    if (countItems(initialObservation, BED_ITEM_IDS) > 0) {
-      yield* approachDragonPerchWatch(driver, options.path);
-      yield* bedBombDragon(driver, {
-        searchRadius,
-        perchTimeoutMs,
-        ...(options.path === undefined ? {} : { path: options.path }),
-      });
-      const watched = yield* driver.observe;
-      const survivor = yield* queryEndEntities(
-        driver,
-        watched.player.position,
-        "minecraft:ender_dragon",
-        searchRadius,
-        1,
-      );
-      if (survivor.length === 0) {
-        yield* waitForDragonDefeatResult(
-          driver,
-          watched.player.position,
-          searchRadius,
-          confirmationAttempts,
-          confirmationDelayMs,
-        );
-        return undefined;
-      }
-    }
     for (let pass = 0; pass < maximumCrystalPasses; pass += 1) {
       const observation = yield* driver.observe;
       const crystals = yield* queryEndEntities(
@@ -2619,6 +2590,9 @@ export function fightEnderDragon(
         break;
       }
       for (const crystal of crystals) {
+        if (yield* lobAtCrystal(driver, crystal, crystalShots, options.path)) {
+          continue;
+        }
         const ranged = yield* rangedAttack(driver, {
           target: crystal,
           maximumShots: crystalShots,
@@ -2672,7 +2646,11 @@ export function fightEnderDragon(
       searchRadius,
       1,
     );
-    if (dragons[0] !== undefined) {
+    // Crystals heal the dragon two health a second, perched or not, which
+    // undid the beds of a live bot between perches. With them gone it
+    // also perches after every circle.
+    if (dragons[0] !== undefined && countItems(afterCrystals, BED_ITEM_IDS) > 0) {
+      yield* approachDragonPerchWatch(driver, options.path);
       yield* bedBombDragon(driver, {
         searchRadius,
         perchTimeoutMs,
@@ -2749,6 +2727,15 @@ export function fightEnderDragon(
 const DRAGON_HEAD_REACH = 6.5;
 const DRAGON_HEAD_DROP = 1;
 const BED_BOMB_STAND_DISTANCE = 3;
+/// Arrows lobbed from this far inside a tower drop onto its crystal over the
+/// rim, which hides the crystal from the ground. Measured in a real End: nine
+/// of ten crystals fell to at most three arrows each from twenty blocks.
+const CRYSTAL_LOB_STAND_DISTANCE = 20;
+const CRYSTAL_LOB_STAND_RADIUS = 3;
+const CRYSTAL_LOB_RANGE = 64;
+const CRYSTAL_LOB_FLIGHT_MS = 8000;
+const CRYSTAL_LOB_POLL_MS = 500;
+const CRYSTAL_LOB_MATCH_RADIUS = 2;
 /// Tower radii run up to five blocks, so a spot six out stands clear of one.
 const CRYSTAL_CLIMB_OFFSET = 6;
 const CRYSTAL_CLIMB_RADIUS = 1.5;
@@ -2922,6 +2909,63 @@ function approachDragonPerchWatch(
     }),
     Effect.catchTag("BeatGameDriverError", () => Effect.void),
   );
+}
+
+/// Walks inside a crystal's tower and lobs arrows over the tower's rim onto
+/// the crystal. Returns whether the crystal is gone.
+function lobAtCrystal(
+  driver: BeatGameDriver,
+  crystal: BeatGameEntityObservation,
+  shots: number,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const { x, z } = crystal.position;
+    const distance = Math.hypot(x, z);
+    const scale = distance < 1 ? 0 : Math.max(0, distance - CRYSTAL_LOB_STAND_DISTANCE) / distance;
+    yield* driver
+      .pathfindXZ(x * scale, z * scale, crystal.position.dimension, CRYSTAL_LOB_STAND_RADIUS, {
+        ...mergePathPolicy(path),
+        allowMining: true,
+        allowPlacing: true,
+        avoidFluids: true,
+      })
+      .pipe(
+        Effect.timeoutOrElse({
+          duration: DRAGON_PERCH_WATCH_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
+        Effect.ignore,
+      );
+    const shot = yield* rangedAttack(driver, {
+      target: crystal,
+      maximumShots: shots,
+      maximumRange: CRYSTAL_LOB_RANGE,
+      targetUnavailableTimeoutSeconds: 2,
+      strafe: false,
+      ...(path === undefined ? {} : { path }),
+    }).pipe(Effect.result);
+    if (shot._tag === "Failure") {
+      return false;
+    }
+    // A lob stays in the air for seconds after the task has let it go.
+    for (let waited = 0; ; waited += CRYSTAL_LOB_POLL_MS) {
+      const standing = yield* queryEndEntities(
+        driver,
+        crystal.position,
+        "minecraft:end_crystal",
+        CRYSTAL_LOB_MATCH_RADIUS,
+        1,
+      );
+      if (standing.length === 0) {
+        return true;
+      }
+      if (waited >= CRYSTAL_LOB_FLIGHT_MS) {
+        return false;
+      }
+      yield* Effect.sleep(CRYSTAL_LOB_POLL_MS);
+    }
+  });
 }
 
 /// Builds up beside a crystal's tower to the crystal's height, off the

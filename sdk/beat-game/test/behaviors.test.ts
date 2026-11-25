@@ -7446,7 +7446,7 @@ describe("beat-game behavior programs", () => {
     });
   });
 
-  it("sets off beds under the perched dragon before going after crystals", async () => {
+  it("lobs arrows at crystals from inside their towers before setting off beds", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;
     const end = (counts: Record<string, number>) =>
@@ -7473,8 +7473,8 @@ describe("beat-game behavior programs", () => {
         observedAt: "2026-01-01T00:00:01.000Z",
       },
     ];
-    // As in a live run: crystals still stood on towers the bot could not
-    // reach, and it never set off a bed.
+    // As in a live run: crystals healed the dragon back to full between
+    // perches, undoing every bed. From the ground the tower's rim hid them.
     const crystal = {
       connectionEpoch: "epoch-1",
       networkId: 77,
@@ -7488,8 +7488,20 @@ describe("beat-game behavior programs", () => {
       query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
         ? driver.entityResults
         : query.selector.entityTypes?.includes("minecraft:end_crystal") === true
-          ? [crystal]
+          ? crystals
           : [];
+    let crystals: readonly (typeof crystal)[] = [crystal];
+    const order: string[] = [];
+    driver.taskObserver = (task) => {
+      if (
+        task.type === "ranged-attack" &&
+        task.target.networkId === crystal.networkId &&
+        task.maximumRange === 64
+      ) {
+        order.push("crystal");
+        crystals = [];
+      }
+    };
     driver.blockQueryResolver = ({ center, selector }) => {
       if (selector.blockIds?.includes("minecraft:end_portal") === true) {
         return driver.entityResults.length === 0
@@ -7530,6 +7542,7 @@ describe("beat-game behavior programs", () => {
       });
     driver.actionObserver = (action) => {
       if (action.type === "interact-block") {
+        order.push("bed");
         beds -= 1;
         driver.currentObservation = end({ "minecraft:red_bed": beds, "minecraft:cobblestone": 7 });
         if (beds === 0) {
@@ -7545,8 +7558,13 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
-    expect(driver.tasks.some((task) => task.type === "ranged-attack")).toBe(false);
+    // Twenty blocks inside the tower, toward the fountain.
+    const towerDistance = Math.hypot(42.5, 0.5);
+    expect(driver.xzPaths[0]).toMatchObject({
+      x: closeTo((42.5 * (towerDistance - 20)) / towerDistance, 0.01),
+      z: closeTo((0.5 * (towerDistance - 20)) / towerDistance, 0.01),
+    });
+    expect(order).toEqual(["crystal", "bed", "bed"]);
   });
 
   it("waits for a landing dragon to sit before setting off a bed", async () => {
