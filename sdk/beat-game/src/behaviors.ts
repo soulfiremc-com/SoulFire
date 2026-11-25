@@ -2842,7 +2842,10 @@ function approachDragonPerchWatch(
       (player.z / distance) * DRAGON_PERCH_WATCH_DISTANCE,
       player.dimension,
       DRAGON_PERCH_WATCH_RADIUS,
-      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true },
+      // Water the bot poured against endermen floods the arrival platform
+      // and runs down the slope. A live bot walked into the flow, was pushed
+      // back five times in a row, and never left the platform.
+      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true, avoidFluids: true },
     );
   }).pipe(
     Effect.timeoutOrElse({

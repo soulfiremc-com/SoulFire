@@ -7442,7 +7442,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.xzPaths[0]).toMatchObject({
       x: closeTo((100.5 / Math.hypot(100.5, 0.5)) * 16, 0.1),
       z: closeTo((0.5 / Math.hypot(100.5, 0.5)) * 16, 0.1),
-      policy: { allowMining: true, allowPlacing: true },
+      policy: { allowMining: true, allowPlacing: true, avoidFluids: true },
     });
   });
 
