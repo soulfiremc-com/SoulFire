@@ -385,6 +385,20 @@ const END_OBSOLETE_DISCARD_ITEM_IDS = [
 ] as const;
 const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:leaf_litter",
+  // Shears carried for wool make every leaf block the bot breaks drop
+  // itself. A live bot held 84 leaves in three stacks and found nothing
+  // to drop when it needed slots for food.
+  "minecraft:oak_leaves",
+  "minecraft:spruce_leaves",
+  "minecraft:birch_leaves",
+  "minecraft:jungle_leaves",
+  "minecraft:acacia_leaves",
+  "minecraft:dark_oak_leaves",
+  "minecraft:mangrove_leaves",
+  "minecraft:cherry_leaves",
+  "minecraft:pale_oak_leaves",
+  "minecraft:azalea_leaves",
+  "minecraft:flowering_azalea_leaves",
   "minecraft:tripwire_hook",
   "minecraft:spider_eye",
   "minecraft:pufferfish",

@@ -235,6 +235,20 @@ describe("inventory discards", () => {
     });
   });
 
+  it("drops leaves that shears picked up", () => {
+    // Part of the pack a live bot carried when its food step found nothing
+    // to drop.
+    expect(
+      selectInventoryDiscard({
+        "minecraft:oak_leaves": 45,
+        "minecraft:spruce_leaves": 30,
+        "minecraft:shears": 1,
+        "minecraft:white_bed": 3,
+        "minecraft:arrow": 41,
+      }),
+    ).toEqual({ itemId: "minecraft:oak_leaves", count: 45 });
+  });
+
   it("frees slots held by stronghold fittings and a stray wool color", () => {
     // Part of the pack a live bot carried when its bed step could not free
     // three slots.
