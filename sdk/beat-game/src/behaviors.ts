@@ -2651,11 +2651,30 @@ export function fightEnderDragon(
     // also perches after every circle.
     if (dragons[0] !== undefined && countItems(afterCrystals, BED_ITEM_IDS) > 0) {
       yield* approachDragonPerchWatch(driver, options.path);
-      yield* bedBombDragon(driver, {
-        searchRadius,
-        perchTimeoutMs,
-        ...(options.path === undefined ? {} : { path: options.path }),
-      });
+      // Arrows send the bot into the open beside the fountain. A live bot
+      // still holding four beds gave up its wait for a perch, went to shoot
+      // the dragon, and died in its breath.
+      for (let round = 0; round < BED_BOMB_PERCH_ROUNDS; round += 1) {
+        yield* bedBombDragon(driver, {
+          searchRadius,
+          perchTimeoutMs,
+          ...(options.path === undefined ? {} : { path: options.path }),
+        });
+        const remaining = yield* driver.observe;
+        const alive = yield* queryEndEntities(
+          driver,
+          remaining.player.position,
+          "minecraft:ender_dragon",
+          searchRadius,
+          1,
+        );
+        if (countItems(remaining, BED_ITEM_IDS) === 0 || alive.length === 0) {
+          break;
+        }
+        if (round === BED_BOMB_PERCH_ROUNDS - 1) {
+          return yield* behaviorError(driver, "The dragon did not perch while the bot held beds");
+        }
+      }
     }
     const dragon = (yield* queryEndEntities(
       driver,
@@ -2746,6 +2765,9 @@ const DRAGON_PERCH_SETTLE_MS = 500;
 const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.05;
 const DRAGON_PERCH_STEADY_CHECKS = 2;
 const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
+/// With the crystals gone the dragon perches after most circles, so a few
+/// waits see several perches.
+const BED_BOMB_PERCH_ROUNDS = 5;
 const DRAGON_PERCH_WATCH_DISTANCE = 16;
 const BED_BOMB_MINIMUM_HEALTH = 16;
 const BED_BOMB_RECOVERY_DISTANCE = 28;

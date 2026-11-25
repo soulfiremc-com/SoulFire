@@ -7632,7 +7632,7 @@ describe("beat-game behavior programs", () => {
 
     await Effect.runPromise(
       fightEnderDragon(driver, {
-        bedPerchTimeoutMs: 2000,
+        bedPerchTimeoutMs: 600,
         maximumCrystalPasses: 1,
         defeatConfirmationAttempts: 1,
         defeatConfirmationDelayMs: 0,
@@ -7640,6 +7640,67 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.actions.some((action) => action.type === "interact-block")).toBe(false);
+  }, 20_000);
+
+  it("keeps waiting for a perch instead of shooting while it holds beds", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 4, "minecraft:end_stone": 8, "minecraft:arrow": 32 },
+    });
+    // Circling, as a dragon does between perches.
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? [
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 42,
+              entityType: "minecraft:ender_dragon",
+              position: { x: 40.5, y: 80, z: 30.5, dimension: "minecraft:the_end" },
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              health: 134,
+              observedAt: "2026-01-01T00:00:01.000Z",
+            },
+          ]
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 100,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(
+      driver.tasks.filter(
+        (task) =>
+          (task.type === "ranged-attack" || task.type === "attack-entity") &&
+          task.target.networkId === 42,
+      ),
+    ).toEqual([]);
   });
 
   it("roofs over its shaft to wait for a perch out of the dragon's sight", async () => {
