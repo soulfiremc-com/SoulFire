@@ -7944,6 +7944,86 @@ describe("beat-game run lifecycle", () => {
     expect(driver.currentObservation.inventory.counts["minecraft:white_wool"]).toBe(3);
   });
 
+  it("fetches wood for beds instead of shearing when it holds the wool", async () => {
+    // As in a live run: eight white wool and no wood, and the bot sheared
+    // sheep for wool it already had.
+    const position = { x: -372, y: 64, z: -1772, dimension: "minecraft:overworld" } as const;
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position,
+      counts: {
+        "minecraft:ender_eye": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+        "minecraft:shears": 1,
+        "minecraft:white_wool": 8,
+      },
+    });
+    const sheep = {
+      connectionEpoch: "epoch-1",
+      networkId: 311,
+      entityType: "minecraft:sheep",
+      position: { ...position, x: -369 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 8,
+      sheep: { color: "white", sheared: false },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:sheep") === true ? [sheep] : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "bed-wood-run",
+      teamId: "bed-wood-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...portalCheckpoint,
+          memory: {
+            ...portalCheckpoint.memory,
+            emptyPortalFrames: 0,
+            portalRoomCenter: { x: -375.5, y: 15, z: -1771.5, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const sheared = () =>
+      driver.actions.some(
+        (action) => action.type === "interact-entity" && action.networkId === sheep.networkId,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "bed-wood-run",
+            team: { teamId: "bed-wood-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+          });
+          yield* sleepWhile(
+            () => !sheared() && !driver.tasks.some((task) => task.type === "collect-blocks"),
+          ).pipe(Effect.timeout("3 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(sheared()).toBe(false);
+    expect(driver.tasks.find((task) => task.type === "collect-blocks")).toMatchObject({
+      blockIds: arrayContaining(["minecraft:oak_log"]),
+    });
+  });
+
   it("shears sheep for dragon beds back at the portal room", async () => {
     // As in a live run: sheep near the stronghold ran short, and killing them
     // gave one wool each. Shears take more and leave the sheep.

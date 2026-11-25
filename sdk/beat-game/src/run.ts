@@ -11202,6 +11202,15 @@ function satisfyBedRequirement(
   if (craftableBed !== undefined) {
     return craftWithTable(state, observation, craftableBed, 1);
   }
+  // A live bot back at the portal room held eight white wool and no wood,
+  // and sheared sheep for wool it already had instead of crafting beds.
+  if (
+    BED_COLORS.some(
+      (color) => (observation.inventory.counts[`minecraft:${color}_wool`] ?? 0) >= BED_WOOL_COUNT,
+    )
+  ) {
+    return fetchLogs(state, observation).pipe(Effect.asVoid);
+  }
   return Effect.gen(function* () {
     // A bed left by the portal room is the bot's respawn point. A live bot
     // took its own back up for the dragon, then died in the End and woke
