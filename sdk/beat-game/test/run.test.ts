@@ -55697,6 +55697,136 @@ describe("beat-game run lifecycle", () => {
     expect(diagnostics).not.toContain("Poured water against an attacking enderman");
   });
 
+  it("wades out of dragon breath on a flooded platform", async () => {
+    // As in a live run: the bot stood in water that flooded the End arrival
+    // platform, and an escape that avoided fluids found no route at all.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 7, y: 64, z: -6, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 71,
+        entityType: "minecraft:enderman",
+        position: { ...position, x: 8.5 },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 40,
+        aggressive: true,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    // No breath cloud is in sight, so it walks away from the fountain.
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.entityTypes?.includes("minecraft:area_effect_cloud") === true
+        ? []
+        : driver.entityResults;
+    const fight = { started: false };
+    const escapes: { avoidFluids: boolean | undefined }[] = [];
+    driver.xzPathResolver = (_x, _z, _dimension, _radius, policy) =>
+      Effect.sync(() => {
+        escapes.push({ avoidFluids: policy.avoidFluids });
+      });
+    driver.blockQueryResolver = ({ center, selector }) =>
+      selector.blockIds?.includes("minecraft:water") === true
+        ? [
+            blockObservation(
+              {
+                x: Math.floor(center.x),
+                y: Math.floor(center.y),
+                z: Math.floor(center.z),
+                dimension: center.dimension,
+              },
+              { blockId: "minecraft:water", solid: false, replaceable: true, diggable: false },
+            ),
+          ]
+        : [];
+    const breath = Effect.gen(function* () {
+      let attempts = 3000;
+      while (!fight.started && attempts > 0) {
+        attempts -= 1;
+        yield* Effect.sleep(1);
+      }
+      const now = yield* DateTime.now;
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_end",
+        position,
+        health: 17.5,
+        counts: driver.currentObservation.inventory.counts,
+      });
+      return {
+        type: "bot-damaged",
+        observedAt: DateTime.formatIso(now),
+        amount: 2.5,
+        health: 17.5,
+        damageType: "minecraft:indirect_magic",
+      } as const;
+    });
+    driver.events = Stream.fromEffect(breath).pipe(Stream.concat(Stream.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "dragon-breath-run",
+          teamId: "dragon-breath-team",
+        }),
+        undefined,
+      ),
+    );
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "dragon-breath-run",
+            team: { teamId: "dragon-breath-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (escapes.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(fight.started).toBe(true);
+    expect(diagnostics).toContain("Leaving dragon breath");
+    expect(escapes[0]).toEqual({ avoidFluids: false });
+  });
+
   it("walks out of dragon breath instead of answering a nearby enderman", async () => {
     // As in a live run: breath over the fountain hurt the bot every second
     // with an enderman beside it. It poured water against the enderman and

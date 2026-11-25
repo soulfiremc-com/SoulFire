@@ -15842,6 +15842,10 @@ function leaveDragonBreath(
       maximumResults: 1,
     });
     const target = selectDragonBreathEscapeTarget(position, cloud?.position);
+    // Water poured against endermen floods the arrival platform. A live bot
+    // standing in it found no route that avoided fluids, since its own block
+    // was one, and died in the breath.
+    const inFluid = yield* isPlayerInFluid(state.driver, position);
     yield* emit(state, {
       type: "diagnostic",
       message: "Leaving dragon breath",
@@ -15855,7 +15859,7 @@ function leaveDragonBreath(
         // died in the breath of the fireballs the dragon kept aiming at it.
         allowMining: true,
         allowPlacing: true,
-        avoidFluids: true,
+        avoidFluids: !inFluid,
         sprint: true,
       })
       .pipe(
