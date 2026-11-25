@@ -345,6 +345,8 @@ export interface BeatGameExplorationFrontier {
   readonly targetAttempts?: number;
   readonly lastPosition?: BeatGamePosition;
   readonly totalAdvances?: number;
+  /// Advances since the spiral last started from its current origin.
+  readonly originAdvances?: number;
 }
 
 export interface BeatGamePortalWorkspace {

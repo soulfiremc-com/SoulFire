@@ -669,6 +669,46 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("searches again for sheep after the spiral restarts elsewhere", () => {
+    // As in a live run: many searches near the stronghold added up to 51
+    // advances, and the bot gave up a minute into a fresh search.
+    const prepared = observation({
+      counts: {
+        "minecraft:cooked_beef": 5,
+        "minecraft:spruce_log": 8,
+        "minecraft:cobblestone": 20,
+        "minecraft:stone_sword": 1,
+        "minecraft:stone_pickaxe": 1,
+      },
+      food: 20,
+      position: { y: 76 },
+    });
+    const base = checkpoint(BeatGamePhase.PREPARE_OVERWORLD);
+    const restarted = {
+      ...base,
+      memory: {
+        ...base.memory,
+        explorationFrontiers: {
+          "minecraft:overworld:find-sheep": {
+            progressVersion: 2 as const,
+            origin: prepared.player.position,
+            nextIndex: 2,
+            totalAdvances: 51,
+            originAdvances: 1,
+          },
+        },
+      },
+    };
+
+    expect(
+      decideBeatGameAction({
+        checkpoint: restarted,
+        observation: prepared,
+        strategy: defaultBeatGameStrategy,
+      }),
+    ).toMatchObject({ action: "satisfy:bed" });
+  });
+
   it("prepares a bed before iron until the sheep search is exhausted", () => {
     const prepared = observation({
       counts: {

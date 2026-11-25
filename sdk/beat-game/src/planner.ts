@@ -553,7 +553,13 @@ function bedSearchExhausted(
 ): boolean {
   const frontier =
     checkpoint.memory.explorationFrontiers?.[`minecraft:overworld:${BED_SHEEP_SEARCH_PURPOSE}`];
-  if (frontier?.progressVersion !== 2 || (frontier.totalAdvances ?? 0) < BED_SHEEP_SEARCH_LEGS) {
+  // The spiral starts again around the bot after a death trip carries it
+  // away. A live bot had 51 advances from many such searches, gave up on
+  // sheep a minute into a fresh one, and went into the End without beds.
+  if (
+    frontier?.progressVersion !== 2 ||
+    (frontier.originAdvances ?? frontier.totalAdvances ?? 0) < BED_SHEEP_SEARCH_LEGS
+  ) {
     return false;
   }
   const searched = frontier.lastPosition ?? frontier.origin;

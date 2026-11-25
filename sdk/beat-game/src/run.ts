@@ -16928,6 +16928,7 @@ function advanceExplorationFrontier(
               nextIndex: 1,
               targetAttempts: 0,
               totalAdvances: 0,
+              originAdvances: 0,
               lastPosition: position,
             }
           : shouldReanchor
@@ -16938,6 +16939,7 @@ function advanceExplorationFrontier(
                 targetAttempts: 0,
                 lastPosition: position,
                 totalAdvances: current.totalAdvances ?? 0,
+                originAdvances: 0,
               }
             : current;
       const offset = rotateExplorationOffset(
@@ -17025,6 +17027,7 @@ function persistExplorationAttempt(
         const madeMaterialProgress =
           startDistance - endDistance >= EXPLORATION_MINIMUM_PROGRESS_DISTANCE;
         const totalAdvances = frontier.totalAdvances ?? 0;
+        const originAdvances = (frontier.originAdvances ?? totalAdvances) + 1;
         const updated: BeatGameExplorationFrontier = targetReached
           ? {
               progressVersion: 2,
@@ -17033,12 +17036,14 @@ function persistExplorationAttempt(
               targetAttempts: 0,
               lastPosition: end,
               totalAdvances: totalAdvances + 1,
+              originAdvances,
             }
           : legReached
             ? {
                 ...frontier,
                 lastPosition: end,
                 totalAdvances: totalAdvances + 1,
+                originAdvances,
               }
             : madeMaterialProgress
               ? {
