@@ -235,6 +235,33 @@ describe("inventory discards", () => {
     });
   });
 
+  it("drops stairs, trapdoors and rabbit leftovers", () => {
+    // Part of the pack a live bot carried when its food step found nothing
+    // to drop.
+    const pack = {
+      "minecraft:oak_stairs": 1,
+      "minecraft:spruce_trapdoor": 4,
+      "minecraft:rabbit_foot": 1,
+      "minecraft:white_bed": 4,
+      "minecraft:cobblestone": 64,
+      "minecraft:arrow": 41,
+    };
+    const dropped: string[] = [];
+    const counts: Record<string, number> = { ...pack };
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      dropped.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+    expect(dropped).toEqual(
+      arrayContaining([
+        "minecraft:oak_stairs",
+        "minecraft:spruce_trapdoor",
+        "minecraft:rabbit_foot",
+      ]),
+    );
+  });
+
   it("drops leaves that shears picked up", () => {
     // Part of the pack a live bot carried when its food step found nothing
     // to drop.

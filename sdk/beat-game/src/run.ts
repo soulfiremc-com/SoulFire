@@ -430,6 +430,12 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:pale_oak_leaves",
   "minecraft:azalea_leaves",
   "minecraft:flowering_azalea_leaves",
+  // Rabbits, jungle walls and village houses leave these behind, and
+  // nothing uses them. A live bot held them all and found nothing to drop
+  // when it needed slots for food.
+  "minecraft:rabbit_foot",
+  "minecraft:rabbit_hide",
+  "minecraft:vine",
   "minecraft:tripwire_hook",
   "minecraft:spider_eye",
   "minecraft:pufferfish",
@@ -18716,7 +18722,11 @@ export function selectInventoryDiscard(
     INVENTORY_DISCARD_PRIORITY.find((itemId) => (counts[itemId] ?? 0) > 0) ??
     obsoleteItemIds.find((itemId) => (counts[itemId] ?? 0) > 0) ??
     Object.keys(counts).find(
-      (itemId) => itemId.startsWith("minecraft:music_disc_") && (counts[itemId] ?? 0) > 0,
+      (itemId) =>
+        (itemId.startsWith("minecraft:music_disc_") ||
+          itemId.endsWith("_stairs") ||
+          itemId.endsWith("_trapdoor")) &&
+        (counts[itemId] ?? 0) > 0,
     );
   if (priorityItemId !== undefined) {
     return { itemId: priorityItemId, count: counts[priorityItemId] ?? 0 };
