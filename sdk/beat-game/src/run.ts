@@ -4935,23 +4935,29 @@ function monitorObservedSafety(
     decision.type === "fight-ender-dragon" &&
     observation.player.health < previousObservation.player.health
   ) {
-    return Ref.get(state.lastDamage).pipe(
+    // The health drop can show before the damage event that names its
+    // cause. A live bot read an older cause for a breath tick, found one of
+    // the End's many endermen nearby, and poured water instead of leaving.
+    return awaitDamageSince(state, previousObservation.observedAt).pipe(
       Effect.flatMap((damage) =>
         isDragonBreathDamage(damage, observation)
           ? Effect.succeed({
               replanReason: "interrupted the dragon fight to leave dragon breath",
               environmentalEscapePosition: observation.player.position,
             } satisfies ActionResult)
-          : findNearbyAttackThreat(state, observation).pipe(
-              Effect.flatMap((threat) =>
-                threat?.target.entityType === "minecraft:enderman"
-                  ? Effect.succeed({
-                      replanReason: "interrupted the dragon fight to escape an attacking enderman",
-                      escapeTarget: threat.target,
-                    } satisfies ActionResult)
-                  : Effect.suspend(() => monitor(observation)),
+          : damage?.damageType === undefined || !ATTACK_DAMAGE_TYPES.has(damage.damageType)
+            ? Effect.suspend(() => monitor(observation))
+            : findNearbyAttackThreat(state, observation).pipe(
+                Effect.flatMap((threat) =>
+                  threat?.target.entityType === "minecraft:enderman"
+                    ? Effect.succeed({
+                        replanReason:
+                          "interrupted the dragon fight to escape an attacking enderman",
+                        escapeTarget: threat.target,
+                      } satisfies ActionResult)
+                    : Effect.suspend(() => monitor(observation)),
+                ),
               ),
-            ),
       ),
     );
   }
@@ -15737,6 +15743,28 @@ const DRAGON_BREATH_RECENT_MS = 1500;
 const DRAGON_BREATH_ESCAPE_DISTANCE = 12;
 const DRAGON_BREATH_ESCAPE_RADIUS = 2;
 const DRAGON_BREATH_ESCAPE_TIMEOUT_MS = 8000;
+
+const DAMAGE_CAUSE_WAIT_MS = 500;
+const DAMAGE_CAUSE_POLL_MS = 50;
+
+/// Waits briefly for a damage event at or after `since` and returns the
+/// latest damage, which may still be older when no event arrives in time.
+function awaitDamageSince(
+  state: RunState,
+  since: string,
+): Effect.Effect<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined> {
+  return Effect.gen(function* () {
+    const sinceMs = Date.parse(since);
+    for (let waited = 0; waited < DAMAGE_CAUSE_WAIT_MS; waited += DAMAGE_CAUSE_POLL_MS) {
+      const damage = yield* Ref.get(state.lastDamage);
+      if (damage !== undefined && Date.parse(damage.observedAt) >= sinceMs) {
+        return damage;
+      }
+      yield* Effect.sleep(DAMAGE_CAUSE_POLL_MS);
+    }
+    return yield* Ref.get(state.lastDamage);
+  });
+}
 
 function isDragonBreathDamage(
   damage: Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined,

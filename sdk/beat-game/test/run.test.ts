@@ -196,6 +196,29 @@ describe("dragon breath escapes", () => {
   });
 });
 
+/// Emits one melee hit after the dragon fight has started, as an enderman's
+/// blow arrives in a real game.
+function meleeHitOnceStarted(fight: {
+  readonly started: boolean;
+}): Stream.Stream<BeatGameDriverEvent> {
+  return Stream.fromEffect(
+    Effect.gen(function* () {
+      while (!fight.started) {
+        yield* Effect.sleep(1);
+      }
+      yield* Effect.sleep(5);
+      const now = yield* DateTime.now;
+      return {
+        type: "bot-damaged",
+        observedAt: DateTime.formatIso(now),
+        amount: 4.5,
+        health: 15.5,
+        damageType: "minecraft:mob_attack",
+      } as const;
+    }),
+  ).pipe(Stream.concat(Stream.never));
+}
+
 describe("inventory discards", () => {
   it("drops netherrack beyond the building reserve a stack at a time", () => {
     // As in a live run whose full inventory blocked a pickaxe craft.
@@ -55510,6 +55533,8 @@ describe("beat-game run lifecycle", () => {
       ),
     );
     const fight = { started: false };
+    // The enderman's hit arrives as a melee damage event once the fight runs.
+    driver.events = meleeHitOnceStarted(fight);
 
     await Effect.runPromise(
       Effect.scoped(
@@ -55554,6 +55579,123 @@ describe("beat-game run lifecycle", () => {
     // The bot turns from the fight to get away from the enderman.
     expect(driver.tasks.length + driver.actions.length).toBeGreaterThan(0);
   }, 10_000);
+
+  it("waits for the damage cause before taking breath for an enderman attack", async () => {
+    // As in a live run: the health drop showed before the breath damage
+    // event, and the bot took the tick for an attack by a nearby enderman.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 7, y: 64, z: -6, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 71,
+        entityType: "minecraft:enderman",
+        position: { ...position, x: 8.5 },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 40,
+        aggressive: true,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    // No breath cloud is in sight, so it walks away from the fountain.
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.entityTypes?.includes("minecraft:area_effect_cloud") === true
+        ? []
+        : driver.entityResults;
+    const fight = { started: false };
+    const escapes: { x: number; z: number; allowMining: boolean }[] = [];
+    driver.xzPathResolver = (x, z, _dimension, _radius, policy) =>
+      Effect.sync(() => {
+        escapes.push({ x, z, allowMining: policy.allowMining });
+      });
+    const breath = Effect.gen(function* () {
+      let attempts = 3000;
+      while (!fight.started && attempts > 0) {
+        attempts -= 1;
+        yield* Effect.sleep(1);
+      }
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_end",
+        position,
+        health: 17.5,
+        counts: driver.currentObservation.inventory.counts,
+      });
+      yield* Effect.sleep(100);
+      const now = yield* DateTime.now;
+      return {
+        type: "bot-damaged",
+        observedAt: DateTime.formatIso(now),
+        amount: 2.5,
+        health: 17.5,
+        damageType: "minecraft:indirect_magic",
+      } as const;
+    });
+    driver.events = Stream.fromEffect(breath).pipe(Stream.concat(Stream.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "dragon-breath-run",
+          teamId: "dragon-breath-team",
+        }),
+        undefined,
+      ),
+    );
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "dragon-breath-run",
+            team: { teamId: "dragon-breath-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (escapes.length === 0 && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(fight.started).toBe(true);
+    expect(diagnostics).toContain("Leaving dragon breath");
+    expect(diagnostics).not.toContain("Poured water against an attacking enderman");
+  });
 
   it("walks out of dragon breath instead of answering a nearby enderman", async () => {
     // As in a live run: breath over the fountain hurt the bot every second
@@ -55746,6 +55888,8 @@ describe("beat-game run lifecycle", () => {
       ),
     );
     const fight = { started: false };
+    // The enderman's hit arrives as a melee damage event once the fight runs.
+    driver.events = meleeHitOnceStarted(fight);
     const diagnostics: string[] = [];
 
     await Effect.runPromise(
@@ -55886,6 +56030,8 @@ describe("beat-game run lifecycle", () => {
       ),
     );
     const fight = { started: false };
+    // The enderman's hit arrives as a melee damage event once the fight runs.
+    driver.events = meleeHitOnceStarted(fight);
     const diagnostics: string[] = [];
 
     await Effect.runPromise(
@@ -56027,6 +56173,8 @@ describe("beat-game run lifecycle", () => {
       ),
     );
     const fight = { started: false };
+    // The enderman's hit arrives as a melee damage event once the fight runs.
+    driver.events = meleeHitOnceStarted(fight);
     const diagnostics: string[] = [];
 
     await Effect.runPromise(
