@@ -100,7 +100,43 @@ const missingEndKeys = (counts: Record<string, number>) =>
     .filter(({ satisfied }) => !satisfied)
     .map(({ key }) => key);
 
+const missingInTheEnd = (counts: Record<string, number>) =>
+  requirementsForPhase(
+    BeatGamePhase.FIGHT_ENDER_DRAGON,
+    observation({ counts }).inventory,
+    fastBeatGameStrategy,
+  )
+    .filter(({ satisfied }) => !satisfied)
+    .map(({ key }) => key);
+
 describe("beat-game requirements", () => {
+  it("crafts a new pickaxe in the End from the stone and wood it carries", () => {
+    // Part of the pack a live bot fought the dragon with after its last
+    // pickaxe broke there.
+    const pack = {
+      "minecraft:cobblestone": 25,
+      "minecraft:oak_log": 2,
+      "minecraft:oak_planks": 2,
+      "minecraft:stick": 2,
+      "minecraft:white_bed": 4,
+      "minecraft:bow": 1,
+      "minecraft:arrow": 41,
+    };
+
+    expect(missingInTheEnd(pack)).toContain("pickaxe");
+    // Nothing in the End makes a pickaxe without them.
+    expect(missingInTheEnd({ ...pack, "minecraft:cobblestone": 2 })).not.toContain("pickaxe");
+    expect(
+      missingInTheEnd({
+        ...pack,
+        "minecraft:oak_log": 0,
+        "minecraft:oak_planks": 3,
+        "minecraft:stick": 0,
+      }),
+    ).not.toContain("pickaxe");
+    expect(missingInTheEnd({ ...pack, "minecraft:stone_pickaxe": 1 })).not.toContain("pickaxe");
+  });
+
   it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
     expect(keys(fastBeatGameStrategy)).toContainEqual({
       key: "dragon-beds",

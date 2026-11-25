@@ -331,6 +331,42 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
   [BeatGamePhase.COMPLETE]: [],
 };
 
+const END_PICKAXE_REQUIREMENT = itemRequirement(
+  "pickaxe",
+  ["minecraft:iron_pickaxe", "minecraft:stone_pickaxe"],
+  () => 1,
+  104,
+);
+
+const PICKAXE_ITEM_IDS = [
+  "minecraft:wooden_pickaxe",
+  "minecraft:stone_pickaxe",
+  "minecraft:iron_pickaxe",
+  "minecraft:golden_pickaxe",
+  "minecraft:diamond_pickaxe",
+  "minecraft:netherite_pickaxe",
+] as const;
+
+const PICKAXE_HEAD_ITEM_IDS = [
+  "minecraft:cobblestone",
+  "minecraft:cobbled_deepslate",
+  "minecraft:blackstone",
+] as const;
+
+/// Whether the carried items make a stone pickaxe: three stone, two sticks
+/// and a crafting table, each from planks when not carried as is.
+function canCraftStonePickaxe(inventory: BeatGameInventory): boolean {
+  const count = (itemIds: readonly string[]) =>
+    itemIds.reduce((total, itemId) => total + (inventory.counts[itemId] ?? 0), 0);
+  if (count(PICKAXE_ITEM_IDS) > 0 || count(PICKAXE_HEAD_ITEM_IDS) < 3) {
+    return false;
+  }
+  const planks = count(PLANK_ITEM_IDS) + 4 * count(LOG_ITEM_IDS);
+  const plankForSticks = (inventory.counts["minecraft:stick"] ?? 0) >= 2 ? 0 : 2;
+  const plankForTable = (inventory.counts["minecraft:crafting_table"] ?? 0) > 0 ? 0 : 4;
+  return planks >= plankForSticks + plankForTable;
+}
+
 export function requirementsForPhase(
   phase: BeatGamePhase,
   inventory: BeatGameInventory,
@@ -351,7 +387,14 @@ export function requirementsForPhase(
           ? // Beds set off under the perched dragon kill it in about four
             // explosions, far faster than arrows. They must be carried in.
             [...REQUIREMENTS[phase], DRAGON_BEDS_REQUIREMENT]
-          : REQUIREMENTS[phase];
+          : phase === BeatGamePhase.FIGHT_ENDER_DRAGON && canCraftStonePickaxe(inventory)
+            ? // A live bot broke its last pickaxe in the End and dug its
+              // dragon shelter by hand, fifteen seconds a block, so it was
+              // still climbing out when the dragon took off. The End has no
+              // wood or stone, so only a pickaxe it can craft from its pack
+              // is asked for.
+              [...REQUIREMENTS[phase], END_PICKAXE_REQUIREMENT]
+            : REQUIREMENTS[phase];
   // Animals live on the surface. A live bot broke off its search at the
   // stronghold depth to hunt for food, and skeletons in the caves shot it.
   // Food is restocked before the dig, and the search goes on below.
