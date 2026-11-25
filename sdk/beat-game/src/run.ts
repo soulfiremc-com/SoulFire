@@ -14469,6 +14469,18 @@ function rememberedFortressTarget(
     )[0]?.position;
 }
 
+/// The drops a hunt of these animals collects. Drops the bot would throw
+/// away are left: a live bot hunting chickens picked up a feather it had
+/// thrown out, could not reach it on a ledge below, and failed the hunt
+/// over and over without progress.
+export function huntDropItemIds(entityTypes: readonly string[]): readonly string[] {
+  return [
+    ...new Set(
+      entityTypes.flatMap((entityType) => HUNT_DROP_ITEM_IDS_BY_ENTITY_TYPE[entityType] ?? []),
+    ),
+  ].filter((itemId) => !(INVENTORY_DISCARD_PRIORITY as readonly string[]).includes(itemId));
+}
+
 function huntOrExplore(
   state: RunState,
   observation: BeatGameObservation,
@@ -14478,15 +14490,10 @@ function huntOrExplore(
   targetPreference?: HuntTargetPreference,
 ): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   return Effect.gen(function* () {
-    const expectedDropItemIds = [
-      ...new Set(
-        targetPreference?.dropItemIds ??
-          selector.entityTypes?.flatMap(
-            (entityType) => HUNT_DROP_ITEM_IDS_BY_ENTITY_TYPE[entityType] ?? [],
-          ) ??
-          [],
-      ),
-    ];
+    const expectedDropItemIds =
+      targetPreference?.dropItemIds === undefined
+        ? huntDropItemIds(selector.entityTypes ?? [])
+        : [...new Set(targetPreference.dropItemIds)];
     const expectedDropCount = (value: BeatGameObservation): number =>
       expectedDropItemIds.reduce(
         (total, itemId) => total + (value.inventory.counts[itemId] ?? 0),

@@ -28,6 +28,7 @@ import {
   hasNonRegressingThreatEscapeCorridor,
   selectSafeDirectEscapeDirection,
   selectDragonBreathEscapeTarget,
+  huntDropItemIds,
   selectInventoryDiscard,
   selectRedundantEquipmentDiscard,
 } from "../src/run.js";
@@ -233,6 +234,12 @@ describe("inventory discards", () => {
       itemId: "minecraft:netherrack",
       count: 36,
     });
+  });
+
+  it("leaves the hunt drops it would throw away", () => {
+    expect(huntDropItemIds(["minecraft:chicken"])).toEqual(["minecraft:chicken"]);
+    expect(huntDropItemIds(["minecraft:rabbit"])).toEqual(["minecraft:rabbit"]);
+    expect(huntDropItemIds(["minecraft:cow"])).toEqual(["minecraft:beef"]);
   });
 
   it("drops stairs, trapdoors and rabbit leftovers", () => {
