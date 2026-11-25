@@ -7549,6 +7549,76 @@ describe("beat-game behavior programs", () => {
     expect(driver.tasks.some((task) => task.type === "ranged-attack")).toBe(false);
   });
 
+  it("waits for a landing dragon to sit before setting off a bed", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:cobblestone": 8 },
+    });
+    // As in a live run: over the fountain, sinking a tenth of a block between
+    // looks, four blocks above where it sits.
+    let height = 68;
+    driver.entityQueryResolver = (query) => {
+      if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
+        return [];
+      }
+      height -= 0.1;
+      return [
+        {
+          connectionEpoch: "epoch-1",
+          networkId: 42,
+          entityType: "minecraft:ender_dragon",
+          position: { x: 0.5, y: height, z: 0.5, dimension: "minecraft:the_end" },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 200,
+          observedAt: "2026-01-01T00:00:01.000Z",
+        },
+      ];
+    };
+
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 2000,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.actions.some((action) => action.type === "interact-block")).toBe(false);
+  });
+
   it("heals away from the fountain before setting off beds when wounded", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;

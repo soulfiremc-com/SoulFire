@@ -2754,7 +2754,10 @@ const CRYSTAL_CLIMB_OFFSET = 6;
 const CRYSTAL_CLIMB_RADIUS = 1.5;
 const DRAGON_PERCH_RADIUS = 2;
 const DRAGON_PERCH_SETTLE_MS = 500;
-const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.3;
+// A seated dragon holds its height exactly; a landing one sinks a little
+// every half second.
+const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.05;
+const DRAGON_PERCH_STEADY_CHECKS = 2;
 const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 const DRAGON_PERCH_WATCH_DISTANCE = 16;
 const BED_BOMB_MINIMUM_HEALTH = 16;
@@ -2790,6 +2793,7 @@ function bedBombDragon(
     const path = mergePathPolicy(options.path);
     let waitedMs = 0;
     let failures = 0;
+    let steadyChecks = 0;
     while (waitedMs < options.perchTimeoutMs && failures < BED_BOMB_MAXIMUM_FAILURES) {
       const observation = yield* driver.observe;
       if (countItems(observation, BED_ITEM_IDS) === 0) {
@@ -2826,9 +2830,19 @@ function bedBombDragon(
         return;
       }
       if (!isPerchedDragon(first, dragon)) {
+        steadyChecks = 0;
         waitedMs += DRAGON_PERCH_SETTLE_MS;
         continue;
       }
+      // A landing dragon sinks slowly onto the fountain. A live bot set off
+      // a bed while the dragon still hung four blocks up, and the blast did
+      // 17 of the 55 it does under a seated head.
+      steadyChecks += 1;
+      if (steadyChecks < DRAGON_PERCH_STEADY_CHECKS) {
+        waitedMs += DRAGON_PERCH_SETTLE_MS;
+        continue;
+      }
+      steadyChecks = 0;
       const exploded = yield* explodeBedUnderDragonHead(driver, dragon, path).pipe(
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
