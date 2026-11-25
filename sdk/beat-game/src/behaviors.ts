@@ -2783,6 +2783,7 @@ const DRAGON_SHELTER_RADIUS = 12;
 /// Feet three blocks down leaves room for a roof in the ground itself.
 const DRAGON_SHELTER_DEPTH = 3;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
+const DRAGON_SHELTER_ANGLE_STEPS = 16;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2890,29 +2891,11 @@ function hideFromDragon(
     if (yield* isSheltered(driver, player)) {
       return true;
     }
-    const distance = Math.hypot(player.x, player.z);
-    const [directionX, directionZ] =
-      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
-    const column = {
-      x: Math.floor(directionX * DRAGON_SHELTER_RADIUS),
-      z: Math.floor(directionZ * DRAGON_SHELTER_RADIUS),
-    };
-    // The neighbors give the surface even where an earlier shaft was dug.
-    let ground: number | undefined;
-    for (const [dx, dz] of [[0, 0], ...HORIZONTAL_OFFSETS] as const) {
-      const surface = yield* groundBelow(
-        driver,
-        { x: column.x + dx, z: column.z + dz },
-        Math.floor(player.y) + DRAGON_SHELTER_SCAN_HEIGHT,
-        player.dimension,
-      );
-      if (surface !== undefined && (ground === undefined || surface > ground)) {
-        ground = surface;
-      }
-    }
-    if (ground === undefined) {
+    const site = yield* findDryShelterSite(driver, player);
+    if (site === undefined) {
       return false;
     }
+    const { column, ground } = site;
     const feet = ground + 1 - DRAGON_SHELTER_DEPTH;
     yield* driver.pathfind(
       { x: column.x + 0.5, y: feet, z: column.z + 0.5, dimension: player.dimension },
@@ -2945,6 +2928,67 @@ function hideFromDragon(
     }
     const sealedIn = (yield* driver.observe).player.position;
     return yield* isSheltered(driver, sealedIn);
+  });
+}
+
+/// Picks a shaft column on the circle around the fountain, starting on the
+/// bot's side, whose shaft and the surface above it hold no water. Water
+/// the bot poured against endermen spreads over the ground there, and a
+/// live bot dug its shaft into it and ran out of air.
+function findDryShelterSite(
+  driver: BeatGameDriver,
+  player: BeatGamePosition,
+): Effect.Effect<
+  | { readonly column: { readonly x: number; readonly z: number }; readonly ground: number }
+  | undefined,
+  BeatGameDriverError
+> {
+  return Effect.gen(function* () {
+    const start = Math.atan2(player.z, player.x);
+    for (let step = 0; step < DRAGON_SHELTER_ANGLE_STEPS; step += 1) {
+      // 0, +1, -1, +2, -2, ... steps away from the bot's side.
+      const offset = (step % 2 === 0 ? -1 : 1) * Math.ceil(step / 2);
+      const angle = start + (offset * 2 * Math.PI) / DRAGON_SHELTER_ANGLE_STEPS;
+      const column = {
+        x: Math.floor(Math.cos(angle) * DRAGON_SHELTER_RADIUS),
+        z: Math.floor(Math.sin(angle) * DRAGON_SHELTER_RADIUS),
+      };
+      // The neighbors give the surface even where an earlier shaft was dug.
+      let ground: number | undefined;
+      for (const [dx, dz] of [[0, 0], ...HORIZONTAL_OFFSETS] as const) {
+        const surface = yield* groundBelow(
+          driver,
+          { x: column.x + dx, z: column.z + dz },
+          Math.floor(player.y) + DRAGON_SHELTER_SCAN_HEIGHT,
+          player.dimension,
+        );
+        if (surface !== undefined && (ground === undefined || surface > ground)) {
+          ground = surface;
+        }
+      }
+      if (ground === undefined) {
+        continue;
+      }
+      let dry = true;
+      for (let y = ground + 1 - DRAGON_SHELTER_DEPTH; y <= ground + 1 && dry; y += 1) {
+        for (const [dx, dz] of [[0, 0], ...HORIZONTAL_OFFSETS] as const) {
+          const block = yield* queryExactBlock(driver, {
+            x: column.x + dx,
+            y,
+            z: column.z + dz,
+            dimension: player.dimension,
+          });
+          if (block !== undefined && isAvoidedFluidBlockId(block.blockId)) {
+            dry = false;
+            break;
+          }
+        }
+      }
+      if (dry) {
+        return { column, ground };
+      }
+    }
+    return undefined;
   });
 }
 
@@ -2991,6 +3035,15 @@ function isSheltered(
     const x = Math.floor(position.x);
     const y = Math.floor(position.y);
     const z = Math.floor(position.z);
+    for (const cell of [
+      { x, y, z },
+      { x, y: y + 1, z },
+    ]) {
+      const block = yield* queryExactBlock(driver, { ...cell, dimension: position.dimension });
+      if (block !== undefined && isAvoidedFluidBlockId(block.blockId)) {
+        return false;
+      }
+    }
     const cells = [
       { x, y: y + 2, z },
       ...HORIZONTAL_OFFSETS.flatMap(([dx, dz]) => [
