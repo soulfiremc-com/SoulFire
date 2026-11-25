@@ -2755,6 +2755,12 @@ const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 24;
 const DRAGON_PERCH_WATCH_RADIUS = 3;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
+/// Twelve blocks out keeps the bot within the twenty blocks at which a
+/// perched dragon spots it, and outside the fountain.
+const DRAGON_SHELTER_RADIUS = 12;
+/// Feet three blocks down leaves room for a roof in the ground itself.
+const DRAGON_SHELTER_DEPTH = 3;
+const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2786,12 +2792,21 @@ function bedBombDragon(
       if (countItems(observation, BED_ITEM_IDS) === 0) {
         return;
       }
+      // The dragon shoots fireballs only at a player it can see, and a
+      // fireball that lands within four blocks drops its cloud at the
+      // player's feet. A live bot waiting in the open for a perch was
+      // followed by cloud after cloud and died while running from them.
+      const hidden = yield* hideFromDragon(driver, options.path).pipe(
+        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+      );
       // A perched dragon breathes on whoever stands near the fountain, four
       // health a tick, and a bed costs the bot some health of its own. A live
       // bot waited there at ten health and died to the breath.
       if (observation.player.health < BED_BOMB_MINIMUM_HEALTH) {
         const startedAt = yield* Clock.currentTimeMillis;
-        yield* recoverAwayFromPerch(driver, options.path);
+        yield* hidden
+          ? recoverInShelter(driver, options.path)
+          : recoverAwayFromPerch(driver, options.path);
         waitedMs += (yield* Clock.currentTimeMillis) - startedAt;
         continue;
       }
@@ -2834,6 +2849,159 @@ function bedBombDragon(
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
       failures = exploded ? 0 : failures + 1;
+    }
+  });
+}
+
+/// Digs a shaft beside the fountain and roofs it over, so the dragon cannot
+/// see the bot between perches. Returns whether the bot is sealed in.
+///
+/// A dragon that sees no player for five seconds after it perches takes off
+/// again, but one that sees a player within twenty blocks stays to roar and
+/// breathe. The shaft sits close enough that the bot climbs out in time.
+function hideFromDragon(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    if (yield* isSheltered(driver, player)) {
+      return true;
+    }
+    const distance = Math.hypot(player.x, player.z);
+    const [directionX, directionZ] =
+      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
+    const column = {
+      x: Math.floor(directionX * DRAGON_SHELTER_RADIUS),
+      z: Math.floor(directionZ * DRAGON_SHELTER_RADIUS),
+    };
+    // The neighbors give the surface even where an earlier shaft was dug.
+    let ground: number | undefined;
+    for (const [dx, dz] of [[0, 0], ...HORIZONTAL_OFFSETS] as const) {
+      const surface = yield* groundBelow(
+        driver,
+        { x: column.x + dx, z: column.z + dz },
+        Math.floor(player.y) + DRAGON_SHELTER_SCAN_HEIGHT,
+        player.dimension,
+      );
+      if (surface !== undefined && (ground === undefined || surface > ground)) {
+        ground = surface;
+      }
+    }
+    if (ground === undefined) {
+      return false;
+    }
+    const feet = ground + 1 - DRAGON_SHELTER_DEPTH;
+    yield* driver.pathfind(
+      { x: column.x + 0.5, y: feet, z: column.z + 0.5, dimension: player.dimension },
+      0.5,
+      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true },
+    );
+    const bottom = { ...column, y: feet, dimension: player.dimension };
+    for (const [dx, dz] of HORIZONTAL_OFFSETS) {
+      for (const dy of [0, 1]) {
+        const cell = {
+          x: bottom.x + dx,
+          y: feet + dy,
+          z: bottom.z + dz,
+          dimension: bottom.dimension,
+        };
+        if (yield* isOpen(driver, cell)) {
+          yield* placeShelterBlock(driver, { ...cell, y: cell.y - 1 }, "up");
+        }
+      }
+    }
+    const roof = { ...bottom, y: feet + 2 };
+    if (yield* isOpen(driver, roof)) {
+      for (const [dx, dz, face] of HORIZONTAL_OFFSETS) {
+        const support = { ...roof, x: roof.x + dx, z: roof.z + dz };
+        if (!(yield* isOpen(driver, support))) {
+          yield* placeShelterBlock(driver, support, face);
+          break;
+        }
+      }
+    }
+    const sealedIn = (yield* driver.observe).player.position;
+    return yield* isSheltered(driver, sealedIn);
+  });
+}
+
+/// The four horizontal neighbors, each with the face of that neighbor which
+/// looks back toward the center.
+const HORIZONTAL_OFFSETS = [
+  [1, 0, "west"],
+  [-1, 0, "east"],
+  [0, 1, "north"],
+  [0, -1, "south"],
+] as const;
+
+function isOpen(
+  driver: BeatGameDriver,
+  position: BeatGameBlockPosition,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return queryExactBlock(driver, position).pipe(
+    Effect.map((block) => block === undefined || block.replaceable || block.solid === false),
+  );
+}
+
+function placeShelterBlock(
+  driver: BeatGameDriver,
+  against: BeatGameBlockPosition,
+  face: BeatGameBlockFace,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const observation = yield* driver.observe;
+    if (countItems(observation, BED_BOMB_WALL_ITEM_IDS) === 0) {
+      return;
+    }
+    yield* driver.act({ type: "select-item", selector: { itemIds: BED_BOMB_WALL_ITEM_IDS } });
+    yield* driver.act({ type: "place-block", against, face, hand: "main" }).pipe(Effect.ignore);
+  });
+}
+
+/// Whether solid blocks close in the bot's feet and head on every side and
+/// above, so nothing outside can see it.
+function isSheltered(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
+    const z = Math.floor(position.z);
+    const cells = [
+      { x, y: y + 2, z },
+      ...HORIZONTAL_OFFSETS.flatMap(([dx, dz]) => [
+        { x: x + dx, y, z: z + dz },
+        { x: x + dx, y: y + 1, z: z + dz },
+      ]),
+    ];
+    for (const cell of cells) {
+      if (yield* isOpen(driver, { ...cell, dimension: position.dimension })) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+/// Eats and waits to heal inside the shelter.
+function recoverInShelter(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    yield* eatWhenNeeded(driver, {
+      foodLevel: 20,
+      maximumMeals: 2,
+      completeWhenNoFood: true,
+      ...(path === undefined ? {} : { path }),
+    }).pipe(Effect.ignore);
+    for (let waited = 0; waited < BED_BOMB_RECOVERY_WAIT_MS; waited += BED_BOMB_RECOVERY_POLL_MS) {
+      if ((yield* driver.observe).player.health >= BED_BOMB_MINIMUM_HEALTH) {
+        return;
+      }
+      yield* Effect.sleep(BED_BOMB_RECOVERY_POLL_MS);
     }
   });
 }

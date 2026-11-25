@@ -184,6 +184,11 @@ const recipe = (
 const blockKey = (position: BeatGameBlockPosition) =>
   `${position.dimension}:${position.x}:${position.y}:${position.z}`;
 
+// A shaft dug down to the bot's feet at y 58, still open at the top.
+function isOpenShaft(position: { x: number; y: number; z: number }): boolean {
+  return position.x === 0 && position.z === 11 && position.y >= 58;
+}
+
 describe("beat-game behavior programs", () => {
   it("bounds recovery eating and completes when supplies run out", async () => {
     const driver = new FakeBeatGameDriver();
@@ -7637,7 +7642,77 @@ describe("beat-game behavior programs", () => {
     expect(driver.actions.some((action) => action.type === "interact-block")).toBe(false);
   });
 
-  it("heals away from the fountain before setting off beds when wounded", async () => {
+  it("roofs over its shaft to wait for a perch out of the dragon's sight", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
+    });
+    // Circling, as a dragon does between perches, shooting at what it sees.
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? [
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 42,
+              entityType: "minecraft:ender_dragon",
+              position: { x: 40.5, y: 80, z: 30.5, dimension: "minecraft:the_end" },
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              health: 200,
+              observedAt: "2026-01-01T00:00:01.000Z",
+            },
+          ]
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60 && !isOpenShaft(position)
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 500,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
+    expect(driver.actions).toContainEqual({
+      type: "place-block",
+      against: { x: 1, y: 60, z: 11, dimension: "minecraft:the_end" },
+      face: "west",
+      hand: "main",
+    });
+  });
+
+  it("heals in its shelter before setting off beds when wounded", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;
     const end = (counts: Record<string, number>) =>
@@ -7742,11 +7817,10 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(eaten.done).toBe(true);
-    // It stepped back from the fountain to heal before the first bed.
-    expect(driver.xzPaths[0]).toMatchObject({
-      x: closeTo((28 * 0.5) / Math.hypot(0.5, 12.5), 0.1),
-      z: closeTo((28 * 12.5) / Math.hypot(0.5, 12.5), 0.1),
-    });
+    // It healed sealed in its shaft, where no fireball reaches it, instead
+    // of walking away across the open.
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
+    expect(driver.xzPaths).toEqual([]);
     expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
   });
 
@@ -7836,7 +7910,10 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 10.5 });
+    // It waited for the perch sealed in a shaft twelve blocks out, then
+    // climbed out to stand behind the head.
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 58, z: 11.5 });
+    expect(driver.paths[1]?.position).toMatchObject({ x: 0.5, y: 61, z: 10.5 });
     expect(driver.actions).toContainEqual({
       type: "place-block",
       against: { x: 0, y: 60, z: 9, dimension: "minecraft:the_end" },
@@ -7948,7 +8025,7 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 10.5, y: 61, z: 0.5 });
+    expect(driver.paths[1]?.position).toMatchObject({ x: 10.5, y: 61, z: 0.5 });
     expect(driver.actions).toContainEqual({
       type: "place-block",
       against: { x: 9, y: 60, z: 0, dimension: "minecraft:the_end" },
