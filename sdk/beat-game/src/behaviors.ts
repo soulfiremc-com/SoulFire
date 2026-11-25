@@ -1,4 +1,4 @@
-import { Effect, Option, Stream } from "effect";
+import { Clock, Effect, Option, Stream } from "effect";
 
 import { BeatGameDriverError } from "./errors.js";
 import {
@@ -2757,6 +2757,10 @@ const DRAGON_PERCH_SETTLE_MS = 500;
 const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.3;
 const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 const DRAGON_PERCH_WATCH_DISTANCE = 16;
+const BED_BOMB_MINIMUM_HEALTH = 16;
+const BED_BOMB_RECOVERY_DISTANCE = 28;
+const BED_BOMB_RECOVERY_WAIT_MS = 20_000;
+const BED_BOMB_RECOVERY_POLL_MS = 500;
 const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 24;
 const DRAGON_PERCH_WATCH_RADIUS = 3;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
@@ -2791,6 +2795,15 @@ function bedBombDragon(
       if (countItems(observation, BED_ITEM_IDS) === 0) {
         return;
       }
+      // A perched dragon breathes on whoever stands near the fountain, four
+      // health a tick, and a bed costs the bot some health of its own. A live
+      // bot waited there at ten health and died to the breath.
+      if (observation.player.health < BED_BOMB_MINIMUM_HEALTH) {
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* recoverAwayFromPerch(driver, options.path);
+        waitedMs += (yield* Clock.currentTimeMillis) - startedAt;
+        continue;
+      }
       const first = (yield* queryEndEntities(
         driver,
         observation.player.position,
@@ -2820,6 +2833,47 @@ function bedBombDragon(
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
       failures = exploded ? 0 : failures + 1;
+    }
+  });
+}
+
+/// Steps back from the fountain, eats to full and waits to heal, so the bot
+/// meets the next perch with health to spare.
+function recoverAwayFromPerch(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    const distance = Math.hypot(player.x, player.z);
+    const [directionX, directionZ] =
+      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
+    yield* driver
+      .pathfindXZ(
+        directionX * BED_BOMB_RECOVERY_DISTANCE,
+        directionZ * BED_BOMB_RECOVERY_DISTANCE,
+        player.dimension,
+        DRAGON_PERCH_WATCH_RADIUS,
+        { ...mergePathPolicy(path), allowMining: true, allowPlacing: true, avoidFluids: true },
+      )
+      .pipe(
+        Effect.timeoutOrElse({
+          duration: DRAGON_PERCH_WATCH_TIMEOUT_MS,
+          orElse: () => Effect.void,
+        }),
+        Effect.ignore,
+      );
+    yield* eatWhenNeeded(driver, {
+      foodLevel: 20,
+      maximumMeals: 2,
+      completeWhenNoFood: true,
+      ...(path === undefined ? {} : { path }),
+    }).pipe(Effect.ignore);
+    for (let waited = 0; waited < BED_BOMB_RECOVERY_WAIT_MS; waited += BED_BOMB_RECOVERY_POLL_MS) {
+      if ((yield* driver.observe).player.health >= BED_BOMB_MINIMUM_HEALTH) {
+        return;
+      }
+      yield* Effect.sleep(BED_BOMB_RECOVERY_POLL_MS);
     }
   });
 }

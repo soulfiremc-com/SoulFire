@@ -7549,6 +7549,119 @@ describe("beat-game behavior programs", () => {
     expect(driver.tasks.some((task) => task.type === "ranged-attack")).toBe(false);
   });
 
+  it("heals away from the fountain before setting off beds when wounded", async () => {
+    const driver = new FakeBeatGameDriver();
+    let beds = 2;
+    const end = (counts: Record<string, number>) =>
+      observation({
+        dimension: "minecraft:the_end",
+        position: driver.currentObservation.player.position,
+        counts,
+      });
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": beds, "minecraft:cobblestone": 8, "minecraft:cooked_beef": 4 },
+      // As in a live run: it waited for the perch at ten health and died to
+      // the perched dragon's breath.
+      health: 10,
+    });
+    const eaten = { done: false };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "auto-eat") {
+          eaten.done = true;
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position: driver.currentObservation.player.position,
+            counts: driver.currentObservation.inventory.counts,
+            health: 20,
+          });
+        }
+        return {};
+      });
+    // As measured in a real game: perched on the portal, facing the bot.
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 42,
+        entityType: "minecraft:ender_dragon",
+        position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_end" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 200,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? driver.entityResults
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal") === true) {
+        return driver.entityResults.length === 0
+          ? [
+              blockObservation(
+                { x: 0, y: 64, z: 0, dimension: "minecraft:the_end" },
+                { blockId: "minecraft:end_portal" },
+              ),
+            ]
+          : [];
+      }
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-block") {
+        beds -= 1;
+        driver.currentObservation = end({ "minecraft:red_bed": beds, "minecraft:cobblestone": 7 });
+        if (beds === 0) {
+          driver.entityResults = [];
+        }
+      }
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }),
+    );
+
+    expect(eaten.done).toBe(true);
+    // It stepped back from the fountain to heal before the first bed.
+    expect(driver.xzPaths[0]).toMatchObject({
+      x: closeTo((28 * 0.5) / Math.hypot(0.5, 12.5), 0.1),
+      z: closeTo((28 * 12.5) / Math.hypot(0.5, 12.5), 0.1),
+    });
+    expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
+  });
+
   it("sets off beds under a perched dragon's head behind a wall", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;
