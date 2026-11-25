@@ -7782,19 +7782,19 @@ describe("beat-game behavior programs", () => {
       position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
     });
-    // Coming down toward the fountain, as a landing dragon does.
-    let height = 80;
+    // Flying straight in toward the fountain, as a landing dragon does.
+    let out = 30;
     driver.entityQueryResolver = (query) => {
       if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
         return [];
       }
-      height -= 1;
+      out = Math.max(10, out - 3);
       return [
         {
           connectionEpoch: "epoch-1",
           networkId: 42,
           entityType: "minecraft:ender_dragon",
-          position: { x: 12.5, y: height, z: 14.5, dimension: "minecraft:the_end" },
+          position: { x: out, y: 70, z: 0.5, dimension: "minecraft:the_end" },
           velocity: { x: 0, y: 0, z: 0 },
           alive: true,
           health: 134,
@@ -7841,6 +7841,70 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+  }, 20_000);
+
+  it("stays in its shelter while the dragon circles past the fountain", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
+    });
+    // As in a live run: circling twenty blocks out, round the fountain.
+    let angle = 0;
+    driver.entityQueryResolver = (query) => {
+      if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
+        return [];
+      }
+      angle += 0.3;
+      return [
+        {
+          connectionEpoch: "epoch-1",
+          networkId: 42,
+          entityType: "minecraft:ender_dragon",
+          position: {
+            x: 20 * Math.cos(angle),
+            y: 75,
+            z: 20 * Math.sin(angle),
+            dimension: "minecraft:the_end",
+          },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 134,
+          observedAt: "2026-01-01T00:00:01.000Z",
+        },
+      ];
+    };
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 600,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths).toEqual([]);
   }, 20_000);
 
   it("roofs over its shaft to wait for a perch out of the dragon's sight", async () => {

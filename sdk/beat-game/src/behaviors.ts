@@ -2787,9 +2787,12 @@ const DRAGON_SHELTER_RADIUS = 12;
 const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
-/// The dragon circles forty blocks or more from the fountain and comes this
-/// close only to land.
 const DRAGON_LANDING_WATCH_RADIUS = 30;
+/// The dragon hangs this close over the fountain only to land or sit.
+const DRAGON_OVER_FOUNTAIN_RADIUS = 8;
+/// How much nearer to the fountain a landing dragon comes between two looks
+/// half a second apart; a circling one barely changes its distance.
+const DRAGON_LANDING_CLOSING_DISTANCE = 2;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2845,19 +2848,6 @@ function bedBombDragon(
         waitedMs += (yield* Clock.currentTimeMillis) - startedAt;
         continue;
       }
-      // A dragon flying in to land shoots no fireballs, and once it sits it
-      // takes off again after five seconds without seeing a player. A live
-      // bot that waited in its shelter for the dragon to sit took thirteen
-      // seconds to climb out, and set off its bed after the dragon had gone.
-      // Farther out, the dragon shoots fireballs only at a player it can
-      // see, and a fireball that lands within four blocks drops its cloud at
-      // the player's feet. A live bot waiting in the open for a perch was
-      // followed by cloud after cloud and died while running from them.
-      yield* (
-        Math.hypot(first.position.x, first.position.z) <= DRAGON_LANDING_WATCH_RADIUS
-          ? leaveShelter(driver, options.path)
-          : hideFromDragon(driver, options.path)
-      ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
       yield* Effect.sleep(DRAGON_PERCH_SETTLE_MS);
       const dragon = (yield* queryEndEntities(
         driver,
@@ -2869,7 +2859,21 @@ function bedBombDragon(
       if (dragon === undefined) {
         return;
       }
-      if (!isPerchedDragon(first, dragon)) {
+      const perched = isPerchedDragon(first, dragon);
+      // A dragon flying in to land shoots no fireballs, and once it sits it
+      // takes off again after five seconds without seeing a player. A live
+      // bot that waited in its shelter for the dragon to sit took thirteen
+      // seconds to climb out, and set off its bed after the dragon had gone.
+      // Farther out, the dragon shoots fireballs only at a player it can
+      // see, and a fireball that lands within four blocks drops its cloud at
+      // the player's feet. A live bot waiting in the open for a perch was
+      // followed by cloud after cloud and died while running from them.
+      yield* (
+        perched || isLandingDragon(first, dragon)
+          ? leaveShelter(driver, options.path)
+          : hideFromDragon(driver, options.path)
+      ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+      if (!perched) {
         steadyChecks = 0;
         waitedMs += DRAGON_PERCH_SETTLE_MS;
         continue;
@@ -3280,6 +3284,22 @@ function climbBesideCrystal(
       { ...mergePathPolicy(path), allowPlacing: true, allowMining: false },
     );
   });
+}
+
+/// Whether the dragon is coming in to land: over the fountain, or closing on
+/// it fast. A circling dragon passes within twenty blocks of the fountain
+/// but moves around it, and a live bot that left its shelter for every
+/// pass was caught by the breath on the surface.
+function isLandingDragon(
+  earlier: BeatGameEntityObservation,
+  later: BeatGameEntityObservation,
+): boolean {
+  const before = Math.hypot(earlier.position.x, earlier.position.z);
+  const after = Math.hypot(later.position.x, later.position.z);
+  return (
+    after <= DRAGON_OVER_FOUNTAIN_RADIUS ||
+    (after <= DRAGON_LANDING_WATCH_RADIUS && before - after >= DRAGON_LANDING_CLOSING_DISTANCE)
+  );
 }
 
 function isPerchedDragon(
