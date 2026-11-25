@@ -886,7 +886,21 @@ function deathEntry(secondsAgo: number, inventoryCounts: Readonly<Record<string,
 // Counts the blocks a bot with a full inventory digs for its item discard
 // pocket before it heads for a nearby corpse.
 // `lavaWalls` is how many of the walls the bot checks have lava behind them.
+// With `pocketDrops`, the bot carries no junk, and each block it digs drops
+// a dirt that lands two observations later; the result then also counts the
+// dirt the bot threw.
 async function discardPocketDigs(lavaWalls: number): Promise<number> {
+  return (await runDiscardPocket(lavaWalls, false)).digs;
+}
+
+function discardPocketTosses(): Promise<{ digs: number; tossed: number }> {
+  return runDiscardPocket(0, true);
+}
+
+async function runDiscardPocket(
+  lavaWalls: number,
+  pocketDrops: boolean,
+): Promise<{ digs: number; tossed: number }> {
   const driver = new FakeBeatGameDriver();
   const store = new InMemoryBeatGameCheckpointStore();
   const deathPosition = { x: 4, y: 64, z: 0, dimension: "minecraft:overworld" };
@@ -915,9 +929,36 @@ async function discardPocketDigs(lavaWalls: number): Promise<number> {
     ),
   );
   driver.currentObservation = observation({
-    counts: { "minecraft:stone_sword": 1, "minecraft:leaf_litter": 64 },
+    counts: pocketDrops
+      ? { "minecraft:stone_sword": 1, "minecraft:cobblestone": 64 }
+      : { "minecraft:stone_sword": 1, "minecraft:leaf_litter": 64 },
     emptyPlayerSlots: 0,
   });
+  const landing: number[] = [];
+  const tossedDirt = { count: 0 };
+  if (pocketDrops) {
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const due = landing.filter((left) => left <= 0).length;
+        landing.splice(
+          0,
+          landing.length,
+          ...landing.filter((left) => left > 0).map((left) => left - 1),
+        );
+        if (due > 0) {
+          const current = driver.currentObservation;
+          const counts = { ...current.inventory.counts };
+          counts["minecraft:dirt"] = (counts["minecraft:dirt"] ?? 0) + due;
+          driver.currentObservation = observation({
+            counts,
+            emptyPlayerSlots: current.inventory.emptyPlayerSlots ?? 0,
+            position: current.player.position,
+            rotation: current.player.rotation,
+          });
+        }
+        return driver.currentObservation;
+      });
+  }
   driver.entityQueryResolver = (query) =>
     query.selector.categories?.includes(6)
       ? [
@@ -1004,7 +1045,31 @@ async function discardPocketDigs(lavaWalls: number): Promise<number> {
   driver.actionResolver = (action) =>
     Effect.sync(() => {
       const current = driver.currentObservation;
+      if (action.type === "dig-block" && pocketDrops) {
+        landing.push(2);
+      }
+      if (action.type === "look" && pocketDrops) {
+        driver.currentObservation = {
+          ...current,
+          player: { ...current.player, rotation: { yaw: action.yaw, pitch: action.pitch } },
+        };
+      }
       if (action.type === "toss-items") {
+        if (pocketDrops) {
+          const counts = { ...current.inventory.counts };
+          const thrown = Math.min(action.count, counts["minecraft:dirt"] ?? 0);
+          if (action.selector.itemIds?.includes("minecraft:dirt") === true) {
+            tossedDirt.count += thrown;
+            counts["minecraft:dirt"] = (counts["minecraft:dirt"] ?? 0) - thrown;
+          }
+          driver.currentObservation = observation({
+            counts,
+            emptyPlayerSlots: (counts["minecraft:dirt"] ?? 0) === 0 ? 4 : 0,
+            position: current.player.position,
+            rotation: current.player.rotation,
+          });
+          return {};
+        }
         driver.currentObservation = observation({
           counts: { "minecraft:stone_sword": 1 },
           emptyPlayerSlots: 4,
@@ -1025,7 +1090,7 @@ async function discardPocketDigs(lavaWalls: number): Promise<number> {
       }).pipe(
         Effect.flatMap((run) =>
           Effect.gen(function* () {
-            yield* Effect.sleep(500);
+            yield* Effect.sleep(pocketDrops ? 3000 : 500);
             yield* run.stop;
             yield* run.awaitCompletion.pipe(Effect.result);
           }),
@@ -1033,7 +1098,10 @@ async function discardPocketDigs(lavaWalls: number): Promise<number> {
       ),
     ),
   );
-  return driver.actions.filter((action) => action.type === "dig-block").length;
+  return {
+    digs: driver.actions.filter((action) => action.type === "dig-block").length,
+    tossed: tossedDirt.count,
+  };
 }
 
 // The error SoulFire returns while a dropped bot reconnects.
@@ -18840,6 +18908,15 @@ describe("beat-game run lifecycle", () => {
       }),
     );
   });
+
+  it("counts the items its discard pocket drops before choosing what to throw", async () => {
+    // As in a live run: the only junk was the dirt from the pocket itself,
+    // which landed in the inventory a moment after each block broke. The bot
+    // misread its throws and dug pocket after pocket.
+    const { digs, tossed } = await discardPocketTosses();
+    expect(digs).toBe(4);
+    expect(tossed).toBe(4);
+  }, 20_000);
 
   it("digs its item discard pocket into another wall when one has lava behind it", async () => {
     // As in a live run: lava lay behind the first wall the bot picked.

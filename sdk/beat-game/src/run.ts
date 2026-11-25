@@ -383,6 +383,37 @@ const END_OBSOLETE_DISCARD_ITEM_IDS = [
   "minecraft:fire_charge",
   "minecraft:gold_nugget",
 ] as const;
+/// Polls until two observations in a row hold the same item counts, so
+/// items still landing from dug blocks are counted.
+function awaitSettledInventory(
+  state: Pick<RunState, "driver" | "strategy">,
+): Effect.Effect<BeatGameObservation, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    let previous = yield* state.driver.observe;
+    for (let attempt = 0; attempt < INVENTORY_SETTLE_MAXIMUM_POLLS; attempt += 1) {
+      yield* Effect.sleep(Math.max(INVENTORY_SETTLE_POLL_MS, state.strategy.observationPollMs));
+      const next = yield* state.driver.observe;
+      if (sameItemCounts(previous.inventory.counts, next.inventory.counts)) {
+        return next;
+      }
+      previous = next;
+    }
+    return previous;
+  });
+}
+
+function sameItemCounts(
+  left: Readonly<Record<string, number>>,
+  right: Readonly<Record<string, number>>,
+): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].every((key) => (left[key] ?? 0) === (right[key] ?? 0));
+}
+
+/// Dropped block items wait ten ticks before they can be picked up.
+const INVENTORY_SETTLE_POLL_MS = 250;
+const INVENTORY_SETTLE_MAXIMUM_POLLS = 8;
+
 const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:leaf_litter",
   // Shears carried for wool make every leaf block the bot breaks drop
@@ -18551,6 +18582,14 @@ function ensureInventorySpace(
             }
           }
           discardPocketYaw = pocketYaw;
+          // The pocket's own blocks drop items that land over the next
+          // ticks. A live bot picked the discard from a view taken before
+          // they landed, threw one dirt, held more than it had counted, and
+          // read the toss as a failure every time.
+          current = yield* awaitSettledInventory(state);
+          if (current.inventory.emptyPlayerSlots === undefined) {
+            return undefined;
+          }
         }
       }
       if (discardPocketYaw === undefined) {
