@@ -3339,7 +3339,7 @@ function explodeBedUnderDragonHead(
     });
     const headY = Math.floor(dragon.position.y - DRAGON_HEAD_DROP);
     const standColumn = along(DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE);
-    const wallColumn = along(DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE - 1);
+    const wallColumn = bedBombWallColumn(standColumn, along(DRAGON_HEAD_REACH));
     const dimension = player.dimension;
     const standGround = yield* groundBelow(driver, standColumn, headY, dimension);
     if (standGround === undefined) {
@@ -3397,6 +3397,23 @@ function explodeBedUnderDragonHead(
     yield* driver.act({ type: "interact-block", position: bed, face: "up", hand: "main" });
     return true;
   });
+}
+
+/// The column beside the stand spot on the bed's side, along whichever axis
+/// leads more toward the bed.
+///
+/// A live bot measured the wall one block nearer the head along a diagonal
+/// line. Both coordinates rounded down to its own column, so the wall went
+/// under its feet, and its bed took it from 17.5 health to 2.
+export function bedBombWallColumn(
+  stand: Readonly<{ x: number; z: number }>,
+  bed: Readonly<{ x: number; z: number }>,
+): { x: number; z: number } {
+  const dx = bed.x - stand.x;
+  const dz = bed.z - stand.z;
+  return Math.abs(dx) >= Math.abs(dz)
+    ? { x: stand.x + Math.sign(dx), z: stand.z }
+    : { x: stand.x, z: stand.z + Math.sign(dz) };
 }
 
 // The dragon's head points along its yaw the opposite way to other mobs:

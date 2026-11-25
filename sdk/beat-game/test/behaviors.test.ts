@@ -25,6 +25,7 @@ import {
   type BeatGameBlockPosition,
   type BeatGameEntityObservation,
 } from "../src/index.js";
+import { bedBombWallColumn } from "../src/behaviors.js";
 import {
   blockObservation,
   FakeBeatGameDriver,
@@ -8211,6 +8212,26 @@ describe("beat-game behavior programs", () => {
       ),
     ).toHaveLength(2);
     expect(driver.tasks.some((task) => task.type === "ranged-attack")).toBe(false);
+  });
+
+  it("puts the bed wall beside the stand spot on the bed's side for any heading", () => {
+    // As in a live run: a diagonal heading rounded the wall onto the bot's
+    // own column, and its bed nearly killed it.
+    const dragon = { x: 0.37, z: 0.81 };
+    for (let degrees = 0; degrees < 360; degrees += 1) {
+      const yaw = (degrees * Math.PI) / 180;
+      const along = (distance: number) => ({
+        x: Math.floor(dragon.x + Math.sin(yaw) * distance),
+        z: Math.floor(dragon.z - Math.cos(yaw) * distance),
+      });
+      const stand = along(9.5);
+      const bed = along(6.5);
+      const wall = bedBombWallColumn(stand, bed);
+      expect(Math.abs(wall.x - stand.x) + Math.abs(wall.z - stand.z)).toBe(1);
+      expect(Math.hypot(wall.x - bed.x, wall.z - bed.z)).toBeLessThan(
+        Math.hypot(stand.x - bed.x, stand.z - bed.z),
+      );
+    }
   });
 
   it("walks onto the line a perched dragon's head points along", async () => {
