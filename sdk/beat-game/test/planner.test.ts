@@ -116,6 +116,39 @@ describe("beat-game planner", () => {
     expect(decision).toEqual({ type: "activate-end-portal", action: "activate-end-portal" });
   });
 
+  it("stocks food for the End when a hunt has led it away from the portal room", () => {
+    // As in a live run: a hunt took the bot 280 blocks from the room, past
+    // where it stopped needing food, so it walked back and turned around.
+    const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...portalCheckpoint,
+        memory: {
+          ...portalCheckpoint.memory,
+          emptyPortalFrames: 0,
+          portalRoomCenter: { x: -375.5, y: 15, z: -1771.5, dimension: "minecraft:overworld" },
+        },
+      },
+      observation: observation({
+        position: { x: -91.5, y: 67, z: -1753.5, dimension: "minecraft:overworld" },
+        counts: {
+          "minecraft:ender_eye": 1,
+          "minecraft:porkchop": 6,
+          "minecraft:stone_pickaxe": 1,
+          "minecraft:stone_sword": 1,
+          "minecraft:water_bucket": 1,
+          "minecraft:shield": 1,
+          "minecraft:iron_chestplate": 1,
+          "minecraft:iron_helmet": 1,
+        },
+        food: 16,
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement", action: "satisfy:food" });
+  });
+
   it("re-equips tools before going back to the portal", () => {
     // As in a live run: the bot came back after a death with no tools left.
     const portalCheckpoint = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL);

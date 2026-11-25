@@ -372,8 +372,10 @@ export function decideBeatGameAction(input: BeatGamePlannerInput): BeatGamePlann
 // Sea level is 63, so a bot this far down is in a cave or a dug shaft.
 const DEEP_UNDERGROUND_MAXIMUM_Y = 50;
 
-/// Matches the distance from which the portal activation travels in legs.
-const PORTAL_ROOM_DISTANT_RADIUS = 128;
+/// Food hunts range a few hundred blocks. A live bot came within 128 blocks
+/// of the portal room, went hunting past that line, stopped needing food,
+/// walked back, and needed it again, for half an hour.
+const PORTAL_ROOM_DISTANT_RADIUS = 512;
 
 function isPortalRoomDistant(
   checkpoint: BeatGameCheckpoint,
