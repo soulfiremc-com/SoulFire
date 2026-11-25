@@ -50,6 +50,9 @@ allprojects {
       content {
         includeGroup("net.minecraft")
         includeGroup("com.mojang")
+        // Minecraft ships Mojang's own LWJGL builds, such as 3.4.3-mojang-2.15.0,
+        // which only this repository publishes.
+        includeGroup("org.lwjgl")
       }
     }
     maven("https://nexus.lucko.me/repository/hosted/") {
