@@ -7774,6 +7774,75 @@ describe("beat-game behavior programs", () => {
     expect(Math.hypot((shaft?.x ?? 0) - 0.5, (shaft?.z ?? 0) - 0.5)).toBeCloseTo(12, 0);
   });
 
+  it("climbs out of its shelter while the dragon flies in to land", async () => {
+    const driver = new FakeBeatGameDriver();
+    // Sealed in its shaft four blocks under the surface.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
+    });
+    // Coming down toward the fountain, as a landing dragon does.
+    let height = 80;
+    driver.entityQueryResolver = (query) => {
+      if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
+        return [];
+      }
+      height -= 1;
+      return [
+        {
+          connectionEpoch: "epoch-1",
+          networkId: 42,
+          entityType: "minecraft:ender_dragon",
+          position: { x: 12.5, y: height, z: 14.5, dimension: "minecraft:the_end" },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 134,
+          observedAt: "2026-01-01T00:00:01.000Z",
+        },
+      ];
+    };
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 600,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+  }, 20_000);
+
   it("roofs over its shaft to wait for a perch out of the dragon's sight", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
@@ -8056,10 +8125,7 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    // It waited for the perch sealed in a shaft twelve blocks out, then
-    // climbed out to stand behind the head.
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
-    expect(driver.paths[1]?.position).toMatchObject({ x: 0.5, y: 61, z: 10.5 });
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 10.5 });
     expect(driver.actions).toContainEqual({
       type: "place-block",
       against: { x: 0, y: 60, z: 9, dimension: "minecraft:the_end" },

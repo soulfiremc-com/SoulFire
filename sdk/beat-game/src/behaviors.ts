@@ -2787,6 +2787,9 @@ const DRAGON_SHELTER_RADIUS = 12;
 const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
+/// The dragon circles forty blocks or more from the fountain and comes this
+/// close only to land.
+const DRAGON_LANDING_WATCH_RADIUS = 30;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2818,24 +2821,6 @@ function bedBombDragon(
       if (countItems(observation, BED_ITEM_IDS) === 0) {
         return;
       }
-      // The dragon shoots fireballs only at a player it can see, and a
-      // fireball that lands within four blocks drops its cloud at the
-      // player's feet. A live bot waiting in the open for a perch was
-      // followed by cloud after cloud and died while running from them.
-      const hidden = yield* hideFromDragon(driver, options.path).pipe(
-        Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
-      );
-      // A perched dragon breathes on whoever stands near the fountain, four
-      // health a tick, and a bed costs the bot some health of its own. A live
-      // bot waited there at ten health and died to the breath.
-      if (observation.player.health < BED_BOMB_MINIMUM_HEALTH) {
-        const startedAt = yield* Clock.currentTimeMillis;
-        yield* hidden
-          ? recoverInShelter(driver, options.path)
-          : recoverAwayFromPerch(driver, options.path);
-        waitedMs += (yield* Clock.currentTimeMillis) - startedAt;
-        continue;
-      }
       const first = (yield* queryEndEntities(
         driver,
         observation.player.position,
@@ -2846,6 +2831,33 @@ function bedBombDragon(
       if (first === undefined) {
         return;
       }
+      // A perched dragon breathes on whoever stands near the fountain, four
+      // health a tick, and a bed costs the bot some health of its own. A live
+      // bot waited there at ten health and died to the breath.
+      if (observation.player.health < BED_BOMB_MINIMUM_HEALTH) {
+        const startedAt = yield* Clock.currentTimeMillis;
+        const sheltered = yield* hideFromDragon(driver, options.path).pipe(
+          Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
+        );
+        yield* sheltered
+          ? recoverInShelter(driver, options.path)
+          : recoverAwayFromPerch(driver, options.path);
+        waitedMs += (yield* Clock.currentTimeMillis) - startedAt;
+        continue;
+      }
+      // A dragon flying in to land shoots no fireballs, and once it sits it
+      // takes off again after five seconds without seeing a player. A live
+      // bot that waited in its shelter for the dragon to sit took thirteen
+      // seconds to climb out, and set off its bed after the dragon had gone.
+      // Farther out, the dragon shoots fireballs only at a player it can
+      // see, and a fireball that lands within four blocks drops its cloud at
+      // the player's feet. A live bot waiting in the open for a perch was
+      // followed by cloud after cloud and died while running from them.
+      yield* (
+        Math.hypot(first.position.x, first.position.z) <= DRAGON_LANDING_WATCH_RADIUS
+          ? leaveShelter(driver, options.path)
+          : hideFromDragon(driver, options.path)
+      ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
       yield* Effect.sleep(DRAGON_PERCH_SETTLE_MS);
       const dragon = (yield* queryEndEntities(
         driver,
@@ -2997,6 +3009,29 @@ function findDryShelterSite(
       }
     }
     return undefined;
+  });
+}
+
+/// Climbs from the shelter back up to the surface, breaking its roof.
+function leaveShelter(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    if (!(yield* isSheltered(driver, player))) {
+      return;
+    }
+    yield* driver.pathfind(
+      {
+        x: Math.floor(player.x) + 0.5,
+        y: Math.floor(player.y) + DRAGON_SHELTER_DEPTH,
+        z: Math.floor(player.z) + 0.5,
+        dimension: player.dimension,
+      },
+      0.5,
+      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true },
+    );
   });
 }
 
