@@ -2791,6 +2791,9 @@ const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
 /// The dragon hangs this close over the fountain only to land or sit.
 const DRAGON_OVER_FOUNTAIN_RADIUS = 8;
+/// A landing dragon sinks onto the fountain within a few blocks of the
+/// ground; its flights over the fountain pass twenty blocks up or more.
+const DRAGON_LANDING_MAXIMUM_HEIGHT = 12;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2867,7 +2870,7 @@ function bedBombDragon(
       // the player's feet. A live bot waiting in the open for a perch was
       // followed by cloud after cloud and died while running from them.
       yield* (
-        perched || isLandingDragon(dragon)
+        perched || isLandingDragon(dragon, observation.player.position)
           ? leaveShelter(driver, options.path)
           : hideFromDragon(driver, options.path)
       ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
@@ -3293,13 +3296,18 @@ function climbBesideCrystal(
   });
 }
 
-/// Whether the dragon is coming in to land: hanging over the fountain.
+/// Whether the dragon is coming in to land: hanging low over the fountain.
 ///
-/// A circling dragon passes within twenty blocks of the fountain, and one
-/// diving at the bot closes on it fast. A live bot that left its shelter
-/// for those was caught by the breath on the surface.
-function isLandingDragon(dragon: BeatGameEntityObservation): boolean {
-  return Math.hypot(dragon.position.x, dragon.position.z) <= DRAGON_OVER_FOUNTAIN_RADIUS;
+/// A circling dragon passes within twenty blocks of the fountain, one
+/// diving at the bot closes on it fast, and its flight crosses straight
+/// over the fountain twenty blocks up. A live bot that left its shelter for
+/// those was caught by the breath on the surface, or climbed out and back
+/// every half minute without a perch.
+function isLandingDragon(dragon: BeatGameEntityObservation, player: BeatGamePosition): boolean {
+  return (
+    Math.hypot(dragon.position.x, dragon.position.z) <= DRAGON_OVER_FOUNTAIN_RADIUS &&
+    dragon.position.y - player.y <= DRAGON_LANDING_MAXIMUM_HEIGHT
+  );
 }
 
 /// Whether the spot behind the perched dragon's head lies within a short
