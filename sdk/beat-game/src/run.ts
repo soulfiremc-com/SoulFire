@@ -1386,7 +1386,10 @@ export function beatGameWithDriver(
       Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
     >(undefined);
     const state: RunState = {
-      driver: withGoldCalmedPiglins(driver, observationRef, lastDamage),
+      driver: withProtectedRespawnBed(
+        withGoldCalmedPiglins(driver, observationRef, lastDamage),
+        checkpointRef,
+      ),
       store,
       coordinator,
       strategy,
@@ -10000,6 +10003,67 @@ function withGoldCalmedPiglins(
     withControl: driver.withControl,
   };
 }
+
+/// Keeps every route from breaking the respawn bed. Routes may mine what
+/// lies in their way, and a live bot's routes round the cramped portal room
+/// broke two respawn beds, one three seconds after the bot woke in it. It
+/// then died in the End and woke at the world spawn, 1,250 blocks away.
+///
+/// The bed's other half lies beside the remembered block, so the four
+/// blocks around it are kept too.
+function withProtectedRespawnBed(
+  driver: BeatGameDriver,
+  checkpoint: Ref.Ref<BeatGameCheckpoint>,
+): BeatGameDriver {
+  const protect = (dimension: string | undefined, policy: PathPolicy): Effect.Effect<PathPolicy> =>
+    Ref.get(checkpoint).pipe(
+      Effect.map(({ memory: { respawnBed } }) =>
+        respawnBed === undefined || (dimension !== undefined && respawnBed.dimension !== dimension)
+          ? policy
+          : {
+              ...policy,
+              protectedBlocks: [
+                ...(policy.protectedBlocks ?? []),
+                respawnBed,
+                ...HORIZONTAL_NEIGHBOR_OFFSETS.map(([dx, dz]) => ({
+                  x: respawnBed.x + dx,
+                  y: respawnBed.y,
+                  z: respawnBed.z + dz,
+                  dimension: respawnBed.dimension,
+                })),
+              ],
+            },
+      ),
+    );
+  return {
+    ...driver,
+    pathfind: (position, radius, policy) =>
+      protect(position.dimension, policy).pipe(
+        Effect.flatMap((protectedPolicy) => driver.pathfind(position, radius, protectedPolicy)),
+      ),
+    pathfindXZ: (x, z, dimension, radius, policy) =>
+      protect(dimension, policy).pipe(
+        Effect.flatMap((protectedPolicy) =>
+          driver.pathfindXZ(x, z, dimension, radius, protectedPolicy),
+        ),
+      ),
+    // A task's routes stay in the bot's dimension, and a kept block in
+    // another dimension changes nothing.
+    runTask: (task, policy, execution) =>
+      protect(undefined, policy).pipe(
+        Effect.flatMap((protectedPolicy) => driver.runTask(task, protectedPolicy, execution)),
+      ),
+  };
+}
+
+type PathPolicy = Parameters<BeatGameDriver["pathfind"]>[2];
+
+const HORIZONTAL_NEIGHBOR_OFFSETS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 
 function isAggressiveNeutralMob(entity: BeatGameEntityObservation): boolean {
   return entity.aggressive === true || entity.target !== undefined;

@@ -48018,6 +48018,12 @@ describe("beat-game run lifecycle", () => {
       face: "up",
       hand: "main",
     });
+    // As in a live run: routes round the portal room mined two respawn
+    // beds that lay in their way. Every route keeps the bed.
+    expect(driver.paths.length).toBeGreaterThan(0);
+    for (const { policy } of driver.paths) {
+      expect(policy.protectedBlocks).toContainEqual(respawnBed);
+    }
   }, 10_000);
 
   it("leaves a new respawn bed when its old one lies out of reach", async () => {
