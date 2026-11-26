@@ -2789,6 +2789,8 @@ const DRAGON_SHELTER_RADIUS = 12;
 const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
+const SHELTER_EXIT_DISTANCE = 3;
+const SHELTER_EXIT_RADIUS = 1;
 
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
@@ -3024,20 +3026,22 @@ function leaveShelter(
   return Effect.gen(function* () {
     const player = (yield* driver.observe).player.position;
     // A roof half built, or none over a narrow shaft, still hides the bot.
-    // Live bots sat under one block of a roof and at the foot of an open
+    // Live bots sat under one block of a roof and two blocks down an open
     // shaft for half an hour each, out of the dragon's sight, while the
     // dragon strafed them and never landed.
     if (!(yield* isCovered(driver, player)) && !(yield* isInPit(driver, player))) {
       return;
     }
-    yield* driver.pathfind(
-      {
-        x: Math.floor(player.x) + 0.5,
-        y: Math.floor(player.y) + DRAGON_SHELTER_DEPTH,
-        z: Math.floor(player.z) + 0.5,
-        dimension: player.dimension,
-      },
-      0.5,
+    // A few blocks outward the route finds the ground at whatever height it
+    // lies, away from the fountain where the dragon breathes.
+    const distance = Math.hypot(player.x, player.z);
+    const [directionX, directionZ] =
+      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
+    yield* driver.pathfindXZ(
+      player.x + directionX * SHELTER_EXIT_DISTANCE,
+      player.z + directionZ * SHELTER_EXIT_DISTANCE,
+      player.dimension,
+      SHELTER_EXIT_RADIUS,
       { ...mergePathPolicy(path), allowMining: true, allowPlacing: true },
     );
   });
@@ -3112,7 +3116,8 @@ function isSheltered(
   });
 }
 
-/// Whether walls rise above the bot's head on at least three sides.
+/// Whether walls rise to the bot's head on at least three sides, leaving
+/// its eyes below the ground around it.
 function isInPit(
   driver: BeatGameDriver,
   position: BeatGamePosition,
@@ -3122,7 +3127,7 @@ function isInPit(
     for (const [dx, dz] of HORIZONTAL_OFFSETS) {
       const cell = {
         x: Math.floor(position.x) + dx,
-        y: Math.floor(position.y) + 2,
+        y: Math.floor(position.y) + 1,
         z: Math.floor(position.z) + dz,
         dimension: position.dimension,
       };

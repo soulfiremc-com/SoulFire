@@ -185,6 +185,19 @@ const recipe = (
 const blockKey = (position: BeatGameBlockPosition) =>
   `${position.dimension}:${position.x}:${position.y}:${position.z}`;
 
+// Sets the bot on the surface, at y 61, wherever a horizontal route ends.
+function landOnSurfaceAfterRoutes(driver: FakeBeatGameDriver): void {
+  driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+    Effect.sync(() => {
+      driver.xzPaths.push({ x, z, dimension, radius, policy });
+      driver.currentObservation = observation({
+        dimension,
+        position: { x, y: 61, z, dimension },
+        counts: driver.currentObservation.inventory.counts,
+      });
+    });
+}
+
 // A shaft dug down to the bot's feet at y 57, still open at the top.
 function isOpenShaft(position: { x: number; y: number; z: number }): boolean {
   return position.x === 0 && position.z === 11 && position.y >= 57;
@@ -7833,6 +7846,8 @@ describe("beat-game behavior programs", () => {
         });
       });
 
+    landOnSurfaceAfterRoutes(driver);
+
     await Effect.runPromise(
       fightEnderDragon(driver, {
         bedPerchTimeoutMs: 600,
@@ -7842,7 +7857,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+    // It walked a few blocks outward, away from the fountain.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
   }, 20_000);
 
   it("climbs out of its shelter to wait where the circling dragon sees it", async () => {
@@ -7899,6 +7915,8 @@ describe("beat-game behavior programs", () => {
       ];
     };
 
+    landOnSurfaceAfterRoutes(driver);
+
     await Effect.runPromise(
       fightEnderDragon(driver, {
         bedPerchTimeoutMs: 600,
@@ -7908,7 +7926,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+    // It walked a few blocks outward, away from the fountain.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
   }, 20_000);
 
   it("climbs out from under a half-built roof to wait in the dragon's sight", async () => {
@@ -7977,6 +7996,8 @@ describe("beat-game behavior programs", () => {
       ];
     };
 
+    landOnSurfaceAfterRoutes(driver);
+
     await Effect.runPromise(
       fightEnderDragon(driver, {
         bedPerchTimeoutMs: 600,
@@ -7986,7 +8007,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+    // It walked a few blocks outward, away from the fountain.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
   }, 20_000);
 
   it("climbs out of an open shaft to wait in the dragon's sight", async () => {
@@ -8033,7 +8055,7 @@ describe("beat-game behavior programs", () => {
         z: Math.floor(center.z),
         dimension: center.dimension,
       };
-      // As in a live run: the roof is gone and the shaft open to the sky.
+      // As in a live run: two blocks down a shaft open to the sky.
       if (position.x === 0 && position.z === 11 && position.y >= 57) {
         return [
           blockObservation(position, {
@@ -8047,12 +8069,14 @@ describe("beat-game behavior programs", () => {
       return [
         blockObservation(
           position,
-          position.y <= 60
+          position.y <= 58
             ? { blockId: "minecraft:end_stone" }
             : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
         ),
       ];
     };
+
+    landOnSurfaceAfterRoutes(driver);
 
     await Effect.runPromise(
       fightEnderDragon(driver, {
@@ -8063,7 +8087,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+    // It walked a few blocks outward, away from the fountain.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
   }, 20_000);
 
   it("roofs over its shaft to heal out of the dragon's sight", async () => {
@@ -8248,6 +8273,8 @@ describe("beat-game behavior programs", () => {
       }
     };
 
+    landOnSurfaceAfterRoutes(driver);
+
     await Effect.runPromise(
       fightEnderDragon(driver, {
         defeatConfirmationAttempts: 1,
@@ -8259,7 +8286,7 @@ describe("beat-game behavior programs", () => {
     // It healed sealed in its shaft, where no fireball reaches it, instead
     // of walking away across the open.
     expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
-    expect(driver.xzPaths).toEqual([]);
+    expect(driver.xzPaths.every(({ x, z }) => Math.hypot(x, z) < 20)).toBe(true);
     expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
   });
 
