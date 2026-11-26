@@ -2222,7 +2222,7 @@ export function enterEndPortal(
         return yield* behaviorError(driver, "The active End portal was not observable");
       }
       const portalCenter = centerOfBlocks(portals);
-      const rimTarget = nearestEndPortalRim(observation.player.position, portals);
+      const rimTarget = yield* clearEndPortalRim(driver, observation.player.position, portals);
 
       yield* Effect.gen(function* () {
         yield* ensureEndPortalRimReachable(
@@ -2483,10 +2483,49 @@ function centerOfBlocks(
   };
 }
 
+/// The rim to climb onto: the nearest whose standing room is clear, or the
+/// nearest with its standing room dug out. A live bot had walled itself in
+/// on the rim for a night, left a block where it stood, and failed to climb
+/// that rim time after time until the run gave up.
+function clearEndPortalRim(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+  portals: readonly BeatGameBlockObservation[],
+): Effect.Effect<BeatGameBlockPosition, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const rims = endPortalRimCandidates(position, portals).toSorted(
+      (left, right) => distanceSquared(position, left) - distanceSquared(position, right),
+    );
+    for (const rim of rims) {
+      const feet = yield* isOpen(driver, rim);
+      const head = yield* isOpen(driver, { ...rim, y: rim.y + 1 });
+      if (feet && head) {
+        return rim;
+      }
+    }
+    const nearest = nearestEndPortalRim(position, portals);
+    for (const cell of [nearest, { ...nearest, y: nearest.y + 1 }]) {
+      if (!(yield* isOpen(driver, cell))) {
+        yield* driver.act({ type: "dig-block", position: cell }).pipe(Effect.ignore);
+      }
+    }
+    return nearest;
+  });
+}
+
 function nearestEndPortalRim(
   position: BeatGamePosition,
   portals: readonly BeatGameBlockObservation[],
 ): BeatGameBlockPosition {
+  return endPortalRimCandidates(position, portals).reduce((nearest, candidate) =>
+    distanceSquared(position, candidate) < distanceSquared(position, nearest) ? candidate : nearest,
+  );
+}
+
+function endPortalRimCandidates(
+  position: BeatGamePosition,
+  portals: readonly BeatGameBlockObservation[],
+): readonly BeatGameBlockPosition[] {
   const dimension = portals[0]?.position.dimension ?? position.dimension;
   const minimumX = Math.min(...portals.map(({ position: portalPosition }) => portalPosition.x));
   const maximumX = Math.max(...portals.map(({ position: portalPosition }) => portalPosition.x));
@@ -2521,9 +2560,7 @@ function nearestEndPortalRim(
       dimension,
     },
   ];
-  return candidates.reduce((nearest, candidate) =>
-    distanceSquared(position, candidate) < distanceSquared(position, nearest) ? candidate : nearest,
-  );
+  return candidates;
 }
 
 export interface FightEnderDragonOptions extends BeatGameBehaviorOptions {
@@ -3885,7 +3922,7 @@ export function exitEnd(
         return yield* behaviorError(driver, "The End exit portal was not observable");
       }
       const portalCenter = centerOfBlocks(portals);
-      const rimTarget = nearestEndPortalRim(observation.player.position, portals);
+      const rimTarget = yield* clearEndPortalRim(driver, observation.player.position, portals);
 
       const attempts = positiveInteger(options.confirmationAttempts ?? 40, "confirmationAttempts");
       const delayMs = nonNegativeInteger(options.confirmationDelayMs ?? 250, "confirmationDelayMs");

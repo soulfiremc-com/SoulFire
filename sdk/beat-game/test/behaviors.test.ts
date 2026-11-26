@@ -7257,6 +7257,74 @@ describe("beat-game behavior programs", () => {
     expect(driver.maximumActiveControlScopes).toBe(1);
   });
 
+  it("climbs onto a clear side of the End portal rim", async () => {
+    // As in a live run: a block the bot had left on the nearest rim stopped
+    // every climb there until the run gave up.
+    const results = await Promise.all(
+      [false, true].map(async (everySideBlocked) => {
+        const driver = new FakeBeatGameDriver();
+        const portals = Array.from({ length: 9 }, (_, index) => ({
+          x: 1 + (index % 3),
+          y: 31,
+          z: 1 + Math.floor(index / 3),
+          dimension: "minecraft:overworld",
+        }));
+        driver.currentObservation = observation({
+          position: { x: 2.5, y: 32, z: 6.5, dimension: "minecraft:overworld" },
+        });
+        const blocked = (position: { x: number; y: number; z: number }) =>
+          position.y === 32 &&
+          ((position.x === 2 && position.z === 4) ||
+            (everySideBlocked &&
+              ((position.x === 2 && position.z === 0) ||
+                (position.x === 0 && position.z === 2) ||
+                (position.x === 4 && position.z === 2))));
+        driver.blockQueryResolver = ({ center, selector }) => {
+          if (selector.blockIds?.includes("minecraft:end_portal") === true) {
+            return portals.map((portal) =>
+              blockObservation(portal, { blockId: "minecraft:end_portal", replaceable: true }),
+            );
+          }
+          const position = {
+            x: Math.floor(center.x),
+            y: Math.floor(center.y),
+            z: Math.floor(center.z),
+            dimension: center.dimension,
+          };
+          return blocked(position)
+            ? [blockObservation(position, { blockId: "minecraft:cobblestone" })]
+            : [
+                blockObservation(position, {
+                  blockId: "minecraft:air",
+                  diggable: false,
+                  replaceable: true,
+                  solid: false,
+                }),
+              ];
+        };
+        driver.observationResolver = () =>
+          Effect.sync(() =>
+            driver.actions.some((action) => action.type === "set-movement")
+              ? observation({
+                  dimension: "minecraft:the_end",
+                  position: { x: 100, y: 49, z: 0, dimension: "minecraft:the_end" },
+                })
+              : driver.currentObservation,
+          );
+        await Effect.runPromise(
+          enterEndPortal(driver, { transitionTimeoutMs: 100 }).pipe(Effect.result),
+        );
+        return driver.actions.filter((action) => action.type === "dig-block");
+      }),
+    );
+
+    expect(results[0]).toEqual([]);
+    expect(results[1]).toContainEqual({
+      type: "dig-block",
+      position: { x: 2, y: 32, z: 4, dimension: "minecraft:overworld" },
+    });
+  });
+
   it("builds a reachable End portal approach when the bot is below the rim", async () => {
     const driver = new FakeBeatGameDriver();
     const portals = Array.from({ length: 9 }, (_, index) => ({
