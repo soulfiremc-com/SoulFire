@@ -7857,8 +7857,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    // It walked a few blocks outward, away from the fountain.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
+    // It walked a few blocks along the circle, keeping its distance.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
   }, 20_000);
 
   it("climbs out of its shelter to wait where the circling dragon sees it", async () => {
@@ -7926,8 +7926,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    // It walked a few blocks outward, away from the fountain.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
+    // It walked a few blocks along the circle, keeping its distance.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
   }, 20_000);
 
   it("climbs out from under a half-built roof to wait in the dragon's sight", async () => {
@@ -8007,8 +8007,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    // It walked a few blocks outward, away from the fountain.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
+    // It walked a few blocks along the circle, keeping its distance.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
   }, 20_000);
 
   it("climbs out of an open shaft to wait in the dragon's sight", async () => {
@@ -8087,8 +8087,8 @@ describe("beat-game behavior programs", () => {
       }).pipe(Effect.result),
     );
 
-    // It walked a few blocks outward, away from the fountain.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(0.5, 0.3), z: closeTo(14.5, 0.1) });
+    // It walked a few blocks along the circle, keeping its distance.
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
   }, 20_000);
 
   it("roofs over its shaft to heal out of the dragon's sight", async () => {

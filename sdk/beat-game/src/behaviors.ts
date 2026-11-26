@@ -3042,11 +3042,14 @@ function leaveShelter(
     if (!(yield* isCovered(driver, player)) && !(yield* isInPit(driver, player))) {
       return;
     }
-    // A few blocks outward the route finds the ground at whatever height it
-    // lies, away from the fountain where the dragon breathes.
+    // A few blocks along the circle round the fountain the route finds the
+    // ground at whatever height it lies, and keeps the bot's distance from
+    // the fountain. A live bot that climbed outward left the twenty blocks a
+    // perched dragon looks, walked back into the same pit to return, and
+    // went back and forth while a perch passed.
     const distance = Math.hypot(player.x, player.z);
     const [directionX, directionZ] =
-      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
+      distance < 1 ? [1, 0] : [-player.z / distance, player.x / distance];
     yield* driver.pathfindXZ(
       player.x + directionX * SHELTER_EXIT_DISTANCE,
       player.z + directionZ * SHELTER_EXIT_DISTANCE,
