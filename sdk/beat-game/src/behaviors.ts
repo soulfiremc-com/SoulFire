@@ -2789,11 +2789,7 @@ const DRAGON_SHELTER_RADIUS = 12;
 const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
-/// The dragon hangs this close over the fountain only to land or sit.
-const DRAGON_OVER_FOUNTAIN_RADIUS = 8;
-/// A landing dragon sinks onto the fountain within a few blocks of the
-/// ground; its flights over the fountain pass twenty blocks up or more.
-const DRAGON_LANDING_MAXIMUM_HEIGHT = 12;
+
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2861,19 +2857,13 @@ function bedBombDragon(
         return;
       }
       const perched = isPerchedDragon(first, dragon);
-      // A dragon flying in to land shoots no fireballs, and once it sits it
-      // takes off again after five seconds without seeing a player. A live
-      // bot that waited in its shelter for the dragon to sit took thirteen
-      // seconds to climb out, and set off its bed after the dragon had gone.
-      // Farther out, the dragon shoots fireballs only at a player it can
-      // see, and a fireball that lands within four blocks drops its cloud at
-      // the player's feet. A live bot waiting in the open for a perch was
-      // followed by cloud after cloud and died while running from them.
-      yield* (
-        perched || isLandingDragon(dragon, observation.player.position)
-          ? leaveShelter(driver, options.path)
-          : hideFromDragon(driver, options.path)
-      ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+      // A healthy bot waits where the dragon can see it. A strafing dragon
+      // leaves its run only by firing at a player it sees, and lands only
+      // from its circling. A live bot sealed in its shelter for half an hour
+      // was strafed the whole time and never saw a perch.
+      yield* leaveShelter(driver, options.path).pipe(
+        Effect.catchTag("BeatGameDriverError", () => Effect.void),
+      );
       if (!perched) {
         steadyChecks = 0;
         waitedMs += DRAGON_PERCH_SETTLE_MS;
@@ -2906,11 +2896,11 @@ function bedBombDragon(
 }
 
 /// Digs a shaft beside the fountain and roofs it over, so the dragon cannot
-/// see the bot between perches. Returns whether the bot is sealed in.
+/// see a wounded bot while it heals. Returns whether the bot is sealed in.
 ///
-/// A dragon that sees no player for five seconds after it perches takes off
-/// again, but one that sees a player within twenty blocks stays to roar and
-/// breathe. The shaft sits close enough that the bot climbs out in time.
+/// The dragon shoots fireballs only at a player it can see, and one that
+/// lands within four blocks drops its cloud at the player's feet. A live
+/// bot healing in the open was followed by cloud after cloud and died.
 function hideFromDragon(
   driver: BeatGameDriver,
   path: Partial<BeatGamePathPolicy> | undefined,
@@ -3294,20 +3284,6 @@ function climbBesideCrystal(
       { ...mergePathPolicy(path), allowPlacing: true, allowMining: false },
     );
   });
-}
-
-/// Whether the dragon is coming in to land: hanging low over the fountain.
-///
-/// A circling dragon passes within twenty blocks of the fountain, one
-/// diving at the bot closes on it fast, and its flight crosses straight
-/// over the fountain twenty blocks up. A live bot that left its shelter for
-/// those was caught by the breath on the surface, or climbed out and back
-/// every half minute without a perch.
-function isLandingDragon(dragon: BeatGameEntityObservation, player: BeatGamePosition): boolean {
-  return (
-    Math.hypot(dragon.position.x, dragon.position.z) <= DRAGON_OVER_FOUNTAIN_RADIUS &&
-    dragon.position.y - player.y <= DRAGON_LANDING_MAXIMUM_HEIGHT
-  );
 }
 
 /// Whether the spot behind the perched dragon's head lies within a short
