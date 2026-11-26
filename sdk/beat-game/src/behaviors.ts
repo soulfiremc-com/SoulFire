@@ -22,7 +22,7 @@ import {
   type BeatGamePosition,
 } from "./model.js";
 import { approachLiquidSourceFromSide, LIQUID_INTERACTION_REACH } from "./liquids.js";
-import { BED_ITEM_IDS } from "./requirements.js";
+import { BED_ITEM_IDS, EDIBLE_FOOD_ITEM_IDS } from "./requirements.js";
 import type {
   BeatGameBlockFace,
   BeatGameBuildBlock,
@@ -2770,6 +2770,8 @@ const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 const BED_BOMB_PERCH_ROUNDS = 5;
 const DRAGON_PERCH_WATCH_DISTANCE = 16;
 const BED_BOMB_MINIMUM_HEALTH = 16;
+/// Health comes back on its own only at this hunger or above.
+const NATURAL_REGENERATION_MINIMUM_FOOD = 18;
 const BED_BOMB_RECOVERY_DISTANCE = 28;
 const BED_BOMB_RECOVERY_WAIT_MS = 20_000;
 const BED_BOMB_RECOVERY_POLL_MS = 500;
@@ -2842,7 +2844,11 @@ function bedBombDragon(
       // A perched dragon breathes on whoever stands near the fountain, four
       // health a tick, and a bed costs the bot some health of its own. A live
       // bot waited there at ten health and died to the breath.
-      if (observation.player.health < BED_BOMB_MINIMUM_HEALTH) {
+      // Health comes back only from food, or with a hunger bar near full. A
+      // live bot in the End with no food left and its hunger at sixteen sat
+      // at fourteen health for half an hour, waiting to heal, while perches
+      // passed. A bot that cannot heal goes on as it is.
+      if (observation.player.health < BED_BOMB_MINIMUM_HEALTH && canRegainHealth(observation)) {
         const startedAt = yield* Clock.currentTimeMillis;
         const sheltered = yield* hideFromDragon(driver, options.path).pipe(
           Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
@@ -3193,6 +3199,15 @@ function recoverInShelter(
       yield* Effect.sleep(BED_BOMB_RECOVERY_POLL_MS);
     }
   });
+}
+
+/// Whether the bot can heal: it carries food, or its hunger is high enough
+/// for health to come back on its own.
+function canRegainHealth(observation: BeatGameObservation): boolean {
+  return (
+    observation.player.food >= NATURAL_REGENERATION_MINIMUM_FOOD ||
+    countItems(observation, EDIBLE_FOOD_ITEM_IDS) > 0
+  );
 }
 
 /// Steps back from the fountain, eats to full and waits to heal, so the bot
