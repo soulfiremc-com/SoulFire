@@ -2782,8 +2782,9 @@ const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
 /// How far above the ground under the dragon's head the bot may stand.
 const BED_BOMB_MAXIMUM_STAND_RISE = 1;
-/// The bot waits for the head to face it rather than walk farther than this.
-const BED_BOMB_MAXIMUM_WALK = 8;
+/// The bot waits for the head to turn within this angle of it rather than
+/// walk round the fountain through the breath.
+const BED_BOMB_HEAD_FACING_COSINE = Math.cos(Math.PI / 4);
 /// Twelve blocks out keeps the bot within the twenty blocks at which a
 /// perched dragon spots it, and outside the fountain.
 const DRAGON_SHELTER_RADIUS = 12;
@@ -3377,20 +3378,24 @@ function climbBesideCrystal(
   });
 }
 
-/// Whether the spot behind the perched dragon's head lies within a short
-/// walk of the bot. Without a known heading the bot goes anyway.
+/// Whether the perched dragon's head points toward the bot's side of the
+/// fountain. Without a known heading the bot goes anyway.
+///
+/// The bot waits sixteen to eighteen blocks out, beyond the spot behind the
+/// head, so a live bot that measured the walk to that spot never found a
+/// head close enough, through a perch of nearly a minute facing it.
 function isHeadTowardBot(dragon: BeatGameEntityObservation, player: BeatGamePosition): boolean {
   if (dragon.rotation === undefined) {
     return true;
   }
   const head = dragonHeadDirection(dragon);
-  const reach = DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE;
-  return (
-    Math.hypot(
-      dragon.position.x + head.x * reach - player.x,
-      dragon.position.z + head.z * reach - player.z,
-    ) <= BED_BOMB_MAXIMUM_WALK
-  );
+  const towardX = player.x - dragon.position.x;
+  const towardZ = player.z - dragon.position.z;
+  const distance = Math.hypot(towardX, towardZ);
+  if (distance < 1) {
+    return true;
+  }
+  return (head.x * towardX + head.z * towardZ) / distance >= BED_BOMB_HEAD_FACING_COSINE;
 }
 
 function isPerchedDragon(
