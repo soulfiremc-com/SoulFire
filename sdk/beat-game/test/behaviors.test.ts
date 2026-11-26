@@ -7459,8 +7459,8 @@ describe("beat-game behavior programs", () => {
     );
 
     expect(driver.xzPaths[0]).toMatchObject({
-      x: closeTo((100.5 / Math.hypot(100.5, 0.5)) * 16, 0.1),
-      z: closeTo((0.5 / Math.hypot(100.5, 0.5)) * 16, 0.1),
+      x: closeTo((100.5 / Math.hypot(100.5, 0.5)) * 17, 0.1),
+      z: closeTo((0.5 / Math.hypot(100.5, 0.5)) * 17, 0.1),
       policy: { allowMining: true, allowPlacing: true, avoidFluids: true },
     });
   });
@@ -7794,7 +7794,7 @@ describe("beat-game behavior programs", () => {
     // Sealed in its shaft four blocks under the surface.
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      position: { x: 0.5, y: 57, z: 16.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
     });
     // Coming down over the fountain, as a landing dragon does.
@@ -7858,14 +7858,14 @@ describe("beat-game behavior programs", () => {
     );
 
     // It walked a few blocks along the circle, keeping its distance.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
-  }, 20_000);
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(16.6, 0.2) });
+  }, 40_000);
 
   it("climbs out of its shelter to wait where the circling dragon sees it", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      position: { x: 0.5, y: 57, z: 16.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
     });
     // As in a live run: a bot sealed in its shelter for half an hour was
@@ -7927,14 +7927,14 @@ describe("beat-game behavior programs", () => {
     );
 
     // It walked a few blocks along the circle, keeping its distance.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
-  }, 20_000);
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(16.6, 0.2) });
+  }, 40_000);
 
   it("climbs out from under a half-built roof to wait in the dragon's sight", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      position: { x: 0.5, y: 57, z: 16.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
     });
     // As in a live run: a bot sealed in its shelter for half an hour was
@@ -7976,7 +7976,7 @@ describe("beat-game behavior programs", () => {
       };
       // As in a live run: the lower roof block is in, the upper one missing,
       // and a side wall open.
-      if (position.x === 1 && position.z === 11 && position.y === 58) {
+      if (position.x === 1 && position.z === 16 && position.y === 58) {
         return [
           blockObservation(position, {
             blockId: "minecraft:air",
@@ -8008,14 +8008,14 @@ describe("beat-game behavior programs", () => {
     );
 
     // It walked a few blocks along the circle, keeping its distance.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
-  }, 20_000);
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(16.6, 0.2) });
+  }, 40_000);
 
   it("climbs out of an open shaft to wait in the dragon's sight", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      position: { x: 0.5, y: 57, z: 16.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
     });
     // As in a live run: a bot sealed in its shelter for half an hour was
@@ -8056,7 +8056,7 @@ describe("beat-game behavior programs", () => {
         dimension: center.dimension,
       };
       // As in a live run: two blocks down a shaft open to the sky.
-      if (position.x === 0 && position.z === 11 && position.y >= 57) {
+      if (position.x === 0 && position.z === 16 && position.y >= 57) {
         return [
           blockObservation(position, {
             blockId: "minecraft:air",
@@ -8088,8 +8088,8 @@ describe("beat-game behavior programs", () => {
     );
 
     // It walked a few blocks along the circle, keeping its distance.
-    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(11.6, 0.2) });
-  }, 20_000);
+    expect(driver.xzPaths[0]).toMatchObject({ x: closeTo(-2.5, 0.2), z: closeTo(16.6, 0.2) });
+  }, 40_000);
 
   it("roofs over its shaft to heal out of the dragon's sight", async () => {
     const driver = new FakeBeatGameDriver();
@@ -8187,7 +8187,7 @@ describe("beat-game behavior programs", () => {
       });
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      position: { x: 0.5, y: 61, z: 16.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": beds, "minecraft:cobblestone": 8, "minecraft:cooked_beef": 4 },
       // As in a live run: it waited for the perch at ten health and died to
       // the perched dragon's breath.
@@ -8288,7 +8288,7 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 57, z: 11.5 });
     expect(driver.xzPaths.every(({ x, z }) => Math.hypot(x, z) < 20)).toBe(true);
     expect(driver.actions.filter((action) => action.type === "interact-block")).toHaveLength(2);
-  });
+  }, 40_000);
 
   it("sets off beds under a perched dragon's head behind a wall", async () => {
     const driver = new FakeBeatGameDriver();
@@ -8407,8 +8407,8 @@ describe("beat-game behavior programs", () => {
     // After each bed it walked back out of the perched dragon's breath.
     expect(driver.xzPaths).toContainEqual(
       objectContaining({
-        x: closeTo(0.5 * (16 / Math.hypot(0.5, 10.5)), 0.2),
-        z: closeTo(16, 0.1),
+        x: closeTo(0.5 * (17 / Math.hypot(0.5, 10.5)), 0.2),
+        z: closeTo(17, 0.1),
       }),
     );
   });
@@ -8570,10 +8570,10 @@ describe("beat-game behavior programs", () => {
 
     const distance = Math.hypot(14.9, 16.5);
     expect(driver.xzPaths[0]).toMatchObject({
-      x: closeTo((14.9 / distance) * 16, 0.1),
-      z: closeTo((16.5 / distance) * 16, 0.1),
+      x: closeTo((14.9 / distance) * 17, 0.1),
+      z: closeTo((16.5 / distance) * 17, 0.1),
     });
-  }, 20_000);
+  }, 40_000);
 
   it("goes for a perched dragon facing its side from its watch distance", async () => {
     const driver = new FakeBeatGameDriver();

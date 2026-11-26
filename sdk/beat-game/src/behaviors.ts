@@ -2768,7 +2768,8 @@ const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 /// With the crystals gone the dragon perches after most circles, so a few
 /// waits see several perches.
 const BED_BOMB_PERCH_ROUNDS = 5;
-const DRAGON_PERCH_WATCH_DISTANCE = 16;
+const DRAGON_PERCH_WATCH_DISTANCE = 17;
+const DRAGON_PERCH_WATCH_MINIMUM_DISTANCE = 15;
 const BED_BOMB_MINIMUM_HEALTH = 16;
 /// Health comes back on its own only at this hunger or above.
 const NATURAL_REGENERATION_MINIMUM_FOOD = 18;
@@ -2778,8 +2779,8 @@ const BED_BOMB_RECOVERY_POLL_MS = 500;
 /// A perched dragon looks for players within twenty blocks and takes off
 /// after five seconds without one. A live bot escaping a fireball's cloud
 /// ended up twenty-two blocks out, and a perch passed it by.
-const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 18;
-const DRAGON_PERCH_WATCH_RADIUS = 3;
+const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 19;
+const DRAGON_PERCH_WATCH_RADIUS = 1.5;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
 /// How far above the ground under the dragon's head the bot may stand.
@@ -2908,7 +2909,7 @@ function bedBombDragon(
       failures = exploded ? 0 : failures + 1;
       // The spot behind the head lies in the perched dragon's breath. A live
       // bot that stayed there after its bed failed burned to death.
-      yield* returnToPerchWatch(driver, options.path);
+      yield* approachDragonPerchWatch(driver, options.path);
     }
   });
 }
@@ -3261,12 +3262,19 @@ function approachDragonPerchWatch(
   return Effect.gen(function* () {
     const player = (yield* driver.observe).player.position;
     const distance = Math.hypot(player.x, player.z);
-    if (distance <= DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE) {
+    // A perched dragon's breath spreads to fourteen blocks along its head.
+    // A live bot waiting thirteen blocks out burned in it.
+    if (
+      distance <= DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE &&
+      distance >= DRAGON_PERCH_WATCH_MINIMUM_DISTANCE
+    ) {
       return;
     }
+    const [directionX, directionZ] =
+      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
     yield* driver.pathfindXZ(
-      (player.x / distance) * DRAGON_PERCH_WATCH_DISTANCE,
-      (player.z / distance) * DRAGON_PERCH_WATCH_DISTANCE,
+      directionX * DRAGON_PERCH_WATCH_DISTANCE,
+      directionZ * DRAGON_PERCH_WATCH_DISTANCE,
       player.dimension,
       DRAGON_PERCH_WATCH_RADIUS,
       // Water the bot poured against endermen floods the arrival platform
@@ -3338,35 +3346,6 @@ function lobAtCrystal(
       yield* Effect.sleep(CRYSTAL_LOB_POLL_MS);
     }
   });
-}
-
-/// Walks back out to the perch watch distance on the bot's side.
-function returnToPerchWatch(
-  driver: BeatGameDriver,
-  path: Partial<BeatGamePathPolicy> | undefined,
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    const player = (yield* driver.observe).player.position;
-    const distance = Math.hypot(player.x, player.z);
-    if (distance >= DRAGON_PERCH_WATCH_DISTANCE - DRAGON_PERCH_WATCH_RADIUS) {
-      return;
-    }
-    const [directionX, directionZ] =
-      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
-    yield* driver.pathfindXZ(
-      directionX * DRAGON_PERCH_WATCH_DISTANCE,
-      directionZ * DRAGON_PERCH_WATCH_DISTANCE,
-      player.dimension,
-      DRAGON_PERCH_WATCH_RADIUS,
-      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true, sprint: true },
-    );
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: DRAGON_PERCH_WATCH_TIMEOUT_MS,
-      orElse: () => Effect.void,
-    }),
-    Effect.catchTag("BeatGameDriverError", () => Effect.void),
-  );
 }
 
 /// Builds up beside a crystal's tower to the crystal's height, off the
