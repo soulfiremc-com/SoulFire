@@ -269,6 +269,36 @@ describe("inventory discards", () => {
     );
   });
 
+  it("drops bone meal, ink, fences and pressure plates", () => {
+    // Part of the pack a live bot carried when its sword step could not
+    // free three slots on its way to the End portal.
+    const counts: Record<string, number> = {
+      "minecraft:leaf_litter": 7,
+      "minecraft:bone_meal": 3,
+      "minecraft:ink_sac": 1,
+      "minecraft:spruce_fence": 1,
+      "minecraft:spruce_pressure_plate": 1,
+      "minecraft:white_bed": 3,
+      "minecraft:end_stone": 121,
+      "minecraft:arrow": 36,
+    };
+    const dropped: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      dropped.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+    expect(dropped).toEqual(
+      arrayContaining([
+        "minecraft:bone_meal",
+        "minecraft:ink_sac",
+        "minecraft:spruce_fence",
+        "minecraft:spruce_pressure_plate",
+      ]),
+    );
+    expect(dropped).not.toContain("minecraft:white_bed");
+  });
+
   it("drops leaves that shears picked up", () => {
     // Part of the pack a live bot carried when its food step found nothing
     // to drop.

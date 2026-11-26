@@ -436,6 +436,10 @@ const INVENTORY_DISCARD_PRIORITY = [
   "minecraft:rabbit_foot",
   "minecraft:rabbit_hide",
   "minecraft:vine",
+  // Skeletons and squid drop these, and nothing uses them. A live bot held
+  // them with a fence and a pressure plate, and could not free three slots.
+  "minecraft:bone_meal",
+  "minecraft:ink_sac",
   "minecraft:tripwire_hook",
   "minecraft:spider_eye",
   "minecraft:pufferfish",
@@ -18956,7 +18960,9 @@ export function selectInventoryDiscard(
       (itemId) =>
         (itemId.startsWith("minecraft:music_disc_") ||
           itemId.endsWith("_stairs") ||
-          itemId.endsWith("_trapdoor")) &&
+          itemId.endsWith("_trapdoor") ||
+          itemId.endsWith("_fence") ||
+          itemId.endsWith("_pressure_plate")) &&
         (counts[itemId] ?? 0) > 0,
     );
   if (priorityItemId !== undefined) {
