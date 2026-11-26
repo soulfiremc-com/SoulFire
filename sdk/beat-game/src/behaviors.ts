@@ -3355,24 +3355,6 @@ function explodeBedUnderDragonHead(
       0.5,
       path,
     );
-    const wallFeet = { ...wallColumn, y: standGround + 1, dimension };
-    const wallBlock = yield* queryExactBlock(driver, wallFeet);
-    const current = yield* driver.observe;
-    if (
-      wallBlock !== undefined &&
-      wallBlock.replaceable &&
-      countItems(current, BED_BOMB_WALL_ITEM_IDS) > 0
-    ) {
-      yield* driver.act({ type: "select-item", selector: { itemIds: BED_BOMB_WALL_ITEM_IDS } });
-      yield* driver
-        .act({
-          type: "place-block",
-          against: { ...wallFeet, y: wallFeet.y - 1 },
-          face: "up",
-          hand: "main",
-        })
-        .pipe(Effect.ignore);
-    }
     // The head may have turned while the bot walked, so aim at where it is now.
     const anchor =
       (yield* queryEndEntities(driver, dragon.position, "minecraft:ender_dragon", 16, 1))[0] ??
@@ -3394,6 +3376,27 @@ function explodeBedUnderDragonHead(
       face: "up",
       hand: "main",
     });
+    // The bed goes down before the wall. A live bot stood three blocks
+    // above the bed's ground, where its wall hid the face to place the bed
+    // against. Setting the bed off needs no sight of it.
+    const wallFeet = { ...wallColumn, y: standGround + 1, dimension };
+    const wallBlock = yield* queryExactBlock(driver, wallFeet);
+    const current = yield* driver.observe;
+    if (
+      wallBlock !== undefined &&
+      wallBlock.replaceable &&
+      countItems(current, BED_BOMB_WALL_ITEM_IDS) > 0
+    ) {
+      yield* driver.act({ type: "select-item", selector: { itemIds: BED_BOMB_WALL_ITEM_IDS } });
+      yield* driver
+        .act({
+          type: "place-block",
+          against: { ...wallFeet, y: wallFeet.y - 1 },
+          face: "up",
+          hand: "main",
+        })
+        .pipe(Effect.ignore);
+    }
     yield* driver.act({ type: "interact-block", position: bed, face: "up", hand: "main" });
     return true;
   });

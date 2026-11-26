@@ -8197,6 +8197,12 @@ describe("beat-game behavior programs", () => {
       face: "up",
       hand: "main",
     });
+    // As in a live run standing above the bed's ground: a wall placed first
+    // hid the face the bed goes against.
+    const placements = driver.actions.filter((action) => action.type === "place-block");
+    expect(placements.findIndex((action) => action.against.z === 7)).toBeLessThan(
+      placements.findIndex((action) => action.against.z === 9),
+    );
     expect(
       driver.actions.filter(
         (action) =>
