@@ -28,6 +28,8 @@ import { BeatGamePathSearchMode } from "./model.js";
 
 const CONTROL_LEASE_TTL_SECONDS = 90;
 const CONTROL_LEASE_RENEWAL_INTERVAL_MS = 30_000;
+/// The most blocks the server returns in one page.
+const BLOCK_QUERY_PAGE_SIZE = 500;
 const RPC_STATUS_CODE_NAMES = [
   "ok",
   "canceled",
@@ -1127,28 +1129,36 @@ export function makeSoulFireBeatGameDriver(
       }),
       Stream.mapError(mapError("events")),
     ),
+    // The server returns at most 500 blocks a page. A live bot asked for
+    // 4,096 blocks around it to find a bed spot, got the nearest 500, saw
+    // no spot whose blocks were all known, and went into the End with no
+    // respawn point.
     queryBlocks: (query) =>
-      bot.world
-        .queryBlocks({
-          region: {
+      Effect.gen(function* () {
+        const maximumResults = query.maximumResults ?? 128;
+        const blocks: BeatGameBlockObservation[] = [];
+        let pageToken = "";
+        do {
+          const page = yield* bot.world.queryBlocks({
             region: {
-              case: "sphere",
-              value: {
-                center: query.center,
-                radius: query.radius,
+              region: {
+                case: "sphere",
+                value: {
+                  center: query.center,
+                  radius: query.radius,
+                },
               },
             },
-          },
-          selector: blockSelector(query.selector),
-          sort: QuerySort.NEAREST,
-          pageSize: query.maximumResults ?? 128,
-        })
-        .pipe(
-          Effect.mapBoth({
-            onSuccess: ({ blocks }) => blocks.map((block) => toBeatGameBlockObservation(block)),
-            onFailure: mapError("queryBlocks"),
-          }),
-        ),
+            selector: blockSelector(query.selector),
+            sort: QuerySort.NEAREST,
+            pageSize: Math.min(maximumResults - blocks.length, BLOCK_QUERY_PAGE_SIZE),
+            pageToken,
+          });
+          blocks.push(...page.blocks.map((block) => toBeatGameBlockObservation(block)));
+          pageToken = page.nextPageToken;
+        } while (pageToken !== "" && blocks.length < maximumResults);
+        return blocks;
+      }).pipe(Effect.mapError(mapError("queryBlocks"))),
     queryEntities: (query) =>
       bot.world
         .queryEntities({

@@ -191,6 +191,14 @@ function effectBot(
   return { bot: bot as unknown as SoulFireBot, calls };
 }
 
+function stoneBlockResult(index: number) {
+  return {
+    blockId: "minecraft:stone",
+    position: { x: index, y: 64, z: 0 },
+    dimension: "minecraft:overworld",
+  };
+}
+
 describe("production SoulFire beat-game driver", () => {
   it("shares one control lease across nested control scopes", async () => {
     const { bot, calls } = effectBot();
@@ -482,6 +490,49 @@ describe("production SoulFire beat-game driver", () => {
         restoreSelectedSlot: false,
       }),
     ]);
+  });
+
+  it("pages through block queries larger than one server page", async () => {
+    // As in a live run: a bed spot search asked for 4,096 blocks, got the
+    // nearest 500, and found no spot.
+    const { bot } = effectBot();
+    const pageSizes: number[] = [];
+    Object.assign(bot.world, {
+      queryBlocks: (request: { readonly pageSize: number; readonly pageToken: string }) =>
+        Effect.sync(() => {
+          pageSizes.push(request.pageSize);
+          const start = request.pageToken === "" ? 0 : Number(request.pageToken);
+          const count = Math.min(request.pageSize, 500, 1200 - start);
+          const end = start + count;
+          return {
+            blocks: Array.from({ length: count }, (_, index) => stoneBlockResult(start + index)),
+            nextPageToken: end < 1200 ? String(end) : "",
+          };
+        }),
+    });
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    const blocks = await Effect.runPromise(
+      driver.queryBlocks({
+        center: { x: 0, y: 64, z: 0, dimension: "minecraft:overworld" },
+        radius: 10,
+        selector: {},
+        maximumResults: 4096,
+      }),
+    );
+    const limited = await Effect.runPromise(
+      driver.queryBlocks({
+        center: { x: 0, y: 64, z: 0, dimension: "minecraft:overworld" },
+        radius: 10,
+        selector: {},
+        maximumResults: 700,
+      }),
+    );
+
+    expect(blocks).toHaveLength(1200);
+    expect(blocks.at(-1)?.position.x).toBe(1199);
+    expect(limited).toHaveLength(700);
+    expect(pageSizes).toEqual([500, 500, 500, 500, 200]);
   });
 
   it("preserves exact entity selectors for targeted evasion", async () => {
