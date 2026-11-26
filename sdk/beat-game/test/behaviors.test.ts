@@ -7911,6 +7911,84 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
   }, 20_000);
 
+  it("climbs out from under a half-built roof to wait in the dragon's sight", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 57, z: 11.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
+    });
+    // As in a live run: a bot sealed in its shelter for half an hour was
+    // strafed the whole time, since a strafing dragon leaves its run only by
+    // firing at a player it sees, and it never landed.
+    let angle = 0;
+    driver.entityQueryResolver = (query) => {
+      if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
+        return [];
+      }
+      angle += 0.3;
+      return [
+        {
+          connectionEpoch: "epoch-1",
+          networkId: 42,
+          entityType: "minecraft:ender_dragon",
+          position: {
+            x: 20 * Math.cos(angle),
+            y: 75,
+            z: 20 * Math.sin(angle),
+            dimension: "minecraft:the_end",
+          },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 134,
+          observedAt: "2026-01-01T00:00:01.000Z",
+        },
+      ];
+    };
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      // As in a live run: the lower roof block is in, the upper one missing,
+      // and a side wall open.
+      if (position.x === 1 && position.z === 11 && position.y === 58) {
+        return [
+          blockObservation(position, {
+            blockId: "minecraft:air",
+            diggable: false,
+            replaceable: true,
+            solid: false,
+          }),
+        ];
+      }
+      return [
+        blockObservation(
+          position,
+          position.y <= 59
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 600,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 61, z: 11.5 });
+  }, 20_000);
+
   it("roofs over its shaft to heal out of the dragon's sight", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

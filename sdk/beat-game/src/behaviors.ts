@@ -3023,7 +3023,10 @@ function leaveShelter(
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
     const player = (yield* driver.observe).player.position;
-    if (!(yield* isSheltered(driver, player))) {
+    // A roof half built still hides the bot. A live bot sat under one block
+    // of its roof for half an hour, out of the dragon's sight, while the
+    // dragon strafed it and never landed.
+    if (!(yield* isCovered(driver, player))) {
       return;
     }
     yield* driver.pathfind(
@@ -3105,6 +3108,28 @@ function isSheltered(
       }
     }
     return true;
+  });
+}
+
+/// Whether a block above the bot's head, within its shelter's depth, hides
+/// it from the sky.
+function isCovered(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    for (let above = 2; above <= DRAGON_SHELTER_DEPTH; above += 1) {
+      const cell = {
+        x: Math.floor(position.x),
+        y: Math.floor(position.y) + above,
+        z: Math.floor(position.z),
+        dimension: position.dimension,
+      };
+      if (!(yield* isOpen(driver, cell))) {
+        return true;
+      }
+    }
+    return false;
   });
 }
 
