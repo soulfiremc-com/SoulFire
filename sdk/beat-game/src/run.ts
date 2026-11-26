@@ -8358,40 +8358,41 @@ function recoverFromFluid(
 ): Effect.Effect<void, BeatGameDriverError> {
   // Rock right over its head stops a swim straight up. A live bot under a
   // stone ceiling jumped into it until its air was too low to swim to the
-  // opening three blocks away, and drowned.
+  // opening three blocks away, and drowned. Under rock, the first attempt
+  // looks for a breathing pocket while the air lasts, then swims up and
+  // digs as before.
   const [, aboveHead] = overheadEscapeBlocks(observation.player.position);
-  const swimStraightUp = queryExactBlock(state.driver, aboveHead).pipe(
-    Effect.flatMap((block) =>
-      block !== undefined && block.solid && !block.replaceable
-        ? Effect.succeed(false)
-        : state.driver.withControl(
-            state.driver
-              .act({
-                type: "look",
-                yaw: observation.player.rotation.yaw,
-                pitch: -90,
-              })
-              .pipe(
-                Effect.andThen(
-                  state.driver.act({
-                    type: "set-movement",
-                    jump: true,
-                  }),
-                ),
-                Effect.andThen(
-                  waitForAirRecovery(
-                    state,
-                    60,
-                    observation.player.position.y,
-                    observation.player.air,
-                  ),
-                ),
-                Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
-              ),
+  const pocketUnderCeiling =
+    attemptsRemaining === AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS
+      ? queryExactBlock(state.driver, aboveHead).pipe(
+          Effect.flatMap((block) =>
+            block !== undefined && block.solid && !block.replaceable
+              ? escapeNearbyBreathingPocket(state, observation)
+              : Effect.succeed(false),
           ),
-    ),
+        )
+      : Effect.succeed(false);
+  const swimStraightUp = state.driver.withControl(
+    state.driver
+      .act({
+        type: "look",
+        yaw: observation.player.rotation.yaw,
+        pitch: -90,
+      })
+      .pipe(
+        Effect.andThen(
+          state.driver.act({
+            type: "set-movement",
+            jump: true,
+          }),
+        ),
+        Effect.andThen(
+          waitForAirRecovery(state, 60, observation.player.position.y, observation.player.air),
+        ),
+        Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
+      ),
   );
-  return swimStraightUp.pipe(
+  const ascend = swimStraightUp.pipe(
     Effect.flatMap((recovered) =>
       recovered && !seekDrySurfaceAfterRecovery
         ? Effect.succeed(true)
@@ -8460,6 +8461,7 @@ function recoverFromFluid(
           ),
     ),
   );
+  return pocketUnderCeiling.pipe(Effect.flatMap((breathing) => (breathing ? Effect.void : ascend)));
 }
 
 function escapeNearbyBreathingPocket(
