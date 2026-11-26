@@ -1953,6 +1953,17 @@ function trySleepThroughNight(
     }
     let current = observation;
     let beds = yield* findNearbyNightBeds(state.driver, current);
+    // Sleeping in a bed makes it the respawn point, and taking it back up
+    // leaves none. A live bot with a respawn bed by the portal room slept on
+    // the road, picked the bed up, died in the End and woke at the world
+    // spawn 1,200 blocks away. Away from that bed it takes shelter instead.
+    const standingRespawnBed = (yield* Ref.get(state.checkpoint)).memory.respawnBed;
+    if (standingRespawnBed !== undefined) {
+      beds = beds.filter((bed) => sameBlockPosition(bed.position, standingRespawnBed));
+      if (beds.length === 0) {
+        return "unavailable";
+      }
+    }
     if (beds.length === 0) {
       let bedItemId = carriedBedItemId(current);
       if (bedItemId === undefined) {

@@ -7221,9 +7221,9 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([]);
   });
 
-  it("takes a second bed along when a respawn bed already stands", async () => {
-    // One bed by the portal room is enough. Leaving every bed behind would
-    // empty the pack the bot carries for the dragon.
+  it("keeps its respawn bed by not sleeping in another one", async () => {
+    // As in a live run: the bot slept on the road, which moved its respawn
+    // point, took that bed back up, and woke at the world spawn after dying.
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };
     driver.currentObservation = observation({
@@ -7278,25 +7278,14 @@ describe("beat-game run lifecycle", () => {
             ),
             Effect.forkScoped,
           );
-          while (!succeeded.includes("survive:night-shelter")) {
-            yield* Effect.sleep(1);
-          }
+          yield* Effect.sleep(500);
           yield* run.stop;
           yield* run.awaitCompletion.pipe(Effect.result);
-        }).pipe(
-          Effect.timeoutOrElse({
-            duration: "3 seconds",
-            orElse: () =>
-              Effect.fail(new ScenarioFailure({ message: "Timed out waiting for bed sleep" })),
-          }),
-        ),
+        }),
       ),
     );
 
-    expect(driver.tasks).toContainEqual(objectContaining({ type: "sleep" }));
-    expect(driver.actions.filter(({ type }) => type === "dig-block")).toEqual([
-      objectContaining({ position: objectContaining({ x: 0, y: 64, z: 1 }) }),
-    ]);
+    expect(driver.tasks.some((task) => task.type === "sleep")).toBe(false);
   });
 
   it("travels on through the night after its bed shelter fails", async () => {
