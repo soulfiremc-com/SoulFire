@@ -8240,6 +8240,65 @@ describe("beat-game behavior programs", () => {
     }
   });
 
+  it("waits on its side for a perched dragon facing away to turn", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 12.5, y: 61, z: 0.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:cobblestone": 8 },
+    });
+    // As in a live run: the head faced the far side of the fountain, and
+    // the bot died to the breath walking round to it.
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? [
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 42,
+              entityType: "minecraft:ender_dragon",
+              position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_end" },
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              health: 100,
+              // A yaw of 270 points the head west, away from the bot.
+              rotation: { yaw: 270, pitch: 0 },
+              observedAt: "2026-01-01T00:00:01.000Z",
+            },
+          ]
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 1500,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths).toEqual([]);
+    expect(driver.actions.some((action) => action.type === "interact-block")).toBe(false);
+  }, 30_000);
+
   it("walks onto the line a perched dragon's head points along", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;
@@ -8251,7 +8310,7 @@ describe("beat-game behavior programs", () => {
       });
     driver.currentObservation = observation({
       dimension: "minecraft:the_end",
-      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      position: { x: 8.5, y: 61, z: 5.5, dimension: "minecraft:the_end" },
       counts: { "minecraft:red_bed": beds, "minecraft:cobblestone": 8 },
     });
     // As measured in a real game: perched on the portal, facing the bot.
@@ -8264,7 +8323,7 @@ describe("beat-game behavior programs", () => {
         velocity: { x: 0, y: 0, z: 0 },
         alive: true,
         health: 200,
-        // A yaw of 90 points the dragon's head east, away from the bot.
+        // A yaw of 90 points the dragon's head east, past the bot's side.
         rotation: { yaw: 90, pitch: 0 },
         observedAt: "2026-01-01T00:00:01.000Z",
       },
@@ -8328,7 +8387,7 @@ describe("beat-game behavior programs", () => {
       }),
     );
 
-    expect(driver.paths[1]?.position).toMatchObject({ x: 10.5, y: 61, z: 0.5 });
+    expect(driver.paths[0]?.position).toMatchObject({ x: 10.5, y: 61, z: 0.5 });
     expect(driver.actions).toContainEqual({
       type: "place-block",
       against: { x: 9, y: 60, z: 0, dimension: "minecraft:the_end" },

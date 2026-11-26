@@ -2777,6 +2777,8 @@ const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 24;
 const DRAGON_PERCH_WATCH_RADIUS = 3;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
+/// The bot waits for the head to face it rather than walk farther than this.
+const BED_BOMB_MAXIMUM_WALK = 8;
 /// Twelve blocks out keeps the bot within the twenty blocks at which a
 /// perched dragon spots it, and outside the fountain.
 const DRAGON_SHELTER_RADIUS = 12;
@@ -2887,6 +2889,15 @@ function bedBombDragon(
         continue;
       }
       steadyChecks = 0;
+      // A perched dragon turns to face a player it sees each time it starts
+      // to look round. A live bot walked seventeen seconds round the
+      // fountain to the far side of a head facing away, and the dragon's
+      // breath caught it on the way. Waiting on its own side brings the head
+      // round to it.
+      if (!isHeadTowardBot(dragon, observation.player.position)) {
+        waitedMs += DRAGON_PERCH_SETTLE_MS;
+        continue;
+      }
       const exploded = yield* explodeBedUnderDragonHead(driver, dragon, path).pipe(
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
@@ -3299,6 +3310,22 @@ function isLandingDragon(
   return (
     after <= DRAGON_OVER_FOUNTAIN_RADIUS ||
     (after <= DRAGON_LANDING_WATCH_RADIUS && before - after >= DRAGON_LANDING_CLOSING_DISTANCE)
+  );
+}
+
+/// Whether the spot behind the perched dragon's head lies within a short
+/// walk of the bot. Without a known heading the bot goes anyway.
+function isHeadTowardBot(dragon: BeatGameEntityObservation, player: BeatGamePosition): boolean {
+  if (dragon.rotation === undefined) {
+    return true;
+  }
+  const head = dragonHeadDirection(dragon);
+  const reach = DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE;
+  return (
+    Math.hypot(
+      dragon.position.x + head.x * reach - player.x,
+      dragon.position.z + head.z * reach - player.z,
+    ) <= BED_BOMB_MAXIMUM_WALK
   );
 }
 
