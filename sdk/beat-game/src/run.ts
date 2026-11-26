@@ -1129,6 +1129,11 @@ const STRONGHOLD_RETHROW_SAMPLE_RADIUS = 200;
 const BED_WOOL_COUNT = 3;
 const NIGHT_BED_SEARCH_RADIUS = 32;
 const NIGHT_BED_PLACEMENT_SEARCH_RADIUS = 5;
+/// Floors the bed may stand on, nearest the bot's own first. A portal room
+/// is all steps and frames; a live bot standing by the frames found no
+/// level spot at its own height and went into the End without a respawn
+/// point.
+const NIGHT_BED_PLACEMENT_HEIGHT_OFFSETS = [0, -1, 1, -2, 2] as const;
 const NIGHT_BED_PLACEMENT_CONFIRMATION_ATTEMPTS = 20;
 const NIGHT_BED_MORNING_TIMEOUT_MS = 20_000;
 const NIGHT_SHELTER_BLOCK_ITEM_IDS = [
@@ -2276,7 +2281,7 @@ function findNightBedPlacementSites(
   return driver
     .queryBlocks({
       center: blockCenter(origin),
-      radius: NIGHT_BED_PLACEMENT_SEARCH_RADIUS + 4,
+      radius: NIGHT_BED_PLACEMENT_SEARCH_RADIUS + 5,
       selector: {},
       maximumResults: 4096,
     })
@@ -2303,19 +2308,22 @@ function findNightBedPlacementSites(
               if (radius > 0 && Math.max(Math.abs(xOffset), Math.abs(zOffset)) !== radius) {
                 continue;
               }
-              for (const direction of directions) {
+              for (const [yOffset, direction] of NIGHT_BED_PLACEMENT_HEIGHT_OFFSETS.flatMap(
+                (offset) => directions.map((step) => [offset, step] as const),
+              )) {
                 const stand = {
                   ...origin,
                   x: origin.x + xOffset,
+                  y: origin.y + yOffset,
                   z: origin.z + zOffset,
                 };
                 const foot = {
-                  ...origin,
+                  ...stand,
                   x: stand.x + direction.x,
                   z: stand.z + direction.z,
                 };
                 const head = {
-                  ...origin,
+                  ...stand,
                   x: foot.x + direction.x,
                   z: foot.z + direction.z,
                 };

@@ -47974,6 +47974,82 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions.some((action) => action.type === "interact-block")).toBe(true);
   }, 10_000);
 
+  it("leaves a respawn bed on a floor below its feet", async () => {
+    // As in a live run: the bot stood a step above the portal room floor,
+    // found no level spot at its own height, and went into the End without
+    // a respawn point.
+    const driver = new FakeBeatGameDriver();
+    const portalRoomCenter = {
+      x: 0.5,
+      y: 65,
+      z: 0.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:white_bed": 3,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+      },
+      position: { x: 0.5, y: 65, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "respawn-step-run",
+      teamId: "respawn-step-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: { ...initial.memory, emptyPortalFrames: 10, portalRoomCenter },
+        },
+        undefined,
+      ),
+    );
+    const framesSearched = () =>
+      driver.blockQueries.some(
+        ({ selector }) => selector.blockIds?.includes("minecraft:end_portal_frame") === true,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "respawn-step-run",
+            team: { teamId: "respawn-step-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!framesSearched() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual(
+      objectContaining({
+        type: "place-block",
+        against: { x: 0, y: 63, z: 1, dimension: "minecraft:overworld" },
+      }),
+    );
+    expect(driver.actions.some((action) => action.type === "interact-block")).toBe(true);
+  }, 10_000);
+
   it("walks above the portal room when the dug route down outgrows the search", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: from ninety blocks off, every dug route down to the
