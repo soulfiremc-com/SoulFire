@@ -8404,6 +8404,105 @@ describe("beat-game behavior programs", () => {
       ),
     ).toHaveLength(2);
     expect(driver.tasks.some((task) => task.type === "ranged-attack")).toBe(false);
+    // After each bed it walked back out of the perched dragon's breath.
+    expect(driver.xzPaths).toContainEqual(
+      objectContaining({
+        x: closeTo(0.5 * (16 / Math.hypot(0.5, 10.5)), 0.2),
+        z: closeTo(16, 0.1),
+      }),
+    );
+  });
+
+  it("digs down to the level of the ground under a perched dragon's head", async () => {
+    const driver = new FakeBeatGameDriver();
+    let beds = 2;
+    const end = (counts: Record<string, number>) =>
+      observation({
+        dimension: "minecraft:the_end",
+        position: driver.currentObservation.player.position,
+        counts,
+      });
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": beds, "minecraft:cobblestone": 8 },
+    });
+    // As measured in a real game: perched on the portal, facing the bot.
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 42,
+        entityType: "minecraft:ender_dragon",
+        position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_end" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 200,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? driver.entityResults
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal") === true) {
+        return driver.entityResults.length === 0
+          ? [
+              blockObservation(
+                { x: 0, y: 64, z: 0, dimension: "minecraft:the_end" },
+                { blockId: "minecraft:end_portal" },
+              ),
+            ]
+          : [];
+      }
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      // As in a live run: the ground under the head lies three blocks lower.
+      const underHead = position.x === 0 && position.z === 7;
+      return [
+        blockObservation(
+          position,
+          position.y <= (underHead ? 57 : 60)
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+    driver.actionObserver = (action) => {
+      if (action.type === "interact-block") {
+        beds -= 1;
+        driver.currentObservation = end({ "minecraft:red_bed": beds, "minecraft:cobblestone": 7 });
+        if (beds === 0) {
+          driver.entityResults = [];
+        }
+      }
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }),
+    );
+
+    expect(driver.paths[0]?.position).toMatchObject({ x: 0.5, y: 59, z: 10.5 });
+    expect(driver.paths[0]?.policy).toMatchObject({ allowMining: true });
   });
 
   it("puts the bed wall beside the stand spot on the bed's side for any heading", () => {

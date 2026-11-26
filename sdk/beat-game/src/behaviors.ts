@@ -2780,6 +2780,8 @@ const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 18;
 const DRAGON_PERCH_WATCH_RADIUS = 3;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
+/// How far above the ground under the dragon's head the bot may stand.
+const BED_BOMB_MAXIMUM_STAND_RISE = 1;
 /// The bot waits for the head to face it rather than walk farther than this.
 const BED_BOMB_MAXIMUM_WALK = 8;
 /// Twelve blocks out keeps the bot within the twenty blocks at which a
@@ -2897,6 +2899,9 @@ function bedBombDragon(
         Effect.catchTag("BeatGameDriverError", () => Effect.succeed(false)),
       );
       failures = exploded ? 0 : failures + 1;
+      // The spot behind the head lies in the perched dragon's breath. A live
+      // bot that stayed there after its bed failed burned to death.
+      yield* returnToPerchWatch(driver, options.path);
     }
   });
 }
@@ -3316,6 +3321,35 @@ function lobAtCrystal(
   });
 }
 
+/// Walks back out to the perch watch distance on the bot's side.
+function returnToPerchWatch(
+  driver: BeatGameDriver,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    const distance = Math.hypot(player.x, player.z);
+    if (distance >= DRAGON_PERCH_WATCH_DISTANCE - DRAGON_PERCH_WATCH_RADIUS) {
+      return;
+    }
+    const [directionX, directionZ] =
+      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
+    yield* driver.pathfindXZ(
+      directionX * DRAGON_PERCH_WATCH_DISTANCE,
+      directionZ * DRAGON_PERCH_WATCH_DISTANCE,
+      player.dimension,
+      DRAGON_PERCH_WATCH_RADIUS,
+      { ...mergePathPolicy(path), allowMining: true, allowPlacing: true, sprint: true },
+    );
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: DRAGON_PERCH_WATCH_TIMEOUT_MS,
+      orElse: () => Effect.void,
+    }),
+    Effect.catchTag("BeatGameDriverError", () => Effect.void),
+  );
+}
+
 /// Builds up beside a crystal's tower to the crystal's height, off the
 /// tower's edge on the bot's side.
 function climbBesideCrystal(
@@ -3398,10 +3432,19 @@ function explodeBedUnderDragonHead(
     const standColumn = along(DRAGON_HEAD_REACH + BED_BOMB_STAND_DISTANCE);
     const wallColumn = bedBombWallColumn(standColumn, along(DRAGON_HEAD_REACH));
     const dimension = player.dimension;
-    const standGround = yield* groundBelow(driver, standColumn, headY, dimension);
-    if (standGround === undefined) {
+    const groundUnderStand = yield* groundBelow(driver, standColumn, headY, dimension);
+    if (groundUnderStand === undefined) {
       return false;
     }
+    // The bed's face must lie within reach and sight. A live bot stood four
+    // blocks above the ground under the head and could not place its bed
+    // there, twice. Where the ground under the head lies lower, the bot digs
+    // down to stand at most a block above it.
+    const groundUnderHead = yield* groundBelow(driver, along(DRAGON_HEAD_REACH), headY, dimension);
+    const standGround =
+      groundUnderHead === undefined
+        ? groundUnderStand
+        : Math.min(groundUnderStand, groundUnderHead + BED_BOMB_MAXIMUM_STAND_RISE);
     yield* driver.pathfind(
       {
         x: standColumn.x + 0.5,
@@ -3410,7 +3453,7 @@ function explodeBedUnderDragonHead(
         dimension,
       },
       0.5,
-      path,
+      { ...path, allowMining: true },
     );
     // The head may have turned while the bot walked, so aim at where it is now.
     const anchor =
