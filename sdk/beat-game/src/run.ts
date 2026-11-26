@@ -1048,6 +1048,9 @@ const END_PORTAL_FRAME_COUNT = 12;
 const PORTAL_ROOM_SILVERFISH_MINIMUM_HEALTH = 6;
 const ENDERMAN_WATER_HOLD_MS = 4000;
 const RESPAWN_BED_KEEP_RADIUS = 256;
+/// Beds the bot keeps for the dragon when it leaves one as a respawn point.
+const RESPAWN_BED_MINIMUM_CARRIED = 2;
+const RESPAWN_BED_REACH = 3;
 const STONE_SWORD_COBBLESTONE = 2;
 const STONE_PICKAXE_COBBLESTONE = 3;
 const FURNACE_STONE_COUNT = 8;
@@ -2050,6 +2053,68 @@ function trySleepThroughNight(
     }
     return "unavailable";
   });
+}
+
+/// Makes a bed by the portal room the respawn point before the bot goes
+/// into the End. Using a bed sets the respawn point even by day. A live bot
+/// whose respawn bed had been taken up died in the End and woke at the
+/// world spawn, 1,200 blocks and an hour's walk from the portal.
+///
+/// A remembered bed that still stands is used again; otherwise the bot
+/// leaves one of its beds there while it keeps two for the dragon.
+function claimRespawnBed(
+  state: RunState,
+): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const remembered = (yield* Ref.get(state.checkpoint)).memory.respawnBed;
+    let bed: BeatGameBlockPosition | undefined;
+    if (remembered !== undefined) {
+      const standing = yield* state.driver.queryBlocks({
+        center: blockCenter(remembered),
+        radius: 0.25,
+        selector: { blockIds: BED_ITEM_IDS },
+        maximumResults: 1,
+      });
+      if (standing.some((block) => sameBlockPosition(block.position, remembered))) {
+        bed = remembered;
+      }
+    }
+    if (bed === undefined) {
+      const observation = yield* state.driver.observe;
+      const bedItemId = carriedBedItemId(observation);
+      if (bedItemId === undefined || countBeds(observation) <= RESPAWN_BED_MINIMUM_CARRIED) {
+        return;
+      }
+      const placed = yield* placeNightBed(state, observation, bedItemId);
+      if (placed === undefined) {
+        return;
+      }
+      bed = placed.position;
+    }
+    const claimed = bed;
+    yield* state.driver
+      .pathfind(blockCenter(claimed), RESPAWN_BED_REACH, {
+        ...state.strategy.path,
+        allowPlacing: false,
+      })
+      .pipe(Effect.ignore);
+    yield* state.driver
+      .withControl(
+        state.driver.act({ type: "interact-block", position: claimed, face: "up", hand: "main" }),
+      )
+      .pipe(Effect.ignore);
+    yield* persist(state, (checkpoint) => ({
+      ...checkpoint,
+      memory: { ...checkpoint.memory, respawnBed: claimed },
+    }));
+  }).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+}
+
+function countBeds(observation: BeatGameObservation): number {
+  return BED_ITEM_IDS.reduce(
+    (total, itemId) => total + (observation.inventory.counts[itemId] ?? 0),
+    0,
+  );
 }
 
 /// Takes the bed along, so the next night does not need new wool.
@@ -4461,6 +4526,7 @@ function executeDecision(
                   ),
                 );
         return approachPortalRoom.pipe(
+          Effect.andThen(claimRespawnBed(state)),
           Effect.andThen(
             activateEndPortal(state.driver, {
               path: state.strategy.path,
