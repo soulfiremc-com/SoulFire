@@ -2789,12 +2789,8 @@ const DRAGON_SHELTER_RADIUS = 12;
 const DRAGON_SHELTER_DEPTH = 4;
 const DRAGON_SHELTER_SCAN_HEIGHT = 4;
 const DRAGON_SHELTER_ANGLE_STEPS = 16;
-const DRAGON_LANDING_WATCH_RADIUS = 30;
 /// The dragon hangs this close over the fountain only to land or sit.
 const DRAGON_OVER_FOUNTAIN_RADIUS = 8;
-/// How much nearer to the fountain a landing dragon comes between two looks
-/// half a second apart; a circling one barely changes its distance.
-const DRAGON_LANDING_CLOSING_DISTANCE = 2;
 const BED_BOMB_MAXIMUM_FAILURES = 3;
 const BED_BOMB_WALL_ITEM_IDS = [
   "minecraft:end_stone",
@@ -2871,7 +2867,7 @@ function bedBombDragon(
       // the player's feet. A live bot waiting in the open for a perch was
       // followed by cloud after cloud and died while running from them.
       yield* (
-        perched || isLandingDragon(first, dragon)
+        perched || isLandingDragon(dragon)
           ? leaveShelter(driver, options.path)
           : hideFromDragon(driver, options.path)
       ).pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
@@ -3297,20 +3293,13 @@ function climbBesideCrystal(
   });
 }
 
-/// Whether the dragon is coming in to land: over the fountain, or closing on
-/// it fast. A circling dragon passes within twenty blocks of the fountain
-/// but moves around it, and a live bot that left its shelter for every
-/// pass was caught by the breath on the surface.
-function isLandingDragon(
-  earlier: BeatGameEntityObservation,
-  later: BeatGameEntityObservation,
-): boolean {
-  const before = Math.hypot(earlier.position.x, earlier.position.z);
-  const after = Math.hypot(later.position.x, later.position.z);
-  return (
-    after <= DRAGON_OVER_FOUNTAIN_RADIUS ||
-    (after <= DRAGON_LANDING_WATCH_RADIUS && before - after >= DRAGON_LANDING_CLOSING_DISTANCE)
-  );
+/// Whether the dragon is coming in to land: hanging over the fountain.
+///
+/// A circling dragon passes within twenty blocks of the fountain, and one
+/// diving at the bot closes on it fast. A live bot that left its shelter
+/// for those was caught by the breath on the surface.
+function isLandingDragon(dragon: BeatGameEntityObservation): boolean {
+  return Math.hypot(dragon.position.x, dragon.position.z) <= DRAGON_OVER_FOUNTAIN_RADIUS;
 }
 
 /// Whether the spot behind the perched dragon's head lies within a short
