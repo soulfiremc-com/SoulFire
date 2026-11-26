@@ -56561,6 +56561,136 @@ describe("beat-game run lifecycle", () => {
     expect(looks.every((look) => look.pitch >= 20)).toBe(true);
   });
 
+  it("leaves dragon breath that lands while it holds water against an enderman", async () => {
+    // As in a live run: the bot poured water against an enderman, a breath
+    // cloud landed on it, and it held its water until it died.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: -9, y: 63, z: 16, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      counts: {
+        "minecraft:cooked_beef": 16,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+        "minecraft:cobblestone": 64,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    const enderman = {
+      connectionEpoch: "epoch-1",
+      networkId: 71,
+      entityType: "minecraft:enderman",
+      position: { ...position, x: -7.5 },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 40,
+      aggressive: true,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.entityTypes?.includes("minecraft:area_effect_cloud") === true
+        ? []
+        : driver.entityResults;
+    const escapes: { x: number; z: number }[] = [];
+    driver.xzPathResolver = (x, z) =>
+      Effect.sync(() => {
+        escapes.push({ x, z });
+      });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "enderman-breath-run",
+          teamId: "enderman-breath-team",
+        }),
+        undefined,
+      ),
+    );
+    const fight = { started: false };
+    const poured = { done: false };
+    const breath = Effect.gen(function* () {
+      while (!poured.done) {
+        yield* Effect.sleep(1);
+      }
+      const now = yield* DateTime.now;
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_end",
+        position,
+        health: 11.5,
+        counts: driver.currentObservation.inventory.counts,
+      });
+      return {
+        type: "bot-damaged",
+        observedAt: DateTime.formatIso(now),
+        amount: 4,
+        health: 11.5,
+        damageType: "minecraft:indirect_magic",
+      } as const;
+    });
+    driver.events = meleeHitOnceStarted(fight).pipe(
+      Stream.take(1),
+      Stream.concat(Stream.fromEffect(breath)),
+      Stream.concat(Stream.never),
+    );
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "enderman-breath-run",
+            team: { teamId: "enderman-breath-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () =>
+                Effect.sync(() => {
+                  fight.started = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                    if (event.message === "Poured water against an attacking enderman") {
+                      poured.done = true;
+                    }
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 3000;
+          while (!fight.started && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          driver.entityResults = [enderman];
+          driver.currentObservation = observation({
+            dimension: "minecraft:the_end",
+            position,
+            health: 15.5,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          attempts = 8000;
+          while (!diagnostics.includes("Leaving dragon breath") && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(diagnostics).toContain("Poured water against an attacking enderman");
+    expect(diagnostics).toContain("Leaving dragon breath");
+  }, 20_000);
+
   it("walks back to the water it poured against an enderman", async () => {
     // As in a live run: the flow pushed the bot off its water, it looked
     // straight down into flowing water, and lost it. In a real game the

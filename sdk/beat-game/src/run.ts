@@ -6045,6 +6045,10 @@ function escapeFromTarget(
     if (water.type === "held") {
       return;
     }
+    if (water.type === "breath") {
+      yield* leaveDragonBreath(state, (yield* state.driver.observe).player.position);
+      return;
+    }
     // Water the enderman already ignored is no escape.
     const endermanWaterEscapeTarget =
       target.entityType === "minecraft:enderman" && water.type !== "overrun"
@@ -6805,6 +6809,7 @@ function continueDirectFastPursuerEscape(
 
 type EndermanWaterOutcome =
   | { readonly type: "held" }
+  | { readonly type: "breath" }
   | { readonly type: "overrun"; readonly pourPosition: BeatGameBlockPosition }
   | { readonly type: "failed" };
 
@@ -6828,7 +6833,8 @@ function pourWaterAgainstEnderman(
           hand: "main",
           retryTicks: FALL_CLUTCH_USE_RETRY_TICKS,
         });
-        const poured = (yield* state.driver.observe).player;
+        const pouredObservation = yield* state.driver.observe;
+        const poured = pouredObservation.player;
         const position = poured.position;
         const pourPosition = {
           x: Math.floor(position.x),
@@ -6851,6 +6857,12 @@ function pourWaterAgainstEnderman(
             return { type: "failed" } as const;
           }
           if (holding.player.health < poured.health) {
+            // A live bot held its water where a breath cloud landed, took
+            // the breath for the enderman, poured again, and died there.
+            const damage = yield* awaitDamageSince(state, pouredObservation.observedAt);
+            if (isDragonBreathDamage(damage, holding)) {
+              return { type: "breath" } as const;
+            }
             yield* emit(state, {
               type: "diagnostic",
               message: "The water did not stop an attacking enderman",
