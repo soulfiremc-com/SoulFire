@@ -2764,6 +2764,9 @@ const DRAGON_PERCH_SETTLE_MS = 500;
 // every half second.
 const DRAGON_PERCH_HEIGHT_TOLERANCE = 0.05;
 const DRAGON_PERCH_STEADY_CHECKS = 2;
+/// A perched dragon's breath cloud sits nine blocks along its head with a
+/// radius of five.
+const DRAGON_BREATH_WATCH_RADIUS = 16;
 const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 /// With the crystals gone the dragon perches after most circles, so a few
 /// waits see several perches.
@@ -2900,6 +2903,22 @@ function bedBombDragon(
       // breath caught it on the way. Waiting on its own side brings the head
       // round to it.
       if (!isHeadTowardBot(dragon, observation.player.position)) {
+        steadyChecks = DRAGON_PERCH_STEADY_CHECKS;
+        waitedMs += DRAGON_PERCH_SETTLE_MS;
+        continue;
+      }
+      // A perched dragon breathes along its head for ten seconds, then looks
+      // round and roars for about three before it breathes again. A live bot
+      // that ran in as the dragon sat met the breath on the way and turned
+      // back hurt. The bot goes in the gap, once the breath has cleared.
+      const breath = yield* driver.queryEntities({
+        origin: dragon.position,
+        radius: DRAGON_BREATH_WATCH_RADIUS,
+        selector: { entityTypes: ["minecraft:area_effect_cloud"] },
+        maximumResults: 1,
+      });
+      if (breath.length > 0) {
+        steadyChecks = DRAGON_PERCH_STEADY_CHECKS;
         waitedMs += DRAGON_PERCH_SETTLE_MS;
         continue;
       }

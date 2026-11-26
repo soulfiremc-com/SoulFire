@@ -8633,6 +8633,75 @@ describe("beat-game behavior programs", () => {
     expect(driver.paths[0]?.position).toMatchObject({ x: 9.5, y: 61, z: 0.5 });
   }, 30_000);
 
+  it("waits out a perched dragon's breath before running in", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: the bot ran in as the dragon breathed along its
+    // head, and met the breath on the way.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 18.5, y: 61, z: 1.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:cobblestone": 8 },
+    });
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:area_effect_cloud") === true
+        ? [
+            {
+              connectionEpoch: "epoch-1",
+              networkId: 77,
+              entityType: "minecraft:area_effect_cloud",
+              position: { x: 9.5, y: 61, z: 0.5, dimension: "minecraft:the_end" },
+              velocity: { x: 0, y: 0, z: 0 },
+              alive: true,
+              observedAt: "2026-01-01T00:00:01.000Z",
+            },
+          ]
+        : query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+          ? [
+              {
+                connectionEpoch: "epoch-1",
+                networkId: 42,
+                entityType: "minecraft:ender_dragon",
+                position: { x: 0.3, y: 64, z: 0.5, dimension: "minecraft:the_end" },
+                velocity: { x: 0, y: 0, z: 0 },
+                alive: true,
+                health: 100,
+                // A yaw of 90 points the head east, toward the bot.
+                rotation: { yaw: 90, pitch: 0 },
+                observedAt: "2026-01-01T00:00:01.000Z",
+              },
+            ]
+          : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 1500,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    expect(driver.paths).toEqual([]);
+  }, 30_000);
   it("goes for a perch wounded when it has no way to heal", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: no food left, hunger at sixteen, and fourteen
