@@ -7188,6 +7188,9 @@ describe("beat-game behavior programs", () => {
 
   it("waits for the End dimension before completing portal entry", async () => {
     const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      position: { x: 2.5, y: 32, z: 5.5, dimension: "minecraft:overworld" },
+    });
     const portals = Array.from({ length: 9 }, (_, index) => ({
       x: 1 + (index % 3),
       y: 31,
@@ -7314,12 +7317,20 @@ describe("beat-game behavior programs", () => {
         await Effect.runPromise(
           enterEndPortal(driver, { transitionTimeoutMs: 100 }).pipe(Effect.result),
         );
-        return driver.actions.filter((action) => action.type === "dig-block");
+        return {
+          digs: driver.actions.filter((action) => action.type === "dig-block"),
+          paths: driver.paths.map(({ position }) => position),
+        };
       }),
     );
 
-    expect(results[0]).toEqual([]);
-    expect(results[1]).toContainEqual({
+    expect(results[0]?.digs).toEqual([]);
+    // A live bot walked into a crafting table and a block on its way to a
+    // far rim. It walks around the frame to the spot outside that rim first.
+    expect(results[0]?.paths).toEqual([
+      { x: 5.5, y: 32, z: 2.5, dimension: "minecraft:overworld" },
+    ]);
+    expect(results[1]?.digs).toContainEqual({
       type: "dig-block",
       position: { x: 2, y: 32, z: 4, dimension: "minecraft:overworld" },
     });

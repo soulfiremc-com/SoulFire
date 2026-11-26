@@ -2232,6 +2232,11 @@ export function enterEndPortal(
           rimTarget,
           options.path,
         );
+        // The climb walks straight at the rim. A live bot set off from the
+        // far side of a crafting table and a block it had left by the frame,
+        // walked into them, and failed the climb time after time. It first
+        // walks to the spot just outside the rim.
+        yield* approachEndPortalRimFront(driver, portalCenter, rimTarget, options.path);
         const changedOnApproach = yield* navigateUntilDimensionChange(
           driver,
           initialDimension,
@@ -2481,6 +2486,35 @@ function centerOfBlocks(
     y: Math.min(...blocks.map(({ position }) => position.y)) + 0.5,
     z: blocks.reduce((total, block) => total + block.position.z + 0.5, 0) / blocks.length,
   };
+}
+
+const END_PORTAL_RIM_FRONT_TOLERANCE = 1.5;
+
+function approachEndPortalRimFront(
+  driver: BeatGameDriver,
+  portalCenter: Readonly<{ x: number; y: number; z: number }>,
+  rim: BeatGameBlockPosition,
+  path: Partial<BeatGamePathPolicy> | undefined,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const player = (yield* driver.observe).player.position;
+    const direction = endPortalOutwardDirection(portalCenter, rim);
+    const front = {
+      x: rim.x + direction.x + 0.5,
+      y: Math.floor(player.y),
+      z: rim.z + direction.z + 0.5,
+      dimension: rim.dimension,
+    };
+    if (
+      front.y < rim.y - 1 ||
+      Math.hypot(player.x - front.x, player.z - front.z) <= END_PORTAL_RIM_FRONT_TOLERANCE
+    ) {
+      return;
+    }
+    yield* driver
+      .pathfind(front, 0.5, { ...mergePathPolicy(path), allowMining: true, allowPlacing: true })
+      .pipe(Effect.ignore);
+  });
 }
 
 /// The rim to climb onto: the nearest whose standing room is clear, or the
@@ -3934,6 +3968,11 @@ export function exitEnd(
           rimTarget,
           options.path,
         );
+        // The climb walks straight at the rim. A live bot set off from the
+        // far side of a crafting table and a block it had left by the frame,
+        // walked into them, and failed the climb time after time. It first
+        // walks to the spot just outside the rim.
+        yield* approachEndPortalRimFront(driver, portalCenter, rimTarget, options.path);
         const changedOnApproach = yield* navigateUntilDimensionChange(
           driver,
           initialDimension,
