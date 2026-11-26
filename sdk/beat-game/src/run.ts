@@ -16095,6 +16095,9 @@ export function selectDragonBreathEscapeTarget(
 /// Walks out of a breath cloud. The dragon's fireballs leave clouds anywhere
 /// on the island. A live bot at its edge walked away from the fountain toward
 /// the void, barely moved, and died in a fireball's cloud.
+/// Long enough to sprint three blocks, a fresh cloud's radius.
+const DRAGON_BREATH_SPRINT_MS = 700;
+
 function leaveDragonBreath(
   state: RunState,
   position: BeatGamePosition,
@@ -16116,6 +16119,21 @@ function leaveDragonBreath(
       message: "Leaving dragon breath",
       data: { position, target, ...(cloud === undefined ? {} : { cloud: cloud.position }) },
     });
+    // A cloud hits again a second later. A live bot planned its route
+    // first and took two or three hits for every fireball. A sprint
+    // straight away leaves a fresh cloud before its next hit.
+    const awayX = target.x - position.x;
+    const awayZ = target.z - position.z;
+    if (Math.hypot(awayX, awayZ) > 0.5) {
+      yield* state.driver.act({
+        type: "look",
+        yaw: (Math.atan2(-awayX, awayZ) * 180) / Math.PI,
+        pitch: 0,
+      });
+      yield* state.driver.act({ type: "set-movement", forward: true, sprint: true });
+      yield* Effect.sleep(DRAGON_BREATH_SPRINT_MS);
+      yield* state.driver.act({ type: "reset-movement" });
+    }
     yield* state.driver
       .pathfindXZ(target.x, target.z, position.dimension, DRAGON_BREATH_ESCAPE_RADIUS, {
         ...state.strategy.path,

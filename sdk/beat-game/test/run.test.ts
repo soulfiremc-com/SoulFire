@@ -56222,6 +56222,8 @@ describe("beat-game run lifecycle", () => {
 
     expect(fight.started).toBe(true);
     expect(diagnostics).toContain("Leaving dragon breath");
+    // It sprinted straight off before planning a route.
+    expect(driver.actions).toContainEqual({ type: "set-movement", forward: true, sprint: true });
     expect(diagnostics).not.toContain("Poured water against an attacking enderman");
   });
 
