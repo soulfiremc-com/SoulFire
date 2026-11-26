@@ -56554,6 +56554,11 @@ describe("beat-game run lifecycle", () => {
     expect(escape?.z).toBeCloseTo(-6 - (12 * 6) / Math.hypot(7, 6));
     // The End spawn platform can sit in a pocket that only digging leaves.
     expect(escape?.allowMining).toBe(true);
+    // A live bot sprinted out looking level, met an enderman's eyes, and
+    // died to it.
+    const looks = driver.actions.filter((action) => action.type === "look");
+    expect(looks.length).toBeGreaterThan(0);
+    expect(looks.every((look) => look.pitch >= 20)).toBe(true);
   });
 
   it("walks back to the water it poured against an enderman", async () => {

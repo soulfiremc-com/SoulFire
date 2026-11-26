@@ -16011,6 +16011,11 @@ function escapeEnvironmentalDamage(
 // leave the same lingering cloud where they land. A live bot stood in breath
 // for 14 seconds, poured water against a nearby enderman it took for the
 // attacker, and died without moving.
+/// A sprint only follows the yaw, so the bot runs looking down. A level
+/// look runs along the eyes of endermen across the End island. A live bot
+/// sprinted out of dragon breath looking level, an enderman turned on it,
+/// and it died four seconds later.
+const ENDERMAN_SAFE_LOOK_PITCH = 30;
 const DRAGON_BREATH_DAMAGE_TYPE = "minecraft:indirect_magic";
 const DRAGON_BREATH_RECENT_MS = 1500;
 const DRAGON_BREATH_ESCAPE_DISTANCE = 12;
@@ -16136,7 +16141,7 @@ function leaveDragonBreath(
       yield* state.driver.act({
         type: "look",
         yaw: (Math.atan2(-awayX, awayZ) * 180) / Math.PI,
-        pitch: 0,
+        pitch: ENDERMAN_SAFE_LOOK_PITCH,
       });
       yield* state.driver.act({ type: "set-movement", forward: true, sprint: true });
       yield* Effect.sleep(DRAGON_BREATH_SPRINT_MS);
