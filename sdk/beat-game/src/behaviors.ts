@@ -3023,10 +3023,11 @@ function leaveShelter(
 ): Effect.Effect<void, BeatGameDriverError> {
   return Effect.gen(function* () {
     const player = (yield* driver.observe).player.position;
-    // A roof half built still hides the bot. A live bot sat under one block
-    // of its roof for half an hour, out of the dragon's sight, while the
-    // dragon strafed it and never landed.
-    if (!(yield* isCovered(driver, player))) {
+    // A roof half built, or none over a narrow shaft, still hides the bot.
+    // Live bots sat under one block of a roof and at the foot of an open
+    // shaft for half an hour each, out of the dragon's sight, while the
+    // dragon strafed them and never landed.
+    if (!(yield* isCovered(driver, player)) && !(yield* isInPit(driver, player))) {
       return;
     }
     yield* driver.pathfind(
@@ -3108,6 +3109,28 @@ function isSheltered(
       }
     }
     return true;
+  });
+}
+
+/// Whether walls rise above the bot's head on at least three sides.
+function isInPit(
+  driver: BeatGameDriver,
+  position: BeatGamePosition,
+): Effect.Effect<boolean, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    let walls = 0;
+    for (const [dx, dz] of HORIZONTAL_OFFSETS) {
+      const cell = {
+        x: Math.floor(position.x) + dx,
+        y: Math.floor(position.y) + 2,
+        z: Math.floor(position.z) + dz,
+        dimension: position.dimension,
+      };
+      if (!(yield* isOpen(driver, cell))) {
+        walls += 1;
+      }
+    }
+    return walls >= 3;
   });
 }
 
