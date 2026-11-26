@@ -137,10 +137,10 @@ describe("beat-game requirements", () => {
     expect(missingInTheEnd({ ...pack, "minecraft:stone_pickaxe": 1 })).not.toContain("pickaxe");
   });
 
-  it("carries four beds into a fast run's dragon fight unless sheep ran out", () => {
+  it("carries three beds into a fast run's dragon fight unless sheep ran out", () => {
     expect(keys(fastBeatGameStrategy)).toContainEqual({
       key: "dragon-beds",
-      targetCount: 4,
+      targetCount: 3,
       currentCount: 1,
     });
     expect(keys(fastBeatGameStrategy, true).map(({ key }) => key)).not.toContain("dragon-beds");

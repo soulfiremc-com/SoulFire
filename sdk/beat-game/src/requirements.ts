@@ -126,7 +126,10 @@ const FAST_READY_SHIELD_PRIORITY = 113;
 // before it reached armor at the end of preparation.
 const FAST_CHESTPLATE_PRIORITY = 109;
 const FAST_HELMET_PRIORITY = 108;
-const DRAGON_BED_COUNT = 4;
+// The crystals go first, so the dragon cannot heal between trips and
+// perches after most circles. A live bot holding three beds hunted sheep
+// 470 blocks from the portal for an hour for the wool of a fourth.
+const DRAGON_BED_COUNT = 3;
 
 export const CHESTPLATE_ITEM_IDS = [
   "minecraft:iron_chestplate",
