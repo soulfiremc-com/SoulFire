@@ -1051,6 +1051,8 @@ const RESPAWN_BED_KEEP_RADIUS = 256;
 /// Beds the bot keeps for the dragon when it leaves one as a respawn point.
 const RESPAWN_BED_MINIMUM_CARRIED = 2;
 const RESPAWN_BED_REACH = 3;
+/// How near a remembered respawn bed must stand to be used again.
+const RESPAWN_BED_CLAIM_RADIUS = 32;
 const STONE_SWORD_COBBLESTONE = 2;
 const STONE_PICKAXE_COBBLESTONE = 3;
 const FURNACE_STONE_COUNT = 8;
@@ -2067,14 +2069,24 @@ function claimRespawnBed(
 ): Effect.Effect<void, BeatGameError | BeatGameDriverError> {
   return Effect.gen(function* () {
     const remembered = (yield* Ref.get(state.checkpoint)).memory.respawnBed;
+    const here = (yield* state.driver.observe).player.position;
     let bed: BeatGameBlockPosition | undefined;
-    if (remembered !== undefined) {
-      const standing = yield* state.driver.queryBlocks({
-        center: blockCenter(remembered),
-        radius: 0.25,
-        selector: { blockIds: BED_ITEM_IDS },
-        maximumResults: 1,
-      });
+    // A bed out of the loaded area cannot be used from here. A live bot's
+    // remembered bed lay 120 blocks from the portal room, the look for it
+    // failed, and the bot went in without a respawn point.
+    if (
+      remembered !== undefined &&
+      remembered.dimension === here.dimension &&
+      horizontalDistanceSquared(remembered, here) <= RESPAWN_BED_CLAIM_RADIUS ** 2
+    ) {
+      const standing = yield* state.driver
+        .queryBlocks({
+          center: blockCenter(remembered),
+          radius: 0.25,
+          selector: { blockIds: BED_ITEM_IDS },
+          maximumResults: 1,
+        })
+        .pipe(Effect.orElseSucceed(() => []));
       if (standing.some((block) => sameBlockPosition(block.position, remembered))) {
         bed = remembered;
       }

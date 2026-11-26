@@ -47890,6 +47890,90 @@ describe("beat-game run lifecycle", () => {
     });
   }, 10_000);
 
+  it("leaves a new respawn bed when its old one lies out of reach", async () => {
+    // As in a live run: the remembered bed lay 120 blocks from the portal
+    // room, and the bot went into the End without a respawn point.
+    const driver = new FakeBeatGameDriver();
+    const portalRoomCenter = {
+      x: 0.5,
+      y: 64,
+      z: 0.5,
+      dimension: "minecraft:overworld",
+    } as const;
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:ender_eye": 11,
+        "minecraft:white_bed": 3,
+        "minecraft:cooked_beef": 16,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+        "minecraft:shield": 1,
+        "minecraft:iron_chestplate": 1,
+        "minecraft:iron_helmet": 1,
+        "minecraft:bow": 1,
+        "minecraft:arrow": 32,
+      },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    installNightBedTestWorld(driver);
+    const resolveBlocks = driver.blockQueryResolver;
+    driver.blockQueryResolver = (query) => {
+      if (Math.hypot(query.center.x - 120, query.center.z) < 4) {
+        throw new Error("Target block is not loaded");
+      }
+      return resolveBlocks(query);
+    };
+    const store = new InMemoryBeatGameCheckpointStore();
+    const initial = checkpoint(BeatGamePhase.ACTIVATE_END_PORTAL, {
+      runId: "respawn-replace-run",
+      teamId: "respawn-replace-team",
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            emptyPortalFrames: 10,
+            portalRoomCenter,
+            respawnBed: { x: 120, y: 64, z: 0, dimension: "minecraft:overworld" },
+          },
+        },
+        undefined,
+      ),
+    );
+    const framesSearched = () =>
+      driver.blockQueries.some(
+        ({ selector }) => selector.blockIds?.includes("minecraft:end_portal_frame") === true,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "respawn-replace-run",
+            team: { teamId: "respawn-replace-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 3000;
+          while (!framesSearched() && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual(
+      objectContaining({ type: "select-item", selector: { itemIds: ["minecraft:white_bed"] } }),
+    );
+    expect(driver.actions.some((action) => action.type === "interact-block")).toBe(true);
+  }, 10_000);
+
   it("walks above the portal room when the dug route down outgrows the search", async () => {
     const driver = new FakeBeatGameDriver();
     // As in a live run: from ninety blocks off, every dug route down to the
