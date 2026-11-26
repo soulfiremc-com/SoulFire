@@ -2773,7 +2773,11 @@ const BED_BOMB_PERCH_TIMEOUT_MS = 120_000;
 const BED_BOMB_PERCH_ROUNDS = 5;
 const DRAGON_PERCH_WATCH_DISTANCE = 17;
 const DRAGON_PERCH_WATCH_MINIMUM_DISTANCE = 15;
-const BED_BOMB_MINIMUM_HEALTH = 16;
+/// Fireballs while the bot waits keep its health below full. A live bot
+/// that went to heal below sixteen spent most of a perch in its shelter,
+/// perch after perch. With the wall in place and the breath waited out, a
+/// bed costs it little.
+const BED_BOMB_MINIMUM_HEALTH = 10;
 /// Health comes back on its own only at this hunger or above.
 const NATURAL_REGENERATION_MINIMUM_FOOD = 18;
 const BED_BOMB_RECOVERY_DISTANCE = 28;
