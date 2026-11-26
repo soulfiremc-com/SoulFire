@@ -25,7 +25,7 @@ import {
   type BeatGameBlockPosition,
   type BeatGameEntityObservation,
 } from "../src/index.js";
-import { bedBombWallColumn } from "../src/behaviors.js";
+import { bedBombWallColumn, selectDragonPerchWatchSpot } from "../src/behaviors.js";
 import {
   blockObservation,
   FakeBeatGameDriver,
@@ -7258,6 +7258,19 @@ describe("beat-game behavior programs", () => {
     expect(driver.actions).toContainEqual({ type: "reset-movement" });
     expect(driver.activeControlScopes).toBe(0);
     expect(driver.maximumActiveControlScopes).toBe(1);
+  });
+
+  it("waits for a perch away from lingering breath clouds", () => {
+    // As in a live run: a fireball's cloud lay on the bot's watch spot. The
+    // bot walked out, came straight back to the same spot, and died there.
+    const cloud = { x: 14.9, z: 6.5 };
+    const spot = selectDragonPerchWatchSpot({ x: 26.9, z: 6.5 }, [cloud]);
+
+    assert(spot !== undefined);
+    expect(Math.hypot(spot.x, spot.z)).toBeCloseTo(17);
+    expect(Math.hypot(spot.x - cloud.x, spot.z - cloud.z)).toBeGreaterThanOrEqual(9);
+    expect(selectDragonPerchWatchSpot({ x: 14.9, z: 6.5 }, [cloud])).toBeDefined();
+    expect(selectDragonPerchWatchSpot({ x: 0, z: -17 }, [cloud])).toBeUndefined();
   });
 
   it("climbs onto a clear side of the End portal rim", async () => {

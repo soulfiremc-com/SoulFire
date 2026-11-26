@@ -3349,26 +3349,71 @@ function recoverAwayFromPerch(
 /// Walks within reach of the fountain to wait for the dragon to perch. A
 /// perch lasts seconds, and the End arrival platform lies a hundred blocks
 /// out.
+// A fireball's cloud grows to a radius of seven blocks and lingers for
+// thirty seconds.
+const DRAGON_PERCH_WATCH_CLOUD_CLEARANCE = 9;
+const DRAGON_PERCH_WATCH_CLOUD_SEARCH_RADIUS = 32;
+const DRAGON_PERCH_WATCH_DIRECTIONS = 32;
+
+/// Picks where to wait for the dragon to perch: where the bot stands when it
+/// lies in the watch band away from every breath cloud, otherwise the spot
+/// on the watch ring nearest its bearing that keeps clear of the clouds.
+/// A live bot walked out of a fireball's cloud, went straight back to its
+/// watch spot inside it, and died there.
+export function selectDragonPerchWatchSpot(
+  player: Pick<BeatGamePosition, "x" | "z">,
+  clouds: readonly Pick<BeatGamePosition, "x" | "z">[],
+): { readonly x: number; readonly z: number } | undefined {
+  const clearOfClouds = (spot: { readonly x: number; readonly z: number }) =>
+    clouds.every(
+      (cloud) =>
+        Math.hypot(spot.x - cloud.x, spot.z - cloud.z) >= DRAGON_PERCH_WATCH_CLOUD_CLEARANCE,
+    );
+  const distance = Math.hypot(player.x, player.z);
+  if (
+    distance <= DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE &&
+    distance >= DRAGON_PERCH_WATCH_MINIMUM_DISTANCE &&
+    clearOfClouds(player)
+  ) {
+    return undefined;
+  }
+  const bearing = distance < 1 ? 0 : Math.atan2(player.z, player.x);
+  const spots = Array.from({ length: DRAGON_PERCH_WATCH_DIRECTIONS }, (_, index) => {
+    // Alternates either side of the bearing, nearest first.
+    const step = Math.ceil(index / 2) * (index % 2 === 0 ? 1 : -1);
+    const angle = bearing + (step * 2 * Math.PI) / DRAGON_PERCH_WATCH_DIRECTIONS;
+    return {
+      x: Math.cos(angle) * DRAGON_PERCH_WATCH_DISTANCE,
+      z: Math.sin(angle) * DRAGON_PERCH_WATCH_DISTANCE,
+    };
+  });
+  return spots.find((spot) => clearOfClouds(spot)) ?? spots[0];
+}
+
 function approachDragonPerchWatch(
   driver: BeatGameDriver,
   path: Partial<BeatGamePathPolicy> | undefined,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     const player = (yield* driver.observe).player.position;
-    const distance = Math.hypot(player.x, player.z);
+    const clouds = yield* driver.queryEntities({
+      origin: player,
+      radius: DRAGON_PERCH_WATCH_CLOUD_SEARCH_RADIUS,
+      selector: { entityTypes: ["minecraft:area_effect_cloud"] },
+      maximumResults: 16,
+    });
     // A perched dragon's breath spreads to fourteen blocks along its head.
     // A live bot waiting thirteen blocks out burned in it.
-    if (
-      distance <= DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE &&
-      distance >= DRAGON_PERCH_WATCH_MINIMUM_DISTANCE
-    ) {
+    const spot = selectDragonPerchWatchSpot(
+      player,
+      clouds.map(({ position }) => position),
+    );
+    if (spot === undefined) {
       return;
     }
-    const [directionX, directionZ] =
-      distance < 1 ? [1, 0] : [player.x / distance, player.z / distance];
     yield* driver.pathfindXZ(
-      directionX * DRAGON_PERCH_WATCH_DISTANCE,
-      directionZ * DRAGON_PERCH_WATCH_DISTANCE,
+      spot.x,
+      spot.z,
       player.dimension,
       DRAGON_PERCH_WATCH_RADIUS,
       // Water the bot poured against endermen floods the arrival platform
