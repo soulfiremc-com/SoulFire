@@ -8481,6 +8481,14 @@ describe("beat-game behavior programs", () => {
     expect(placements.findIndex((action) => action.against.z === 7)).toBeLessThan(
       placements.findIndex((action) => action.against.z === 9),
     );
+    // As in a live run: a bed's blast over a one-block wall killed a bot
+    // with twelve health. The wall stands two blocks high.
+    expect(driver.actions).toContainEqual({
+      type: "place-block",
+      against: { x: 0, y: 61, z: 9, dimension: "minecraft:the_end" },
+      face: "up",
+      hand: "main",
+    });
     expect(
       driver.actions.filter(
         (action) =>
