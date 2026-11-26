@@ -8426,6 +8426,56 @@ describe("beat-game behavior programs", () => {
     }
   });
 
+  it("comes back within a perched dragon's sight while it waits", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: an escape from a fireball's cloud left the bot
+    // twenty-two blocks out, beyond the twenty a perched dragon looks.
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 14.9, y: 63, z: 16.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": 2, "minecraft:end_stone": 8 },
+    });
+    let angle = 0;
+    driver.entityQueryResolver = (query) => {
+      if (query.selector.entityTypes?.includes("minecraft:ender_dragon") !== true) {
+        return [];
+      }
+      angle += 0.3;
+      return [
+        {
+          connectionEpoch: "epoch-1",
+          networkId: 42,
+          entityType: "minecraft:ender_dragon",
+          position: {
+            x: 40 * Math.cos(angle),
+            y: 80,
+            z: 40 * Math.sin(angle),
+            dimension: "minecraft:the_end",
+          },
+          velocity: { x: 0, y: 0, z: 0 },
+          alive: true,
+          health: 100,
+          observedAt: "2026-01-01T00:00:01.000Z",
+        },
+      ];
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        bedPerchTimeoutMs: 600,
+        maximumCrystalPasses: 1,
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }).pipe(Effect.result),
+    );
+
+    const distance = Math.hypot(14.9, 16.5);
+    expect(driver.xzPaths[0]).toMatchObject({
+      x: closeTo((14.9 / distance) * 16, 0.1),
+      z: closeTo((16.5 / distance) * 16, 0.1),
+    });
+  }, 20_000);
+
   it("waits on its side for a perched dragon facing away to turn", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

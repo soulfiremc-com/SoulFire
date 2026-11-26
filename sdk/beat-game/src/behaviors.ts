@@ -2773,7 +2773,10 @@ const BED_BOMB_MINIMUM_HEALTH = 16;
 const BED_BOMB_RECOVERY_DISTANCE = 28;
 const BED_BOMB_RECOVERY_WAIT_MS = 20_000;
 const BED_BOMB_RECOVERY_POLL_MS = 500;
-const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 24;
+/// A perched dragon looks for players within twenty blocks and takes off
+/// after five seconds without one. A live bot escaping a fireball's cloud
+/// ended up twenty-two blocks out, and a perch passed it by.
+const DRAGON_PERCH_WATCH_MAXIMUM_DISTANCE = 18;
 const DRAGON_PERCH_WATCH_RADIUS = 3;
 const DRAGON_PERCH_WATCH_TIMEOUT_MS = 60_000;
 const BED_BOMB_GROUND_SCAN_DEPTH = 8;
@@ -2867,6 +2870,7 @@ function bedBombDragon(
         Effect.catchTag("BeatGameDriverError", () => Effect.void),
       );
       if (!perched) {
+        yield* approachDragonPerchWatch(driver, options.path);
         steadyChecks = 0;
         waitedMs += DRAGON_PERCH_SETTLE_MS;
         continue;
