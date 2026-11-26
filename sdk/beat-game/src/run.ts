@@ -6538,12 +6538,39 @@ function waitForBurningDamageSince(state: RunState, since: string): Effect.Effec
   });
 }
 
+const MELEE_DAMAGE_TYPE = "minecraft:mob_attack";
+
+/// Waits for a second melee hit after `since`. Arrows do not count: they are
+/// what most cover is for.
+function waitForRepeatedMeleeDamageSince(state: RunState, since: string): Effect.Effect<void> {
+  const sinceMs = Date.parse(since);
+  return Effect.gen(function* () {
+    let firstHitAt: string | undefined;
+    for (;;) {
+      const damage = yield* Ref.get(state.lastDamage);
+      if (damage?.damageType === MELEE_DAMAGE_TYPE && Date.parse(damage.observedAt) > sinceMs) {
+        if (firstHitAt === undefined) {
+          firstHitAt = damage.observedAt;
+        } else if (damage.observedAt !== firstHitAt) {
+          return;
+        }
+      }
+      yield* Effect.sleep(MINIMUM_RECOVERY_POLL_MS);
+    }
+  });
+}
+
 // Digs down and seals the shaft, or walls the bot in where it stands. Both
 // keep out arrows, and a three-block-tall enderman cannot reach into either.
 //
 // The cover goes up even when a supervisor asks it to stop, but fire stops
 // it. A live bot dug a shaft by hand where a fireball had lit the ground,
 // and burned from 17 health to 0 before the shaft was done.
+//
+// Blows while it builds stop it too. A live bot walled itself in by the
+// End portal with a silverfish at its side. Each wall the silverfish stood
+// in waited ten seconds to be refused, and the bot was bitten to death in
+// half a minute without striking back.
 function takeCoverInPlace(
   state: RunState,
   options: { readonly allowShaft?: boolean } = {},
@@ -6552,10 +6579,11 @@ function takeCoverInPlace(
     Effect.map(DateTime.formatIso),
     Effect.flatMap((startedAt) =>
       Effect.uninterruptibleMask((restore) =>
-        Effect.raceFirst(
+        Effect.raceAllFirst([
           restore(buildCoverInPlace(state, options)),
           waitForBurningDamageSince(state, startedAt).pipe(Effect.as(undefined)),
-        ),
+          waitForRepeatedMeleeDamageSince(state, startedAt).pipe(Effect.as(undefined)),
+        ]),
       ),
     ),
   );
