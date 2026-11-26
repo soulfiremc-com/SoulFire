@@ -35160,6 +35160,141 @@ describe("beat-game run lifecycle", () => {
     expect(driver.actions.some((action) => action.type === "dig-block")).toBe(false);
   });
 
+  it("swims to a breathing pocket at once under a stone ceiling", async () => {
+    // As in a live run: stone lay right over the bot's head. It jumped into
+    // the stone until its air was too low to swim to the opening three
+    // blocks away, and drowned.
+    const driver = new FakeBeatGameDriver();
+    driver.surfaceQueryResolver = () => [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.blockQueryResolver = (query) => {
+      const position = {
+        x: Math.floor(query.center.x),
+        y: Math.floor(query.center.y),
+        z: Math.floor(query.center.z),
+        dimension: query.center.dimension,
+      };
+      if (
+        query.selector.blockIds?.some(
+          (blockId) =>
+            blockId === "minecraft:air" ||
+            blockId === "minecraft:cave_air" ||
+            blockId === "minecraft:void_air",
+        ) === true
+      ) {
+        return [
+          blockObservation(
+            {
+              x: 0,
+              y: 29,
+              z: 0,
+              dimension: "minecraft:overworld",
+            },
+            {
+              blockId: "minecraft:air",
+              diggable: false,
+              replaceable: true,
+            },
+          ),
+        ];
+      }
+      if (query.selector.blockIds?.includes("minecraft:water") === true) {
+        return position.y === 28 || (position.y >= 31 && position.y !== 33)
+          ? [
+              blockObservation(position, {
+                blockId: "minecraft:water",
+                diggable: false,
+                replaceable: true,
+              }),
+            ]
+          : [];
+      }
+      if (query.selector.blockIds === undefined) {
+        if (position.y === 33) {
+          return [blockObservation(position)];
+        }
+        const blockId = position.y === 29 ? "minecraft:air" : "minecraft:water";
+        return [
+          blockObservation(position, {
+            blockId,
+            diggable: false,
+            replaceable: true,
+          }),
+        ];
+      }
+      return [];
+    };
+    // The bot's air runs down while it stays under the ceiling.
+    let escapedToPocket = false;
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        const { player } = driver.currentObservation;
+        if (!escapedToPocket && player.position.y === 31 && player.air > 0) {
+          driver.currentObservation = observation({
+            air: player.air - 2,
+            position: player.position,
+          });
+        }
+        return driver.currentObservation;
+      });
+    let resolveEscaped!: () => void;
+    const escaped = new Promise<void>((resolve) => {
+      resolveEscaped = resolve;
+    });
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        if (position.y === 28) {
+          escapedToPocket = true;
+          driver.currentObservation = observation({
+            air: 300,
+            position,
+          });
+          resolveEscaped();
+        }
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            air: 195,
+            position: { x: 0.5, y: 31, z: 0.5 },
+          });
+          yield* Effect.promise(() => escaped).pipe(Effect.timeout("5 seconds"));
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.paths).toContainEqual({
+      position: {
+        x: 0.5,
+        y: 28,
+        z: 0.5,
+        dimension: "minecraft:overworld",
+      },
+      radius: 0.75,
+      policy: objectContaining({
+        allowMining: false,
+        allowPlacing: false,
+        avoidFluids: false,
+        maxSearchTimeMs: 4000,
+      }),
+    });
+    expect(driver.currentObservation.player.air).toBe(300);
+    expect(driver.actions.some((action) => action.type === "dig-block")).toBe(false);
+  });
+
   it("does not spend critical air on breathing-pocket path searches", async () => {
     const driver = new FakeBeatGameDriver();
     driver.surfaceQueryResolver = () => [];

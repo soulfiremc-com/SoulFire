@@ -8356,96 +8356,110 @@ function recoverFromFluid(
   observation: BeatGameObservation,
   seekDrySurfaceAfterRecovery: boolean,
 ): Effect.Effect<void, BeatGameDriverError> {
-  return state.driver
-    .withControl(
-      state.driver
-        .act({
-          type: "look",
-          yaw: observation.player.rotation.yaw,
-          pitch: -90,
-        })
-        .pipe(
-          Effect.andThen(
-            state.driver.act({
-              type: "set-movement",
-              jump: true,
-            }),
-          ),
-          Effect.andThen(
-            waitForAirRecovery(state, 60, observation.player.position.y, observation.player.air),
-          ),
-          Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
-        ),
-    )
-    .pipe(
-      Effect.flatMap((recovered) =>
-        recovered && !seekDrySurfaceAfterRecovery
-          ? Effect.succeed(true)
-          : (recovered
-              ? Effect.succeed(false)
-              : state.driver.observe.pipe(
-                  Effect.flatMap((latest) =>
-                    hasAirForBreathingPocketPath(latest)
-                      ? escapeNearbyBreathingPocket(state, latest)
-                      : Effect.succeed(false),
-                  ),
-                )
-            ).pipe(
-              Effect.flatMap((reachedBreathingPocket) =>
-                swimToNearbyDrySurface(state, true).pipe(
-                  Effect.map((reachedDrySurface) => reachedDrySurface || reachedBreathingPocket),
+  // Rock right over its head stops a swim straight up. A live bot under a
+  // stone ceiling jumped into it until its air was too low to swim to the
+  // opening three blocks away, and drowned.
+  const [, aboveHead] = overheadEscapeBlocks(observation.player.position);
+  const swimStraightUp = queryExactBlock(state.driver, aboveHead).pipe(
+    Effect.flatMap((block) =>
+      block !== undefined && block.solid && !block.replaceable
+        ? Effect.succeed(false)
+        : state.driver.withControl(
+            state.driver
+              .act({
+                type: "look",
+                yaw: observation.player.rotation.yaw,
+                pitch: -90,
+              })
+              .pipe(
+                Effect.andThen(
+                  state.driver.act({
+                    type: "set-movement",
+                    jump: true,
+                  }),
                 ),
+                Effect.andThen(
+                  waitForAirRecovery(
+                    state,
+                    60,
+                    observation.player.position.y,
+                    observation.player.air,
+                  ),
+                ),
+                Effect.ensuring(state.driver.act({ type: "reset-movement" }).pipe(Effect.ignore)),
+              ),
+          ),
+    ),
+  );
+  return swimStraightUp.pipe(
+    Effect.flatMap((recovered) =>
+      recovered && !seekDrySurfaceAfterRecovery
+        ? Effect.succeed(true)
+        : (recovered
+            ? Effect.succeed(false)
+            : state.driver.observe.pipe(
+                Effect.flatMap((latest) =>
+                  hasAirForBreathingPocketPath(latest)
+                    ? escapeNearbyBreathingPocket(state, latest)
+                    : Effect.succeed(false),
+                ),
+              )
+          ).pipe(
+            Effect.flatMap((reachedBreathingPocket) =>
+              swimToNearbyDrySurface(state, true).pipe(
+                Effect.map((reachedDrySurface) => reachedDrySurface || reachedBreathingPocket),
               ),
             ),
-      ),
-      Effect.flatMap((reachedDrySurface) =>
-        reachedDrySurface
-          ? Effect.void
-          : state.driver.observe.pipe(
-              Effect.flatMap((latest) =>
-                hasUnsafeAir(latest)
-                  ? escapeNearbyOpenAirColumn(state, latest).pipe(
-                      Effect.flatMap((escaped) =>
-                        escaped ? Effect.void : excavateAirEscapeShaft(state),
-                      ),
-                    )
-                  : hasBreathableHeadSpace(state.driver, latest.player.position).pipe(
-                      Effect.flatMap((breathingAtSurface) =>
-                        breathingAtSurface
-                          ? Effect.void
-                          : escapeToOverworldSurface(state, originalPosition),
-                      ),
+          ),
+    ),
+    Effect.flatMap((reachedDrySurface) =>
+      reachedDrySurface
+        ? Effect.void
+        : state.driver.observe.pipe(
+            Effect.flatMap((latest) =>
+              hasUnsafeAir(latest)
+                ? escapeNearbyOpenAirColumn(state, latest).pipe(
+                    Effect.flatMap((escaped) =>
+                      escaped ? Effect.void : excavateAirEscapeShaft(state),
                     ),
-              ),
-              Effect.result,
-              Effect.flatMap(() => state.driver.observe),
-              Effect.flatMap((latest) =>
-                latest.player.dead
-                  ? Effect.void
-                  : isPlayerInFluid(state.driver, latest.player.position).pipe(
-                      Effect.flatMap((inFluid) =>
-                        !inFluid
-                          ? Effect.void
-                          : attemptsRemaining > 1
-                            ? emergencyAirAscent(state, latest.player.position, {
-                                attemptsRemaining: attemptsRemaining - 1,
-                                seekDrySurfaceAfterRecovery,
-                              })
-                            : Effect.fail(
-                                new BeatGameDriverError({
-                                  operation: "recover-air",
-                                  code: "unreachable",
-                                  retryable: true,
-                                  message:
-                                    "The bot could not reach a stable dry surface before exhausting its air-recovery attempts",
-                                }),
-                              ),
-                      ),
+                  )
+                : hasBreathableHeadSpace(state.driver, latest.player.position).pipe(
+                    Effect.flatMap((breathingAtSurface) =>
+                      breathingAtSurface
+                        ? Effect.void
+                        : escapeToOverworldSurface(state, originalPosition),
                     ),
-              ),
+                  ),
             ),
-      ),
-    );
+            Effect.result,
+            Effect.flatMap(() => state.driver.observe),
+            Effect.flatMap((latest) =>
+              latest.player.dead
+                ? Effect.void
+                : isPlayerInFluid(state.driver, latest.player.position).pipe(
+                    Effect.flatMap((inFluid) =>
+                      !inFluid
+                        ? Effect.void
+                        : attemptsRemaining > 1
+                          ? emergencyAirAscent(state, latest.player.position, {
+                              attemptsRemaining: attemptsRemaining - 1,
+                              seekDrySurfaceAfterRecovery,
+                            })
+                          : Effect.fail(
+                              new BeatGameDriverError({
+                                operation: "recover-air",
+                                code: "unreachable",
+                                retryable: true,
+                                message:
+                                  "The bot could not reach a stable dry surface before exhausting its air-recovery attempts",
+                              }),
+                            ),
+                    ),
+                  ),
+            ),
+          ),
+    ),
+  );
 }
 
 function escapeNearbyBreathingPocket(
