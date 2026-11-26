@@ -110,6 +110,12 @@ const missingInTheEnd = (counts: Record<string, number>) =>
     .map(({ key }) => key);
 
 describe("beat-game requirements", () => {
+  it("does not look for food in the End", () => {
+    // As in a live run: at two health with no food, the bot went hunting on
+    // the End island, where nothing lives to eat, and died.
+    expect(missingInTheEnd({ "minecraft:white_bed": 2, "minecraft:bow": 1 })).not.toContain("food");
+  });
+
   it("crafts a new pickaxe in the End from the stone and wood it carries", () => {
     // Part of the pack a live bot fought the dragon with after its last
     // pickaxe broke there.

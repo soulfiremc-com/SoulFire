@@ -325,8 +325,10 @@ const REQUIREMENTS: Readonly<Record<BeatGamePhase, readonly BeatGameRequirementD
     itemRequirement("chestplate", CHESTPLATE_ITEM_IDS, () => 1, 85),
     itemRequirement("helmet", HELMET_ITEM_IDS, () => 1, 84),
   ],
+  // Nothing in the End feeds the bot, so food is stocked before the portal.
+  // A live bot at two health went looking for food on the End island and
+  // died there.
   [BeatGamePhase.FIGHT_ENDER_DRAGON]: [
-    itemRequirement("food", COOKED_FOOD_ITEM_IDS, ({ targetFoodCount }) => targetFoodCount, 100),
     itemRequirement("ranged-weapon", ["minecraft:bow", "minecraft:crossbow"], () => 1, 80),
     itemRequirement("arrows", ["minecraft:arrow"], () => 32, 75),
   ],
