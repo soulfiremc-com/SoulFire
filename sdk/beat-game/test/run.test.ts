@@ -181,6 +181,19 @@ describe("dragon breath escapes", () => {
     expect(Math.hypot(target.x, target.z)).toBeLessThanOrEqual(30);
   });
 
+  it("keeps out of a perched dragon's breath when it leaves a fireball cloud", () => {
+    // As in a live run: the escape from a fireball's cloud led to six blocks
+    // from the fountain, where the dragon perched and breathed, and the bot
+    // died there.
+    const position = { x: 16.7, z: 2.3 };
+    const cloud = { x: 18, z: 3 };
+
+    const target = selectDragonBreathEscapeTarget(position, cloud);
+
+    expect(Math.hypot(target.x, target.z)).toBeGreaterThanOrEqual(15);
+    expect(Math.hypot(target.x - cloud.x, target.z - cloud.z)).toBeGreaterThanOrEqual(9);
+  });
+
   it("walks inward past a fireball cloud near the island's edge", () => {
     // As in a live run: a fireball's cloud lay beside a bot near the edge.
     // Walking away from the fountain led toward the void, and it died in

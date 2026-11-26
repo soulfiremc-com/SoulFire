@@ -16170,6 +16170,10 @@ const DRAGON_BREATH_ESCAPE_DIRECTIONS = 16;
 // Ground this close to the fountain is solid in every direction.
 const DRAGON_BREATH_ESCAPE_INNER_RING = 30;
 const DRAGON_BREATH_ESCAPE_INWARD_STEP = 4;
+// A perched dragon's breath reaches fourteen blocks from the fountain, and
+// it lands there often. A live bot ran out of a fireball's cloud to six
+// blocks from the fountain, was breathed on there, and died.
+const DRAGON_BREATH_ESCAPE_MINIMUM_RING = 15;
 
 /// Picks where to walk out of dragon breath. With the cloud in sight, it is
 /// the spot the escape distance away that lies farthest from the cloud, a
@@ -16197,7 +16201,8 @@ export function selectDragonBreathEscapeTarget(
       .filter(
         (candidate) =>
           fromCloud(candidate) >= DRAGON_BREATH_CLOUD_CLEARANCE &&
-          Math.hypot(candidate.x, candidate.z) <= outerLimit,
+          Math.hypot(candidate.x, candidate.z) <= outerLimit &&
+          Math.hypot(candidate.x, candidate.z) >= DRAGON_BREATH_ESCAPE_MINIMUM_RING,
       )
       .toSorted((left, right) => fromCloud(right) - fromCloud(left))[0];
     if (clear !== undefined) {
