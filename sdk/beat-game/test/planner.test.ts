@@ -927,6 +927,29 @@ describe("beat-game planner", () => {
               confidence: 0.25,
             },
           ],
+          // A live run's lit workspace there kept the portal reusable too.
+          portalWorkspaces: [
+            {
+              workspaceId: "flooded-workspace",
+              origin: { x: 1, y: 64, z: 0, dimension: "minecraft:overworld" },
+              axis: "x",
+              method: "CAST",
+              status: "ENTERED",
+              targetFrame: [],
+              observedFrame: [],
+              interior: [],
+              protectedBlocks: [],
+              candidateLavaSources: [],
+              rejectedLavaSources: [],
+              waterFlow: [],
+              bucketState: "EMPTY",
+              ignitionState: "IGNITED",
+              interiorState: "PORTAL",
+              entryAttempts: 1,
+              observedAt,
+              updatedAt: observedAt,
+            },
+          ],
           // As in a live run: the way to the portal ran the bot out of air.
           unreachable: [
             {

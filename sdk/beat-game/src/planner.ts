@@ -585,29 +585,39 @@ function hasReusablePortalCandidate(
   ) {
     return false;
   }
-  const dimension = observation.player.position.dimension;
-  // A portal whose route ran the bot out of air is left for a long while, so
-  // the bot gathers what it needs to build one of its own.
-  const now = Date.parse(observation.observedAt);
+  return hasReusablePortalEvidence(
+    checkpoint,
+    observation.player.position.dimension,
+    Date.parse(observation.observedAt),
+  );
+}
+
+/// Whether the bot knows a portal in this dimension it can go back to. A
+/// portal whose route ran the bot out of air is left out for a long while, so
+/// the bot gathers what it needs to build one of its own. A live run walked
+/// into the flooded cave in front of its portal every ten seconds instead.
+export function hasReusablePortalEvidence(
+  checkpoint: BeatGameCheckpoint,
+  dimension: string,
+  now: number,
+): boolean {
   const flooded = checkpoint.memory.unreachable.filter(
-    ({ key, expiresAt }) =>
+    ({ key, value, expiresAt }) =>
       key.startsWith("portal-route-flooded:") &&
+      value.dimension === dimension &&
       expiresAt !== undefined &&
       Date.parse(expiresAt) > now,
   );
+  const usable = (position: { readonly x: number; readonly y: number; readonly z: number }) =>
+    !flooded.some(
+      ({ value }) =>
+        (value.x - position.x) ** 2 + (value.y - position.y) ** 2 + (value.z - position.z) ** 2 <=
+        8 ** 2,
+    );
   if (
     checkpoint.memory.portals.some(
       ({ confidence, value }) =>
-        confidence > 0 &&
-        value.position.dimension === dimension &&
-        !flooded.some(
-          (entry) =>
-            entry.value.dimension === dimension &&
-            (entry.value.x - value.position.x) ** 2 +
-              (entry.value.y - value.position.y) ** 2 +
-              (entry.value.z - value.position.z) ** 2 <=
-              8 ** 2,
-        ),
+        confidence > 0 && value.position.dimension === dimension && usable(value.position),
     )
   ) {
     return true;
@@ -616,7 +626,8 @@ function hasReusablePortalCandidate(
   if (
     activeWorkspace?.origin.dimension === dimension &&
     activeWorkspace.status !== "ABANDONED" &&
-    activeWorkspace.interiorState === "PORTAL"
+    activeWorkspace.interiorState === "PORTAL" &&
+    usable(activeWorkspace.origin)
   ) {
     return true;
   }
@@ -624,7 +635,8 @@ function hasReusablePortalCandidate(
     (workspace) =>
       workspace.origin.dimension === dimension &&
       workspace.status !== "ABANDONED" &&
-      workspace.interiorState === "PORTAL",
+      workspace.interiorState === "PORTAL" &&
+      usable(workspace.origin),
   );
 }
 

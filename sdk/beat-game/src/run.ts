@@ -105,6 +105,7 @@ import {
 } from "./model.js";
 import {
   decideBeatGameAction,
+  hasReusablePortalEvidence,
   isEnd,
   isNether,
   objectiveForPhase,
@@ -4318,6 +4319,7 @@ function executeDecision(
         const hadReusablePortal = hasReusablePortalEvidence(
           actionCheckpoint,
           observation.player.position.dimension,
+          Date.parse(observation.observedAt),
         );
         const buildAndEnter =
           state.hooks.buildAndEnterNether !== undefined
@@ -20287,30 +20289,6 @@ function clearPortalRouteFailures(
       },
     };
   }).pipe(Effect.asVoid);
-}
-
-function hasReusablePortalEvidence(checkpoint: BeatGameCheckpoint, dimension: string): boolean {
-  if (
-    checkpoint.memory.portals.some(
-      ({ confidence, value }) => confidence > 0 && value.position.dimension === dimension,
-    )
-  ) {
-    return true;
-  }
-  const activeWorkspace = checkpoint.activeSkill?.portalWorkspace;
-  if (
-    activeWorkspace?.origin.dimension === dimension &&
-    activeWorkspace.status !== "ABANDONED" &&
-    activeWorkspace.interiorState === "PORTAL"
-  ) {
-    return true;
-  }
-  return checkpoint.memory.portalWorkspaces.some(
-    (workspace) =>
-      workspace.origin.dimension === dimension &&
-      workspace.status !== "ABANDONED" &&
-      workspace.interiorState === "PORTAL",
-  );
 }
 
 function approachRememberedPortal(
