@@ -5082,6 +5082,25 @@ function monitorObservedSafety(
       replanReason: "interrupted an action to put on spare gold boots",
     } satisfies ActionResult);
   }
+  // Retreating or eating in the End, the bot stands still. A live bot ate in
+  // place while a fireball's cloud hit it four times, and died there, since
+  // only the dragon fight gave way to breath.
+  if (
+    decision.type !== "fight-ender-dragon" &&
+    observation.player.position.dimension === "minecraft:the_end" &&
+    observation.player.health < previousObservation.player.health
+  ) {
+    return awaitDamageSince(state, previousObservation.observedAt).pipe(
+      Effect.flatMap((damage) =>
+        isDragonBreathDamage(damage, observation)
+          ? Effect.succeed({
+              replanReason: "interrupted an action to leave dragon breath",
+              environmentalEscapePosition: observation.player.position,
+            } satisfies ActionResult)
+          : Effect.suspend(() => monitor(observation)),
+      ),
+    );
+  }
   // The dragon fight answers its own threats, but not an enderman. A live
   // bot shooting at crystals took two enderman hits before its health fell
   // below the fast profile's threshold, and two more killed it during the

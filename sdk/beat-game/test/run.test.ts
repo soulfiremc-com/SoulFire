@@ -57005,6 +57005,97 @@ describe("beat-game run lifecycle", () => {
     expect(diagnostics).toContain("Leaving dragon breath");
   }, 20_000);
 
+  it("leaves dragon breath that lands while it eats in a retreat", async () => {
+    // As in a live run: the bot stepped back from the fight to eat, a
+    // fireball's cloud landed on it, and it kept eating until it died.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: -6, y: 64, z: -14, dimension: "minecraft:the_end" } as const;
+    const counts = { "minecraft:cooked_salmon": 4, "minecraft:bow": 1, "minecraft:arrow": 32 };
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      health: 6,
+      food: 14,
+      counts,
+    });
+    driver.entityQueryResolver = () => [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    const eating = () => driver.tasks.some((task) => task.type === "auto-eat");
+    const breath = Effect.gen(function* () {
+      while (!eating()) {
+        yield* Effect.sleep(1);
+      }
+      yield* Effect.sleep(20);
+      const now = yield* DateTime.now;
+      driver.currentObservation = observation({
+        dimension: "minecraft:the_end",
+        position,
+        health: 2,
+        food: 14,
+        counts,
+      });
+      return {
+        type: "bot-damaged",
+        observedAt: DateTime.formatIso(now),
+        amount: 4,
+        health: 2,
+        damageType: "minecraft:indirect_magic",
+      } as const;
+    });
+    driver.events = Stream.fromEffect(breath).pipe(Stream.concat(Stream.never));
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.FIGHT_ENDER_DRAGON, {
+          runId: "retreat-breath-run",
+          teamId: "retreat-breath-team",
+        }),
+        undefined,
+      ),
+    );
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "retreat-breath-run",
+            team: { teamId: "retreat-breath-team" },
+            checkpointStore: store,
+            strategy: { ...fastBeatGameStrategy, observationPollMs: 1 },
+            hooks: {
+              ...postDragonHooks(driver),
+              fightEnderDragon: () => Effect.never,
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          let attempts = 6000;
+          while (!diagnostics.includes("Leaving dragon breath") && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(eating()).toBe(true);
+    expect(diagnostics).toContain("Leaving dragon breath");
+  }, 20_000);
+
   it("walks back to the water it poured against an enderman", async () => {
     // As in a live run: the flow pushed the bot off its water, it looked
     // straight down into flowing water, and lost it. In a real game the
