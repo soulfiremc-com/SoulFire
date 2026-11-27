@@ -21,6 +21,7 @@ import {
   type BeatGameBlockPosition,
   type BeatGameDriverEvent,
   type BeatGameEntityObservation,
+  type BeatGamePortalWorkspace,
   type BeatGamePosition,
 } from "../src/index.js";
 import {
@@ -42079,6 +42080,115 @@ describe("beat-game run lifecycle", () => {
           detail.includes("No route found") && !detail.includes("retained the portal workspace"),
       ),
     ).toBe(true);
+  }, 15_000);
+
+  it("abandons the half-built portal site that no route reaches", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "abandoned-portal-workspace-run";
+    const teamId = "abandoned-portal-workspace-team";
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:cooked_beef": 8,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:lava_bucket": 1,
+        "minecraft:oak_log": 4,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    // As in the live run: one frame block of ten stood at a cast site deep
+    // in a flooded cave.
+    const startedAt = new Date().toISOString();
+    const origin = { x: 260, y: -53, z: -233, dimension: "minecraft:overworld" };
+    const workspace = {
+      workspaceId: "portal-skill:portal",
+      origin,
+      axis: "x",
+      method: "CAST",
+      status: "BUILDING",
+      targetFrame: [origin, { ...origin, x: origin.x + 1 }],
+      observedFrame: [origin],
+      interior: [{ ...origin, x: origin.x + 1, y: origin.y + 1 }],
+      protectedBlocks: [origin],
+      candidateLavaSources: [],
+      rejectedLavaSources: [],
+      waterFlow: [],
+      bucketState: "UNKNOWN",
+      ignitionState: "NOT_ATTEMPTED",
+      interiorState: "CLEAR",
+      entryAttempts: 0,
+      observedAt: startedAt,
+      updatedAt: startedAt,
+    } satisfies BeatGamePortalWorkspace;
+    await Effect.runPromise(
+      store.save(
+        {
+          ...checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId }),
+          activeSkill: {
+            skillId: "portal-skill",
+            kind: BeatGameDurableSkillKind.PORTAL_CONSTRUCTION,
+            phase: BeatGamePhase.ENTER_NETHER,
+            action: "build-and-enter-nether",
+            status: BeatGameDurableSkillStatus.ACTIVE,
+            substep: "repair-frame",
+            targets: [],
+            protectedBlocks: [],
+            protectedItemIds: [],
+            completedWorldChanges: [],
+            requiredResources: {},
+            retries: {},
+            portalWorkspace: workspace,
+            startedAt,
+            updatedAt: startedAt,
+          },
+        },
+        undefined,
+      ),
+    );
+    let attempts = 0;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              // As in a live run: every route to the build spot fails.
+              buildAndEnterNether: () =>
+                Effect.sync(() => {
+                  attempts += 1;
+                }).pipe(
+                  Effect.andThen(
+                    Effect.fail(
+                      new BeatGameDriverError({
+                        operation: "pathfind",
+                        code: "task_failed",
+                        retryable: false,
+                        message: "No route found to the goal!",
+                      }),
+                    ),
+                  ),
+                ),
+            },
+          });
+          yield* sleepWhile(() => attempts < 6).pipe(Effect.timeout("10 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.memory.portalWorkspaces).toContainEqual(
+      expect.objectContaining({ workspaceId: workspace.workspaceId, status: "ABANDONED" }),
+    );
   }, 15_000);
 
   it("replaces a pickaxe consumed while approaching portal lava", async () => {

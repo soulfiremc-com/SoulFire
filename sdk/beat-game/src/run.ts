@@ -4383,9 +4383,11 @@ function executeDecision(
                 ),
               );
         // A live run kept a portal workspace through 31 failed routes to the
-        // same standing spot in half an hour. After a few in a row the
-        // failure counts against the action, so a site no route reaches is
-        // given up for a new one.
+        // same standing spot in half an hour. After a few in a row the site
+        // is abandoned for a new one. Failing the action alone did not do
+        // it: each replan started the action at its first attempt again, so
+        // its retries never ran out, and a later run failed routes to one
+        // site for over half an hour.
         return buildAndEnter.pipe(
           Effect.tap(() => Ref.set(state.portalWorkspaceRouteFailures, 0)),
           Effect.catchIf(
@@ -4396,6 +4398,18 @@ function executeDecision(
                 Effect.flatMap((failures) =>
                   failures >= PORTAL_WORKSPACE_MAXIMUM_ROUTE_FAILURES
                     ? Ref.set(state.portalWorkspaceRouteFailures, 0).pipe(
+                        Effect.andThen(
+                          persist(state, (current) =>
+                            current.activeSkill?.action === decision.action
+                              ? abandonActiveDurableSkill(
+                                  current,
+                                  `portal workspace unreachable: ${error.message}`,
+                                  new Date().toISOString(),
+                                  { abandonPortalWorkspace: true },
+                                )
+                              : current,
+                          ),
+                        ),
                         Effect.andThen(
                           Effect.fail(
                             new BeatGameDriverError({
