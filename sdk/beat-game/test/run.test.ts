@@ -1267,6 +1267,7 @@ async function climbDryShaft(
     readonly z: number;
   },
   startX = 0.5,
+  breakPickaxeOnFirstDig = false,
 ): Promise<FakeBeatGameDriver> {
   const driver = new FakeBeatGameDriver();
   driver.currentObservation = observation({
@@ -1378,6 +1379,17 @@ async function climbDryShaft(
   driver.actionObserver = (action) => {
     if (action.type !== "dig-block") {
       return;
+    }
+    if (breakPickaxeOnFirstDig) {
+      const { "minecraft:stone_pickaxe": _broken, ...counts } =
+        driver.currentObservation.inventory.counts;
+      driver.currentObservation = {
+        ...driver.currentObservation,
+        inventory: {
+          ...driver.currentObservation.inventory,
+          counts: { ...counts, "minecraft:cobblestone": 64, "minecraft:spruce_log": 4 },
+        },
+      };
     }
     setBlock(action.position, {
       blockId: "minecraft:air",
@@ -25226,6 +25238,15 @@ describe("beat-game run lifecycle", () => {
       objectContaining({ x: 3.5, y: 64, z: 0.5 }),
       objectContaining({ x: 4.5, y: 65, z: 0.5 }),
     ]);
+  }, 10_000);
+
+  it("stops a recovery stair to craft a pickaxe when its last one breaks", async () => {
+    // As in a live run: the last pickaxe broke partway up a stair out of a
+    // deep cave, and the bot dug on by hand at eight seconds a block while it
+    // carried the logs and stone for a new one.
+    const driver = await climbDryShaft(undefined, 0.5, true);
+
+    expect(driver.actions.filter((action) => action.type === "dig-block")).toHaveLength(1);
   }, 10_000);
 
   it("replans when an unconfirmed recovery stair block used the last one", async () => {

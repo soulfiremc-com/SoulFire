@@ -360,7 +360,7 @@ const PICKAXE_HEAD_ITEM_IDS = [
 
 /// Whether the carried items make a stone pickaxe: three stone, two sticks
 /// and a crafting table, each from planks when not carried as is.
-function canCraftStonePickaxe(inventory: BeatGameInventory): boolean {
+export function canCraftStonePickaxe(inventory: BeatGameInventory): boolean {
   const count = (itemIds: readonly string[]) =>
     itemIds.reduce((total, itemId) => total + (inventory.counts[itemId] ?? 0), 0);
   if (count(PICKAXE_ITEM_IDS) > 0 || count(PICKAXE_HEAD_ITEM_IDS) < 3) {

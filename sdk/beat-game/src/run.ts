@@ -128,6 +128,7 @@ import {
   RAW_FOOD_TO_COOKED,
   URGENT_HUNGER_FOOD_LEVEL,
   WOOL_ITEM_IDS,
+  canCraftStonePickaxe,
   requirementCount,
   usableRequirementCount,
 } from "./requirements.js";
@@ -16645,6 +16646,19 @@ function excavateDryShaftRecoveryStaircase(
       for (const obstruction of [step.jumpClearance, step.head, step.feet]) {
         const block = yield* queryExactBlock(state.driver, obstruction);
         if (block !== undefined && !block.replaceable) {
+          // A live bot broke its last pickaxe partway up a recovery stair from
+          // y -36 and dug on by hand at eight seconds a block, carrying the
+          // logs and cobblestone for a new one. Stopping lets the planner
+          // craft it first.
+          const beforeDig = yield* state.driver.observe;
+          if (!hasMiningPickaxe(beforeDig) && canCraftStonePickaxe(beforeDig.inventory)) {
+            return yield* new BeatGameDriverError({
+              operation: "recover-dry-shaft",
+              code: "missing-tool",
+              retryable: true,
+              message: `Stopped the recovery stair at ${positionKey(step.feet)} to craft a pickaxe`,
+            });
+          }
           yield* state.driver.act({
             type: "dig-block",
             position: obstruction,
