@@ -19,7 +19,7 @@ jobs:
       contents: read
 
   set-release-version:
-    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@7c17925726cdd272fb99361c7d1f336210f2dd1f # main
     permissions:
       contents: write
     with:
@@ -212,13 +212,13 @@ jobs:
 
   deploy-javadoc:
     needs: build
-    uses: soulfiremc-com/SoulFire/.github/workflows/deploy-javadoc.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/deploy-javadoc.yml@7c17925726cdd272fb99361c7d1f336210f2dd1f # main
     permissions:
       contents: write
 
   deploy-docker:
     needs: build
-    uses: soulfiremc-com/SoulFire/.github/workflows/docker-deploy.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/docker-deploy.yml@7c17925726cdd272fb99361c7d1f336210f2dd1f # main
     permissions:
       contents: read
       packages: write
@@ -266,7 +266,7 @@ jobs:
     needs: build
     # Preserve the release actor for JSR's scope membership check. npm and PyPI
     # use a separate dispatch to retain their trusted publishing identity.
-    uses: soulfiremc-com/SoulFire/.github/workflows/publish-sdk.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/publish-sdk.yml@7c17925726cdd272fb99361c7d1f336210f2dd1f # main
     permissions:
       contents: read
       id-token: write
@@ -278,7 +278,7 @@ jobs:
 
   set-after-version:
     needs: [deploy-javadoc, deploy-docker, publish-sdk, publish-jsr]
-    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@main
+    uses: soulfiremc-com/SoulFire/.github/workflows/set-version.yml@7c17925726cdd272fb99361c7d1f336210f2dd1f # main
     permissions:
       contents: write
     with:
