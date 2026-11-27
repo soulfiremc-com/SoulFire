@@ -6066,6 +6066,28 @@ function shouldCommitToMeleeFight(
   );
 }
 
+/// Piglins turn on a player with no gold on. A live bot's worn boots broke
+/// to a ghast fireball, and it fled and dug in barefoot with a spare pair in
+/// its pack until a piglin hit it twice and the ghast finished it off. An
+/// escape runs inside the action, before any replan puts the spare pair on.
+function wearSpareGoldBootsInNether(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<void> {
+  if (
+    !isNether(observation.player.position.dimension) ||
+    observation.player.equipment["feet"] !== undefined
+  ) {
+    return Effect.void;
+  }
+  const boots = BOOTS_ITEM_IDS.find((itemId) => (observation.inventory.counts[itemId] ?? 0) > 0);
+  return boots === undefined
+    ? Effect.void
+    : state.driver
+        .act({ type: "equip-item", selector: { itemIds: [boots] }, equipmentSlot: "feet" })
+        .pipe(Effect.catchTag("BeatGameDriverError", () => Effect.void));
+}
+
 function escapeFromTarget(
   state: RunState,
   target: BeatGameEntityObservation,
@@ -6084,6 +6106,7 @@ function escapeFromTarget(
     if (observation.player.dead) {
       return;
     }
+    yield* wearSpareGoldBootsInNether(state, observation);
     // Running from a hoglin is what threw a live run off ledges and into
     // lava, so it stands on a pillar instead when it can.
     if (PILLAR_DEFENSE_ENTITY_TYPES.has(target.entityType)) {

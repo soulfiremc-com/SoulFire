@@ -16433,6 +16433,104 @@ describe("beat-game run lifecycle", () => {
     expect(driver.xzPaths[0]?.x).toBeLessThan(0);
   });
 
+  it("puts on its spare gold boots before it flees a ghast in the Nether", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const runId = "ghast-barefoot-run";
+    const teamId = "ghast-barefoot-team";
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, { runId, teamId }), undefined),
+    );
+    let actionStarted = false;
+    let health = 20;
+    const position = { x: 0.5, y: 64, z: 0.5, dimension: nether };
+    // As in the live run: a ghast fireball broke the worn boots, and the
+    // spare pair stayed in the pack. Equipping here never takes, so the
+    // feet stay bare until the escape puts the spare pair on.
+    const counts = {
+      "minecraft:golden_boots": 1,
+      "minecraft:stone_sword": 1,
+      "minecraft:cooked_beef": 8,
+      "minecraft:netherrack": 32,
+    };
+    const timeline: string[] = [];
+    driver.currentObservation = observation({ health, position, counts });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 16;
+          timeline.push("fireball");
+        }
+        driver.currentObservation = observation({ health, position, counts });
+        return driver.currentObservation;
+      });
+    const ghast = {
+      connectionEpoch: "epoch-1",
+      networkId: 31,
+      entityType: "minecraft:ghast",
+      position: { x: 12.5, y: 72, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 10,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      origin !== undefined &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(ghast.entityType)) &&
+      (selector.networkId === undefined || selector.networkId === ghast.networkId) &&
+      distanceSquared(origin, ghast.position) <= radius ** 2
+        ? [ghast]
+        : [];
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 4,
+      health: 16,
+      damageType: "minecraft:fireball",
+    } as const).pipe(Stream.concat(Stream.never));
+    driver.actionObserver = (action) => {
+      if (action.type === "equip-item" && action.equipmentSlot === "feet") {
+        timeline.push("boots");
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          timeline.push("flee");
+        }
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  actionStarted = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* sleepWhile(() => !timeline.includes("flee")).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const fled = timeline.indexOf("flee");
+    expect(fled).toBeGreaterThan(0);
+    expect(timeline.slice(timeline.indexOf("fireball"), fled)).toContain("boots");
+  });
+
   it("answers a distant blaze while it recovers instead of eating under fire", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
