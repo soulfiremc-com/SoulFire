@@ -246,6 +246,7 @@ const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 // far longer than a route that merely failed to plan.
 const FLOODED_PORTAL_ROUTE_COOLDOWN_MS = 30 * 60_000;
 const FAST_NIGHT_TRAVEL_MINIMUM_HEALTH = 16;
+const PORTAL_WORKSPACE_MAXIMUM_ROUTE_FAILURES = 5;
 // A failed route that still brought the bot this much closer counts as
 // progress. Every failure costs confidence, and one without progress costs
 // more, so a portal the bot keeps failing to reach is eventually forgotten.
@@ -1250,6 +1251,8 @@ interface RunState {
   /// burning, and the burn ticks that follow replace `lastDamage`, so a live
   /// bot lost track of the blaze and ate in its line of fire until the next
   /// hit knocked it off a ledge into lava.
+  /// Route failures in a row that the portal build kept its workspace through.
+  readonly portalWorkspaceRouteFailures: Ref.Ref<number>;
   readonly lastRangedDamage: Ref.Ref<
     Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
   >;
@@ -1417,6 +1420,7 @@ export function beatGameWithDriver(
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
       abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       lastDamage,
+      portalWorkspaceRouteFailures: yield* Ref.make(0),
       lastRangedDamage: yield* Ref.make<
         Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
       >(undefined),
@@ -4359,15 +4363,38 @@ function executeDecision(
                   },
                 ),
               );
+        // A live run kept a portal workspace through 31 failed routes to the
+        // same standing spot in half an hour. After a few in a row the
+        // failure counts against the action, so a site no route reaches is
+        // given up for a new one.
         return buildAndEnter.pipe(
+          Effect.tap(() => Ref.set(state.portalWorkspaceRouteFailures, 0)),
           Effect.catchIf(
             (error): error is BeatGameDriverError =>
               error instanceof BeatGameDriverError && isRouteUnavailable(error),
             (error) =>
-              Effect.succeed({
-                replanReason: `retained the portal workspace after a local route failure: ${error.message}`,
-                replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
-              } satisfies ActionResult),
+              Ref.updateAndGet(state.portalWorkspaceRouteFailures, (count) => count + 1).pipe(
+                Effect.flatMap((failures) =>
+                  failures >= PORTAL_WORKSPACE_MAXIMUM_ROUTE_FAILURES
+                    ? Ref.set(state.portalWorkspaceRouteFailures, 0).pipe(
+                        Effect.andThen(
+                          Effect.fail(
+                            new BeatGameDriverError({
+                              operation: error.operation,
+                              code: "portal-workspace-unreachable",
+                              retryable: true,
+                              message: `No route reached the portal workspace ${PORTAL_WORKSPACE_MAXIMUM_ROUTE_FAILURES} times in a row: ${error.message}`,
+                              cause: error,
+                            }),
+                          ),
+                        ),
+                      )
+                    : Effect.succeed({
+                        replanReason: `retained the portal workspace after a local route failure: ${error.message}`,
+                        replanDelayMs: MINIMUM_RECOVERY_POLL_MS,
+                      } satisfies ActionResult),
+                ),
+              ),
           ),
         );
       }

@@ -41697,6 +41697,87 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("stops keeping a portal workspace that no route reaches", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "unreachable-portal-workspace-run";
+    const teamId = "unreachable-portal-workspace-team";
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:cooked_beef": 8,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:lava_bucket": 1,
+        "minecraft:oak_log": 4,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    await Effect.runPromise(
+      store.save(checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId }), undefined),
+    );
+    let attempts = 0;
+    const failures: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              // As in a live run: every route to the build spot fails.
+              buildAndEnterNether: () =>
+                Effect.sync(() => {
+                  attempts += 1;
+                }).pipe(
+                  Effect.andThen(
+                    Effect.fail(
+                      new BeatGameDriverError({
+                        operation: "pathfind",
+                        code: "task_failed",
+                        retryable: false,
+                        message: "No route found to the goal!",
+                      }),
+                    ),
+                  ),
+                ),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) => {
+              const detail = event.type === "action-failed" ? event.detail : undefined;
+              return detail === undefined
+                ? Effect.void
+                : Effect.sync(() => {
+                    failures.push(detail);
+                  });
+            }),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => attempts < 6).pipe(Effect.timeout("10 seconds"), Effect.ignore);
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    // A dead end at one site does not end the run.
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.planner.status).not.toBe(BeatGameRunStatus.FAILED);
+    // After a few kept attempts, the failure counts against the action.
+    expect(
+      failures.some(
+        (detail) =>
+          detail.includes("No route found") && !detail.includes("retained the portal workspace"),
+      ),
+    ).toBe(true);
+  }, 15_000);
+
   it("replaces a pickaxe consumed while approaching portal lava", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
