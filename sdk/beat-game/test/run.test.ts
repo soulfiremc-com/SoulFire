@@ -7568,6 +7568,62 @@ describe("beat-game run lifecycle", () => {
     expect(shelterStarts).toBe(1);
   }, 10_000);
 
+  it("shelters for the night in a fast run once a fight leaves it hurt", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    // As in a live run: armed and fed, but already hurt at night. Zombies and
+    // strays took it from 15 health to dead in under thirty seconds.
+    driver.currentObservation = observation({
+      health: 14,
+      counts: {
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:cooked_beef": 4,
+      },
+      position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+    });
+    const work = { resumed: false };
+    let shelterStarts = 0;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: {
+              observationPollMs: 1,
+              riskProfile: BeatGameRiskProfile.FAST,
+              minimumHealth: 12,
+            },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  work.resumed = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-started" && event.action === "survive:night-shelter"
+                ? Effect.sync(() => {
+                    shelterStarts += 1;
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => shelterStarts === 0 && !work.resumed).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(shelterStarts).toBeGreaterThan(0);
+  }, 10_000);
+
   it("sleeps through the night in a fast run that could travel through it", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentEnvironment = { gameTime: 14_000n };

@@ -245,6 +245,7 @@ const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 // A route that runs the bot out of air stays flooded, so it is left alone
 // far longer than a route that merely failed to plan.
 const FLOODED_PORTAL_ROUTE_COOLDOWN_MS = 30 * 60_000;
+const FAST_NIGHT_TRAVEL_MINIMUM_HEALTH = 16;
 // A failed route that still brought the bot this much closer counts as
 // progress. Every failure costs confidence, and one without progress costs
 // more, so a portal the bot keeps failing to reach is eventually forgotten.
@@ -1878,11 +1879,16 @@ function shouldTakeNightShelter(
     // eat, instead of losing ten minutes in a shelter. A sword alone was not
     // enough: a live run died to a night mob group, which cost far more time
     // than the shelter would have.
+    //
+    // Night mobs come in groups, and a group took a live fast bot from 15
+    // health to dead in under thirty seconds, faster than a retreat could
+    // start. A fast bot travels on only while it is close to full health.
     const protectedForNightTravel =
       state.strategy.riskProfile === BeatGameRiskProfile.FAST
         ? hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
           hasMeleeWeapon(observation) &&
-          observation.player.health >= state.strategy.minimumHealth &&
+          observation.player.health >=
+            Math.max(state.strategy.minimumHealth, FAST_NIGHT_TRAVEL_MINIMUM_HEALTH) &&
           observation.player.food > URGENT_HUNGER_FOOD_LEVEL &&
           countNightShelterItems(observation, EDIBLE_FOOD_ITEM_IDS) >= 1
         : hasItemInInventoryOrEquipment(observation, "minecraft:shield") &&
