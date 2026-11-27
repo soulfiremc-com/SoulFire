@@ -19,7 +19,7 @@ dependencies {
   implementation(libs.gradle.plugin.indra.git)
   implementation(libs.gradle.plugin.loom)
   implementation(libs.gradle.plugin.spotless)
-  implementation("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.13")
+  implementation("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.15")
   implementation(libs.gradle.plugin.freefair)
   implementation(libs.gradle.plugin.maven.publish)
   implementation("net.ltgt.errorprone:net.ltgt.errorprone.gradle.plugin:5.2.0")
