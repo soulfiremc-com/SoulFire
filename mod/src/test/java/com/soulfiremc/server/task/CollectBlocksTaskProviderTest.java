@@ -94,6 +94,26 @@ final class CollectBlocksTaskProviderTest {
   }
 
   @Test
+  void skipsOreThatWouldLetLavaFlowIn() {
+    // Two gold ores at the edge of a Nether lava sea: the outer one touches
+    // a lava source, the inner one only touches the outer ore.
+    var blocks = new TestBlockAccessorBuilder();
+    blocks.setBlockAt(58, 29, -38, Blocks.NETHER_GOLD_ORE);
+    blocks.setBlockAt(59, 29, -38, Blocks.NETHER_GOLD_ORE);
+    blocks.setBlockAt(60, 29, -38, Blocks.LAVA);
+    blocks.setBlockAt(0, 30, 0, Blocks.NETHER_GOLD_ORE);
+    blocks.setBlockAt(0, 31, 0, Blocks.LAVA);
+    blocks.setBlockAt(5, 30, 0, Blocks.NETHER_GOLD_ORE);
+    blocks.setBlockAt(5, 29, 0, Blocks.LAVA);
+    var level = blocks.build();
+
+    assertTrue(CollectBlocksTaskProvider.exposesLava(level, new BlockPos(59, 29, -38)));
+    assertTrue(CollectBlocksTaskProvider.exposesLava(level, new BlockPos(0, 30, 0)));
+    assertFalse(CollectBlocksTaskProvider.exposesLava(level, new BlockPos(58, 29, -38)));
+    assertFalse(CollectBlocksTaskProvider.exposesLava(level, new BlockPos(5, 30, 0)));
+  }
+
+  @Test
   void onlyTreatsTheFirstRaycastBlockAsDirectlyReachable() {
     var target = new BlockPos(4, 65, -2);
 

@@ -53,6 +53,7 @@ import io.grpc.Status;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -62,6 +63,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -175,6 +177,20 @@ public final class CollectBlocksTaskProvider
         target.getX() != playerFeet.getX()
           || target.getZ() != playerFeet.getZ()
       );
+  }
+
+  /// Breaking a block with lava beside or above it opens a path for the lava
+  /// to flow onto the bot. Lava below stays put, so it does not count.
+  static boolean exposesLava(BlockGetter level, BlockPos target) {
+    for (var direction : Direction.values()) {
+      if (direction == Direction.DOWN) {
+        continue;
+      }
+      if (level.getFluidState(target.relative(direction)).getType().isSame(Fluids.LAVA)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static boolean hasFluidAbove(
@@ -826,6 +842,7 @@ public final class CollectBlocksTaskProvider
         .filter(position ->
           !avoidSubmergedTargets || !hasFluidAbove(level, origin, position.toBlockPos())
         )
+        .filter(position -> !exposesLava(level, position.toBlockPos()))
         .limit(MAX_CANDIDATES)
         .toList();
     }
@@ -854,6 +871,7 @@ public final class CollectBlocksTaskProvider
                   avoidSubmergedTargets
                     && hasFluidAbove(level, origin, position)
                 )
+                || exposesLava(level, position)
             ) {
               continue;
             }
