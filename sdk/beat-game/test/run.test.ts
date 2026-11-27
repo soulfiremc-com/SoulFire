@@ -16589,6 +16589,120 @@ describe("beat-game run lifecycle", () => {
     expect(answered()).toBe(true);
   }, 15_000);
 
+  it("answers a blaze whose fireball still burns it four seconds later", async () => {
+    const driver = new FakeBeatGameDriver();
+    // The run starts in the Overworld phase, where the hook below holds an
+    // action open. The shooter check does not depend on the dimension.
+    const dimension = "minecraft:overworld";
+    const actionStarted = Promise.withResolvers<undefined>();
+    let burned = false;
+    let health = 16;
+    const current = () =>
+      observation({
+        dimension,
+        health,
+        observedAt: "2026-01-01T00:00:04.400Z",
+        position: { x: 0.5, y: 64, z: 0.5 },
+        counts: {
+          "minecraft:stone_sword": 1,
+          "minecraft:cooked_beef": 8,
+          "minecraft:cobblestone": 32,
+        },
+      });
+    driver.currentObservation = current();
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (burned && health === 16) {
+          health = 12;
+        }
+        driver.currentObservation = current();
+        return driver.currentObservation;
+      });
+    // The live blaze hovered 25 blocks out over the lava sea.
+    const blaze = {
+      connectionEpoch: "epoch-1",
+      networkId: 31,
+      entityType: "minecraft:blaze",
+      position: { x: -19.5, y: 64, z: 16.5, dimension },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      origin !== undefined &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(blaze.entityType)) &&
+      (selector.networkId === undefined || selector.networkId === blaze.networkId) &&
+      distanceSquared(origin, blaze.position) <= radius ** 2
+        ? [blaze]
+        : [];
+    // As in the live run: the hits land during the action, and the last burn
+    // tick came four seconds after the fireball, past the window for a
+    // fresh projectile hit.
+    const hits = Stream.make(
+      {
+        type: "bot-damaged",
+        observedAt: "2026-01-01T00:00:00.000Z",
+        amount: 3.5,
+        health: 16.5,
+        damageType: "minecraft:fireball",
+      } as const,
+      {
+        type: "bot-damaged",
+        observedAt: "2026-01-01T00:00:04.000Z",
+        amount: 1,
+        health: 12,
+        damageType: "minecraft:on_fire",
+      } as const,
+    );
+    driver.events = Stream.fromEffect(Effect.promise(() => actionStarted.promise)).pipe(
+      Stream.flatMap(() => hits),
+      Stream.concat(
+        Stream.fromEffect(
+          Effect.sync(() => {
+            burned = true;
+          }),
+        ).pipe(Stream.drain),
+      ),
+      Stream.concat(Stream.never),
+    );
+
+    const response = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          // The live run used the fast profile, which keeps working down to
+          // 12 health.
+          strategy: { observationPollMs: 1, minimumHealth: 12 },
+          hooks: {
+            satisfyRequirement: () =>
+              Effect.sync(() => {
+                actionStarted.resolve(undefined);
+              }).pipe(Effect.andThen(Effect.never)),
+          },
+        }).pipe(
+          Effect.flatMap((run) =>
+            run.events.pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === "diagnostic" &&
+                  (event.message === "Environmental damage interrupted the action" ||
+                    event.message === "Filling the drop behind the bot before a ranged fight"),
+              ),
+              Stream.runHead,
+              Effect.timeout("5 seconds"),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // The ranged fight guards the drop behind the bot before it turns on
+    // the blaze.
+    expect(Option.getOrUndefined(response)).toMatchObject({
+      message: "Filling the drop behind the bot before a ranged fight",
+    });
+  });
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;

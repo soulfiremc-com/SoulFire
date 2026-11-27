@@ -5048,15 +5048,25 @@ function isPositionDimensionTransitionRace(error: BeatGameDriverError): boolean 
 /// live run took blaze fireballs as environmental damage, retreated in the
 /// open to eat and burned to death, so a fresh projectile hit looks for a
 /// visible ranged shooter further out.
+///
+/// A fireball's burn outlasts that window. A live bot took a burn tick four
+/// seconds after a blaze hit it, took it for environmental damage and went
+/// back to its route in the open, and the blaze shot it twice more.
 function findDistantRangedAttacker(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
   return Effect.gen(function* () {
     const damage = yield* Ref.get(state.lastRangedDamage);
+    const latestDamage = yield* Ref.get(state.lastDamage);
+    const window =
+      damage?.damageType === FIREBALL_DAMAGE_TYPE &&
+      latestDamage?.damageType === BURNING_DAMAGE_TYPE
+        ? FIREBALL_BURN_MS
+        : RECENT_ATTACK_MS;
     if (
       damage?.damageType === undefined ||
-      Date.parse(observation.observedAt) - Date.parse(damage.observedAt) > RECENT_ATTACK_MS
+      Date.parse(observation.observedAt) - Date.parse(damage.observedAt) > window
     ) {
       return undefined;
     }
@@ -10057,6 +10067,10 @@ const PILLAR_DEFENSE_DURATION_MS = 30_000;
 const PILLAR_DEFENSE_WATCH_RADIUS = 12;
 const PILLAR_STRIKE_REACH = 3.5;
 const PILLAR_STRIKE_INTERVAL_MS = 650;
+const FIREBALL_DAMAGE_TYPE = "minecraft:fireball";
+const BURNING_DAMAGE_TYPE = "minecraft:on_fire";
+/// A blaze's fireball sets its target alight for five seconds.
+const FIREBALL_BURN_MS = 6000;
 const RANGED_ATTACK_DAMAGE_TYPES = new Set([
   "minecraft:arrow",
   "minecraft:trident",
