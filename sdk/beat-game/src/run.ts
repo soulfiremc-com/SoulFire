@@ -247,6 +247,7 @@ const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
 const FLOODED_PORTAL_ROUTE_COOLDOWN_MS = 30 * 60_000;
 const FAST_NIGHT_TRAVEL_MINIMUM_HEALTH = 16;
 const PORTAL_WORKSPACE_MAXIMUM_ROUTE_FAILURES = 5;
+const DIRECTED_HUNT_MAXIMUM_ROUTE_FAILURES = 3;
 // A failed route that still brought the bot this much closer counts as
 // progress. Every failure costs confidence, and one without progress costs
 // more, so a portal the bot keeps failing to reach is eventually forgotten.
@@ -14907,6 +14908,10 @@ function huntOrExplore(
     // routes to it failed, and spent ten minutes on 410 failed routes without
     // moving. A spawner no route reaches stays out for the rest of the hunt.
     const unreachableSpawners = new Set<string>();
+    // A live blaze hunt sent the bot toward its remembered fortress, failed
+    // the route there about every two seconds for twenty minutes, and never
+    // moved. A few failed routes in a row explore around it instead.
+    let directedRouteFailures = 0;
     while (true) {
       yield* Effect.sleep(1);
       let current = yield* state.driver.observe;
@@ -15385,9 +15390,17 @@ function huntOrExplore(
           if (explorationOutcome.type === "target-visible") {
             confirmedVisibleTarget = explorationOutcome.target;
           }
+          directedRouteFailures =
+            explorationOutcome.type === "route-failed" && directedExplorationTarget !== undefined
+              ? directedRouteFailures + 1
+              : 0;
+          const directedRouteStuck = directedRouteFailures >= DIRECTED_HUNT_MAXIMUM_ROUTE_FAILURES;
+          if (directedRouteStuck) {
+            directedRouteFailures = 0;
+          }
           if (
             explorationOutcome.type === "route-failed" &&
-            targetPreference?.fallbackToLocalExploration === true
+            (targetPreference?.fallbackToLocalExploration === true || directedRouteStuck)
           ) {
             yield* advanceExplorationFrontier(
               state,

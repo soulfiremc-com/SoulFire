@@ -2203,6 +2203,83 @@ describe("beat-game run lifecycle", () => {
     expect(legs.every(({ x, z }) => x > 0.5 && Math.abs(z) < x)).toBe(true);
   });
 
+  it("explores nearby when no route reaches the remembered fortress", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    // The fortress it fought blazes in lies east, past the scan, and nothing
+    // of it is in view from here.
+    const fortress = { x: 200, y: 50, z: 0, dimension: nether };
+    const initial = checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+      runId: "unreachable-fortress-run",
+      teamId: "unreachable-fortress-team",
+    });
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            places: [
+              {
+                key: "FORTRESS:minecraft:the_nether:200:50:0",
+                kind: "FORTRESS",
+                position: fortress,
+                observedAt: "2026-01-01T00:00:00.000Z",
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    // As in a live run: every route toward the fortress hits the search limit.
+    const fortressRouteFailure = new BeatGameDriverError({
+      operation: "pathfindXZ",
+      code: "search_limit",
+      retryable: true,
+      message: "Pathfinding reached its search limit after 50000 expanded states",
+    });
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(x > 8 ? Effect.fail(fortressRouteFailure) : Effect.void));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "unreachable-fortress-run",
+            team: { teamId: "unreachable-fortress-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.sleep("1500 millis");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // After a few failed legs east, it explores in other directions.
+    const otherLegs = driver.xzPaths.filter(({ x }) => x <= 8);
+    expect(otherLegs.length).toBeGreaterThan(0);
+  });
+
   it("goes to a blaze spawner far from the first fortress block it sees", async () => {
     const driver = new FakeBeatGameDriver();
     const position = { x: 0, y: 64, z: 0, dimension: "minecraft:the_nether" } as const;
