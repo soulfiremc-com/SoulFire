@@ -14862,6 +14862,10 @@ function huntOrExplore(
     let attacked = 0;
     let explorationHops = 0;
     let stationaryStructureTarget: BeatGameBlockObservation | undefined;
+    // A live Nether hunt picked the same blaze spawner again each time both
+    // routes to it failed, and spent ten minutes on 410 failed routes without
+    // moving. A spawner no route reaches stays out for the rest of the hunt.
+    const unreachableSpawners = new Set<string>();
     while (true) {
       yield* Effect.sleep(1);
       let current = yield* state.driver.observe;
@@ -15012,6 +15016,9 @@ function huntOrExplore(
             distanceSquared(left.position, current.player.position) -
             distanceSquared(right.position, current.player.position),
         )) {
+          if (unreachableSpawners.has(positionKey(block.position))) {
+            continue;
+          }
           const besideStructure =
             anchorBlocks.some(
               ({ blockId, position }) =>
@@ -15196,6 +15203,7 @@ function huntOrExplore(
             // same walking-only route every second for half an hour.
             const approached = (yield* approachSpawner(false)) || (yield* approachSpawner(true));
             if (!approached) {
+              unreachableSpawners.add(positionKey(stationaryStructureTarget.position));
               stationaryStructureTarget = undefined;
             }
             continue;

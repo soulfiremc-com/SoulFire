@@ -1684,6 +1684,103 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("stops choosing a blaze spawner that no route reaches", async () => {
+    const driver = new FakeBeatGameDriver();
+    const position = {
+      x: 0,
+      y: 64,
+      z: 0,
+      dimension: "minecraft:the_nether",
+    } as const;
+    const fortress = blockObservation(
+      { ...position, x: 20 },
+      {
+        blockId: "minecraft:nether_bricks",
+        replaceable: false,
+        solid: true,
+      },
+    );
+    const spawner = blockObservation(
+      { ...position, x: 24 },
+      {
+        blockId: "minecraft:spawner",
+        replaceable: false,
+        solid: true,
+      },
+    );
+    driver.currentObservation = observation({
+      dimension: position.dimension,
+      position,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:oak_log": 8,
+        "minecraft:cobblestone": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:shield": 1,
+        "minecraft:ender_pearl": 14,
+      },
+    });
+    driver.blockQueryResolver = ({ selector }) =>
+      selector.blockIds?.includes("minecraft:spawner") === true
+        ? [spawner]
+        : selector.blockIds?.includes("minecraft:nether_bricks") === true
+          ? [fortress]
+          : [];
+    // As in a live run: every route to the spawner fails, walking or not.
+    driver.pathResolver = (target, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position: target, radius, policy });
+      }).pipe(
+        Effect.andThen(
+          Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfind",
+              code: "unreachable",
+              retryable: true,
+              message: "No route found to the goal!",
+            }),
+          ),
+        ),
+      );
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "unreachable-spawner-run",
+          teamId: "unreachable-spawner-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "unreachable-spawner-run",
+            team: { teamId: "unreachable-spawner-team" },
+            checkpointStore: store,
+            strategy: {
+              observationPollMs: 1,
+              blockSearchRadius: 48,
+            },
+          });
+          yield* Effect.sleep("500 millis");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const spawnerRoutes = driver.paths.filter(
+      ({ position: target, radius }) =>
+        radius === 4 && target.x === spawner.position.x && target.z === spawner.position.z,
+    );
+    // One walking route and one that may dig and build, then it moves on.
+    expect(spawnerRoutes).toHaveLength(2);
+  });
+
   it("walks to its lit portal workspace after the portal memory is invalidated", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
