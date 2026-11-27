@@ -2817,6 +2817,7 @@ export function fightEnderDragon(
 const DRAGON_HEAD_REACH = 6.5;
 const DRAGON_HEAD_DROP = 1;
 const BED_BOMB_STAND_DISTANCE = 3;
+const BED_BOMB_STAND_RETURN_RADIUS = 0.3;
 /// Arrows lobbed from this far inside a tower drop onto its crystal over the
 /// rim, which hides the crystal from the ground. Measured in a real End: nine
 /// of ten crystals fell to at most three arrows each from twenty blocks.
@@ -3586,16 +3587,16 @@ function explodeBedUnderDragonHead(
       groundUnderHead === undefined
         ? groundUnderStand
         : Math.min(groundUnderStand, groundUnderHead + BED_BOMB_MAXIMUM_STAND_RISE);
-    yield* driver.pathfind(
-      {
-        x: standColumn.x + 0.5,
-        y: standGround + 1,
-        z: standColumn.z + 0.5,
-        dimension,
-      },
-      0.5,
-      { ...path, allowMining: true },
-    );
+    const stand = { x: standColumn.x + 0.5, y: standGround + 1, z: standColumn.z + 0.5, dimension };
+    yield* driver.pathfind(stand, 0.5, { ...path, allowMining: true });
+    // A live bot ran in from the far side, slid a block past its spot into
+    // the wall's column, and the wall could not go up where it stood. The
+    // bed took it from 20 health to 0.7.
+    const arrived = (yield* driver.observe).player.position;
+    if (Math.floor(arrived.x) !== standColumn.x || Math.floor(arrived.z) !== standColumn.z) {
+      yield* driver.act({ type: "reset-movement" });
+      yield* driver.pathfind(stand, BED_BOMB_STAND_RETURN_RADIUS, { ...path, allowMining: true });
+    }
     // The head may have turned while the bot walked, so aim at where it is now.
     const anchor =
       (yield* queryEndEntities(driver, dragon.position, "minecraft:ender_dragon", 16, 1))[0] ??

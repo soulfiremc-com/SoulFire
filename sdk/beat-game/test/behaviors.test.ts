@@ -8513,6 +8513,111 @@ describe("beat-game behavior programs", () => {
     );
   });
 
+  it("walks back onto its stand spot when it slides past it toward the bed", async () => {
+    // As in a live run: the bot slid a block past its spot into the wall's
+    // column, so the wall could not go up and the bed nearly killed it.
+    const driver = new FakeBeatGameDriver();
+    let beds = 2;
+    let slid = false;
+    let pathsBeforeFirstPlacement: number | undefined;
+    const end = (counts: Record<string, number>) =>
+      observation({
+        dimension: "minecraft:the_end",
+        position: driver.currentObservation.player.position,
+        counts,
+      });
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position: { x: 0.5, y: 61, z: 12.5, dimension: "minecraft:the_end" },
+      counts: { "minecraft:red_bed": beds, "minecraft:cobblestone": 8 },
+    });
+    // As measured in a real game: perched on the portal, facing the bot.
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 42,
+        entityType: "minecraft:ender_dragon",
+        position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:the_end" },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 200,
+        observedAt: "2026-01-01T00:00:01.000Z",
+      },
+    ];
+    driver.entityQueryResolver = (query) =>
+      query.selector.entityTypes?.includes("minecraft:ender_dragon") === true
+        ? driver.entityResults
+        : [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds?.includes("minecraft:end_portal") === true) {
+        return driver.entityResults.length === 0
+          ? [
+              blockObservation(
+                { x: 0, y: 64, z: 0, dimension: "minecraft:the_end" },
+                { blockId: "minecraft:end_portal" },
+              ),
+            ]
+          : [];
+      }
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return [
+        blockObservation(
+          position,
+          position.y <= 60
+            ? { blockId: "minecraft:end_stone" }
+            : { blockId: "minecraft:air", diggable: false, replaceable: true, solid: false },
+        ),
+      ];
+    };
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+        const overshoot = !slid && position.z === 10.5;
+        slid ||= overshoot;
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_end",
+          position: overshoot ? { ...position, z: 9.2 } : position,
+          counts: driver.currentObservation.inventory.counts,
+        });
+      });
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        pathsBeforeFirstPlacement ??= driver.paths.length;
+      }
+      if (action.type === "interact-block") {
+        beds -= 1;
+        driver.currentObservation = end({ "minecraft:red_bed": beds, "minecraft:cobblestone": 7 });
+        if (beds === 0) {
+          driver.entityResults = [];
+        }
+      }
+    };
+
+    await Effect.runPromise(
+      fightEnderDragon(driver, {
+        defeatConfirmationAttempts: 1,
+        defeatConfirmationDelayMs: 0,
+      }),
+    );
+
+    // It walked back to the spot before it put anything down.
+    expect(pathsBeforeFirstPlacement).toBe(2);
+    expect(driver.paths[1]?.position).toEqual({
+      x: 0.5,
+      y: 61,
+      z: 10.5,
+      dimension: "minecraft:the_end",
+    });
+  });
+
   it("digs down to the level of the ground under a perched dragon's head", async () => {
     const driver = new FakeBeatGameDriver();
     let beds = 2;
