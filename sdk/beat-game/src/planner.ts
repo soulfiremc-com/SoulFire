@@ -586,9 +586,28 @@ function hasReusablePortalCandidate(
     return false;
   }
   const dimension = observation.player.position.dimension;
+  // A portal whose route ran the bot out of air is left for a long while, so
+  // the bot gathers what it needs to build one of its own.
+  const now = Date.parse(observation.observedAt);
+  const flooded = checkpoint.memory.unreachable.filter(
+    ({ key, expiresAt }) =>
+      key.startsWith("portal-route-flooded:") &&
+      expiresAt !== undefined &&
+      Date.parse(expiresAt) > now,
+  );
   if (
     checkpoint.memory.portals.some(
-      ({ confidence, value }) => confidence > 0 && value.position.dimension === dimension,
+      ({ confidence, value }) =>
+        confidence > 0 &&
+        value.position.dimension === dimension &&
+        !flooded.some(
+          (entry) =>
+            entry.value.dimension === dimension &&
+            (entry.value.x - value.position.x) ** 2 +
+              (entry.value.y - value.position.y) ** 2 +
+              (entry.value.z - value.position.z) ** 2 <=
+              8 ** 2,
+        ),
     )
   ) {
     return true;

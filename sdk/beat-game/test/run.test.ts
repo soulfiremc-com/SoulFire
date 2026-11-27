@@ -40446,6 +40446,119 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("gives up a nearby portal when air runs low on the way into it", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "flooded-nearby-portal-run";
+    const teamId = "flooded-nearby-portal-team";
+    const observedAt = "2026-01-01T00:00:00.000Z";
+    const portal = blockObservation(
+      { x: 0, y: -54, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:nether_portal", diggable: false, solid: false, observedAt },
+    );
+    const initial = checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:minecraft:overworld:0:-54:0",
+                value: portal,
+                observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+    const counts = {
+      "minecraft:cooked_beef": 8,
+      "minecraft:oak_log": 4,
+      "minecraft:cobblestone": 20,
+      "minecraft:stone_sword": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:shield": 1,
+    };
+    driver.currentObservation = observation({
+      position: { x: 20, y: -40, z: 0, dimension: "minecraft:overworld" },
+      counts,
+    });
+    // As in a live run: the way down to the portal runs through a flooded
+    // cave, and the bot runs short of air on it.
+    // The portal is close enough for the nearby scan to find it.
+    driver.blockQueryResolver = (query) =>
+      query.selector.blockIds?.includes("minecraft:nether_portal") === true
+        ? [portal]
+        : query.selector.blockIds?.includes("minecraft:water") === true &&
+            driver.currentObservation.player.air < 300
+          ? [
+              blockObservation(
+                {
+                  x: Math.floor(query.center.x),
+                  y: Math.floor(query.center.y),
+                  z: Math.floor(query.center.z),
+                  dimension: query.center.dimension,
+                },
+                { blockId: "minecraft:water", diggable: false, replaceable: true },
+              ),
+            ]
+          : [];
+    const walking = () =>
+      Effect.sync(() => {
+        driver.currentObservation = observation({
+          position: { x: 20, y: -40, z: 0, dimension: "minecraft:overworld" },
+          counts,
+          air: 150,
+        });
+      }).pipe(Effect.andThen(Effect.never));
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.sync(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+      }).pipe(Effect.andThen(walking()));
+    driver.pathResolver = (position, radius, policy) =>
+      Effect.sync(() => {
+        driver.paths.push({ position, radius, policy });
+      }).pipe(Effect.andThen(walking()));
+
+    const reasons: string[] = [];
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic" &&
+              event.message === "Remembered portal route is temporarily unavailable"
+                ? Effect.sync(() => {
+                    reasons.push(String(event.data?.["reason"]));
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.gen(function* () {
+            while (reasons.length === 0) {
+              yield* Effect.sleep(5);
+            }
+          }).pipe(Effect.timeout("4 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(reasons).toContainEqual(expect.stringContaining("air ran low"));
+  }, 10_000);
+
   it.each([
     { label: "within", missesQualityBound: false },
     // As in a live run whose descent leg found a route just above the

@@ -241,6 +241,9 @@ const REMEMBERED_PORTAL_VERTICAL_LEG_RADIUS = 6;
 const REMEMBERED_PORTAL_MAXIMUM_VERTICAL_LEGS = 16;
 const REMEMBERED_PORTAL_MINIMUM_VERTICAL_PROGRESS = 4;
 const REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS = 10_000;
+// A route that runs the bot out of air stays flooded, so it is left alone
+// far longer than a route that merely failed to plan.
+const FLOODED_PORTAL_ROUTE_COOLDOWN_MS = 30 * 60_000;
 // A failed route that still brought the bot this much closer counts as
 // progress. Every failure costs confidence, and one without progress costs
 // more, so a portal the bot keeps failing to reach is eventually forgotten.
@@ -20235,7 +20238,10 @@ function tryEnterKnownPortal(
     const entry = yield* enterPortal(state.driver, {
       portal,
       path,
-    }).pipe(Effect.result);
+    }).pipe(
+      Effect.onInterrupt(() => markPortalRouteFloodedIfOutOfAir(state, portal)),
+      Effect.result,
+    );
     if (entry._tag === "Success") {
       yield* clearPortalRouteFailures(state, portal);
       return true;
@@ -20418,27 +20424,7 @@ function approachRememberedPortal(
     }
     yield* pathfindRememberedPortalStep(state, portal, 8, finalApproachPolicy);
     return undefined;
-  }).pipe(
-    // The air check stops the walk from outside, so the route never fails
-    // here. A live run walked toward its portal at y -54 through a flooded
-    // cave four times in an hour, ran short of air each time and dug back up
-    // to the surface. Air running out on the way marks the route unusable,
-    // so the bot builds a portal of its own instead.
-    Effect.onInterrupt(() =>
-      state.driver.observe.pipe(
-        Effect.flatMap((latest) =>
-          hasUnsafeAir(latest)
-            ? markPortalRouteUnavailable(
-                state,
-                portal,
-                "air ran low on the way to the remembered portal",
-              )
-            : Effect.void,
-        ),
-        Effect.ignore,
-      ),
-    ),
-  );
+  }).pipe(Effect.onInterrupt(() => markPortalRouteFloodedIfOutOfAir(state, portal)));
 }
 
 // A live descent leg found a route that missed the preferred quality bound
@@ -20658,6 +20644,58 @@ function markPortalRouteUnavailable(
   });
 }
 
+/// The air check stops a walk to a portal from outside, so the route itself
+/// never fails. A live run's portal sat at y -54 beyond a flooded cave, and
+/// the bot walked into that cave again and again for over an hour, ran short
+/// of air each time and dug back up to the surface. A walk stopped while the
+/// bot is short of air keeps that portal out of use for a long while, so the
+/// bot builds one of its own instead.
+function markPortalRouteFloodedIfOutOfAir(
+  state: RunState,
+  portal: BeatGamePosition,
+): Effect.Effect<void> {
+  return state.driver.observe.pipe(
+    Effect.flatMap((latest) =>
+      hasUnsafeAir(latest)
+        ? persist(state, (checkpoint) => {
+            const observedAt = new Date().toISOString();
+            const key = `portal-route-flooded:${positionKey(portal)}`;
+            return {
+              ...checkpoint,
+              memory: {
+                ...checkpoint.memory,
+                unreachable: [
+                  ...checkpoint.memory.unreachable.filter((entry) => entry.key !== key),
+                  {
+                    key,
+                    value: portal,
+                    observedAt,
+                    expiresAt: new Date(
+                      Date.parse(observedAt) + FLOODED_PORTAL_ROUTE_COOLDOWN_MS,
+                    ).toISOString(),
+                    confidence: 1,
+                  },
+                ].slice(-64),
+              },
+            };
+          }).pipe(
+            Effect.andThen(
+              emit(state, {
+                type: "diagnostic",
+                message: "Remembered portal route is temporarily unavailable",
+                data: {
+                  portal: positionKey(portal),
+                  reason: "air ran low on the way to the remembered portal",
+                },
+              }),
+            ),
+          )
+        : Effect.void,
+    ),
+    Effect.ignore,
+  );
+}
+
 function isPortalRouteOnCooldown(
   checkpoint: BeatGameCheckpoint,
   portal: BeatGamePosition,
@@ -20666,12 +20704,11 @@ function isPortalRouteOnCooldown(
   return checkpoint.memory.unreachable.some(({ key, value, observedAt, expiresAt }) => {
     const recordedExpiry =
       expiresAt === undefined ? Number.NEGATIVE_INFINITY : Date.parse(expiresAt);
-    const boundedExpiry = Math.min(
-      recordedExpiry,
-      Date.parse(observedAt) + REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS,
-    );
+    const boundedExpiry = key.startsWith("portal-route-flooded:")
+      ? recordedExpiry
+      : Math.min(recordedExpiry, Date.parse(observedAt) + REMEMBERED_PORTAL_ROUTE_COOLDOWN_MS);
     return (
-      key.startsWith("portal-route:") &&
+      (key.startsWith("portal-route:") || key.startsWith("portal-route-flooded:")) &&
       boundedExpiry > now &&
       value.dimension === portal.dimension &&
       distanceSquared(value, portal) <= 8 ** 2

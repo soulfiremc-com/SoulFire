@@ -898,6 +898,67 @@ describe("beat-game planner", () => {
     });
   });
 
+  it("gathers portal materials when the remembered portal route is flooded", () => {
+    const base = checkpoint(BeatGamePhase.ENTER_NETHER);
+    const observedAt = "2026-01-01T00:00:00.000Z";
+    const decision = decideBeatGameAction({
+      checkpoint: {
+        ...base,
+        memory: {
+          ...base.memory,
+          portals: [
+            {
+              key: "portal:minecraft:overworld:0:64:0",
+              value: blockObservation(
+                {
+                  x: 0,
+                  y: 64,
+                  z: 0,
+                  dimension: "minecraft:overworld",
+                },
+                {
+                  blockId: "minecraft:nether_portal",
+                  diggable: false,
+                  solid: false,
+                  observedAt,
+                },
+              ),
+              observedAt,
+              confidence: 0.25,
+            },
+          ],
+          // As in a live run: the way to the portal ran the bot out of air.
+          unreachable: [
+            {
+              key: "portal-route-flooded:minecraft:overworld:0:64:0",
+              value: { x: 0, y: 64, z: 0, dimension: "minecraft:overworld" },
+              observedAt,
+              expiresAt: "2026-01-01T00:30:00.000Z",
+              confidence: 1,
+            },
+          ],
+        },
+      },
+      observation: observation({
+        counts: {
+          "minecraft:cooked_cod": 8,
+          "minecraft:oak_log": 2,
+          "minecraft:cobblestone": 89,
+          "minecraft:stone_sword": 1,
+          "minecraft:iron_ingot": 2,
+          "minecraft:shield": 1,
+          "minecraft:iron_pickaxe": 1,
+          "minecraft:water_bucket": 1,
+          "minecraft:flint_and_steel": 1,
+        },
+        food: 20,
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toMatchObject({ type: "satisfy-requirement" });
+  });
+
   it("finishes deep portal work before topping up a healthy food reserve", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.ENTER_NETHER),
