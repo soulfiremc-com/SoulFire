@@ -20410,7 +20410,27 @@ function approachRememberedPortal(
     }
     yield* pathfindRememberedPortalStep(state, portal, 8, finalApproachPolicy);
     return undefined;
-  });
+  }).pipe(
+    // The air check stops the walk from outside, so the route never fails
+    // here. A live run walked toward its portal at y -54 through a flooded
+    // cave four times in an hour, ran short of air each time and dug back up
+    // to the surface. Air running out on the way marks the route unusable,
+    // so the bot builds a portal of its own instead.
+    Effect.onInterrupt(() =>
+      state.driver.observe.pipe(
+        Effect.flatMap((latest) =>
+          hasUnsafeAir(latest)
+            ? markPortalRouteUnavailable(
+                state,
+                portal,
+                "air ran low on the way to the remembered portal",
+              )
+            : Effect.void,
+        ),
+        Effect.ignore,
+      ),
+    ),
+  );
 }
 
 // A live descent leg found a route that missed the preferred quality bound
