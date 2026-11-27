@@ -4769,7 +4769,7 @@ function findImmediateActionThreat(
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
   observation: BeatGameObservation,
 ): Effect.Effect<ActionResult | undefined, BeatGameDriverError> {
-  if (hasDangerousFall(observation)) {
+  if (fallClutchApplies(decision, observation)) {
     return Effect.succeed({
       replanReason: "interrupted an action to clutch a dangerous fall",
       fallClutchPosition: observation.player.position,
@@ -4869,7 +4869,7 @@ function monitorActionSafety(
                         ) {
                           return Effect.suspend(() => monitor(observation));
                         }
-                        if (hasDangerousFall(observation)) {
+                        if (fallClutchApplies(decision, observation)) {
                           return Effect.succeed({
                             replanReason: "interrupted an action to clutch a dangerous fall",
                             fallClutchPosition: observation.player.position,
@@ -5050,7 +5050,7 @@ function monitorObservedSafety(
       replanReason: "bot died again during recovery",
     } satisfies ActionResult);
   }
-  if (hasDangerousFall(observation)) {
+  if (fallClutchApplies(decision, observation)) {
     return Effect.succeed({
       replanReason: "interrupted an action to clutch a dangerous fall",
       fallClutchPosition: observation.player.position,
@@ -5299,6 +5299,16 @@ function monitorObservedSafety(
     );
   }
   return Effect.suspend(() => monitor(observation));
+}
+
+/// A bot in the End's exit portal hangs there, falling as far as it knows,
+/// until it asks to respawn. A live bot that had killed the dragon spent
+/// its exit attempts on fall rescues there and never left the End.
+function fallClutchApplies(
+  decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
+  observation: BeatGameObservation,
+): boolean {
+  return decision.type !== "exit-end" && hasDangerousFall(observation);
 }
 
 function hasDangerousFall(observation: BeatGameObservation): boolean {

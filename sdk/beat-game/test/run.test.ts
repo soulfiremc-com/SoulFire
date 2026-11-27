@@ -165,6 +165,73 @@ describe("direct threat escape corridors", () => {
   });
 });
 
+describe("End exit", () => {
+  it("asks to respawn while it hangs in the exit portal", async () => {
+    // As in a live run: the bot entered the exit portal after the dragon
+    // died, and the server held it there, falling as far as it knew. Fall
+    // rescues took every exit attempt, and the bot never left the End.
+    const driver = new FakeBeatGameDriver();
+    const position = { x: 0.6, y: 64.77, z: -1.3, dimension: "minecraft:the_end" } as const;
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_end",
+      position,
+      onGround: false,
+      velocity: { y: -0.9 },
+      counts: { "minecraft:water_bucket": 1, "minecraft:cooked_beef": 8 },
+    });
+    driver.blockQueryResolver = ({ center }) => {
+      const block = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      return block.y === 64 && Math.abs(block.x) <= 2 && Math.abs(block.z) <= 2
+        ? [blockObservation(block, { blockId: "minecraft:end_portal", solid: false })]
+        : [];
+    };
+    driver.actionObserver = (action) => {
+      if (action.type === "respawn") {
+        driver.currentObservation = observation({
+          position: { x: 0.5, y: 64, z: 0.5, dimension: "minecraft:overworld" },
+        });
+      }
+    };
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.EXIT_END, { runId: "exit-run", teamId: "exit-team" }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "exit-run",
+            team: { teamId: "exit-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          let attempts = 4000;
+          while (!driver.actions.some(({ type }) => type === "respawn") && attempts > 0) {
+            attempts -= 1;
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }),
+      ),
+    );
+
+    expect(driver.actions).toContainEqual({ type: "respawn" });
+    expect(driver.actions).not.toContainEqual(
+      objectContaining({ type: "select-item", selector: { itemIds: ["minecraft:water_bucket"] } }),
+    );
+  }, 15_000);
+});
+
 describe("dragon breath escapes", () => {
   it("walks away from the breath of a dragon perched on the fountain", () => {
     // As in a live run: the bot set off a bed beside the fountain, and the

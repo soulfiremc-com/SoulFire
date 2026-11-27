@@ -3997,6 +3997,25 @@ export function exitEnd(
       if (!isEndDimension(initialDimension)) {
         return undefined;
       }
+      const attempts = positiveInteger(options.confirmationAttempts ?? 40, "confirmationAttempts");
+      const delayMs = nonNegativeInteger(options.confirmationDelayMs ?? 250, "confirmationDelayMs");
+      // Once the bot is in the portal, the server holds it there until it
+      // asks to respawn. A live bot's first entry was cut short by a fall
+      // rescue, the credits event that asks for the respawn had passed, and
+      // every later attempt waited for it again while the bot hung in the
+      // portal. The server ignores the request from a bot it is not holding.
+      const feet = {
+        x: Math.floor(observation.player.position.x),
+        y: Math.floor(observation.player.position.y),
+        z: Math.floor(observation.player.position.z),
+        dimension: observation.player.position.dimension,
+      };
+      if ((yield* queryExactBlock(driver, feet))?.blockId === "minecraft:end_portal") {
+        yield* driver.act({ type: "respawn" });
+        if (yield* waitForDimensionExit(driver, attempts, delayMs)) {
+          return undefined;
+        }
+      }
       const portals = yield* driver.queryBlocks({
         center: observation.player.position,
         radius: options.searchRadius ?? 64,
@@ -4010,8 +4029,6 @@ export function exitEnd(
       const portalCenter = centerOfBlocks(portals);
       const rimTarget = yield* clearEndPortalRim(driver, observation.player.position, portals);
 
-      const attempts = positiveInteger(options.confirmationAttempts ?? 40, "confirmationAttempts");
-      const delayMs = nonNegativeInteger(options.confirmationDelayMs ?? 250, "confirmationDelayMs");
       const entryTransition = yield* Effect.gen(function* () {
         yield* ensureEndPortalRimReachable(
           driver,
