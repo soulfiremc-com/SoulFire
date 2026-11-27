@@ -11,9 +11,9 @@
   "devDependencies": {
     "@cloudflare/build-output-utils": "0.9.14",
     "@cloudflare/config": "0.32.1",
-    "cf": "1.0.0-beta.32",
+    "cf": "1.0.0-rc.6",
     "typedoc": "0.28.20",
     "typescript": "6.0.3"
   },
-  "packageManager": "bun@1.4.4"
+  "packageManager": "bun@1.4.5"
 }

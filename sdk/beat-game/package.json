@@ -60,12 +60,12 @@
   "devDependencies": {
     "@bufbuild/protobuf": "2.17.0",
     "@connectrpc/connect": "2.3.0",
-    "@effect/platform-node": "4.1.4",
-    "@types/node": "26.6.6",
-    "effect": "4.1.4",
+    "@effect/platform-node": "4.1.7",
+    "@types/node": "26.6.11",
+    "effect": "4.1.7",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vitest": "5.1.0"
+    "vitest": "5.1.2"
   },
   "peerDependencies": {
     "effect": "^4.0.0"
