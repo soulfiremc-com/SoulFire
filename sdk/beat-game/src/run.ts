@@ -6094,8 +6094,11 @@ function escapeFromTarget(
     // Cover took a live bot two seconds to dig in the End while an enderman
     // hit it every second, and it died. Water at its feet drives an enderman
     // off at once.
+    // Water boils away in the Nether. A live bot poured it there anyway and
+    // was hit twice more in the four seconds it spent.
     const water =
       target.entityType === "minecraft:enderman" &&
+      !isNether(observation.player.position.dimension) &&
       (observation.inventory.counts["minecraft:water_bucket"] ?? 0) > 0
         ? yield* pourWaterAgainstEnderman(state, target)
         : ({ type: "failed" } as const);

@@ -9859,6 +9859,139 @@ describe("beat-game run lifecycle", () => {
     expect(placed).toEqual(new Set(["0:63:0"]));
   });
 
+  it("digs in from an angry enderman in the Nether instead of pouring water", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in a live run: water boils away in the Nether, and pouring it
+    // cost four seconds while the enderman kept hitting.
+    const nether = "minecraft:the_nether";
+    const counts = { "minecraft:cobblestone": 16, "minecraft:water_bucket": 1 };
+    driver.currentObservation = observation({
+      dimension: nether,
+      counts,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      health: 16,
+    });
+    // Endermen teleport after anything that runs from them.
+    driver.entityResults = [
+      {
+        ...skeletonAt(31, 4, 0),
+        position: { x: 4, y: 64, z: 0, dimension: nether },
+        entityType: "minecraft:enderman",
+        health: 40,
+        aggressive: true,
+      },
+    ];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const dug = new Set<string>();
+    const placed = new Set<string>();
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:cobblestone" })];
+      }
+      if (position.y < 64 && !dug.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "dig-block") {
+        dug.add(blockKey(action.position));
+        // The bot drops into the hole it dug.
+        driver.currentObservation = observation({
+          dimension: nether,
+          counts,
+          health: 16,
+          position: { x: 0.5, y: action.position.y, z: 0.5, dimension: nether },
+        });
+      }
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        placed.add(
+          blockKey({
+            x: action.against.x + offset.x,
+            y: action.against.y + offset.y,
+            z: action.against.z + offset.z,
+          }),
+        );
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () =>
+              Effect.fail(new ScenarioFailure({ message: "Never took cover from the enderman" })),
+          }),
+        ),
+      ),
+    );
+
+    expect(driver.actions).not.toContainEqual(
+      objectContaining({
+        type: "select-item",
+        selector: { itemIds: ["minecraft:water_bucket"] },
+      }),
+    );
+    expect(placed.size).toBeGreaterThan(0);
+  });
+
   it("eats in its cover from an angry enderman", async () => {
     const driver = new FakeBeatGameDriver();
     // As in the live run: low on hunger, so it cannot heal without eating.
