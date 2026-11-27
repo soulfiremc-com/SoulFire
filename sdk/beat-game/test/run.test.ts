@@ -10791,6 +10791,118 @@ describe("beat-game run lifecycle", () => {
     );
   });
 
+  it("walls off the shooter's side first when it cannot escape", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:dirt": 16, "minecraft:stone_sword": 1 },
+      position: { x: 0.5, y: 64, z: 0.5 },
+      health: 16,
+    });
+    // The live bot burned to death while its walls went up on the side away
+    // from the blaze. Both archers stand west and a little south.
+    driver.entityResults = [skeletonAt(31, -12, 6), skeletonAt(32, -14, 4)];
+    driver.entityQueryResolver = ({ selector }) =>
+      driver.entityResults.filter(
+        (entity) =>
+          (selector.networkId === undefined || selector.networkId === entity.networkId) &&
+          (selector.entityTypes === undefined || selector.entityTypes.includes(entity.entityType)),
+      );
+    const placed = new Set<string>();
+    const placementOrder: string[] = [];
+    driver.blockQueryResolver = ({ center, selector }) => {
+      if (selector.blockIds !== undefined) {
+        return [];
+      }
+      const position = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+        dimension: center.dimension,
+      };
+      if (position.y === 63) {
+        // Undiggable, so cover falls back to walls on open ground.
+        return [blockObservation(position, { blockId: "minecraft:bedrock", diggable: false })];
+      }
+      if (placed.has(blockKey(position))) {
+        return [blockObservation(position, { blockId: "minecraft:dirt" })];
+      }
+      return [
+        blockObservation(position, {
+          blockId: "minecraft:air",
+          diggable: false,
+          replaceable: true,
+          solid: false,
+        }),
+      ];
+    };
+    const faceOffsets = {
+      up: { x: 0, y: 1, z: 0 },
+      down: { x: 0, y: -1, z: 0 },
+      north: { x: 0, y: 0, z: -1 },
+      south: { x: 0, y: 0, z: 1 },
+      west: { x: -1, y: 0, z: 0 },
+      east: { x: 1, y: 0, z: 0 },
+    } as const;
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        const offset = faceOffsets[action.face];
+        const key = blockKey({
+          x: action.against.x + offset.x,
+          y: action.against.y + offset.y,
+          z: action.against.z + offset.z,
+        });
+        placed.add(key);
+        placementOrder.push(key);
+      }
+    };
+    // The live bot stood on a mountain top where every flee route failed.
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(
+        Effect.andThen(
+          task.type === "flee"
+            ? Effect.fail(
+                new BeatGameDriverError({
+                  operation: "flee",
+                  code: "unreachable",
+                  retryable: true,
+                  message: "No route found to the goal!",
+                }),
+              )
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (placed.size < 10) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+          yield* run.awaitCompletion.pipe(Effect.result);
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: "4 seconds",
+            orElse: () =>
+              Effect.fail(
+                new ScenarioFailure({
+                  message: `Timed out waiting for the bot to wall in: ${JSON.stringify(driver.tasks.map(({ type }) => type))}`,
+                }),
+              ),
+          }),
+        ),
+      ),
+    );
+
+    expect(placementOrder.slice(0, 4)).toEqual(["-1:64:0", "-1:65:0", "0:64:1", "0:65:1"]);
+    expect(placed.size).toBe(10);
+  });
+
   it("fights out of finished cover once healed", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

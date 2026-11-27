@@ -3221,17 +3221,25 @@ const foodCount = (current: BeatGameObservation): number =>
 // the eyes cannot see from inside. A live bot stood in such a pit all night,
 // refused a roof every few seconds. One block deeper, the roof goes up
 // against the sides of the walls instead.
+//
+// A shooter's side goes up first. A live bot walled itself in on a fortress
+// bridge with a blaze to its southwest. The east and north walls went up
+// first, and a fireball hit through the open west side while the eighth
+// block went up, burning the bot to death.
 function encloseNightShelterInPlace(
   state: RunState,
   observation: BeatGameObservation,
+  shooter?: BeatGamePosition,
 ): Effect.Effect<NightShelterEnclosure | undefined, BeatGameDriverError> {
-  return encloseNightShelterInPlaceOnce(state, observation).pipe(
+  return encloseNightShelterInPlaceOnce(state, observation, shooter).pipe(
     Effect.filterOrElse(
       (enclosure) => enclosure !== undefined,
       () =>
         sinkIntoShallowPit(state, observation).pipe(
           Effect.flatMap((sunk) =>
-            sunk === undefined ? Effect.undefined : encloseNightShelterInPlaceOnce(state, sunk),
+            sunk === undefined
+              ? Effect.undefined
+              : encloseNightShelterInPlaceOnce(state, sunk, shooter),
           ),
         ),
     ),
@@ -3293,6 +3301,7 @@ function sinkIntoShallowPit(
 function encloseNightShelterInPlaceOnce(
   state: RunState,
   observation: BeatGameObservation,
+  shooter?: BeatGamePosition,
 ): Effect.Effect<NightShelterEnclosure | undefined, BeatGameDriverError> {
   const feet = {
     x: Math.floor(observation.player.position.x),
@@ -3324,12 +3333,21 @@ function encloseNightShelterInPlaceOnce(
         break;
       }
     }
-    const targets = [
-      ...ENCLOSURE_SIDES.map((side) => ({ ...feet, x: feet.x + side.x, z: feet.z + side.z })),
-      ...ENCLOSURE_SIDES.map((side) => ({ ...head, x: head.x + side.x, z: head.z + side.z })),
-      ...(roofSupported ? [] : [roofCorner]),
-      roof,
-    ];
+    const sideTargets =
+      shooter === undefined
+        ? [
+            ...ENCLOSURE_SIDES.map((side) => ({ ...feet, x: feet.x + side.x, z: feet.z + side.z })),
+            ...ENCLOSURE_SIDES.map((side) => ({ ...head, x: head.x + side.x, z: head.z + side.z })),
+          ]
+        : ENCLOSURE_SIDES.toSorted(
+            (left, right) =>
+              (right.x - left.x) * (shooter.x - observation.player.position.x) +
+              (right.z - left.z) * (shooter.z - observation.player.position.z),
+          ).flatMap((side) => [
+            { ...feet, x: feet.x + side.x, z: feet.z + side.z },
+            { ...head, x: head.x + side.x, z: head.z + side.z },
+          ]);
+    const targets = [...sideTargets, ...(roofSupported ? [] : [roofCorner]), roof];
     const open: BeatGameBlockPosition[] = [];
     for (const target of targets) {
       const block = yield* queryExactBlock(state.driver, target);
@@ -6528,7 +6546,10 @@ function takeCoverFromRangedFire(
     // roof placement was refused. Digging down and sealing the shaft only
     // places against a shaft wall the eyes face, so it goes first.
     const coverStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
-    const cover = yield* takeCoverInPlace(state, { allowShaft: !closeMeleeHostile });
+    const cover = yield* takeCoverInPlace(state, {
+      allowShaft: !closeMeleeHostile,
+      shooter: threat.position,
+    });
     if (cover === undefined) {
       const coverDamage = yield* Ref.get(state.lastDamage);
       if (
@@ -6659,9 +6680,14 @@ function waitForRepeatedMeleeDamageSince(state: RunState, since: string): Effect
 // End portal with a silverfish at its side. Each wall the silverfish stood
 // in waited ten seconds to be refused, and the bot was bitten to death in
 // half a minute without striking back.
+interface CoverInPlaceOptions {
+  readonly allowShaft?: boolean;
+  readonly shooter?: BeatGamePosition;
+}
+
 function takeCoverInPlace(
   state: RunState,
-  options: { readonly allowShaft?: boolean } = {},
+  options: CoverInPlaceOptions = {},
 ): Effect.Effect<RangedCover | undefined> {
   return DateTime.now.pipe(
     Effect.map(DateTime.formatIso),
@@ -6679,7 +6705,7 @@ function takeCoverInPlace(
 
 function buildCoverInPlace(
   state: RunState,
-  options: { readonly allowShaft?: boolean },
+  options: CoverInPlaceOptions,
 ): Effect.Effect<RangedCover | undefined> {
   return state.driver.act({ type: "reset-movement" }).pipe(
     Effect.andThen(state.driver.observe),
@@ -6692,7 +6718,9 @@ function buildCoverInPlace(
           seal !== undefined
             ? Effect.succeed({ method: "sealed-shaft", placedBlocks: 1 } as const)
             : state.driver.observe.pipe(
-                Effect.flatMap((latest) => encloseNightShelterInPlace(state, latest)),
+                Effect.flatMap((latest) =>
+                  encloseNightShelterInPlace(state, latest, options.shooter),
+                ),
                 Effect.map((enclosure) =>
                   enclosure === undefined
                     ? undefined
