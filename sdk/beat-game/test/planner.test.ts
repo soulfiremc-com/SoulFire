@@ -329,6 +329,23 @@ describe("beat-game planner", () => {
     expect(decision).toEqual({ type: "return-through-portal", action: "return-through-portal" });
   });
 
+  it("returns to the Overworld while wounded without food while collecting in the Nether", () => {
+    // A live bot burned by blazes sat at 8.6 health and 17 hunger with no
+    // food, and restarted an empty retreat about four times a second.
+    const decision = decideBeatGameAction({
+      checkpoint: checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES),
+      observation: observation({
+        dimension: "minecraft:the_nether",
+        food: 17,
+        health: 8.6,
+        counts: { "minecraft:stone_sword": 1, "minecraft:shield": 1 },
+      }),
+      strategy: defaultBeatGameStrategy,
+    });
+
+    expect(decision).toEqual({ type: "return-through-portal", action: "return-through-portal" });
+  });
+
   it("acquires emergency food instead of retreating without regeneration", () => {
     const decision = decideBeatGameAction({
       checkpoint: checkpoint(BeatGamePhase.PREPARE_OVERWORLD),
