@@ -3485,7 +3485,7 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "build" }));
   });
 
-  it("fights a blaze from a bridge without widening it first", async () => {
+  it("fills only the drop behind it before fighting a blaze from a bridge", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
     const counts = {
@@ -3571,9 +3571,20 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    // A blaze never stands on the floor, so filling it only costs time.
+    // A blaze never stands on the floor, so a full platform only costs time.
+    // Its fireballs push the bot away from it, and two live bots went over
+    // the edge behind them into lava, so the open cells on that side fill.
     expect(driver.tasks).toContainEqual(objectContaining({ type: "attack-entity" }));
-    expect(driver.tasks).not.toContainEqual(objectContaining({ type: "build" }));
+    const builds = driver.tasks.filter(({ type }) => type === "build");
+    expect(builds.length).toBeGreaterThan(0);
+    for (const build of builds) {
+      expect(build).toMatchObject({
+        blocks: [
+          objectContaining({ offset: { x: -1, y: -1, z: -1 } }),
+          objectContaining({ offset: { x: -1, y: -1, z: 1 } }),
+        ],
+      });
+    }
   });
 
   it("fights the blazes around it once fleeing them keeps failing", async () => {

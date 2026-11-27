@@ -9970,6 +9970,10 @@ const FLYING_HOSTILE_ENTITY_TYPES: ReadonlySet<string> = new Set([
 // A bridge leaves six of the eight cells around the bot open.
 const NARROW_FOOTING_MINIMUM_OPEN_CELLS = 5;
 const NARROW_FOOTING_FILL_TIMEOUT_MS = 4000;
+// Cells within 60 degrees of the push direction: the one straight behind and
+// the two beside it.
+const KNOCKBACK_EDGE_MINIMUM_ALIGNMENT = 0.5;
+const KNOCKBACK_EDGE_FILL_TIMEOUT_MS = 2000;
 const NARROW_FOOTING_RECENT_HIT_MS = 2000;
 // A live run spent 35 and then 48 seconds trying to climb a pillar beside a
 // hoglin, which hit it the whole time until it died.
@@ -10502,13 +10506,90 @@ function defendAgainstSingleTarget(
       return prepareShield.pipe(
         Effect.andThen(
           isRangedTarget || FLYING_HOSTILE_ENTITY_TYPES.has(target.entityType)
-            ? Effect.void
+            ? guardKnockbackEdge(state, observation, target.position)
             : widenNarrowFooting(state, observation),
         ),
         Effect.andThen(guardedAttack),
       );
     }),
   );
+}
+
+/// A shot pushes the bot away from the shooter. Two live bots fought blazes
+/// at the edge of a drop over the Nether lava sea, and a fireball knocked each
+/// of them over that edge. Before a fight with a ranged or flying hostile, the
+/// bot fills the open floor cells on the side away from it. That is at most
+/// three blocks, so it costs far less time under fire than a full platform.
+function guardKnockbackEdge(
+  state: RunState,
+  observation: BeatGameObservation,
+  shooter: BeatGameEntityObservation["position"],
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    const awayX = observation.player.position.x - shooter.x;
+    const awayZ = observation.player.position.z - shooter.z;
+    const awayLength = Math.hypot(awayX, awayZ);
+    const blockId = NARROW_FOOTING_FILL_BLOCK_IDS.find(
+      (itemId) => (observation.inventory.counts[itemId] ?? 0) > 0,
+    );
+    if (
+      awayLength < 1 ||
+      blockId === undefined ||
+      (yield* isPlayerInFluid(state.driver, observation.player.position))
+    ) {
+      return;
+    }
+    const feet = {
+      x: Math.floor(observation.player.position.x),
+      y: Math.floor(observation.player.position.y),
+      z: Math.floor(observation.player.position.z),
+      dimension: observation.player.position.dimension,
+    };
+    const floor = yield* state.driver.queryBlocks({
+      center: { x: feet.x + 0.5, y: feet.y - 0.5, z: feet.z + 0.5, dimension: feet.dimension },
+      radius: 1.5,
+      selector: {},
+      maximumResults: 27,
+    });
+    const openCells: { x: number; y: number; z: number }[] = [];
+    for (const x of [-1, 0, 1]) {
+      for (const z of [-1, 0, 1]) {
+        if (
+          (x === 0 && z === 0) ||
+          (x * awayX + z * awayZ) / (Math.hypot(x, z) * awayLength) <
+            KNOCKBACK_EDGE_MINIMUM_ALIGNMENT
+        ) {
+          continue;
+        }
+        const cell = floor.find(
+          ({ position }) =>
+            position.x === feet.x + x && position.y === feet.y - 1 && position.z === feet.z + z,
+        );
+        if (cell?.solid !== true && cell?.blockId !== "minecraft:water") {
+          openCells.push({ x, y: -1, z });
+        }
+      }
+    }
+    if (openCells.length === 0) {
+      return;
+    }
+    yield* emit(state, {
+      type: "diagnostic",
+      message: "Filling the drop behind the bot before a ranged fight",
+      data: { position: observation.player.position, openCells: openCells.length },
+    });
+    yield* buildStructure(state.driver, {
+      origin: feet,
+      blocks: openCells.map((offset) => ({ offset, blockId })),
+      path: { ...state.strategy.path, allowMining: false, allowPlacing: true },
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: KNOCKBACK_EDGE_FILL_TIMEOUT_MS,
+        orElse: () => Effect.void,
+      }),
+      Effect.ignore,
+    );
+  });
 }
 
 /// A live bot fought a hoglin on a one-block bridge it had built over a
