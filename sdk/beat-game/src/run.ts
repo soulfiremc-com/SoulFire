@@ -1240,6 +1240,13 @@ interface RunState {
   // reset when the action succeeds.
   readonly abandonedActionRounds: Ref.Ref<ReadonlyMap<string, number>>;
   readonly lastDamage: Ref.Ref<Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined>;
+  /// The last arrow, trident or fireball hit. A blaze's fireball sets the bot
+  /// burning, and the burn ticks that follow replace `lastDamage`, so a live
+  /// bot lost track of the blaze and ate in its line of fire until the next
+  /// hit knocked it off a ledge into lava.
+  readonly lastRangedDamage: Ref.Ref<
+    Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
+  >;
   // Escapes whose route failed in a row, reset by one that gets away.
   readonly failedEscapes: Ref.Ref<{ readonly count: number; readonly atMs: number }>;
   /// Threats the bot found it could not reach, by entity key, with when to
@@ -1404,6 +1411,9 @@ export function beatGameWithDriver(
       portalScanDimension: yield* Ref.make<string | undefined>(undefined),
       abandonedActionRounds: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       lastDamage,
+      lastRangedDamage: yield* Ref.make<
+        Extract<BeatGameDriverEvent, { type: "bot-damaged" }> | undefined
+      >(undefined),
       failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
       unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
       failedCrafts: yield* Ref.make<ReadonlyMap<string, FailedCraft>>(new Map()),
@@ -4985,10 +4995,9 @@ function findDistantRangedAttacker(
   observation: BeatGameObservation,
 ): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
   return Effect.gen(function* () {
-    const damage = yield* Ref.get(state.lastDamage);
+    const damage = yield* Ref.get(state.lastRangedDamage);
     if (
       damage?.damageType === undefined ||
-      !RANGED_ATTACK_DAMAGE_TYPES.has(damage.damageType) ||
       Date.parse(observation.observedAt) - Date.parse(damage.observedAt) > RECENT_ATTACK_MS
     ) {
       return undefined;
@@ -6414,11 +6423,11 @@ function takeCoverFromRangedFire(
     // Arrows also came from skeletons beyond the entity query range, and
     // tridents from drowned the bot never saw, so a recent projectile hit
     // counts as an archer too.
-    const lastDamage = yield* Ref.get(state.lastDamage);
+    const lastRangedDamage = yield* Ref.get(state.lastRangedDamage);
     const recentArrowHit =
-      lastDamage?.damageType !== undefined &&
-      RANGED_ATTACK_DAMAGE_TYPES.has(lastDamage.damageType) &&
-      (yield* Clock.currentTimeMillis) - Date.parse(lastDamage.observedAt) <= RECENT_ARROW_HIT_MS;
+      lastRangedDamage !== undefined &&
+      (yield* Clock.currentTimeMillis) - Date.parse(lastRangedDamage.observedAt) <=
+        RECENT_ARROW_HIT_MS;
     const archerNearby =
       recentArrowHit ||
       PROACTIVE_RANGED_HOSTILE_ENTITY_TYPES.has(threat.entityType) ||
@@ -21237,6 +21246,11 @@ function monitorDriverEvents(state: RunState): Effect.Effect<void> {
     Stream.runForEach((event) => {
       if (event.type === "bot-damaged") {
         return Ref.set(state.lastDamage, event).pipe(
+          Effect.andThen(
+            event.damageType !== undefined && RANGED_ATTACK_DAMAGE_TYPES.has(event.damageType)
+              ? Ref.set(state.lastRangedDamage, event)
+              : Effect.void,
+          ),
           Effect.andThen(
             emit(state, {
               type: "diagnostic",

@@ -16007,6 +16007,90 @@ describe("beat-game run lifecycle", () => {
     expect(answered()).toBe(true);
   }, 15_000);
 
+  it("answers a distant blaze whose fireball set it burning while it recovers", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    const position = { x: 0.5, y: 64, z: 0.5, dimension: nether };
+    const counts = {
+      "minecraft:stone_sword": 1,
+      "minecraft:cooked_beef": 8,
+      "minecraft:netherrack": 32,
+    };
+    // Low health sends the bot to recover. The live bot stood there eating.
+    driver.currentObservation = observation({
+      dimension: nether,
+      health: 6,
+      food: 20,
+      position,
+      counts,
+    });
+    // The blaze fires from twenty-one blocks, beyond the nearby threat check.
+    const blaze = {
+      connectionEpoch: "epoch-1",
+      networkId: 31,
+      entityType: "minecraft:blaze",
+      position: { x: 15.5, y: 70, z: 14.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ origin, radius, selector }) =>
+      origin !== undefined &&
+      (selector.entityTypes === undefined || selector.entityTypes.includes(blaze.entityType)) &&
+      (selector.networkId === undefined || selector.networkId === blaze.networkId) &&
+      distanceSquared(origin, blaze.position) <= radius ** 2
+        ? [blaze]
+        : [];
+    // As in a live run: the burn the fireball lit ticks right after the
+    // hit, so the latest damage is fire, not the fireball.
+    driver.events = Stream.make(
+      {
+        type: "bot-damaged",
+        observedAt: "2026-01-01T00:00:00.000Z",
+        amount: 3.5,
+        health: 7,
+        damageType: "minecraft:fireball",
+      } as const,
+      {
+        type: "bot-damaged",
+        observedAt: "2026-01-01T00:00:00.500Z",
+        amount: 1,
+        health: 6,
+        damageType: "minecraft:on_fire",
+      } as const,
+    ).pipe(Stream.concat(Stream.never));
+    const placements: unknown[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "place-block") {
+        placements.push(action);
+      }
+    };
+    const answered = () =>
+      placements.length > 0 ||
+      driver.tasks.some(
+        (task) => task.type === "attack-entity" && task.target.networkId === blaze.networkId,
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          yield* Effect.gen(function* () {
+            while (!answered()) {
+              yield* Effect.sleep(5);
+            }
+          }).pipe(Effect.timeout("6 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(answered()).toBe(true);
+  }, 15_000);
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;
