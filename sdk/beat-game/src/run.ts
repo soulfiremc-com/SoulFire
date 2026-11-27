@@ -584,10 +584,15 @@ const INVENTORY_DISCARD_PRIORITY = [
   // Nothing crafts with iron nuggets. A live bot looking for its last eye of
   // ender carried 36 of them and could not free three slots for food.
   "minecraft:iron_nugget",
+  // Trial chamber chests and dispensers. A live bot came out of one holding
+  // these and failed its food search for want of three empty slots.
+  "minecraft:snowball",
+  "minecraft:glow_ink_sac",
 ] as const;
 // Each keeps a reserve. Cobblestone is also what Nether pickaxes are made of:
 // a live run threw all of it away to make room and then had no stone left
 // for pickaxes in the Nether.
+const TRIAL_CHAMBER_BLOCK_PATTERN = /^minecraft:(?:.*_)?(?:tuff|copper)(?:_|$)/u;
 const BUILDING_BLOCK_DISCARD_IDS = [
   "minecraft:netherrack",
   "minecraft:basalt",
@@ -19254,6 +19259,9 @@ export function selectInventoryDiscard(
     Object.keys(counts).find(
       (itemId) =>
         (itemId.startsWith("minecraft:music_disc_") ||
+          // Trial chambers are built of tuff and copper blocks, which the bot
+          // digs through on its way out. Nothing it makes needs either.
+          TRIAL_CHAMBER_BLOCK_PATTERN.test(itemId) ||
           itemId.endsWith("_stairs") ||
           itemId.endsWith("_trapdoor") ||
           itemId.endsWith("_fence") ||

@@ -350,6 +350,66 @@ describe("inventory discards", () => {
     );
   });
 
+  it("drops the tuff and copper blocks a trial chamber leaves behind", () => {
+    // The pack a live bot carried out of a trial chamber when its food
+    // search found nothing to drop.
+    const counts: Record<string, number> = {
+      "minecraft:tuff_bricks": 79,
+      "minecraft:coal": 4,
+      "minecraft:arrow": 7,
+      "minecraft:stick": 2,
+      "minecraft:waxed_oxidized_cut_copper": 1,
+      "minecraft:glow_ink_sac": 1,
+      "minecraft:warped_planks": 2,
+      "minecraft:warped_stem": 1,
+      "minecraft:waxed_oxidized_copper": 1,
+      "minecraft:gold_nugget": 7,
+      "minecraft:rotten_flesh": 16,
+      "minecraft:bow": 1,
+      "minecraft:tipped_arrow": 2,
+      "minecraft:bucket": 1,
+      "minecraft:waxed_copper_block": 4,
+      "minecraft:chiseled_tuff": 1,
+      "minecraft:water_bucket": 1,
+      "minecraft:stone_pickaxe": 1,
+      "minecraft:flint": 4,
+      "minecraft:polished_tuff": 3,
+      "minecraft:raw_iron": 4,
+      "minecraft:chiseled_tuff_bricks": 5,
+      "minecraft:netherrack": 60,
+      "minecraft:waxed_chiseled_copper": 1,
+      "minecraft:cobblestone": 63,
+      "minecraft:spruce_planks": 1,
+      "minecraft:furnace": 1,
+      "minecraft:spruce_log": 3,
+      "minecraft:stone_sword": 1,
+      "minecraft:sugar_cane": 2,
+      "minecraft:snowball": 16,
+      "minecraft:cobbled_deepslate": 120,
+      "minecraft:flint_and_steel": 1,
+      "minecraft:shield": 1,
+      "minecraft:golden_boots": 1,
+    };
+    const dropped: string[] = [];
+    for (let discard = selectInventoryDiscard(counts); discard !== undefined;) {
+      dropped.push(discard.itemId);
+      counts[discard.itemId] = 0;
+      discard = selectInventoryDiscard(counts);
+    }
+    expect(dropped.toSorted()).toEqual([
+      "minecraft:chiseled_tuff",
+      "minecraft:chiseled_tuff_bricks",
+      "minecraft:glow_ink_sac",
+      "minecraft:polished_tuff",
+      "minecraft:snowball",
+      "minecraft:tuff_bricks",
+      "minecraft:waxed_chiseled_copper",
+      "minecraft:waxed_copper_block",
+      "minecraft:waxed_oxidized_copper",
+      "minecraft:waxed_oxidized_cut_copper",
+    ]);
+  });
+
   it("drops bone meal, ink, fences and pressure plates", () => {
     // Part of the pack a live bot carried when its sword step could not
     // free three slots on its way to the End portal.
