@@ -77,7 +77,7 @@
     "@connectrpc/connect-web": "2.3.0",
     "@effect/platform-node": "4.1.4",
     "adm-zip": "0.6.1",
-    "tar": "7.5.23"
+    "tar": "8.0.2"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
