@@ -6763,9 +6763,19 @@ function takeCoverFromRangedFire(
     // food sat behind finished walls fifteen times at six health, waiting to
     // heal, while its hunger ran down, so a bot that cannot heal goes out.
     const cannotHealInCover = sheltered.player.food < 18 && !hasUsableFood(sheltered);
+    // Strays and skeletons keep spawning all night. A live bot healed in
+    // cover to 14 at night, went out and shot the stray that had pinned it,
+    // and a second stray shot it dead before it could get back.
+    const environment =
+      state.driver.environment !== undefined &&
+      sheltered.player.position.dimension === "minecraft:overworld"
+        ? yield* observeEnvironment(state)
+        : undefined;
+    const hostileNight = environment !== undefined && isHostileNight(timeOfDay(environment));
     if (
       cover.placedBlocks === 0 &&
-      (sheltered.player.health >= state.strategy.minimumHealth || cannotHealInCover) &&
+      ((sheltered.player.health >= state.strategy.minimumHealth && !hostileNight) ||
+        cannotHealInCover) &&
       hasMeleeWeapon(sheltered)
     ) {
       yield* emit(state, {
