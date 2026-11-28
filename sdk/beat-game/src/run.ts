@@ -6431,8 +6431,14 @@ function escapeFromTarget(
       path: {
         ...escapePath,
         allowMining: needsRecovery && !rangedThreat,
+        // A Nether escape that places blocks builds stairs out over the lava
+        // sea. A live bot fled a fortress group down such stairs, and when
+        // the escape was cut short it fell 22 blocks into the lava.
         allowPlacing:
-          !rangedThreat && isActiveMeleeHostile(target) && pathBuildingBlockCount(latest) > 0,
+          !rangedThreat &&
+          isActiveMeleeHostile(target) &&
+          pathBuildingBlockCount(latest) > 0 &&
+          !isNether(latest.player.position.dimension),
         // Crossing water outruns arrows, but the only fluid in the Nether is
         // lava. A live bot fled a skeleton there straight into the lava sea.
         avoidFluids: !(

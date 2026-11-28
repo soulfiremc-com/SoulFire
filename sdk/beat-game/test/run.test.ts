@@ -4544,6 +4544,75 @@ describe("beat-game run lifecycle", () => {
     expect(driver.taskPolicies[index]).toEqual(objectContaining({ avoidFluids: true }));
   });
 
+  it("does not build its escape route in the Nether", async () => {
+    const driver = new FakeBeatGameDriver();
+    const nether = "minecraft:the_nether";
+    // Wounded, so it runs from the wither skeleton rather than fighting.
+    driver.currentObservation = observation({
+      dimension: nether,
+      position: { x: 0.5, y: 64, z: 0.5, dimension: nether },
+      pathBuildingBlockCount: 64,
+      health: 6,
+      counts: {
+        "minecraft:golden_boots": 1,
+        "minecraft:cooked_beef": 16,
+        "minecraft:netherrack": 64,
+        "minecraft:stone_sword": 1,
+        "minecraft:iron_pickaxe": 1,
+      },
+    });
+    const witherSkeleton = {
+      connectionEpoch: "epoch-1",
+      networkId: 82,
+      entityType: "minecraft:wither_skeleton",
+      position: { x: 4.5, y: 64, z: 0.5, dimension: nether },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 20,
+      target: { connectionEpoch: "epoch-1", networkId: 99 },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    };
+    driver.entityQueryResolver = ({ selector }) =>
+      (selector.networkId === undefined || selector.networkId === witherSkeleton.networkId) &&
+      (selector.entityTypes === undefined ||
+        selector.entityTypes.includes(witherSkeleton.entityType))
+        ? [witherSkeleton]
+        : [];
+    const store = new InMemoryBeatGameCheckpointStore();
+    await Effect.runPromise(
+      store.save(
+        checkpoint(BeatGamePhase.COLLECT_NETHER_RESOURCES, {
+          runId: "nether-escape-run",
+          teamId: "nether-escape-team",
+        }),
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId: "nether-escape-run",
+            team: { teamId: "nether-escape-team" },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !driver.tasks.some(({ type }) => type === "flee")).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    const index = driver.tasks.findIndex(({ type }) => type === "flee");
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(driver.taskPolicies[index]).toEqual(objectContaining({ allowPlacing: false }));
+  });
+
   it("hunts endermen for pearls when it has no gold to trade", async () => {
     const driver = new FakeBeatGameDriver();
     const nether = "minecraft:the_nether";
