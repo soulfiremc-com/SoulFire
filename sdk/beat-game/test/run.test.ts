@@ -44698,6 +44698,177 @@ describe("beat-game run lifecycle", () => {
     );
   }, 10_000);
 
+  it("resumes fishing after air when a fed bot fishes barren land", async () => {
+    const driver = new FakeBeatGameDriver();
+    // As in the live run: fully fed, fishing after a long empty land search.
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "barren-land-fishing-air-run";
+    const teamId = "barren-land-fishing-air-team";
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            explorationFrontiers: {
+              "minecraft:overworld:find-food-animals": {
+                progressVersion: 2,
+                origin: { x: 0, y: 64, z: 0, dimension: "minecraft:overworld" },
+                nextIndex: 39,
+                targetAttempts: 0,
+                totalAdvances: 38,
+              },
+            },
+          },
+        },
+        undefined,
+      ),
+    );
+    const foodProvisioningFailures: string[] = [];
+    driver.currentObservation = observation({
+      health: 20,
+      food: 20,
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:iron_ingot": 7,
+        "minecraft:oak_log": 8,
+        "minecraft:shield": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    const salmon = {
+      connectionEpoch: "epoch-1",
+      networkId: 52,
+      entityType: "minecraft:salmon",
+      position: {
+        x: 2,
+        y: 63,
+        z: 0,
+        dimension: "minecraft:overworld",
+      },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 3,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityResults = [salmon];
+    let attacks = 0;
+    let ascending = false;
+    let airAtAscentStart: number | undefined;
+    let airAtAscentRelease: number | undefined;
+    driver.blockQueryResolver = () =>
+      driver.currentObservation.player.air < 120
+        ? [
+            blockObservation(
+              {
+                x: 0,
+                y: 64,
+                z: 0,
+                dimension: "minecraft:overworld",
+              },
+              { blockId: "minecraft:water", replaceable: true },
+            ),
+          ]
+        : [];
+    driver.actionResolver = (action) =>
+      Effect.sync(() => {
+        if (action.type === "set-movement") {
+          ascending = true;
+          airAtAscentStart = driver.currentObservation.player.air;
+        }
+        if (action.type === "reset-movement" && ascending) {
+          ascending = false;
+          airAtAscentRelease = driver.currentObservation.player.air;
+        }
+        return {};
+      });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (ascending && driver.currentObservation.player.air < 300) {
+          driver.currentObservation = observation({
+            health: 20,
+            food: 20,
+            air: Math.min(300, driver.currentObservation.player.air + 20),
+            counts: driver.currentObservation.inventory.counts,
+          });
+        }
+        return driver.currentObservation;
+      });
+    driver.taskResolver = (task) =>
+      Effect.suspend(() => {
+        driver.tasks.push(task);
+        if (task.type !== "attack-entity") {
+          return Effect.void;
+        }
+        attacks += 1;
+        if (attacks === 1) {
+          driver.currentObservation = observation({
+            health: 20,
+            food: 20,
+            air: 195,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          return Effect.never;
+        }
+        driver.entityResults = [];
+        return Effect.void;
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "action-failed" && event.action === "satisfy:food-supply"
+                ? Effect.sync(() => {
+                    foodProvisioningFailures.push(event.detail ?? "");
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          while (driver.tasks.filter((task) => task.type === "attack-entity").length === 0) {
+            yield* Effect.sleep(1);
+          }
+          yield* Effect.sleep(10);
+          expect(driver.tasks.filter((task) => task.type === "attack-entity")).toHaveLength(1);
+          driver.currentObservation = observation({
+            health: 20,
+            food: 20,
+            air: 100,
+            counts: driver.currentObservation.inventory.counts,
+          });
+          while (driver.tasks.filter((task) => task.type === "attack-entity").length < 2) {
+            yield* Effect.sleep(1);
+          }
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(
+      driver.tasks
+        .filter((task) => task.type === "attack-entity")
+        .slice(0, 2)
+        .map((task) => task.target.networkId),
+    ).toEqual([salmon.networkId, salmon.networkId]);
+    expect(driver.surfaceQueries).not.toHaveLength(0);
+    expect(driver.surfaceQueries.every(({ radius }) => radius === 4)).toBe(true);
+    expect(airAtAscentRelease).toBeGreaterThan(airAtAscentStart ?? 300);
+    expect(airAtAscentRelease).toBe(300);
+    expect(foodProvisioningFailures).toContain(
+      "Interrupted for replanning: air fell below the safety threshold",
+    );
+  }, 10_000);
+
   it("searches on land instead of chasing fish above critical hunger", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

@@ -8489,10 +8489,13 @@ function shouldResumeUrgentAquaticFoodHunt(
   decision: Exclude<BeatGamePlannerDecision, { readonly type: "advance-phase" }>,
   observation: BeatGameObservation,
 ): boolean {
+  // A fed bot fishes too once a long land search finds no food. A live
+  // bot fishing in open ocean surfaced for air, then failed to reach dry
+  // land on every try, and the food action's retries ran out and ended
+  // the run. Any food hunt goes back to its fish once it has breathed.
   return (
     (decision.type === "satisfy-requirement" &&
-      (decision.requirement.key === "food" || decision.requirement.key === "food-supply") &&
-      observation.player.food <= URGENT_HUNGER_FOOD_LEVEL) ||
+      (decision.requirement.key === "food" || decision.requirement.key === "food-supply")) ||
     isUrgentCorpseRecoveryFoodSearch(decision, observation)
   );
 }
