@@ -20209,6 +20209,60 @@ function rememberPortal(checkpoint: BeatGameCheckpoint, frame: PortalFrame): Bea
 }
 
 const LINKED_NETHER_PORTAL_ARRIVAL_RADIUS = 8;
+const LONG_WALK_MAXIMUM_HOP = 48;
+const LONG_WALK_MINIMUM_HOP = 8;
+const LONG_WALK_MAXIMUM_LEGS = 24;
+const LONG_WALK_LEG_ARRIVAL_RADIUS = 4;
+
+/// One route across a hundred blocks of Nether can run out of search
+/// states. A live bot with no food walked back toward its portal 130
+/// blocks away, and every route hit the search limit until the retries ran
+/// out and the run ended. Shorter legs each find a route, and a leg that
+/// fails is halved.
+function walkTowardInHops(
+  state: RunState,
+  target: { readonly x: number; readonly z: number },
+  arrivalRadius: number,
+): Effect.Effect<void, BeatGameDriverError> {
+  return Effect.gen(function* () {
+    let hop = LONG_WALK_MAXIMUM_HOP;
+    for (let leg = 0; leg < LONG_WALK_MAXIMUM_LEGS; leg += 1) {
+      const position = (yield* state.driver.observe).player.position;
+      const distance = Math.hypot(target.x - position.x, target.z - position.z);
+      if (distance <= arrivalRadius) {
+        break;
+      }
+      const step = Math.min(distance, hop);
+      const waypoint = {
+        x: position.x + ((target.x - position.x) / distance) * step,
+        z: position.z + ((target.z - position.z) / distance) * step,
+      };
+      // The last, shortest leg lets its failure end the walk.
+      const canShorten = hop / 2 >= LONG_WALK_MINIMUM_HOP;
+      const legFailed = yield* state.driver
+        .pathfindXZ(
+          waypoint.x,
+          waypoint.z,
+          position.dimension,
+          step < distance ? LONG_WALK_LEG_ARRIVAL_RADIUS : arrivalRadius,
+          state.strategy.path,
+        )
+        .pipe(
+          Effect.as(false),
+          Effect.catchIf(
+            (error) =>
+              canShorten &&
+              /No route found|search limit|certified bound|no progress/iu.test(error.message),
+            () => Effect.succeed(true),
+          ),
+        );
+      if (legFailed) {
+        hop /= 2;
+      }
+    }
+  });
+}
+
 // Centered halfway up the Nether, this radius covers its full height.
 const LINKED_NETHER_PORTAL_SEARCH_Y = 64;
 const LINKED_NETHER_PORTAL_SEARCH_RADIUS = 72;
@@ -20283,13 +20337,7 @@ function approachLinkedNetherPortal(
         message: "Walking to the Nether position linked to a remembered Overworld portal",
         data: { position: player, target },
       });
-      yield* state.driver.pathfindXZ(
-        target.x,
-        target.z,
-        player.dimension,
-        LINKED_NETHER_PORTAL_ARRIVAL_RADIUS,
-        state.strategy.path,
-      );
+      yield* walkTowardInHops(state, target, LINKED_NETHER_PORTAL_ARRIVAL_RADIUS);
       portal = yield* findLinkedPortal;
     }
     if (portal === undefined) {

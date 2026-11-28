@@ -6837,7 +6837,96 @@ describe("beat-game run lifecycle", () => {
       ),
     );
 
-    expect(driver.xzPaths[0]).toMatchObject({ x: 55, z: 0, dimension: "minecraft:the_nether" });
+    // The linked position (55, 0) lies about 129 blocks away, so the first
+    // leg goes 48 blocks straight toward it.
+    const [firstLeg] = driver.xzPaths;
+    expect(firstLeg?.dimension).toBe("minecraft:the_nether");
+    expect(Math.hypot((firstLeg?.x ?? 0) + 33.5, (firstLeg?.z ?? 0) - 93.5)).toBeCloseTo(48);
+    expect(Math.hypot((firstLeg?.x ?? 0) - 55, firstLeg?.z ?? 0)).toBeCloseTo(
+      Math.hypot(55 + 33.5, 93.5) - 48,
+    );
+  });
+
+  it("walks a long way to the linked Nether position in legs that find routes", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "linked-portal-legs-run";
+    const teamId = "linked-portal-legs-team";
+    const overworldPortal = blockObservation(
+      { x: 446, y: 130, z: 3, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:nether_portal", diggable: false },
+    );
+    const position = { x: -33.5, y: 37, z: 93.5 };
+    const counts = { "minecraft:cooked_beef": 16, "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({
+      dimension: "minecraft:the_nether",
+      position,
+      counts,
+    });
+    // As in the live run: a route over more than 30 blocks of Nether runs
+    // out of search states, and shorter ones arrive.
+    driver.xzPathResolver = (x, z, dimension, radius, policy) =>
+      Effect.suspend(() => {
+        driver.xzPaths.push({ x, z, dimension, radius, policy });
+        if (Math.hypot(x - position.x, z - position.z) > 30) {
+          return Effect.fail(
+            new BeatGameDriverError({
+              operation: "pathfindXZ",
+              code: "path_search_limit",
+              retryable: true,
+              message: "Pathfinding reached its search limit after 50000 expanded states",
+            }),
+          );
+        }
+        position.x = x;
+        position.z = z;
+        driver.currentObservation = observation({
+          dimension: "minecraft:the_nether",
+          position,
+          counts,
+        });
+        return Effect.void;
+      });
+    const initial = checkpoint(BeatGamePhase.RETURN_TO_OVERWORLD, { runId, teamId });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            portals: [
+              {
+                key: "portal:overworld",
+                value: overworldPortal,
+                observedAt: overworldPortal.observedAt,
+                confidence: 1,
+              },
+            ],
+          },
+        },
+        undefined,
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => Math.hypot(position.x - 55, position.z) > 8).pipe(
+            Effect.timeout("5 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(Math.hypot(position.x - 55, position.z)).toBeLessThanOrEqual(8);
   });
 
   it("finds a linked Nether portal far above the bot", async () => {
