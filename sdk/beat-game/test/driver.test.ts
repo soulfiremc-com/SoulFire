@@ -973,7 +973,7 @@ describe("production SoulFire beat-game driver", () => {
     });
     const cause = new SoulFireTaskError(task);
     let attempts = 0;
-    const { bot } = effectBot(
+    const { bot, calls } = effectBot(
       Effect.suspend(() => {
         attempts += 1;
         return attempts === 1
@@ -1018,6 +1018,10 @@ describe("production SoulFire beat-game driver", () => {
       "reset",
     ]);
     expect(attempts).toBe(2);
+    // The movement keys only steer the bot under the control lease. A live
+    // nudge without it left the bot where it stood.
+    expect(calls.controlAcquisitions).toBe(1);
+    expect(calls.controlReleases).toBe(1);
   });
 
   it("keeps a route that ran out of search states retryable", async () => {

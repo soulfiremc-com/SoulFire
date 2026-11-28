@@ -707,6 +707,25 @@ export function makeSoulFireBeatGameDriver(
     }),
   );
 
+  const withSharedControl = <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | BeatGameDriverError, R> =>
+    Effect.acquireUseRelease(
+      acquireSharedControl,
+      (lease) => {
+        const renew = Effect.sleep(CONTROL_LEASE_RENEWAL_INTERVAL_MS).pipe(
+          Effect.andThen(lease.renew(CONTROL_LEASE_TTL_SECONDS)),
+          Effect.forever,
+        );
+        return Effect.raceFirst(effect, renew);
+      },
+      releaseSharedControl,
+    ).pipe(
+      Effect.mapError((cause) =>
+        cause instanceof BeatGameDriverError ? cause : driverError("control", cause),
+      ),
+    );
+
   const actPrimitive = (action: BeatGamePrimitiveAction) =>
     executePrimitive(bot, action).pipe(Effect.mapError(mapError(`act.${action.type}`)));
 
@@ -721,25 +740,32 @@ export function makeSoulFireBeatGameDriver(
     if (Math.hypot(start.x, start.z) <= BLOCK_CENTER_TOLERANCE) {
       return false;
     }
-    yield* actPrimitive({
-      type: "look",
-      yaw: (Math.atan2(start.z, start.x) * 180) / Math.PI - 90,
-      pitch: 0,
-    });
-    yield* actPrimitive({ type: "set-movement", forward: true }).pipe(
-      Effect.andThen(
-        Effect.gen(function* () {
-          for (let poll = 0; poll < BLOCK_CENTER_STEP_POLLS; poll += 1) {
-            yield* Effect.sleep(BLOCK_CENTER_STEP_POLL_MS);
-            const currentObservation = yield* observe;
-            const current = blockCenterOffset(currentObservation);
-            if (Math.hypot(current.x, current.z) <= BLOCK_CENTER_TOLERANCE) {
-              return;
-            }
-          }
-        }),
-      ),
-      Effect.ensuring(actPrimitive({ type: "reset-movement" }).pipe(Effect.ignore)),
+    // The movement keys only steer the bot while it holds the control lease,
+    // as every other scripted movement does. A live nudge without it
+    // left the bot where it stood.
+    yield* withSharedControl(
+      Effect.gen(function* () {
+        yield* actPrimitive({
+          type: "look",
+          yaw: (Math.atan2(start.z, start.x) * 180) / Math.PI - 90,
+          pitch: 0,
+        });
+        yield* actPrimitive({ type: "set-movement", forward: true }).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              for (let poll = 0; poll < BLOCK_CENTER_STEP_POLLS; poll += 1) {
+                yield* Effect.sleep(BLOCK_CENTER_STEP_POLL_MS);
+                const currentObservation = yield* observe;
+                const current = blockCenterOffset(currentObservation);
+                if (Math.hypot(current.x, current.z) <= BLOCK_CENTER_TOLERANCE) {
+                  return;
+                }
+              }
+            }),
+          ),
+          Effect.ensuring(actPrimitive({ type: "reset-movement" }).pipe(Effect.ignore)),
+        );
+      }),
     );
     return true;
   });
@@ -1377,22 +1403,7 @@ export function makeSoulFireBeatGameDriver(
     runTask,
     act: (action) =>
       executePrimitive(bot, action).pipe(Effect.mapError(mapError(`act.${action.type}`))),
-    withControl: (effect) =>
-      Effect.acquireUseRelease(
-        acquireSharedControl,
-        (lease) => {
-          const renew = Effect.sleep(CONTROL_LEASE_RENEWAL_INTERVAL_MS).pipe(
-            Effect.andThen(lease.renew(CONTROL_LEASE_TTL_SECONDS)),
-            Effect.forever,
-          );
-          return Effect.raceFirst(effect, renew);
-        },
-        releaseSharedControl,
-      ).pipe(
-        Effect.mapError((cause) =>
-          cause instanceof BeatGameDriverError ? cause : driverError("control", cause),
-        ),
-      ),
+    withControl: withSharedControl,
   };
 }
 
