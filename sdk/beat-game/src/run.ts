@@ -20042,13 +20042,17 @@ function reservePortalWorkspace(
     // about 280 blocks from its half-cast frame, failed every cast for want
     // of lava it could see, and the run ended when the retries ran out. A
     // half-cast frame that far away is left for a new one nearby.
-    if (
+    //
+    // A frame recorded as complete can be broken by now, and a complete
+    // frame is resumed even after it was abandoned. A live bot resumed a
+    // recorded complete frame 280 blocks away, found blocks missing, and
+    // failed the same way. A far cast frame of either kind is passed over.
+    const distantCastFrame =
       resumable?.method === "CAST" &&
       resumable.origin.dimension === observation.player.position.dimension &&
-      resumable.observedFrame.length < resumable.targetFrame.length &&
       horizontalDistanceSquared(resumable.origin, observation.player.position) >
-        PORTAL_CAST_RESUME_MAXIMUM_DISTANCE ** 2
-    ) {
+        PORTAL_CAST_RESUME_MAXIMUM_DISTANCE ** 2;
+    if (distantCastFrame && resumable.observedFrame.length < resumable.targetFrame.length) {
       yield* updatePortalSkill(state, resumable, "find-lava-pool", {
         status: "ABANDONED",
         abandonedReason: "the half-cast frame is too far away to resume",
@@ -20060,7 +20064,13 @@ function reservePortalWorkspace(
       });
       return yield* reservePortalWorkspace(state, observation, preferCasting);
     }
-    if (
+    if (distantCastFrame) {
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Passed over a distant cast portal frame recorded as complete",
+        data: { origin: resumable.origin, position: observation.player.position },
+      });
+    } else if (
       resumable !== undefined &&
       resumable.origin.dimension === observation.player.position.dimension
     ) {
