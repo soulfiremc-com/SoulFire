@@ -44819,6 +44819,97 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("fishes when fully fed once a long land search finds no food", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "barren-land-aquatic-run";
+    const teamId = "barren-land-aquatic-team";
+    const initial = checkpoint(BeatGamePhase.PREPARE_OVERWORLD, {
+      runId,
+      teamId,
+    });
+    await Effect.runPromise(
+      store.save(
+        {
+          ...initial,
+          memory: {
+            ...initial.memory,
+            explorationFrontiers: {
+              "minecraft:overworld:find-food-animals": {
+                progressVersion: 2,
+                origin: {
+                  x: 0,
+                  y: 64,
+                  z: 0,
+                  dimension: "minecraft:overworld",
+                },
+                nextIndex: 39,
+                targetAttempts: 0,
+                // As in the live run: 38 legs over fifty minutes found no land food.
+                totalAdvances: 38,
+              },
+            },
+          },
+        },
+        undefined,
+      ),
+    );
+    driver.currentObservation = observation({
+      health: 20,
+      food: 20,
+      counts: {
+        "minecraft:oak_log": 8,
+        "minecraft:wooden_sword": 1,
+      },
+    });
+    driver.entityResults = [
+      {
+        connectionEpoch: "epoch-1",
+        networkId: 54,
+        entityType: "minecraft:salmon",
+        position: {
+          x: 3,
+          y: 63,
+          z: 0,
+          dimension: "minecraft:overworld",
+        },
+        velocity: { x: 0, y: 0, z: 0 },
+        alive: true,
+        health: 3,
+        observedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    driver.taskResolver = (task) => {
+      driver.tasks.push(task);
+      return task.type === "attack-entity" ? Effect.never : Effect.void;
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* sleepWhile(() => !driver.tasks.some((task) => task.type === "attack-entity")).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(driver.tasks).toContainEqual(
+      objectContaining({
+        type: "attack-entity",
+        target: objectContaining({ networkId: 54 }),
+      }),
+    );
+  });
+
   it("hunts passive food barehanded when injured", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({

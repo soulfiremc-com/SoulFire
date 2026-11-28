@@ -928,6 +928,7 @@ const HIGH_YIELD_FOOD_ANIMAL_TYPES = new Set([
 ]);
 const HIGH_YIELD_FOOD_PREFERENCE_RADIUS = 32;
 const SAFE_AQUATIC_FALLBACK_EXPLORATION_LEGS = 12;
+const BARREN_LAND_AQUATIC_FALLBACK_EXPLORATION_LEGS = 30;
 
 const DANGEROUS_NEUTRAL_ENTITY_TYPES = [
   "minecraft:bee",
@@ -16198,6 +16199,16 @@ function shouldAllowAquaticHunt(
   const exhaustedDrySearch =
     targetPreference.safeAquaticFallbackAfterExplorationLegs !== undefined &&
     completedDryExplorationLegs >= targetPreference.safeAquaticFallbackAfterExplorationLegs;
+  // Land that stays empty far past that point has no food to find. A live
+  // bot searched 38 legs over fifty minutes, saw one rabbit and 164 salmon,
+  // and left every fish alone because it was not hungry yet.
+  if (
+    exhaustedDrySearch &&
+    completedDryExplorationLegs >= BARREN_LAND_AQUATIC_FALLBACK_EXPLORATION_LEGS &&
+    observation.player.health >= minimumHealth
+  ) {
+    return true;
+  }
   if (exhaustedDrySearch) {
     const maximumFallbackFoodLevel =
       targetPreference.maximumSafeAquaticFoodLevel ?? URGENT_HUNGER_FOOD_LEVEL;
