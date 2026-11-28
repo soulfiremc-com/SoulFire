@@ -31376,6 +31376,106 @@ describe("beat-game run lifecycle", () => {
     ).toBeGreaterThanOrEqual(2);
   }, 10_000);
 
+  it("fights a spider the first time it catches up with the escape", async () => {
+    const driver = new FakeBeatGameDriver();
+    const counts = { "minecraft:stone_sword": 1 };
+    driver.currentObservation = observation({ counts });
+    const spider = {
+      connectionEpoch: "epoch-1",
+      networkId: 58,
+      entityType: "minecraft:spider",
+      position: { x: 8, y: 64, z: 0, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      aggressive: true,
+      health: 16,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    // As in the live run: a second spider and a zombie came along at night.
+    const pack = [
+      { ...spider, networkId: 59, position: { ...spider.position, z: 3 } },
+      {
+        ...spider,
+        networkId: 60,
+        entityType: "minecraft:zombie",
+        position: { ...spider.position, z: -3 },
+      },
+    ];
+    driver.entityQueryResolver = (query) =>
+      query.selector.categories?.includes(2) === true
+        ? driver.entityResults
+        : driver.entityResults.filter(
+            (entity) =>
+              query.selector.networkId === undefined ||
+              query.selector.networkId === entity.networkId,
+          );
+    const timeline: string[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "attack-entity") {
+        timeline.push("strike");
+      }
+    };
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        timeline.push(task.type);
+      }).pipe(
+        Effect.andThen(
+          task.type === "collect-blocks" || task.type === "flee" || task.type === "attack-entity"
+            ? Effect.never
+            : Effect.void,
+        ),
+      );
+
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+                yield* Effect.sleep(1);
+              }
+              driver.currentObservation = observation({ counts, health: 14, food: 14 });
+              driver.entityResults = [spider, ...pack];
+              while (!driver.tasks.some((task) => task.type === "flee")) {
+                yield* Effect.sleep(1);
+              }
+              // As in the live run: the spider keeps pace two blocks away.
+              driver.currentObservation = observation({ counts, health: 12, food: 14 });
+              driver.entityResults = [
+                { ...spider, position: { ...spider.position, x: 2 } },
+                ...pack,
+              ];
+              while (!driver.tasks.some((task) => task.type === "attack-entity")) {
+                yield* Effect.sleep(1);
+              }
+              yield* run.stop;
+              yield* run.awaitCompletion.pipe(Effect.result);
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "5 seconds",
+                orElse: () =>
+                  Effect.fail(
+                    new ScenarioFailure({
+                      message: `Never turned to fight: ${driver.actions.filter((action) => action.type === "attack-entity").length} knockbacks`,
+                    }),
+                  ),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // It turns to fight the first time the escape that strikes and runs
+    // finds the spider at its back, where the live bot ran four times.
+    expect(
+      timeline.slice(0, timeline.indexOf("attack-entity")).filter((step) => step === "flee").length,
+    ).toBeLessThanOrEqual(2);
+  }, 10_000);
+
   it("keeps fighting a zombie it could not outrun when it takes another hit", async () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:stone_sword": 1 };

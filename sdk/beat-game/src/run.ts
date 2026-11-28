@@ -1169,6 +1169,10 @@ const SHIELDED_RANGED_FIGHT_MINIMUM_HEALTH = MELEE_DISENGAGE_HEALTH;
 const UNSHIELDED_RANGED_FIGHT_MINIMUM_HEALTH = 14;
 const CAUGHT_MELEE_COMMIT_MINIMUM_HEALTH = MELEE_DISENGAGE_HEALTH;
 const MAXIMUM_KNOCKBACK_ESCAPES = 2;
+const UNOUTRUNNABLE_MELEE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:spider",
+  "minecraft:cave_spider",
+]);
 const THREAT_ESCAPE_SAFE_DISTANCE = 24;
 const SINGLE_THREAT_MAXIMUM_ESCAPES = 4;
 const DURABLE_DEATH_RECOVERY_WINDOW_MS = 8 * 60 * 60 * 1000;
@@ -6498,8 +6502,17 @@ function escapeFromTarget(
       // A zombie keeps pace with a fleeing player. A live run struck and
       // fled from one about every half second while it and a second zombie
       // kept hitting. Once running has failed twice, an armed bot fights.
+      //
+      // A spider outruns the bot from the start. A live bot struck and fled
+      // two of them five times at night, from 18 health down to 9, before it
+      // stood and fought, and died in that fight. An armed bot fights one
+      // the first time it catches up.
       const knockbackStrikes = options.knockbackStrikes ?? 0;
-      if (knockbackStrikes >= MAXIMUM_KNOCKBACK_ESCAPES && hasMeleeWeapon(current)) {
+      if (
+        (knockbackStrikes >= MAXIMUM_KNOCKBACK_ESCAPES ||
+          UNOUTRUNNABLE_MELEE_ENTITY_TYPES.has(outcome.target.entityType)) &&
+        hasMeleeWeapon(current)
+      ) {
         yield* emit(state, {
           type: "diagnostic",
           message: "Fighting a melee attacker that kept pace with the escape",
