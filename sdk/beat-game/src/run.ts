@@ -1820,7 +1820,25 @@ function runNightShelterAction(
       action: NIGHT_SHELTER_ACTION,
       attempt: 1,
     });
-    const reachedMorning = yield* shelterUntilMorning(state, observation);
+    // The shelter runs its steps without the action safety monitor. A live
+    // bot spent ten seconds on a route to dry ground at night while a
+    // stray shot it from 11 health to 5, and died before the next step
+    // looked for hostiles. A hit ends the attempt, and the next one deals
+    // with the attacker first.
+    const shelterStartedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
+    const reachedMorning = yield* Effect.raceFirst(
+      shelterUntilMorning(state, observation),
+      waitForAttackDamageSince(state, shelterStartedAt).pipe(
+        Effect.tap((damage) =>
+          emit(state, {
+            type: "diagnostic",
+            message: "An attack interrupted the night shelter",
+            data: { damageType: damage.damageType, health: damage.health },
+          }),
+        ),
+        Effect.as(false),
+      ),
+    );
     if (!reachedMorning) {
       const failedAtMs = yield* Clock.currentTimeMillis;
       yield* Ref.set(state.nightShelterFailedAtMs, failedAtMs);
@@ -6798,6 +6816,26 @@ function takeCoverFromRangedFire(
       yield* stepOffBurningGround(state, current);
     }
     return true;
+  });
+}
+
+function waitForAttackDamageSince(
+  state: RunState,
+  since: string,
+): Effect.Effect<Extract<BeatGameDriverEvent, { type: "bot-damaged" }>> {
+  const sinceMs = Date.parse(since);
+  return Effect.gen(function* () {
+    for (;;) {
+      const damage = yield* Ref.get(state.lastDamage);
+      if (
+        damage?.damageType !== undefined &&
+        ATTACK_DAMAGE_TYPES.has(damage.damageType) &&
+        Date.parse(damage.observedAt) > sinceMs
+      ) {
+        return damage;
+      }
+      yield* Effect.sleep(MINIMUM_RECOVERY_POLL_MS);
+    }
   });
 }
 

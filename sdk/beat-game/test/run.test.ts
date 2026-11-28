@@ -13253,6 +13253,70 @@ describe("beat-game run lifecycle", () => {
     expect(driver.tasks).not.toContainEqual(objectContaining({ type: "auto-eat" }));
   });
 
+  it("breaks off a night shelter attempt when an arrow hits it", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentEnvironment = { gameTime: 14_000n };
+    driver.currentObservation = observation({
+      counts: { "minecraft:stone_pickaxe": 1, "minecraft:stone_sword": 1, "minecraft:dirt": 16 },
+      position: { x: 0.5, y: 64, z: 0.5 },
+    });
+    // As in the live run: the shelter's route took long, and a stray shot
+    // the bot while it was under way.
+    const routeStarted = Promise.withResolvers<undefined>();
+    driver.pathResolver = () =>
+      Effect.sync(() => {
+        routeStarted.resolve(undefined);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.xzPathResolver = () =>
+      Effect.sync(() => {
+        routeStarted.resolve(undefined);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        routeStarted.resolve(undefined);
+      }).pipe(Effect.andThen(Effect.never));
+    // The stray keeps shooting while the route runs.
+    driver.events = Stream.fromEffect(Effect.promise(() => routeStarted.promise)).pipe(
+      Stream.flatMap(() => Stream.tick("200 millis")),
+      Stream.mapEffect(() =>
+        DateTime.now.pipe(
+          Effect.map(
+            (now) =>
+              ({
+                type: "bot-damaged",
+                observedAt: DateTime.formatIso(now),
+                amount: 3,
+                health: 17,
+                damageType: "minecraft:arrow",
+              }) as const,
+          ),
+        ),
+      ),
+    );
+
+    const interrupted = await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, { strategy: { observationPollMs: 1 } }).pipe(
+          Effect.flatMap((run) =>
+            run.events.pipe(
+              Stream.filter(
+                (event) =>
+                  event.type === "action-failed" && event.action === "survive:night-shelter",
+              ),
+              Stream.runHead,
+              Effect.timeout("10 seconds"),
+              Effect.option,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // The attempt ends instead of finishing a route under fire.
+    expect(Option.isSome(Option.flatten(interrupted))).toBe(true);
+  }, 15_000);
+
   it("answers a drowned that reaches it while it waits in a shelter", async () => {
     // As in a live run: a drowned reached the bot in its sealed shaft and
     // hit it every second for eight seconds while it waited for morning.
