@@ -959,6 +959,67 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
+  it("steps to the middle of its block and retries a stalled route", async () => {
+    // As in the live run: the bot stood at the edge of its block, and the
+    // same step stalled again and again.
+    const task = create(BotTaskSchema, {
+      taskId: "stalled-step",
+      failure: create(BotTaskFailureSchema, {
+        code: "path_action_stalled",
+        message:
+          "Pathfinding stalled on MovementAction -> [2, 65, 2] across 5 consecutive attempts",
+        retryable: false,
+      }),
+    });
+    const cause = new SoulFireTaskError(task);
+    let attempts = 0;
+    const { bot } = effectBot(
+      Effect.suspend(() => {
+        attempts += 1;
+        return attempts === 1
+          ? Effect.fail(new SoulFireTaskFailed({ task, cause, message: cause.message }))
+          : Effect.succeed({});
+      }),
+    );
+    const movements: unknown[] = [];
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake adds only the movement methods this test needs
+    Object.assign(bot as unknown as Record<string, unknown>, {
+      look: (yaw: number, pitch: number) =>
+        Effect.sync(() => {
+          movements.push({ look: { yaw, pitch } });
+          return {};
+        }),
+      setMovement: (movement: Readonly<Record<string, unknown>>) =>
+        Effect.sync(() => {
+          movements.push({ set: movement });
+          return {};
+        }),
+      resetMovement: () =>
+        Effect.sync(() => {
+          movements.push("reset");
+          return {};
+        }),
+    });
+    const driver = makeSoulFireBeatGameDriver(bot);
+
+    await Effect.runPromise(
+      driver.pathfind(
+        { x: 10, y: 64, z: 20, dimension: "minecraft:overworld" },
+        2,
+        defaultBeatGameStrategy.path,
+      ),
+    );
+
+    // The fake bot stands at (1, 2), the corner of its block, so it walks
+    // toward (1.5, 2.5): south-east, a yaw of -45 degrees.
+    expect(movements).toEqual([
+      { look: { yaw: -45, pitch: 0 } },
+      { set: { forward: true } },
+      "reset",
+    ]);
+    expect(attempts).toBe(2);
+  });
+
   it("keeps a route that ran out of search states retryable", async () => {
     // As in the live run: a long walk down to the stronghold hit the state
     // limit, and the failure ended the whole run.

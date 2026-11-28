@@ -707,6 +707,56 @@ export function makeSoulFireBeatGameDriver(
     }),
   );
 
+  const actPrimitive = (action: BeatGamePrimitiveAction) =>
+    executePrimitive(bot, action).pipe(Effect.mapError(mapError(`act.${action.type}`)));
+
+  // Routes plan from the middle of each block. A live bot stood at the edge
+  // of its block with its head under the low ceiling of the next column, so
+  // every jump onto a one-block step bumped the ceiling. The same step
+  // stalled for twenty minutes. Off the middle, a stalled route steps to the
+  // middle of the block and tries once more.
+  const stepToBlockCenter: Effect.Effect<boolean, BeatGameDriverError> = Effect.gen(function* () {
+    const startObservation = yield* observe;
+    const start = blockCenterOffset(startObservation);
+    if (Math.hypot(start.x, start.z) <= BLOCK_CENTER_TOLERANCE) {
+      return false;
+    }
+    yield* actPrimitive({
+      type: "look",
+      yaw: (Math.atan2(start.z, start.x) * 180) / Math.PI - 90,
+      pitch: 0,
+    });
+    yield* actPrimitive({ type: "set-movement", forward: true }).pipe(
+      Effect.andThen(
+        Effect.gen(function* () {
+          for (let poll = 0; poll < BLOCK_CENTER_STEP_POLLS; poll += 1) {
+            yield* Effect.sleep(BLOCK_CENTER_STEP_POLL_MS);
+            const currentObservation = yield* observe;
+            const current = blockCenterOffset(currentObservation);
+            if (Math.hypot(current.x, current.z) <= BLOCK_CENTER_TOLERANCE) {
+              return;
+            }
+          }
+        }),
+      ),
+      Effect.ensuring(actPrimitive({ type: "reset-movement" }).pipe(Effect.ignore)),
+    );
+    return true;
+  });
+
+  const recenterAfterActionStall = (
+    route: Effect.Effect<void, BeatGameDriverError>,
+  ): Effect.Effect<void, BeatGameDriverError> =>
+    route.pipe(
+      Effect.catchIf(
+        (error) => error.code === ACTION_STALL_FAILURE_CODE,
+        (error) =>
+          stepToBlockCenter.pipe(
+            Effect.flatMap((stepped) => (stepped ? route : Effect.fail(error))),
+          ),
+      ),
+    );
+
   const goToGoal = (
     goal: Parameters<typeof bot.tasks.goTo>[0],
     policy: BeatGamePathPolicy,
@@ -1313,12 +1363,16 @@ export function makeSoulFireBeatGameDriver(
         })
         .pipe(Effect.asVoid, Effect.mapError(mapError("waitForChunks"))),
     pathfind: (position, radius, policy) =>
-      withQualityBoundFallback(policy, (attemptPolicy) =>
-        goToGoal(goals.near(position, radius), attemptPolicy, "pathfind"),
+      recenterAfterActionStall(
+        withQualityBoundFallback(policy, (attemptPolicy) =>
+          goToGoal(goals.near(position, radius), attemptPolicy, "pathfind"),
+        ),
       ),
     pathfindXZ: (x, z, dimension, radius, policy) =>
-      withQualityBoundFallback(policy, (attemptPolicy) =>
-        goToGoal(goals.xz(x, z, { dimension, radius }), attemptPolicy, "pathfindXZ"),
+      recenterAfterActionStall(
+        withQualityBoundFallback(policy, (attemptPolicy) =>
+          goToGoal(goals.xz(x, z, { dimension, radius }), attemptPolicy, "pathfindXZ"),
+        ),
       ),
     runTask,
     act: (action) =>
@@ -1601,6 +1655,16 @@ const ROUTE_SEARCH_LIMIT_CODES: ReadonlySet<string> = new Set([
   "path_search_limit",
   "search_limit",
 ]);
+
+const ACTION_STALL_FAILURE_CODE = "path_action_stalled";
+
+function blockCenterOffset(observation: BeatGameObservation): { x: number; z: number } {
+  const { x, z } = observation.player.position;
+  return { x: Math.floor(x) + 0.5 - x, z: Math.floor(z) + 0.5 - z };
+}
+const BLOCK_CENTER_TOLERANCE = 0.2;
+const BLOCK_CENTER_STEP_POLL_MS = 50;
+const BLOCK_CENTER_STEP_POLLS = 20;
 
 function withQualityBoundFallback(
   policy: BeatGamePathPolicy,
