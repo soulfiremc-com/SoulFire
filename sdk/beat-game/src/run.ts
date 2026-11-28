@@ -5254,24 +5254,32 @@ function monitorObservedSafety(
             return Effect.suspend(() => monitor(observation));
           }
           return Ref.get(state.lastDamage).pipe(
-            Effect.flatMap((damage) =>
-              emit(state, {
-                type: "diagnostic",
-                message: "Environmental damage interrupted the action",
-                data: {
-                  action: decision.action,
-                  position: observation.player.position,
-                  health: observation.player.health,
-                  ...(damage?.damageType === undefined
-                    ? {}
-                    : { damageType: damage.damageType, damagedAt: damage.observedAt }),
-                },
-              }),
+            Effect.flatMap(
+              (damage): Effect.Effect<ActionResult, BeatGameError | BeatGameDriverError> =>
+                // A status effect hurts wherever the bot stands. A live bot
+                // took a wither tick after a wither skeleton's hit, stepped
+                // away as if from fire, and dropped among two more of them.
+                damage?.damageType !== undefined &&
+                STATUS_EFFECT_DAMAGE_TYPES.has(damage.damageType)
+                  ? Effect.suspend(() => monitor(observation))
+                  : emit(state, {
+                      type: "diagnostic",
+                      message: "Environmental damage interrupted the action",
+                      data: {
+                        action: decision.action,
+                        position: observation.player.position,
+                        health: observation.player.health,
+                        ...(damage?.damageType === undefined
+                          ? {}
+                          : { damageType: damage.damageType, damagedAt: damage.observedAt }),
+                      },
+                    }).pipe(
+                      Effect.as({
+                        replanReason: "environmental damage was observed without a nearby attacker",
+                        environmentalEscapePosition: observation.player.position,
+                      } satisfies ActionResult),
+                    ),
             ),
-            Effect.as({
-              replanReason: "environmental damage was observed without a nearby attacker",
-              environmentalEscapePosition: observation.player.position,
-            } satisfies ActionResult),
           );
         }
         const response = threat.response;
@@ -10110,6 +10118,11 @@ const PILLAR_DEFENSE_WATCH_RADIUS = 12;
 const PILLAR_STRIKE_REACH = 3.5;
 const PILLAR_STRIKE_INTERVAL_MS = 650;
 const FIREBALL_DAMAGE_TYPE = "minecraft:fireball";
+/// Damage from a status effect: wither and poison (`magic`).
+const STATUS_EFFECT_DAMAGE_TYPES: ReadonlySet<string> = new Set([
+  "minecraft:wither",
+  "minecraft:magic",
+]);
 const BURNING_DAMAGE_TYPE = "minecraft:on_fire";
 /// A blaze's fireball sets its target alight for five seconds.
 const FIREBALL_BURN_MS = 6000;

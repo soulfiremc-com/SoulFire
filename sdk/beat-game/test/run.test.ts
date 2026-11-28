@@ -16862,6 +16862,65 @@ describe("beat-game run lifecycle", () => {
     });
   });
 
+  it("keeps working through a wither tick instead of escaping it", async () => {
+    const driver = new FakeBeatGameDriver();
+    let actionStarted = false;
+    let health = 20;
+    driver.currentObservation = observation({ health });
+    driver.observationResolver = () =>
+      Effect.sync(() => {
+        if (actionStarted && health === 20) {
+          health = 19;
+        }
+        driver.currentObservation = observation({ health });
+        return driver.currentObservation;
+      });
+    // As in the live run: a wither skeleton's hit left the wither effect,
+    // and its first tick came with the skeleton out of sight.
+    driver.events = Stream.make({
+      type: "bot-damaged",
+      observedAt: "2026-01-01T00:00:00.000Z",
+      amount: 1,
+      health: 19,
+      damageType: "minecraft:wither",
+    } as const).pipe(Stream.concat(Stream.never));
+    const messages: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: {
+              satisfyRequirement: () =>
+                Effect.sync(() => {
+                  actionStarted = true;
+                }).pipe(Effect.andThen(Effect.never)),
+            },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic" || event.type === "action-failed"
+                ? Effect.sync(() => {
+                    messages.push(
+                      event.type === "diagnostic" ? event.message : (event.detail ?? ""),
+                    );
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(() => health === 20).pipe(Effect.timeout("2 seconds"), Effect.ignore);
+          yield* Effect.sleep("500 millis");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(health).toBe(19);
+    expect(messages).not.toContain("Environmental damage interrupted the action");
+  });
+
   it("names the damage type when environmental damage interrupts an action", async () => {
     const driver = new FakeBeatGameDriver();
     let actionStarted = false;
