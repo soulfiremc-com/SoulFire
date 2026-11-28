@@ -404,8 +404,10 @@ const program = Effect.scoped(
             entries: [
               create(SettingsNamespace_SettingsEntrySchema, {
                 key: "render-distance",
+                // The maximum, so the bot sees as much of the world as the
+                // server sends.
                 value: create(ValueSchema, {
-                  kind: { case: "numberValue", value: 10 },
+                  kind: { case: "numberValue", value: 32 },
                 }),
               }),
             ],
@@ -1737,9 +1739,9 @@ const startMinecraftFixture = Effect.suspend(() => {
       "--env",
       "SPAWN_PROTECTION=0",
       "--env",
-      "VIEW_DISTANCE=10",
+      "VIEW_DISTANCE=32",
       "--env",
-      "SIMULATION_DISTANCE=10",
+      "SIMULATION_DISTANCE=32",
     ];
 
     if (fixtureConfiguration.mode === "survival") {
