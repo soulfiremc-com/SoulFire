@@ -20038,6 +20038,28 @@ function reservePortalWorkspace(
   return Effect.gen(function* () {
     const checkpoint = yield* Ref.get(state.checkpoint);
     const resumable = latestResumablePortalWorkspace(checkpoint);
+    // Casting looks for lava where the bot stands. A live bot respawned
+    // about 280 blocks from its half-cast frame, failed every cast for want
+    // of lava it could see, and the run ended when the retries ran out. A
+    // half-cast frame that far away is left for a new one nearby.
+    if (
+      resumable?.method === "CAST" &&
+      resumable.origin.dimension === observation.player.position.dimension &&
+      resumable.observedFrame.length < resumable.targetFrame.length &&
+      horizontalDistanceSquared(resumable.origin, observation.player.position) >
+        PORTAL_CAST_RESUME_MAXIMUM_DISTANCE ** 2
+    ) {
+      yield* updatePortalSkill(state, resumable, "find-lava-pool", {
+        status: "ABANDONED",
+        abandonedReason: "the half-cast frame is too far away to resume",
+      });
+      yield* emit(state, {
+        type: "diagnostic",
+        message: "Left a distant half-cast portal frame for a new one",
+        data: { origin: resumable.origin, position: observation.player.position },
+      });
+      return yield* reservePortalWorkspace(state, observation, preferCasting);
+    }
     if (
       resumable !== undefined &&
       resumable.origin.dimension === observation.player.position.dimension
@@ -20252,6 +20274,7 @@ function rememberPortal(checkpoint: BeatGameCheckpoint, frame: PortalFrame): Bea
 }
 
 const LINKED_NETHER_PORTAL_ARRIVAL_RADIUS = 8;
+const PORTAL_CAST_RESUME_MAXIMUM_DISTANCE = 64;
 const LONG_WALK_MAXIMUM_HOP = 48;
 const LONG_WALK_MINIMUM_HOP = 8;
 const LONG_WALK_MAXIMUM_LEGS = 24;

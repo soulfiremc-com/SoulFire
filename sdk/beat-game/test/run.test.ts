@@ -42914,6 +42914,109 @@ describe("beat-game run lifecycle", () => {
     );
   }, 15_000);
 
+  it("leaves a half-cast portal frame far from where it respawned", async () => {
+    const driver = new FakeBeatGameDriver();
+    const store = new InMemoryBeatGameCheckpointStore();
+    const runId = "distant-cast-frame-run";
+    const teamId = "distant-cast-frame-team";
+    driver.currentObservation = observation({
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:cooked_beef": 8,
+        "minecraft:flint_and_steel": 1,
+        "minecraft:iron_pickaxe": 1,
+        "minecraft:lava_bucket": 1,
+        "minecraft:oak_log": 4,
+        "minecraft:shield": 1,
+        "minecraft:stone_sword": 1,
+        "minecraft:water_bucket": 1,
+      },
+    });
+    // As in the live run: the bot respawned about 280 blocks from a cast
+    // site with one frame block of ten in place.
+    const startedAt = new Date().toISOString();
+    const origin = { x: 260, y: -53, z: -233, dimension: "minecraft:overworld" };
+    const workspace = {
+      workspaceId: "portal-skill:portal",
+      origin,
+      axis: "x",
+      method: "CAST",
+      status: "BUILDING",
+      targetFrame: [origin, { ...origin, x: origin.x + 1 }],
+      observedFrame: [origin],
+      interior: [{ ...origin, x: origin.x + 1, y: origin.y + 1 }],
+      protectedBlocks: [origin],
+      candidateLavaSources: [],
+      rejectedLavaSources: [],
+      waterFlow: [],
+      bucketState: "UNKNOWN",
+      ignitionState: "NOT_ATTEMPTED",
+      interiorState: "CLEAR",
+      entryAttempts: 0,
+      observedAt: startedAt,
+      updatedAt: startedAt,
+    } satisfies BeatGamePortalWorkspace;
+    await Effect.runPromise(
+      store.save(
+        {
+          ...checkpoint(BeatGamePhase.ENTER_NETHER, { runId, teamId }),
+          activeSkill: {
+            skillId: "portal-skill",
+            kind: BeatGameDurableSkillKind.PORTAL_CONSTRUCTION,
+            phase: BeatGamePhase.ENTER_NETHER,
+            action: "build-and-enter-nether",
+            status: BeatGameDurableSkillStatus.ACTIVE,
+            substep: "repair-frame",
+            targets: [],
+            protectedBlocks: [],
+            protectedItemIds: [],
+            completedWorldChanges: [],
+            requiredResources: {},
+            retries: {},
+            portalWorkspace: workspace,
+            startedAt,
+            updatedAt: startedAt,
+          },
+        },
+        undefined,
+      ),
+    );
+    const diagnostics: string[] = [];
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            runId,
+            team: { teamId },
+            checkpointStore: store,
+            strategy: { observationPollMs: 1 },
+          });
+          yield* run.events.pipe(
+            Stream.runForEach((event) =>
+              event.type === "diagnostic"
+                ? Effect.sync(() => {
+                    diagnostics.push(event.message);
+                  })
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          );
+          yield* sleepWhile(
+            () => !diagnostics.includes("Left a distant half-cast portal frame for a new one"),
+          ).pipe(Effect.timeout("5 seconds"), Effect.ignore);
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(diagnostics).toContain("Left a distant half-cast portal frame for a new one");
+    const saved = await Effect.runPromise(store.load(runId));
+    expect(saved?.memory.portalWorkspaces).toContainEqual(
+      expect.objectContaining({ workspaceId: workspace.workspaceId, status: "ABANDONED" }),
+    );
+  }, 15_000);
+
   it("replaces a pickaxe consumed while approaching portal lava", async () => {
     const driver = new FakeBeatGameDriver();
     const store = new InMemoryBeatGameCheckpointStore();
