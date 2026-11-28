@@ -959,17 +959,18 @@ describe("production SoulFire beat-game driver", () => {
     });
   });
 
-  it("steps to the middle of its block and retries a stalled route", async () => {
+  it.each([
+    [
+      "path_action_stalled",
+      "Pathfinding stalled on MovementAction -> [2, 65, 2] across 5 consecutive attempts",
+    ],
+    ["path_stalled", "Pathfinding made no progress across 3 consecutive partial routes"],
+  ])("steps to the middle of its block and retries a %s route", async (code, message) => {
     // As in the live run: the bot stood at the edge of its block, and the
     // same step stalled again and again.
     const task = create(BotTaskSchema, {
       taskId: "stalled-step",
-      failure: create(BotTaskFailureSchema, {
-        code: "path_action_stalled",
-        message:
-          "Pathfinding stalled on MovementAction -> [2, 65, 2] across 5 consecutive attempts",
-        retryable: false,
-      }),
+      failure: create(BotTaskFailureSchema, { code, message, retryable: false }),
     });
     const cause = new SoulFireTaskError(task);
     let attempts = 0;
@@ -981,7 +982,7 @@ describe("production SoulFire beat-game driver", () => {
           : Effect.succeed({});
       }),
     );
-    const movements: unknown[] = [];
+    const movements: ("reset" | Readonly<Record<string, unknown>>)[] = [];
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake adds only the movement methods this test needs
     Object.assign(bot as unknown as Record<string, unknown>, {
       look: (yaw: number, pitch: number) =>
@@ -1010,13 +1011,14 @@ describe("production SoulFire beat-game driver", () => {
       ),
     );
 
-    // The fake bot stands at (1, 2), the corner of its block, so it walks
-    // toward (1.5, 2.5): south-east, a yaw of -45 degrees.
-    expect(movements).toEqual([
-      { look: { yaw: -45, pitch: 0 } },
-      { set: { forward: true } },
-      "reset",
-    ]);
+    // The fake bot stands at (1, 2), the corner of its block, facing a yaw
+    // of 20 degrees. The middle lies south-east, ahead and to its left. The
+    // fake never moves, so it keeps walking until the step gives up.
+    expect(movements[0]).toEqual({
+      set: { forward: true, backward: false, left: true, right: false },
+    });
+    expect(movements.at(-1)).toBe("reset");
+    expect(movements.filter((movement) => movement !== "reset" && "look" in movement)).toEqual([]);
     expect(attempts).toBe(2);
     // The movement keys only steer the bot under the control lease. A live
     // nudge without it left the bot where it stood.

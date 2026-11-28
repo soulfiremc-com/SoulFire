@@ -742,30 +742,23 @@ export function makeSoulFireBeatGameDriver(
     }
     // The movement keys only steer the bot while it holds the control lease,
     // as every other scripted movement does. A live nudge without it
-    // left the bot where it stood.
+    // left the bot where it stood. A turn to face the middle did not take
+    // either, so the keys are chosen from the way the bot already faces.
     yield* withSharedControl(
       Effect.gen(function* () {
-        yield* actPrimitive({
-          type: "look",
-          yaw: (Math.atan2(start.z, start.x) * 180) / Math.PI - 90,
-          pitch: 0,
-        });
-        yield* actPrimitive({ type: "set-movement", forward: true }).pipe(
-          Effect.andThen(
-            Effect.gen(function* () {
-              for (let poll = 0; poll < BLOCK_CENTER_STEP_POLLS; poll += 1) {
-                yield* Effect.sleep(BLOCK_CENTER_STEP_POLL_MS);
-                const currentObservation = yield* observe;
-                const current = blockCenterOffset(currentObservation);
-                if (Math.hypot(current.x, current.z) <= BLOCK_CENTER_TOLERANCE) {
-                  return;
-                }
-              }
-            }),
-          ),
-          Effect.ensuring(actPrimitive({ type: "reset-movement" }).pipe(Effect.ignore)),
-        );
-      }),
+        for (let poll = 0; poll < BLOCK_CENTER_STEP_POLLS; poll += 1) {
+          const currentObservation = yield* observe;
+          const current = blockCenterOffset(currentObservation);
+          if (Math.hypot(current.x, current.z) <= BLOCK_CENTER_TOLERANCE) {
+            return;
+          }
+          yield* actPrimitive({
+            type: "set-movement",
+            ...movementKeysToward(current, currentObservation.player.rotation.yaw),
+          });
+          yield* Effect.sleep(BLOCK_CENTER_STEP_POLL_MS);
+        }
+      }).pipe(Effect.ensuring(actPrimitive({ type: "reset-movement" }).pipe(Effect.ignore))),
     );
     return true;
   });
@@ -775,7 +768,7 @@ export function makeSoulFireBeatGameDriver(
   ): Effect.Effect<void, BeatGameDriverError> =>
     route.pipe(
       Effect.catchIf(
-        (error) => error.code === ACTION_STALL_FAILURE_CODE,
+        (error) => error.code !== undefined && ROUTE_STALL_FAILURE_CODES.has(error.code),
         (error) =>
           stepToBlockCenter.pipe(
             Effect.flatMap((stepped) => (stepped ? route : Effect.fail(error))),
@@ -1667,7 +1660,29 @@ const ROUTE_SEARCH_LIMIT_CODES: ReadonlySet<string> = new Set([
   "search_limit",
 ]);
 
-const ACTION_STALL_FAILURE_CODE = "path_action_stalled";
+/// A route that keeps failing on the same move, or keeps ending partial
+/// routes without getting anywhere.
+const ROUTE_STALL_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "path_action_stalled",
+  "path_stalled",
+]);
+
+/// The movement keys that walk the bot along `offset` from the way it
+/// faces, in eight directions as SoulFire's own path movement picks them.
+function movementKeysToward(
+  offset: { readonly x: number; readonly z: number },
+  yaw: number,
+): { forward: boolean; backward: boolean; left: boolean; right: boolean } {
+  const targetYaw = (Math.atan2(offset.z, offset.x) * 180) / Math.PI - 90;
+  const relativeYaw = ((((targetYaw - yaw + 180) % 360) + 360) % 360) - 180;
+  const direction = ((Math.round(relativeYaw / 45) % 8) + 8) % 8;
+  return {
+    forward: direction === 0 || direction === 1 || direction === 7,
+    backward: direction === 3 || direction === 4 || direction === 5,
+    left: direction === 5 || direction === 6 || direction === 7,
+    right: direction === 1 || direction === 2 || direction === 3,
+  };
+}
 
 function blockCenterOffset(observation: BeatGameObservation): { x: number; z: number } {
   const { x, z } = observation.player.position;
@@ -1675,7 +1690,7 @@ function blockCenterOffset(observation: BeatGameObservation): { x: number; z: nu
 }
 const BLOCK_CENTER_TOLERANCE = 0.2;
 const BLOCK_CENTER_STEP_POLL_MS = 50;
-const BLOCK_CENTER_STEP_POLLS = 20;
+const BLOCK_CENTER_STEP_POLLS = 40;
 
 function withQualityBoundFallback(
   policy: BeatGamePathPolicy,
