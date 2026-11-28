@@ -909,6 +909,8 @@ const FOOD_ANIMAL_ENTITY_TYPES = [
   "minecraft:salmon",
 ] as const;
 const AQUATIC_FOOD_ENTITY_TYPES = new Set(["minecraft:cod", "minecraft:salmon"]);
+const ICE_BLOCK_IDS = ["minecraft:ice", "minecraft:packed_ice", "minecraft:blue_ice"];
+const ICE_COVER_SEARCH_RADIUS = 4;
 const AQUATIC_HUNT_DROWNED_RADIUS = 24;
 const EMERGENCY_FOOD_ENTITY_TYPES = [
   "minecraft:zombie",
@@ -15411,7 +15413,7 @@ function huntOrExplore(
               ),
             ];
       confirmedVisibleTarget = undefined;
-      const candidates = targets.filter(
+      const reachableCandidates = targets.filter(
         (target) =>
           !isHuntingTargetUnreachable(
             target,
@@ -15422,6 +15424,26 @@ function huntOrExplore(
           ) &&
           !attemptedTargets.has(`${target.connectionEpoch}:${target.networkId}`) &&
           isEligibleHuntingTarget(target, current, targetPreference, aquaticHuntAllowed),
+      );
+      // A live bot chased a salmon under a frozen lake, swam up into the ice
+      // and drowned before it could break through. Fish under ice are left.
+      const iceCoveredFish = new Set<string>();
+      for (const candidate of reachableCandidates) {
+        if (!AQUATIC_FOOD_ENTITY_TYPES.has(candidate.entityType)) {
+          continue;
+        }
+        const ice = yield* state.driver.queryBlocks({
+          center: { ...candidate.position, y: candidate.position.y + ICE_COVER_SEARCH_RADIUS },
+          radius: ICE_COVER_SEARCH_RADIUS,
+          selector: { blockIds: ICE_BLOCK_IDS },
+          maximumResults: 1,
+        });
+        if (ice.length > 0) {
+          iceCoveredFish.add(`${candidate.connectionEpoch}:${candidate.networkId}`);
+        }
+      }
+      const candidates = reachableCandidates.filter(
+        (candidate) => !iceCoveredFish.has(`${candidate.connectionEpoch}:${candidate.networkId}`),
       );
       const preferredCandidates =
         targetPreference === undefined
