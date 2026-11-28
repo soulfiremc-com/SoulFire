@@ -1271,6 +1271,8 @@ interface RunState {
   /// Threats the bot found it could not reach, by entity key, with when to
   /// look at them again.
   readonly unreachableThreats: Ref.Ref<ReadonlyMap<string, number>>;
+  /// Creepers the bot evaded without them moving or fusing, by entity key.
+  readonly idleCreeperEvasions: Ref.Ref<ReadonlyMap<string, IdleCreeperEvasion>>;
   /// What each item last failed to craft from, for lack of materials.
   readonly failedCrafts: Ref.Ref<ReadonlyMap<string, FailedCraft>>;
   /// Set while the bot fetches logs for a craft.
@@ -1436,6 +1438,7 @@ export function beatGameWithDriver(
       >(undefined),
       failedEscapes: yield* Ref.make({ count: 0, atMs: 0 }),
       unreachableThreats: yield* Ref.make<ReadonlyMap<string, number>>(new Map()),
+      idleCreeperEvasions: yield* Ref.make<ReadonlyMap<string, IdleCreeperEvasion>>(new Map()),
       failedCrafts: yield* Ref.make<ReadonlyMap<string, FailedCraft>>(new Map()),
       fetchingTableWood: yield* Ref.make(false),
       nightShelterFailedAtMs: yield* Ref.make(Number.NEGATIVE_INFINITY),
@@ -5642,7 +5645,83 @@ function rememberUnreachableThreat(
   );
 }
 
+/// A creeper that never moved or fused while the bot came close and fled it
+/// three times over is penned in. A live bot fled one sitting in a cave
+/// pocket beside its way down to the portal every 22 seconds for eight
+/// minutes. A penned creeper is passed by until it moves or fuses.
+interface IdleCreeperEvasion {
+  readonly block: string;
+  readonly evasions: number;
+  readonly lastEvadedAtMs: number;
+}
+
+const PENNED_CREEPER_EVASIONS = 3;
+/// Checks within one escape see the same creeper again, so only evasions
+/// this far apart count.
+const IDLE_CREEPER_EVASION_SPACING_MS = 2000;
+
+function creeperBlockKey(target: BeatGameEntityObservation): string {
+  return `${Math.floor(target.position.x)}:${Math.floor(target.position.y)}:${Math.floor(target.position.z)}`;
+}
+
+function isPennedCreeper(
+  idleCreepers: ReadonlyMap<string, IdleCreeperEvasion>,
+  target: BeatGameEntityObservation,
+): boolean {
+  const record = idleCreepers.get(`${target.connectionEpoch}:${target.networkId}`);
+  return (
+    target.entityType === "minecraft:creeper" &&
+    !isFusingCreeper(target) &&
+    record !== undefined &&
+    record.block === creeperBlockKey(target) &&
+    record.evasions >= PENNED_CREEPER_EVASIONS
+  );
+}
+
+function recordIdleCreeperEvasion(
+  state: RunState,
+  threat: ImmediateThreat | undefined,
+): Effect.Effect<void> {
+  if (
+    threat?.response !== "flee" ||
+    threat.target.entityType !== "minecraft:creeper" ||
+    isFusingCreeper(threat.target)
+  ) {
+    return Effect.void;
+  }
+  const target = threat.target;
+  const key = `${target.connectionEpoch}:${target.networkId}`;
+  const block = creeperBlockKey(target);
+  return Clock.currentTimeMillis.pipe(
+    Effect.flatMap((now) =>
+      Ref.update(state.idleCreeperEvasions, (current) => {
+        const record = current.get(key);
+        if (
+          record?.block === block &&
+          now - record.lastEvadedAtMs < IDLE_CREEPER_EVASION_SPACING_MS
+        ) {
+          return current;
+        }
+        return new Map(current).set(key, {
+          block,
+          evasions: record?.block === block ? record.evasions + 1 : 1,
+          lastEvadedAtMs: now,
+        });
+      }),
+    ),
+  );
+}
+
 function findImmediateThreat(
+  state: RunState,
+  observation: BeatGameObservation,
+): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
+  return findImmediateThreatCandidate(state, observation).pipe(
+    Effect.tap((threat) => recordIdleCreeperEvasion(state, threat)),
+  );
+}
+
+function findImmediateThreatCandidate(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
@@ -5684,16 +5763,28 @@ function findImmediateThreat(
     { concurrency: 1 },
   ).pipe(
     Effect.flatMap((queried) =>
-      Effect.all([Ref.get(state.unreachableThreats), Clock.currentTimeMillis], {
-        concurrency: 1,
-      }).pipe(Effect.map(([unreachable, now]) => [queried, unreachable, now] as const)),
+      Effect.all(
+        [
+          Ref.get(state.unreachableThreats),
+          Ref.get(state.idleCreeperEvasions),
+          Clock.currentTimeMillis,
+        ],
+        {
+          concurrency: 1,
+        },
+      ).pipe(
+        Effect.map(
+          ([unreachable, idleCreepers, now]) => [queried, unreachable, idleCreepers, now] as const,
+        ),
+      ),
     ),
     Effect.map(
       ([
         [visibleHostiles, nearbyEscapeOnlyThreats, nearbyDangerousNeutralMobs],
         unreachable,
+        idleCreepers,
         now,
-      ]) => {
+      ]): ImmediateThreat | undefined => {
         const hostiles = new Map(
           [
             ...visibleHostiles.filter((entity) => isCurrentlyHostileMob(entity)),
@@ -5732,7 +5823,8 @@ function findImmediateThreat(
         const escapeOnlyThreat = candidates.find(
           ({ target, distanceSquared: targetDistanceSquared }) =>
             ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(target.entityType) &&
-            targetDistanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2,
+            targetDistanceSquared <= proactiveEscapeOnlyEvasionRadius(target) ** 2 &&
+            !isPennedCreeper(idleCreepers, target),
         );
         if (escapeOnlyThreat !== undefined) {
           return { target: escapeOnlyThreat.target, response: "flee" };
@@ -10328,6 +10420,19 @@ function findNearbyAttackThreat(
   state: RunState,
   observation: BeatGameObservation,
 ): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
+  return Ref.get(state.idleCreeperEvasions).pipe(
+    Effect.flatMap((idleCreepers) =>
+      findNearbyAttackThreatCandidate(state, observation, idleCreepers),
+    ),
+    Effect.tap((threat) => recordIdleCreeperEvasion(state, threat)),
+  );
+}
+
+function findNearbyAttackThreatCandidate(
+  state: RunState,
+  observation: BeatGameObservation,
+  idleCreepers: ReadonlyMap<string, IdleCreeperEvasion>,
+): Effect.Effect<ImmediateThreat | undefined, BeatGameDriverError> {
   const radius = 16;
   return Effect.all(
     [
@@ -10363,14 +10468,16 @@ function findNearbyAttackThreat(
           ...dangerousNeutralMobs.filter((entity) => isAggressiveNeutralMob(entity)),
         ].map((entity) => [`${entity.connectionEpoch}:${entity.networkId}`, entity]),
       );
-      const candidates = [...threats.values()].toSorted((left, right) => {
-        const leftDistanceSquared = distanceSquared(observation.player.position, left.position);
-        const rightDistanceSquared = distanceSquared(observation.player.position, right.position);
-        return (
-          threatPriorityScore(left, leftDistanceSquared) -
-          threatPriorityScore(right, rightDistanceSquared)
-        );
-      });
+      const candidates = [...threats.values()]
+        .filter((candidate) => !isPennedCreeper(idleCreepers, candidate))
+        .toSorted((left, right) => {
+          const leftDistanceSquared = distanceSquared(observation.player.position, left.position);
+          const rightDistanceSquared = distanceSquared(observation.player.position, right.position);
+          return (
+            threatPriorityScore(left, leftDistanceSquared) -
+            threatPriorityScore(right, rightDistanceSquared)
+          );
+        });
       const escapeOnlyThreat = candidates.find(
         (candidate) =>
           ESCAPE_ONLY_DEFENSIVE_ENTITY_TYPES.has(candidate.entityType) &&

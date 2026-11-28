@@ -31376,6 +31376,59 @@ describe("beat-game run lifecycle", () => {
     ).toBeGreaterThanOrEqual(2);
   }, 10_000);
 
+  it("passes a penned creeper that never moves or fuses", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      counts: { "minecraft:stone_sword": 1, "minecraft:cooked_beef": 8 },
+      position: { x: 0.5, y: 17, z: 0.5 },
+    });
+    // As in the live run: the creeper sat in a cave pocket a few blocks
+    // below the bot's way down for eight minutes and never fused.
+    const creeper = {
+      connectionEpoch: "epoch-1",
+      networkId: 61,
+      entityType: "minecraft:creeper",
+      position: { x: -0.5, y: 13, z: -0.5, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 20,
+      creeper: { fuseProgress: 0, swellDirection: -1, powered: false, ignited: false },
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityQueryResolver = ({ selector }) =>
+      selector.categories?.includes(2) === true ||
+      selector.entityTypes?.includes(creeper.entityType) === true ||
+      selector.networkId === creeper.networkId
+        ? [creeper]
+        : [];
+    const fleesAt: number[] = [];
+    const startedAt = performance.now();
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+        if (task.type === "flee") {
+          fleesAt.push(performance.now());
+        }
+      });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+            hooks: { satisfyRequirement: () => Effect.never },
+          });
+          yield* Effect.sleep("8 seconds");
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    expect(fleesAt.length).toBeGreaterThan(0);
+    // Once three evasions found it in the same block, the bot stops fleeing.
+    expect(fleesAt.filter((at) => at - startedAt > 6000)).toEqual([]);
+  }, 15_000);
+
   it("fights a spider the first time it catches up with the escape", async () => {
     const driver = new FakeBeatGameDriver();
     const counts = { "minecraft:stone_sword": 1 };
