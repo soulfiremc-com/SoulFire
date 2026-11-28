@@ -1039,6 +1039,9 @@ const skeletonAt = (networkId: number, x: number, z: number) =>
     observedAt: "2026-01-01T00:00:00.000Z",
   }) as const;
 const blockKey = ({ x, y, z }: { x: number; y: number; z: number }) => `${x}:${y}:${z}`;
+/// Ice at y=62 over water, with one hole at x=3, as over a live frozen ocean.
+const frozenOceanBlockAt = (x: number, y: number) =>
+  y >= 63 ? "minecraft:air" : y === 62 && x !== 3 ? "minecraft:ice" : "minecraft:water";
 const grassColumn = (x: number, z: number) => ({
   x,
   z,
@@ -36789,6 +36792,71 @@ describe("beat-game run lifecycle", () => {
     });
     expect(driver.currentObservation.player.air).toBe(300);
     expect(driver.actions.some((action) => action.type === "dig-block")).toBe(false);
+  });
+
+  it("swims sideways to open water from under ice", async () => {
+    // As in a live run: the bot swam up under a frozen ocean and jumped into
+    // the ice until it drowned, with open water three blocks away.
+    const driver = new FakeBeatGameDriver();
+    driver.surfaceQueryResolver = () => [];
+    driver.taskResolver = (task) =>
+      Effect.sync(() => {
+        driver.tasks.push(task);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.blockQueryResolver = (query) => {
+      const position = {
+        x: Math.floor(query.center.x),
+        y: Math.floor(query.center.y),
+        z: Math.floor(query.center.z),
+        dimension: query.center.dimension,
+      };
+      const blockId = frozenOceanBlockAt(position.x, position.y);
+      if (query.selector.blockIds !== undefined) {
+        return query.selector.blockIds.includes(blockId) && blockId !== "minecraft:air"
+          ? [blockObservation(position, { blockId, diggable: false, replaceable: true })]
+          : [];
+      }
+      return [
+        blockObservation(
+          position,
+          blockId === "minecraft:ice"
+            ? { blockId }
+            : { blockId, diggable: false, replaceable: true },
+        ),
+      ];
+    };
+    const lookedToward: { yaw: number; pitch: number }[] = [];
+    driver.actionObserver = (action) => {
+      if (action.type === "look") {
+        lookedToward.push({ yaw: action.yaw, pitch: action.pitch });
+      }
+    };
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const run = yield* beatGameWithDriver(driver, {
+            strategy: { observationPollMs: 1 },
+          });
+          while (!driver.tasks.some((task) => task.type === "collect-blocks")) {
+            yield* Effect.sleep(1);
+          }
+          driver.currentObservation = observation({
+            air: 60,
+            position: { x: 0.5, y: 60, z: 0.5 },
+          });
+          yield* sleepWhile(() => !lookedToward.some(({ pitch }) => pitch === -20)).pipe(
+            Effect.timeout("4 seconds"),
+            Effect.ignore,
+          );
+          yield* run.stop;
+        }),
+      ),
+    );
+
+    // It turns east, toward the hole in the ice, rather than up.
+    const sideways = lookedToward.find(({ pitch }) => pitch === -20);
+    expect(sideways?.yaw).toBeCloseTo(-90);
   });
 
   it("does not spend critical air on breathing-pocket path searches", async () => {

@@ -1199,6 +1199,7 @@ const AIR_ESCAPE_DIG_TIMEOUT_BUFFER_TICKS = 20;
 const AIR_ESCAPE_ASCENT_STAGNATION_OBSERVATIONS = 10;
 const AIR_ESCAPE_ASCENT_PROGRESS_EPSILON = 0.05;
 const AIR_ESCAPE_OPEN_COLUMN_SEARCH_RADIUS = 4;
+const AIR_ESCAPE_OPEN_COLUMN_MAXIMUM_RISE = 4;
 const AIR_ESCAPE_BREATHING_POCKET_SEARCH_RADIUS = 8;
 const AIR_ESCAPE_BREATHING_POCKET_CANDIDATES = 16;
 const AIR_ESCAPE_BREATHING_POCKET_PATH_TIMEOUT_MS = 4000;
@@ -8695,17 +8696,24 @@ function recoverFromFluid(
   // opening three blocks away, and drowned. Under rock, the first attempt
   // looks for a breathing pocket while the air lasts, then swims up and
   // digs as before.
+  //
+  // Ice over open water stops it the same way. A live bot swam up under a
+  // frozen ocean and jumped into the ice on every attempt until it
+  // drowned, with open water a few blocks away. Under any ceiling, on any
+  // attempt, it first swims sideways to a column that opens to the air.
   const [, aboveHead] = overheadEscapeBlocks(observation.player.position);
-  const pocketUnderCeiling =
-    attemptsRemaining === AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS
-      ? queryExactBlock(state.driver, aboveHead).pipe(
-          Effect.flatMap((block) =>
-            block !== undefined && block.solid && !block.replaceable
-              ? escapeNearbyBreathingPocket(state, observation)
-              : Effect.succeed(false),
-          ),
-        )
-      : Effect.succeed(false);
+  const pocketUnderCeiling = queryExactBlock(state.driver, aboveHead).pipe(
+    Effect.flatMap((block) =>
+      block !== undefined && block.solid && !block.replaceable
+        ? escapeNearbyOpenAirColumn(state, observation).pipe(
+            Effect.filterOrElse(
+              (escaped) => escaped || attemptsRemaining !== AIR_ESCAPE_MAXIMUM_RECOVERY_ATTEMPTS,
+              () => escapeNearbyBreathingPocket(state, observation),
+            ),
+          )
+        : Effect.succeed(false),
+    ),
+  );
   const swimStraightUp = state.driver.withControl(
     state.driver
       .act({
@@ -9730,13 +9738,28 @@ function escapeNearbyOpenAirColumn(
         if (!corridorOpen) {
           continue;
         }
-        const openAir = yield* queryExactBlock(state.driver, {
-          x: blockX + direction.x * distance,
-          y: blockY + 2,
-          z: blockZ + direction.z * distance,
-          dimension: origin.dimension,
-        });
-        if (openAir === undefined || !isAirBlock(openAir.blockId)) {
+        // Under ice the water goes on above the bot's head, so a column
+        // is open where only water lies between the head and the air.
+        let openAir: BeatGameBlockObservation | undefined;
+        for (let rise = 2; rise <= AIR_ESCAPE_OPEN_COLUMN_MAXIMUM_RISE; rise += 1) {
+          const block = yield* queryExactBlock(state.driver, {
+            x: blockX + direction.x * distance,
+            y: blockY + rise,
+            z: blockZ + direction.z * distance,
+            dimension: origin.dimension,
+          });
+          if (
+            block === undefined ||
+            !(isAirBlock(block.blockId) || isPlayerFluidBlock(block.blockId))
+          ) {
+            break;
+          }
+          if (isAirBlock(block.blockId)) {
+            openAir = block;
+            break;
+          }
+        }
+        if (openAir === undefined) {
           continue;
         }
         return yield* swimTowardOpenAirColumn(state, observation, {
