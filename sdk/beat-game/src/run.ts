@@ -15476,7 +15476,13 @@ function huntOrExplore(
           maximumResults: 1,
         });
         if (ice.length > 0) {
-          iceCoveredFish.add(`${candidate.connectionEpoch}:${candidate.networkId}`);
+          const key = `${candidate.connectionEpoch}:${candidate.networkId}`;
+          iceCoveredFish.add(key);
+          // The watch for targets during exploration skips attempted
+          // targets. A live bot saw seventeen salmon under ice, explored,
+          // and broke off every route half a second in when the watch saw
+          // the same fish, restarting 342 times in thirty minutes.
+          attemptedTargets.add(key);
         }
       }
       const candidates = reachableCandidates.filter(

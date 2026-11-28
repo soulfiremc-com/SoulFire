@@ -44437,6 +44437,75 @@ describe("beat-game run lifecycle", () => {
     expect(attack).toMatchObject({ target: objectContaining({ networkId: 50 }) });
   }, 10_000);
 
+  it("keeps exploring past a fish under ice", async () => {
+    const driver = new FakeBeatGameDriver();
+    driver.currentObservation = observation({
+      health: 20,
+      food: 6,
+      counts: {
+        "minecraft:cobblestone": 20,
+        "minecraft:iron_ingot": 7,
+        "minecraft:oak_log": 8,
+        "minecraft:shield": 1,
+        "minecraft:stone_pickaxe": 1,
+        "minecraft:stone_sword": 1,
+      },
+    });
+    // As in the live run: every fish in sight swims under ice, so the bot
+    // explores, and the route must not stop each time it sees them again.
+    const salmonUnderIce = {
+      connectionEpoch: "epoch-1",
+      networkId: 49,
+      entityType: "minecraft:salmon",
+      position: { x: 3, y: 60, z: 0, dimension: "minecraft:overworld" },
+      velocity: { x: 0, y: 0, z: 0 },
+      alive: true,
+      health: 3,
+      observedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    driver.entityResults = [salmonUnderIce];
+    const routes: string[] = [];
+    driver.pathResolver = (position) =>
+      Effect.sync(() => {
+        routes.push(`${position.x}:${position.z}`);
+      }).pipe(Effect.andThen(Effect.never));
+    driver.xzPathResolver = (x, z) =>
+      Effect.sync(() => {
+        routes.push(`${x}:${z}`);
+      }).pipe(Effect.andThen(Effect.never));
+    const ice = blockObservation(
+      { x: 3, y: 62, z: 0, dimension: "minecraft:overworld" },
+      { blockId: "minecraft:ice" },
+    );
+    driver.blockQueryResolver = ({ center, radius, selector }) =>
+      selector.blockIds?.includes("minecraft:ice") === true &&
+      distanceSquared(center, ice.position) <= radius ** 2
+        ? [ice]
+        : [];
+    await Effect.runPromise(
+      Effect.scoped(
+        beatGameWithDriver(driver, {
+          strategy: { observationPollMs: 1 },
+        }).pipe(
+          Effect.flatMap((run) =>
+            Effect.gen(function* () {
+              yield* sleepWhile(() => routes.length === 0).pipe(
+                Effect.timeout("4 seconds"),
+                Effect.ignore,
+              );
+              yield* Effect.sleep("1500 millis");
+              yield* run.stop;
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(driver.tasks.some((task) => task.type === "attack-entity")).toBe(false);
+    // One route keeps going rather than a new one every half second.
+    expect(routes).toHaveLength(1);
+  }, 10_000);
+
   it("finishes a nearby wounded fish during a critical aquatic hunt", async () => {
     const driver = new FakeBeatGameDriver();
     driver.currentObservation = observation({
